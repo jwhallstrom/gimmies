@@ -1,0 +1,88 @@
+import React from 'react';
+import { Routes, Route, Link, useLocation } from 'react-router-dom';
+import LoginPage from './LoginPage';
+import Dashboard from './Dashboard';
+import EventsPage from './EventsPage';
+import AnalyticsPage from './AnalyticsPage';
+import EventPage from './EventPage';
+import JoinEventPage from './JoinEventPage';
+import UserMenu from '../components/UserMenu';
+import useStore from '../state/store';
+
+const App: React.FC = () => {
+  const { currentUser, currentProfile, events } = useStore();
+  const location = useLocation();
+
+  // Count user's events
+  const userEventsCount = currentProfile ? events.filter(event =>
+    event.golfers.some(golfer => golfer.profileId === currentProfile.id)
+  ).length : 0;
+
+  if (!currentUser) {
+    return <LoginPage />;
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-primary-900 via-primary-800 to-primary-900 text-gray-900">
+      <header className="bg-primary-900/80 backdrop-blur text-white px-4 py-3 flex items-center justify-between shadow-md sticky top-0 z-40">
+        <Link to="/">
+          <img src="/gimmies-logo.png" alt="Gimmies" className="h-12 w-auto" />
+        </Link>
+        <UserMenu />
+      </header>
+      <main className="flex-1 p-4 pb-24 max-w-5xl w-full mx-auto">
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/events" element={<EventsPage />} />
+          <Route path="/analytics" element={<AnalyticsPage />} />
+          <Route path="/event/:id/*" element={<EventPage />} />
+          <Route path="/join/:code" element={<JoinEventPage />} />
+        </Routes>
+      </main>
+      <footer className="fixed bottom-0 inset-x-0 bg-white/90 backdrop-blur border-t border-primary-900/20 flex items-center justify-between px-4 py-2 z-40">
+        <Link
+          to="/"
+          className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${
+            location.pathname === '/' ? 'text-primary-600' : 'text-primary-800 hover:text-primary-600'
+          }`}
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+          </svg>
+          <span className="text-xs">Home</span>
+        </Link>
+
+        <Link
+          to="/events"
+          className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors relative ${
+            location.pathname === '/events' ? 'text-primary-600' : 'text-primary-800 hover:text-primary-600'
+          }`}
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          <span className="text-xs">Events</span>
+          {userEventsCount > 0 && (
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-bold">
+              {userEventsCount > 9 ? '9+' : userEventsCount}
+            </span>
+          )}
+        </Link>
+
+        <Link
+          to="/analytics"
+          className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${
+            location.pathname === '/analytics' ? 'text-primary-600' : 'text-primary-800 hover:text-primary-600'
+          }`}
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+          </svg>
+          <span className="text-xs">Analytics</span>
+        </Link>
+      </footer>
+    </div>
+  );
+};
+
+export default App;
