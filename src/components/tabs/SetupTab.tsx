@@ -6,7 +6,10 @@ import EventSharing from '../EventSharing';
 type Props = { eventId: string };
 
 const SetupTab: React.FC<Props> = ({ eventId }) => {
-  const event = useStore((s: any) => s.events.find((e: any) => e.id === eventId));
+  const event = useStore((s: any) => 
+    s.events.find((e: any) => e.id === eventId) || 
+    s.completedEvents.find((e: any) => e.id === eventId)
+  );
   const { currentProfile, profiles, addGolferToEvent, updateEventGolfer } = useStore();
   if (!event) return null;
   
@@ -38,6 +41,14 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
   
   return (
     <form className="space-y-5 max-w-xl" onSubmit={e => e.preventDefault()}>
+      {event.isCompleted && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+          <div className="flex items-center gap-2 text-sm text-green-800">
+            <span className="font-medium">✓ Event Completed</span>
+            <span className="text-xs">Event setup is read-only</span>
+          </div>
+        </div>
+      )}
       <div className="flex flex-wrap gap-4 items-end">
         <div className="flex-1 min-w-[180px]">
           <label className="block text-xs font-medium mb-1">Event Name</label>
@@ -46,6 +57,7 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
             value={event.name}
             onChange={e => useStore.getState().updateEvent(eventId, { name: e.target.value })}
             placeholder="Event name"
+            disabled={event.isCompleted}
           />
         </div>
         <div className="w-40">
@@ -55,6 +67,7 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
             className="w-full border border-gray-400 rounded px-2 py-1 text-sm"
             value={event.date}
             onChange={e => useStore.getState().updateEvent(eventId, { date: e.target.value })}
+            disabled={event.isCompleted}
           />
         </div>
       </div>
@@ -69,6 +82,7 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
               const courseId = e.target.value;
               useStore.getState().setEventCourse(eventId, courseId);
             }}
+            disabled={event.isCompleted}
           >
             <option value="">Select course</option>
             {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -80,7 +94,7 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
             className="w-full border border-gray-400 rounded px-2 py-1 text-sm"
             value={event.course.teeName || ''}
             onChange={e => useStore.getState().setEventTee(eventId, e.target.value)}
-            disabled={!event.course.courseId}
+            disabled={!event.course.courseId || event.isCompleted}
           >
             <option value="">Select tee</option>
             {event.course.courseId && courseTeesMap[event.course.courseId]?.tees.map(t => (
@@ -114,6 +128,7 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
               value={event.groups[0].teeTime || ''} 
               onChange={e => useStore.getState().setGroupTeeTime(eventId, event.groups[0].id, e.target.value)} 
               className="border border-gray-400 rounded px-1 py-0.5 text-[11px]" 
+              disabled={event.isCompleted}
             />
           </div>
         )}
@@ -150,6 +165,7 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
                     className="border border-gray-400 rounded px-2 py-1 text-xs"
                     value={eventGolfer.teeName || ''}
                     onChange={e => updateEventGolfer(eventId, eventGolfer.profileId || eventGolfer.customName, { teeName: e.target.value || undefined })}
+                    disabled={event.isCompleted}
                   >
                     <option value="">Event Tee</option>
                     {tees.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
@@ -160,9 +176,10 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
                   type="number"
                   step="0.1"
                   min="0"
-                  className="w-20 border border-gray-400 rounded px-2 py-1 text-sm text-right"
+                  max="54"
+                  className="w-14 border border-gray-400 rounded px-1 py-1 text-sm text-center"
                   value={handicapValue}
-                  placeholder="Hcp Index"
+                  placeholder="0.0"
                   onChange={e => {
                     const v = e.target.value;
                     updateEventGolfer(eventId, eventGolfer.profileId || eventGolfer.customName, { 
@@ -170,6 +187,7 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
                     });
                   }}
                   title="Handicap override"
+                  disabled={event.isCompleted}
                 />
                 
                 <button
@@ -181,6 +199,7 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
                   aria-label="Delete golfer"
                   title="Delete golfer"
                   className="p-1.5 rounded border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center"
+                  disabled={event.isCompleted}
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M3 6h18" />
@@ -203,7 +222,7 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
                   className="border border-gray-400 rounded px-2 py-1 text-sm w-40"
                   value={golferName}
                   onChange={e => setGolferName(e.target.value)}
-                  disabled={!courseSelected || !teeSelected}
+                  disabled={!courseSelected || !teeSelected || event.isCompleted}
                   placeholder="Enter name"
                 />
               </div>
@@ -214,7 +233,7 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
                   className="border border-gray-400 rounded px-2 py-1 text-xs"
                   value={customTeeName}
                   onChange={e => setCustomTeeName(e.target.value)}
-                  disabled={!courseSelected || !teeSelected}
+                  disabled={!courseSelected || !teeSelected || event.isCompleted}
                 >
                   <option value="">Event Tee ({event.course.teeName||''})</option>
                   {teesForCourse.map(t => <option key={t.name} value={t.name}>{t.name}</option>)}
@@ -227,19 +246,20 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
                   type="number"
                   step="0.1"
                   min="0"
-                  className="border border-gray-400 rounded px-2 py-1 text-sm w-20 text-right"
+                  max="54"
+                  className="border border-gray-400 rounded px-1 py-1 text-sm w-14 text-center"
                   value={customHandicap}
                   onChange={e => setCustomHandicap(e.target.value)}
-                  disabled={!courseSelected || !teeSelected}
-                  placeholder="Optional"
+                  disabled={!courseSelected || !teeSelected || event.isCompleted}
+                  placeholder="0.0"
                 />
               </div>
               
               <button
                 type="button"
-                disabled={!canAddGolfer}
+                disabled={!canAddGolfer || event.isCompleted}
                 onClick={handleAddGolfer}
-                className={`text-xs px-3 py-1 rounded font-medium border ${canAddGolfer? 'bg-primary-600 text-white border-primary-700 hover:bg-primary-700':'bg-neutral-200 text-neutral-500 border-neutral-300 cursor-not-allowed'}`}
+                className={`text-xs px-3 py-1 rounded font-medium border ${canAddGolfer && !event.isCompleted ? 'bg-primary-600 text-white border-primary-700 hover:bg-primary-700':'bg-neutral-200 text-neutral-500 border-neutral-300 cursor-not-allowed'}`}
               >
                 Add
               </button>

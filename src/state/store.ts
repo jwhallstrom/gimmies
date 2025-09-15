@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { nanoid } from 'nanoid/non-secure';
 import { courseMap, courses } from '../data/courses';
+import { calculateEventPayouts } from '../games/payouts';
 
 // Domain models (simplified initial draft)
 export interface HoleDef { number: number; par: number; strokeIndex?: number; }
@@ -69,22 +70,67 @@ export interface ChatMessage {
   createdAt: string;     // ISO timestamp
 }
 
-// Extended Event with sharing and ownership
+// Toast notification interface
+export interface Toast {
+  id: string;
+  message: string;
+  type: 'achievement' | 'info' | 'success' | 'error';
+  duration?: number;
+  createdAt: string;
+}
+
+// Event interface
 export interface Event {
   id: string;
   name: string;
   date: string;
   course: EventCourseSelection;
-  golfers: EventGolfer[]; // now references profiles
+  golfers: EventGolfer[];
   groups: Group[];
   scorecards: PlayerScorecard[];
   games: EventGameConfig;
-  ownerProfileId: string; // who created the event
-  shareCode?: string; // for sharing with others
-  isPublic: boolean; // allow anyone to join
+  ownerProfileId: string;
+  scorecardView: 'individual' | 'team' | 'admin';
+  isPublic: boolean;
   createdAt: string;
   lastModified: string;
-  chat?: ChatMessage[]; // event-scoped chat history
+  chat: ChatMessage[];
+  shareCode?: string;
+  isCompleted?: boolean; // Mark event as completed (read-only)
+  completedAt?: string; // When the event was completed
+}
+
+// Completed Round for analytics and history
+export interface CompletedRound {
+  id: string;
+  eventId: string; // Reference to original event
+  eventName: string;
+  datePlayed: string;
+  courseId?: string;
+  courseName: string;
+  teeName?: string;
+  golferId: string; // Profile ID or custom name
+  golferName: string;
+  handicapIndex?: number;
+  finalScore: number;
+  scoreToPar: number; // Total strokes relative to par
+  holesPlayed: number;
+  holeScores: { hole: number; strokes: number; par: number; toPar: number }[];
+  gameResults: {
+    nassau?: { winnings: number; position: number };
+    skins?: { winnings: number; skinsWon: number };
+  };
+  stats: {
+    birdies: number;
+    eagles: number;
+    pars: number;
+    bogeys: number;
+    doubleBogeys: number;
+    triplesOrWorse: number;
+    fairwaysHit?: number; // Future enhancement
+    greensInRegulation?: number; // Future enhancement
+  };
+  createdAt: string;
 }
 
 interface State {
@@ -97,7 +143,12 @@ interface State {
   profiles: GolferProfile[];
   
   events: Event[];
+  completedEvents: Event[]; // Completed events moved here
+  completedRounds: CompletedRound[]; // Completed rounds for analytics
+  toasts: Toast[]; // Toast notifications
+  
   createEvent: () => string | null;
+  completeEvent: (eventId: string) => boolean; // Complete event and record rounds
   setEventCourse: (eventId: string, courseId: string) => void;
   setEventTee: (eventId: string, teeName: string) => void;
   updateEvent: (id: string, patch: Partial<Event>) => void;
@@ -140,6 +191,12 @@ interface State {
   // Chat
   addChatMessage: (eventId: string, text: string) => void;
   clearChat: (eventId: string) => void;
+  // Scorecard permissions
+  canEditScore: (eventId: string, golferId: string) => boolean;
+  setScorecardView: (eventId: string, view: 'individual' | 'team' | 'admin') => void;
+  // Toast notifications
+  addToast: (message: string, type?: 'achievement' | 'info' | 'success' | 'error', duration?: number) => void;
+  removeToast: (toastId: string) => void;
 }
 
 const defaultScoreArray = (courseId?: string) => {
@@ -156,6 +213,9 @@ export const useStore = create<State>()(
       currentProfile: null,
       profiles: [],
       events: [],
+      completedEvents: [],
+      completedRounds: [],
+      toasts: [],
       
       createUser: (username: string, displayName?: string) => {
         const user: User = {
@@ -165,9 +225,43 @@ export const useStore = create<State>()(
           createdAt: new Date().toISOString(),
           lastActive: new Date().toISOString()
         };
+        
+        console.log('createUser: Creating user', user);
         set({ users: [...get().users, user] });
+        
         if (!get().currentUser) {
+          console.log('createUser: Setting as current user');
           set({ currentUser: user });
+          
+          // Immediately create a profile for the new user
+          console.log('createUser: Creating profile for new user');
+          const profile: GolferProfile = {
+            id: nanoid(8),
+            userId: user.id,
+            name: user.displayName,
+            stats: {
+              roundsPlayed: 0,
+              averageScore: 0,
+              bestScore: 0,
+              totalBirdies: 0,
+              totalEagles: 0
+            },
+            preferences: {
+              theme: 'auto',
+              defaultNetScoring: false,
+              autoAdvanceScores: true,
+              showHandicapStrokes: true
+            },
+            createdAt: new Date().toISOString(),
+            lastActive: new Date().toISOString()
+          };
+          
+          console.log('createUser: Adding profile to store');
+          set({ 
+            profiles: [...get().profiles, profile],
+            currentProfile: profile
+          });
+          console.log('createUser: User and profile creation complete');
         }
       },
       
@@ -183,10 +277,18 @@ export const useStore = create<State>()(
         
         const user = get().users.find(u => u.id === userId);
         if (user) {
+          console.log('switchUser: Found user', user);
+          
+          // Find existing profile for this user
+          const userProfile = get().profiles.find(p => p.userId === userId);
+          console.log('switchUser: Found profile', userProfile?.id);
+          
           set({ 
             currentUser: user,
-            currentProfile: null // Reset profile when switching users
+            currentProfile: userProfile || null
           });
+          
+          console.log('switchUser: Switch complete', { user: user.id, profile: userProfile?.id });
         }
       },
       
@@ -370,6 +472,7 @@ export const useStore = create<State>()(
           scorecards: [scorecard],
           games: { nassau: [], skins: [] },
           ownerProfileId: currentProfile.id,
+          scorecardView: 'individual', // Default to individual view for owner
           isPublic: false,
           createdAt: new Date().toISOString(),
           lastModified: new Date().toISOString(),
@@ -461,7 +564,7 @@ export const useStore = create<State>()(
             if (groups.length === 0) {
               groups = [{ id: nanoid(5), golferIds: [golferId] }];
             } else {
-              groups = groups.map(g => ({ ...g, golferIds: [...new Set([...g.golferIds, golferId])] }));
+              groups = groups.map(g => ({ ...g, golferIds: Array.from(new Set([...g.golferIds, golferId])) }));
             }
             return { 
               ...e, 
@@ -540,20 +643,106 @@ export const useStore = create<State>()(
       },
       
       updateScore: (eventId: string, golferId: string, hole: number, strokes: number | null) => {
-        set({
-          events: get().events.map(e => {
-            if (e.id !== eventId) return e;
-            return {
-              ...e,
-              scorecards: e.scorecards.map(sc => 
-                sc.golferId === golferId 
-                  ? { ...sc, scores: sc.scores.map(s => s.hole === hole ? { ...s, strokes } : s) } 
-                  : sc
-              ),
-              lastModified: new Date().toISOString()
-            };
-          })
+        const state = get();
+        const event = state.events.find(e => e.id === eventId);
+        if (!event) return;
+
+        // Get player name for chat messages
+        const eventGolfer = event.golfers.find(g => g.profileId === golferId || g.customName === golferId);
+        const profile = eventGolfer?.profileId ? state.profiles.find(p => p.id === eventGolfer.profileId) : null;
+        const playerName = profile ? profile.name : eventGolfer?.customName || 'Unknown Player';
+
+        // Get course info for par calculations
+        let holePar = 4; // default
+        if (event.course.courseId && courseMap[event.course.courseId]) {
+          const holeData = courseMap[event.course.courseId].holes.find(h => h.number === hole);
+          if (holeData) holePar = holeData.par;
+        }
+
+        // Check for achievements if strokes is not null
+        let chatMessage = '';
+        if (strokes !== null) {
+          const toPar = strokes - holePar;
+          
+          // Check for specific achievements
+          if (strokes === 1 && holePar > 1) {
+            chatMessage = `🎉 HOLE IN ONE! ${playerName} just aced hole ${hole}! 💎`;
+          } else if (toPar <= -2) {
+            chatMessage = `🦅 EAGLE ALERT! ${playerName} just made an eagle on hole ${hole}! Amazing shot!`;
+          } else if (strokes === 8) {
+            chatMessage = `⛄ ${playerName} built a snowman on hole ${hole}! Everyone's been there! 🏌️`;
+          }
+
+          // Check for birdie streaks after updating the score
+          const updatedScorecard = event.scorecards.find(sc => sc.golferId === golferId);
+          if (updatedScorecard && toPar === -1) {
+            // Count consecutive birdies including this one
+            const allScores = [...updatedScorecard.scores].map(s => 
+              s.hole === hole ? { ...s, strokes } : s
+            ).filter(s => s.strokes != null)
+              .sort((a, b) => a.hole - b.hole);
+
+            let consecutiveBirdies = 0;
+            for (let i = allScores.length - 1; i >= 0; i--) {
+              const score = allScores[i];
+              let scorePar = 4;
+              if (event.course.courseId && courseMap[event.course.courseId]) {
+                const scoreHoleData = courseMap[event.course.courseId].holes.find(h => h.number === score.hole);
+                if (scoreHoleData) scorePar = scoreHoleData.par;
+              }
+              
+              if (score.strokes === scorePar - 1) {
+                consecutiveBirdies++;
+              } else {
+                break;
+              }
+            }
+
+            if (consecutiveBirdies >= 3) {
+              chatMessage = `🔥 ${playerName} is ON FIRE! ${consecutiveBirdies} birdies in a row! Check it out! 🔥`;
+            } else if (consecutiveBirdies === 2) {
+              chatMessage = `🐦 ${playerName} is flying high with back-to-back birdies! 🐦`;
+            }
+          }
+        }
+
+        // Update the scorecard
+        const updatedEvents = state.events.map(e => {
+          if (e.id !== eventId) return e;
+          return {
+            ...e,
+            scorecards: e.scorecards.map(sc => 
+              sc.golferId === golferId 
+                ? { ...sc, scores: sc.scores.map(s => s.hole === hole ? { ...s, strokes } : s) } 
+                : sc
+            ),
+            lastModified: new Date().toISOString()
+          };
         });
+
+        set({ events: updatedEvents });
+
+        // Add chat message if there's an achievement
+        if (chatMessage.trim()) {
+          const msg: ChatMessage = {
+            id: nanoid(10),
+            profileId: 'gimmies-bot', // Special ID for bot messages
+            text: chatMessage.trim(),
+            createdAt: new Date().toISOString()
+          };
+
+          set({
+            events: get().events.map(e => {
+              if (e.id !== eventId) return e;
+              const existing = e.chat || [];
+              const next = [...existing, msg].slice(-500);
+              return { ...e, chat: next, lastModified: new Date().toISOString() };
+            })
+          });
+
+          // Also show toast notification for the achievement
+          get().addToast(chatMessage.trim(), 'achievement', 5000);
+        }
       },
       
       moveGolferToGroup: (eventId: string, profileId: string, targetGroupId: string | null) => {
@@ -666,6 +855,221 @@ export const useStore = create<State>()(
         });
       },
       
+      // Scorecard permissions
+      canEditScore: (eventId: string, golferId: string) => {
+        const event = get().events.find(e => e.id === eventId);
+        const currentProfile = get().currentProfile;
+        if (!event || !currentProfile) return false;
+        
+        // Event owner can edit all scores
+        if (event.ownerProfileId === currentProfile.id) return true;
+        
+        // Others can only edit their own scores
+        return golferId === currentProfile.id;
+      },
+      
+      setScorecardView: (eventId: string, view: 'individual' | 'team' | 'admin') => {
+        set({
+          events: get().events.map(e => 
+            e.id === eventId ? { ...e, scorecardView: view, lastModified: new Date().toISOString() } : e
+          )
+        });
+      },
+      
+      // Toast notifications
+      addToast: (message: string, type: 'achievement' | 'info' | 'success' | 'error' = 'info', duration: number = 4000) => {
+        const toast: Toast = {
+          id: nanoid(8),
+          message,
+          type,
+          duration,
+          createdAt: new Date().toISOString()
+        };
+        set({ toasts: [...get().toasts, toast] });
+        
+        // Auto-remove toast after duration (with cleanup to prevent memory leaks)
+        setTimeout(() => {
+          get().removeToast(toast.id);
+        }, duration);
+      },
+      
+      removeToast: (toastId: string) => {
+        set({
+          toasts: get().toasts.filter(t => t.id !== toastId)
+        });
+      },
+      
+      completeEvent: (eventId: string): boolean => {
+        const event: Event | undefined = get().events.find((e: Event) => e.id === eventId);
+        if (!event) return false;
+        
+        // Check if all scores are complete
+        const allScoresComplete = event.scorecards.every(sc => 
+          sc.scores.every(s => s.strokes != null)
+        );
+        if (!allScoresComplete) return false;
+        
+        // Calculate payouts for analytics
+        const payouts = calculateEventPayouts(event, get().profiles);
+        
+        // Create completed rounds for each golfer
+        const newCompletedRounds: CompletedRound[] = [];
+        
+        event.golfers.forEach(eventGolfer => {
+          const golferId = eventGolfer.profileId || eventGolfer.customName;
+          if (!golferId) return;
+          
+          const profile = eventGolfer.profileId ? get().profiles.find(p => p.id === eventGolfer.profileId) : null;
+          const golferName = profile ? profile.name : eventGolfer.customName || 'Unknown';
+          
+          const scorecard = event.scorecards.find(sc => sc.golferId === golferId);
+          if (!scorecard) return;
+          
+          // Calculate final score and stats
+          let totalScore = 0;
+          let totalPar = 0;
+          let holesPlayed = 0;
+          const holeScores: { hole: number; strokes: number; par: number; toPar: number }[] = [];
+          const stats = {
+            birdies: 0,
+            eagles: 0,
+            pars: 0,
+            bogeys: 0,
+            doubleBogeys: 0,
+            triplesOrWorse: 0
+          };
+          
+          scorecard.scores.forEach(score => {
+            if (score.strokes != null) {
+              // Get par for this hole
+              let holePar = 4; // default
+              if (event.course.courseId) {
+                try {
+                  const { courseMap } = require('../data/courses');
+                  const course = courseMap[event.course.courseId];
+                  if (course) {
+                    const holeData = course.holes.find((h: any) => h.number === score.hole);
+                    if (holeData) holePar = holeData.par;
+                  }
+                } catch {}
+              }
+              
+              totalScore += score.strokes;
+              totalPar += holePar;
+              holesPlayed++;
+              
+              const toPar = score.strokes - holePar;
+              holeScores.push({
+                hole: score.hole,
+                strokes: score.strokes,
+                par: holePar,
+                toPar
+              });
+              
+              // Count stats
+              if (toPar <= -2) stats.eagles++;
+              else if (toPar === -1) stats.birdies++;
+              else if (toPar === 0) stats.pars++;
+              else if (toPar === 1) stats.bogeys++;
+              else if (toPar === 2) stats.doubleBogeys++;
+              else if (toPar >= 3) stats.triplesOrWorse++;
+            }
+          });
+          
+          // Get game results for this golfer
+          const gameResults: CompletedRound['gameResults'] = {};
+          
+          // Nassau results
+          const nassauWinnings = payouts.nassau.reduce((total: number, n: any) => {
+            return total + (n.winningsByGolfer[golferId] || 0);
+          }, 0);
+          if (nassauWinnings !== 0) {
+            gameResults.nassau = {
+              winnings: nassauWinnings,
+              position: 1 // Could be enhanced to calculate actual position
+            };
+          }
+          
+          // Skins results
+          const skinsWinnings = payouts.skins.reduce((total: number, s: any) => {
+            if (!s) return total;
+            return total + (s.winningsByGolfer[golferId] || 0);
+          }, 0);
+          if (skinsWinnings !== 0) {
+            gameResults.skins = {
+              winnings: skinsWinnings,
+              skinsWon: 0 // Could be enhanced to count actual skins won
+            };
+          }
+          
+          const completedRound: CompletedRound = {
+            id: nanoid(8),
+            eventId: event.id,
+            eventName: event.name,
+            datePlayed: event.date,
+            courseId: event.course.courseId,
+            courseName: event.course.courseId ? (() => {
+              try {
+                const { courseMap } = require('../data/courses');
+                return courseMap[event.course.courseId]?.name || 'Unknown Course';
+              } catch {
+                return 'Unknown Course';
+              }
+            })() : 'Custom Course',
+            teeName: eventGolfer.teeName,
+            golferId,
+            golferName,
+            handicapIndex: eventGolfer.handicapOverride ?? profile?.handicapIndex,
+            finalScore: totalScore,
+            scoreToPar: totalScore - totalPar,
+            holesPlayed,
+            holeScores,
+            gameResults,
+            stats,
+            createdAt: new Date().toISOString()
+          };
+          
+          newCompletedRounds.push(completedRound);
+          
+          // Update profile stats
+          if (profile) {
+            const roundsPlayed = profile.stats.roundsPlayed + 1;
+            const averageScore = ((profile.stats.averageScore * profile.stats.roundsPlayed) + totalScore) / roundsPlayed;
+            const bestScore = Math.min(profile.stats.bestScore || totalScore, totalScore);
+            
+            set({
+              profiles: get().profiles.map(p => 
+                p.id === profile.id ? {
+                  ...p,
+                  handicapIndex: profile.handicapIndex, // Could implement handicap calculation here
+                  stats: {
+                    ...p.stats,
+                    roundsPlayed,
+                    averageScore,
+                    bestScore,
+                    totalBirdies: p.stats.totalBirdies + stats.birdies,
+                    totalEagles: p.stats.totalEagles + stats.eagles
+                  },
+                  lastActive: new Date().toISOString()
+                } : p
+              )
+            });
+          }
+        });
+        
+        // Mark event as completed and move to completed events
+        const completedAt = new Date().toISOString();
+        const completedEvent = { ...event, isCompleted: true, completedAt, lastModified: completedAt };
+        
+        set({
+          completedRounds: [...get().completedRounds, ...newCompletedRounds],
+          events: get().events.filter(e => e.id !== eventId), // Remove from active events
+          completedEvents: [...get().completedEvents, completedEvent] // Add to completed events
+        });
+        
+        return true;
+      },
+      
       importData: (data: Event[]) => set({ events: data }),
       exportData: () => JSON.stringify(get().events, null, 2)
     }),
@@ -725,6 +1129,7 @@ export const useStore = create<State>()(
             // Ensure new required fields
             if (!e.ownerProfileId) e.ownerProfileId = e.golfers[0]?.profileId || 'unknown';
             if (!e.isPublic) e.isPublic = false;
+            if (!e.scorecardView) e.scorecardView = 'individual'; // Default to individual view
             if (!e.createdAt) e.createdAt = new Date().toISOString();
             if (!e.lastModified) e.lastModified = new Date().toISOString();
             if (!e.chat) e.chat = [];

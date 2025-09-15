@@ -6,7 +6,10 @@ import { nanoid } from 'nanoid/non-secure';
 type Props = { eventId: string };
 
 const GamesTab: React.FC<Props> = ({ eventId }) => {
-  const event = useStore((s: any) => s.events.find((e: any) => e.id === eventId));
+  const event = useStore((s: any) => 
+    s.events.find((e: any) => e.id === eventId) || 
+    s.completedEvents.find((e: any) => e.id === eventId)
+  );
   const profiles = useStore((s: any) => s.profiles);
   const updateEvent = useStore((s: any) => s.updateEvent);
   if (!event) return null;
@@ -210,16 +213,26 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
 
   return (
     <div className="space-y-6">
+      {event.isCompleted && (
+        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+          <div className="flex items-center gap-2 text-sm text-green-800">
+            <span className="font-medium">✓ Event Completed</span>
+            <span className="text-xs">Games configuration is read-only</span>
+          </div>
+        </div>
+      )}
       <section>
         <h2 className="font-semibold mb-2">Nassau (event)</h2>
         <div className="flex gap-2 mb-3">
           <button
-            className="text-[10px] px-3 py-1 rounded bg-primary-600 text-white font-medium shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-400"
+            className="text-[10px] px-3 py-1 rounded bg-primary-600 text-white font-medium shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-400 disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => addNassau(false)}
+            disabled={event.isCompleted}
           >Add Gross</button>
           <button
-            className="text-[10px] px-3 py-1 rounded bg-primary-600 text-white font-medium shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-400"
+            className="text-[10px] px-3 py-1 rounded bg-primary-600 text-white font-medium shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-400 disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => addNassau(true)}
+            disabled={event.isCompleted}
           >Add Net</button>
         </div>
         <div className="grid gap-3 max-w-lg">
@@ -250,10 +263,10 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                   </div>
                   <div className="flex items-center gap-2">
                     <label className="flex items-center gap-1">Fee
-                      <input className="border rounded px-1 py-0.5 w-20" type="number" value={n.fee} onChange={e => updateCfg({ fee: Number(e.target.value) })} />
+                      <input className="border rounded px-1 py-0.5 w-20" type="number" value={n.fee} onChange={e => updateCfg({ fee: Number(e.target.value) })} disabled={event.isCompleted} />
                     </label>
                     <label className="flex items-center gap-1">Net
-                      <input type="checkbox" checked={n.net} onChange={e => updateCfg({ net: e.target.checked })} />
+                      <input type="checkbox" checked={n.net} onChange={e => updateCfg({ net: e.target.checked })} disabled={event.isCompleted} />
                     </label>
                     {(() => {
                       const teamsArr = (n.teams || []).filter((t:any)=> t.golferIds && t.golferIds.length>0);
@@ -268,7 +281,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                           <select
                             className="border rounded px-1 py-0.5 disabled:opacity-50"
                             value={effectiveValue}
-                            disabled={maxSelectable===0}
+                            disabled={maxSelectable===0 || event.isCompleted}
                             onChange={e => updateCfg({ teamBestCount: e.target.value ? Number(e.target.value) : undefined })}
                           >
                             <option value="">—</option>
@@ -277,7 +290,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                         </label>
                       );
                     })()}
-                    <button type="button" onClick={() => removeNassau(n.id)} className="text-[10px] px-2 py-1 rounded border border-red-200 bg-red-50 text-red-600">Remove</button>
+                    <button type="button" onClick={() => removeNassau(n.id)} className="text-[10px] px-2 py-1 rounded border border-red-200 bg-red-50 text-red-600 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted}>Remove</button>
                   </div>
                 </div>
                 
@@ -289,12 +302,12 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-[9px] font-semibold tracking-wide text-primary-700">Playing</span>
                         {activeGolfers.length !== allGolfers.length && (
-                          <button className="text-[9px] underline" onClick={()=> setList(allGolfers.map((gg:any)=>gg.id))}>All</button>
+                          <button className="text-[9px] underline disabled:opacity-50 disabled:cursor-not-allowed" onClick={()=> setList(allGolfers.map((gg:any)=>gg.id))} disabled={event.isCompleted}>All</button>
                         )}
                       </div>
                       <div className="flex flex-wrap gap-1">
                         {activeGolfers.map((g:any)=>(
-                          <button key={g.id} type="button" title="Tap to remove" onClick={()=> removeActive(g.id)} className="text-[9px] px-1.5 py-0.5 rounded border bg-primary-600 text-white border-primary-600">
+                          <button key={g.id} type="button" title="Tap to remove" onClick={()=> removeActive(g.id)} className="text-[9px] px-1.5 py-0.5 rounded border bg-primary-600 text-white border-primary-600 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted}>
                             {g.name}
                           </button>
                         ))}
@@ -305,12 +318,12 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-[9px] font-semibold tracking-wide text-gray-700">Not Playing</span>
                         {inactiveGolfers.length>0 && (
-                          <button className="text-[9px] underline" onClick={()=> setList(allGolfers.map((gg:any)=>gg.id))}>Add All</button>
+                          <button className="text-[9px] underline disabled:opacity-50 disabled:cursor-not-allowed" onClick={()=> setList(allGolfers.map((gg:any)=>gg.id))} disabled={event.isCompleted}>Add All</button>
                         )}
                       </div>
                       <div className="flex flex-wrap gap-1">
                         {inactiveGolfers.map((g:any)=>(
-                          <button key={g.id} type="button" title="Tap to add" onClick={()=> addInactive(g.id)} className="text-[9px] px-1.5 py-0.5 rounded border bg-white text-primary-700 border-primary-300">
+                          <button key={g.id} type="button" title="Tap to add" onClick={()=> addInactive(g.id)} className="text-[9px] px-1.5 py-0.5 rounded border bg-white text-primary-700 border-primary-300 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted}>
                             {g.name}
                           </button>
                         ))}
@@ -327,13 +340,13 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                       <span className="font-semibold text-[10px] tracking-wide">Team Options</span>
                     </div>
                     <div className="grid grid-cols-2 xs:grid-cols-3 sm:flex sm:flex-wrap gap-2">
-                      <button type="button" className="text-[10px] px-2 py-1 border border-primary-300 rounded bg-primary-50 text-primary-700" onClick={() => {
+                      <button type="button" className="text-[10px] px-2 py-1 border border-primary-300 rounded bg-primary-50 text-primary-700 disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => {
                         const teams = n.teams || [];
                         updateCfg({ teams: [...teams, { id: 'T' + (teams.length + 1), name: 'Team ' + (teams.length + 1), golferIds: [] }] });
-                      }}>Add Team</button>
-                      <button type="button" className="text-[10px] px-2 py-1 border border-primary-300 rounded bg-white text-primary-700" onClick={() => randomizeTeams(n, activeGolfers)}>Randomize</button>
-                      <button type="button" className="text-[10px] px-2 py-1 border border-primary-300 rounded bg-white text-primary-700" onClick={() => autoBalanceTeams(n, activeGolfers)}>Auto-Balance</button>
-                      <button type="button" className="text-[10px] px-2 py-1 border border-primary-600 rounded bg-primary-600 text-white" onClick={() => setBulkAssignState({ nassauId: n.id, selected: new Set(), mode: 'assign' })}>Assign</button>
+                      }} disabled={event.isCompleted}>Add Team</button>
+                      <button type="button" className="text-[10px] px-2 py-1 border border-primary-300 rounded bg-white text-primary-700 disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => randomizeTeams(n, activeGolfers)} disabled={event.isCompleted}>Randomize</button>
+                      <button type="button" className="text-[10px] px-2 py-1 border border-primary-300 rounded bg-white text-primary-700 disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => autoBalanceTeams(n, activeGolfers)} disabled={event.isCompleted}>Auto-Balance</button>
+                      <button type="button" className="text-[10px] px-2 py-1 border border-primary-600 rounded bg-primary-600 text-white disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => setBulkAssignState({ nassauId: n.id, selected: new Set(), mode: 'assign' })} disabled={event.isCompleted}>Assign</button>
                     </div>
                   </div>
                   <div className="flex items-center justify-between">
@@ -343,14 +356,14 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                     {(n.teams || []).map((t: any, ti: number) => (
                       <div key={t.id} className="border rounded p-2 bg-white/70 flex flex-col gap-1">
                         <div className="flex items-center gap-2">
-                          <input className="border rounded px-1 py-0.5 flex-1" value={t.name} onChange={e => {
+                          <input className="border rounded px-1 py-0.5 flex-1 disabled:opacity-50" value={t.name} onChange={e => {
                             const teams = (n.teams || []).map((x: any) => x.id === t.id ? { ...x, name: e.target.value } : x);
                             updateCfg({ teams });
-                          }} />
-                          <button type="button" className="text-[10px] text-red-600 border border-red-200 rounded px-1 py-0.5 bg-red-50" onClick={() => {
+                          }} disabled={event.isCompleted} />
+                          <button type="button" className="text-[10px] text-red-600 border border-red-200 rounded px-1 py-0.5 bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => {
                             const teams = (n.teams || []).filter((x: any) => x.id !== t.id);
                             updateCfg({ teams });
-                          }}>Remove</button>
+                          }} disabled={event.isCompleted}>Remove</button>
                         </div>
                         <div className="flex flex-wrap gap-1">
                           {(() => {
@@ -372,7 +385,8 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                                       const teams = (n.teams || []).map((x: any) => x.id === t.id ? { ...x, golferIds: active ? x.golferIds.filter((id: string) => id !== gg.id) : [...x.golferIds, gg.id] } : x);
                                       updateCfg({ teams });
                                     }}
-                                    className={`text-[10px] px-2 py-0.5 rounded border ${active ? 'bg-primary-600 text-white border-primary-600' : 'bg-white border-primary-300 text-primary-700'}`}
+                                    className={`text-[10px] px-2 py-0.5 rounded border ${active ? 'bg-primary-600 text-white border-primary-600' : 'bg-white border-primary-300 text-primary-700'} disabled:opacity-50 disabled:cursor-not-allowed`}
+                                    disabled={event.isCompleted}
                                   >{gg.name}</button>
                                 );
                               });
@@ -394,12 +408,14 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
         <h2 className="font-semibold mb-2">Skins (event)</h2>
         <div className="flex gap-2 mb-3">
           <button
-            className="text-[10px] px-3 py-1 rounded bg-primary-600 text-white font-medium shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-400"
+            className="text-[10px] px-3 py-1 rounded bg-primary-600 text-white font-medium shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-400 disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={()=> addSkins(false)}
+            disabled={event.isCompleted}
           >Add Gross</button>
           <button
-            className="text-[10px] px-3 py-1 rounded bg-primary-600 text-white font-medium shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-400"
+            className="text-[10px] px-3 py-1 rounded bg-primary-600 text-white font-medium shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-400 disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={()=> addSkins(true)}
+            disabled={event.isCompleted}
           >Add Net</button>
         </div>
         <div className="grid gap-3 max-w-lg">
@@ -414,12 +430,12 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                   <label className="flex items-center gap-1">Fee
                     <input className="border rounded px-1 py-0.5 w-20" type="number" value={sk.fee} onChange={e => {
                       updateEvent(eventId, { games: { ...event.games, skins: skinsArray.map((s:any)=> s.id===sk.id? { ...s, fee: Number(e.target.value)}: s) } });
-                    }} />
+                    }} disabled={event.isCompleted} />
                   </label>
                   <label className="flex items-center gap-1">Net
-                    <input type="checkbox" checked={sk.net} onChange={e => updateEvent(eventId, { games: { ...event.games, skins: skinsArray.map((s:any)=> s.id===sk.id? { ...s, net: e.target.checked}: s) } })} />
+                    <input type="checkbox" checked={sk.net} onChange={e => updateEvent(eventId, { games: { ...event.games, skins: skinsArray.map((s:any)=> s.id===sk.id? { ...s, net: e.target.checked}: s) } })} disabled={event.isCompleted} />
                   </label>
-                  <button type="button" onClick={()=> removeSkins(sk.id)} className="text-[10px] px-2 py-1 rounded border border-red-200 bg-red-50 text-red-600">Remove</button>
+                  <button type="button" onClick={()=> removeSkins(sk.id)} className="text-[10px] px-2 py-1 rounded border border-red-200 bg-red-50 text-red-600 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted}>Remove</button>
                 </div>
               </div>
             </div>
@@ -454,10 +470,10 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 <button onClick={closeBulk} className="text-[10px] px-2 py-0.5 rounded border">Close</button>
               </div>
               <div className="flex gap-2 items-center flex-wrap">
-                <label className="flex items-center gap-1"><input type="radio" name="bulkMode" checked={bulkAssignState.mode==='assign'} onChange={()=> setBulkAssignState(s=> s?{...s, mode:'assign'}:s)} /> Assign to Team</label>
-                <label className="flex items-center gap-1"><input type="radio" name="bulkMode" checked={bulkAssignState.mode==='roundRobin'} onChange={()=> setBulkAssignState(s=> s?{...s, mode:'roundRobin'}:s)} /> Even Round-Robin</label>
+                <label className="flex items-center gap-1"><input type="radio" name="bulkMode" checked={bulkAssignState.mode==='assign'} onChange={()=> setBulkAssignState(s=> s?{...s, mode:'assign'}:s)} disabled={event.isCompleted} /> Assign to Team</label>
+                <label className="flex items-center gap-1"><input type="radio" name="bulkMode" checked={bulkAssignState.mode==='roundRobin'} onChange={()=> setBulkAssignState(s=> s?{...s, mode:'roundRobin'}:s)} disabled={event.isCompleted} /> Even Round-Robin</label>
                 {bulkAssignState.mode==='assign' && (
-                  <select className="border rounded px-1 py-0.5" value={bulkAssignState.teamId || ''} onChange={e => setBulkAssignState(s=> s?{...s, teamId: e.target.value || undefined}:s)}>
+                  <select className="border rounded px-1 py-0.5 disabled:opacity-50" value={bulkAssignState.teamId || ''} onChange={e => setBulkAssignState(s=> s?{...s, teamId: e.target.value || undefined}:s)} disabled={event.isCompleted}>
                     <option value="">Select team</option>
                     {teams.map((t: any)=> <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
@@ -470,8 +486,8 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 {unassigned.map((gg: any) => {
                   const sel = bulkAssignState.selected.has(gg.id);
                   return (
-                    <label key={gg.id} className={`flex items-center gap-1 px-2 py-1 rounded border cursor-pointer ${sel ? 'bg-primary-600 text-white border-primary-600' : 'bg-white border-primary-300 text-primary-700'}`}>
-                      <input type="checkbox" className="hidden" checked={sel} onChange={()=> toggleSelect(gg.id)} />
+                    <label key={gg.id} className={`flex items-center gap-1 px-2 py-1 rounded border cursor-pointer ${sel ? 'bg-primary-600 text-white border-primary-600' : 'bg-white border-primary-300 text-primary-700'} disabled:opacity-50 disabled:cursor-not-allowed`} style={event.isCompleted ? { pointerEvents: 'none' } : {}}>
+                      <input type="checkbox" className="hidden" checked={sel} onChange={()=> toggleSelect(gg.id)} disabled={event.isCompleted} />
                       <span className="truncate">{gg.name}</span>
                       {gg.handicapIndex != null && <span className="text-[9px] opacity-70">({gg.handicapIndex})</span>}
                     </label>
@@ -481,7 +497,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
               <div className="flex justify-between items-center">
                 <div className="text-[10px] text-gray-500">{bulkAssignState.selected.size} selected</div>
                 <div className="flex gap-2">
-                  <button disabled={bulkAssignState.selected.size===0 || (bulkAssignState.mode==='assign' && !bulkAssignState.teamId)} onClick={()=> commitBulkAssign(nassau, activeGolfers)} className="text-[10px] px-3 py-1 rounded bg-primary-600 text-white disabled:opacity-40">Apply</button>
+                  <button disabled={bulkAssignState.selected.size===0 || (bulkAssignState.mode==='assign' && !bulkAssignState.teamId) || event.isCompleted} onClick={()=> commitBulkAssign(nassau, activeGolfers)} className="text-[10px] px-3 py-1 rounded bg-primary-600 text-white disabled:opacity-40">Apply</button>
                   <button onClick={closeBulk} className="text-[10px] px-3 py-1 rounded border">Cancel</button>
                 </div>
               </div>

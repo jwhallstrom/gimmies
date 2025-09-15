@@ -4,3 +4,86 @@
 
 html, body, #root { height: 100%; }
 body { font-family: ui-sans-serif, system-ui, sans-serif; }
+
+/* PWA Safe Area Support for iOS - Only when in standalone mode */
+@media (display-mode: standalone) {
+  .pt-safe {
+    padding-top: calc(0.75rem + constant(safe-area-inset-top));
+    padding-top: calc(0.75rem + env(safe-area-inset-top));
+  }
+
+  .pb-safe {
+    padding-bottom: calc(0.5rem + constant(safe-area-inset-bottom));
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+  }
+  
+  .pl-safe {
+    padding-left: max(1rem, constant(safe-area-inset-left));
+    padding-left: max(1rem, env(safe-area-inset-left));
+  }
+
+  .pr-safe {
+    padding-right: max(1rem, constant(safe-area-inset-right));
+    padding-right: max(1rem, env(safe-area-inset-right));
+  }
+}
+
+/* Default for non-PWA mode */
+.pt-safe {
+  padding-top: 0.75rem;
+}
+
+.pb-safe {
+  padding-bottom: 0.5rem;
+}
+
+.pl-safe {
+  padding-left: 1rem;
+}
+
+.pr-safe {
+  padding-right: 1rem;
+}
+
+/* Mobile viewport fix - Use dynamic viewport units */
+@supports (-webkit-touch-callout: none) {
+  .min-h-screen {
+    min-height: -webkit-fill-available;
+  }
+  
+  .h-screen {
+    height: 100dvh;
+    height: -webkit-fill-available;
+  }
+  
+  .min-h-dvh {
+    min-height: 100dvh;
+    min-height: -webkit-fill-available;
+  }
+}
+
+/* Full-screen overlay for modals/profile editor */
+.fullscreen-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  height: 100dvh;
+  z-index: 10000;
+}
+
+@media (display-mode: standalone) {
+  .fullscreen-overlay {
+    padding-top: constant(safe-area-inset-top);
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: constant(safe-area-inset-bottom);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: constant(safe-area-inset-left);
+    padding-left: env(safe-area-inset-left);
+    padding-right: constant(safe-area-inset-right);
+    padding-right: env(safe-area-inset-right);
+  }
+}

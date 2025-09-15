@@ -10,7 +10,10 @@ import ChatTab from '../components/tabs/ChatTab';
 
 const EventPage: React.FC = () => {
   const { id } = useParams();
-  const event = useStore(s => s.events.find(e => e.id === id));
+  const event = useStore(s => 
+    s.events.find(e => e.id === id) || 
+    s.completedEvents.find(e => e.id === id)
+  );
   const { deleteEvent, currentProfile } = useStore();
   const navigate = useNavigate();
   if (!event) return <div>Event not found.</div>;
@@ -97,7 +100,7 @@ const EventPage: React.FC = () => {
           </button>
         )}
       </div>
-      <div className="flex gap-2 overflow-x-auto pb-2 border-b border-primary-700/40 sticky top-[52px] bg-gradient-to-r from-primary-900 via-primary-800 to-primary-900 z-30 px-0 -mx-4 pl-4 pr-4 justify-center">
+      <div className="flex gap-2 overflow-x-auto pb-2 border-b border-primary-700/40 sticky top-[72px] bg-gradient-to-r from-primary-900 via-primary-800 to-primary-900 z-35 px-0 -mx-4 pl-4 pr-4 justify-center">
         {tabs.map(t => (
           <NavLink
             key={t.path}

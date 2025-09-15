@@ -18,7 +18,10 @@ const timeAgo = (iso: string) => {
 };
 
 const ChatTab: React.FC<ChatTabProps> = ({ eventId }) => {
-  const event = useStore(s => s.events.find(e => e.id === eventId));
+  const event = useStore(s => 
+    s.events.find(e => e.id === eventId) || 
+    s.completedEvents.find(e => e.id === eventId)
+  );
   const currentProfile = useStore(s => s.currentProfile);
   const addChatMessage = useStore(s => s.addChatMessage);
   const clearChat = useStore(s => s.clearChat);
@@ -53,7 +56,9 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId }) => {
         {messages.length > 0 && (
           <button
             onClick={() => {
-              if (window.confirm('Clear all chat messages for this event?')) clearChat(eventId);
+              if (window.confirm('Clear all chat messages for this event?')) {
+                clearChat(eventId);
+              }
             }}
             className="text-[10px] uppercase tracking-wide font-semibold text-primary-500 hover:text-primary-700"
           >
@@ -68,6 +73,22 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId }) => {
         {messages.map(m => {
           const sender = m.profileId ? useStore.getState().profiles.find(p => p.id === m.profileId) : undefined;
           const mine = m.profileId === currentProfile?.id;
+          const isBot = m.profileId === 'gimmies-bot';
+          
+          if (isBot) {
+            return (
+              <div key={m.id} className="flex justify-center">
+                <div className="max-w-[85%] rounded-lg px-3 py-2 shadow-sm border text-[12px] leading-snug bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200 text-amber-900">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <span className="font-bold text-amber-700">🎯 Gimmies Alert</span>
+                    <span className="text-[10px] uppercase tracking-wide text-amber-600">{timeAgo(m.createdAt)}</span>
+                  </div>
+                  <div className="whitespace-pre-wrap break-words font-medium">{m.text}</div>
+                </div>
+              </div>
+            );
+          }
+          
           return (
             <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
               <div className={`max-w-[75%] rounded-lg px-3 py-1.5 shadow-sm border text-[12px] leading-snug ${mine ? 'bg-primary-600 text-white border-primary-700' : 'bg-primary-50 text-primary-900 border-primary-200'}`}>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import useStore from '../../state/store';
 import { courseMap } from '../../data/courses';
 
@@ -6,32 +6,93 @@ type Props = { eventId: string };
 
 const LeaderboardTab: React.FC<Props> = ({ eventId }) => {
   const { profiles } = useStore();
-  const event = useStore((s: any) => s.events.find((e: any) => e.id === eventId));
-  const [isMobile, setIsMobile] = useState(false);
-  const [viewMode, setViewMode] = useState<'full' | 'compact'>('full');
-
-  // Detect mobile screen size
-  useEffect(() => {
-    const checkMobile = () => {
-      const mobile = window.innerWidth < 768;
-      setIsMobile(mobile);
-      if (mobile && viewMode === 'full') {
-        setViewMode('compact');
-      }
-    };
-
-    checkMobile();
-    window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
-  }, [viewMode]);
+  const event = useStore((s: any) => 
+    s.events.find((e: any) => e.id === eventId) || 
+    s.completedEvents.find((e: any) => e.id === eventId)
+  );
+  const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null);
 
   if (!event) return null;
+
+  const togglePlayerExpanded = (playerId: string) => {
+    setExpandedPlayer(expandedPlayer === playerId ? null : playerId);
+  };
+
+  const getPlayerScorecard = (playerId: string) => {
+    const scorecard = event.scorecards.find((sc: any) => 
+      sc.golferId === playerId
+    );
+    return scorecard?.scores || [];
+  };
 
   const course = event.course.courseId ? courseMap[event.course.courseId] : null;
   const holes = course ? course.holes : Array.from({ length: 18 }).map((_, i) => ({ number: i + 1, par: 4 }));
 
   // Calculate total par for the course
   const totalPar = holes.reduce((sum, hole) => sum + hole.par, 0);
+
+  // Function to get emoji based on recent performance
+  const getPlayerEmoji = (scorecard: any) => {
+    if (!scorecard?.scores || scorecard.scores.length === 0) return '';
+
+    const scores = scorecard.scores
+      .filter((s: any) => s.strokes != null)
+      .sort((a: any, b: any) => a.hole - b.hole);
+
+    if (scores.length === 0) return '';
+
+    const latestScore = scores[scores.length - 1];
+    const latestHoleNumber = latestScore.hole;
+
+    // Check for snowman (8) on latest score - disappears after next score entry
+    if (latestScore.strokes === 8) {
+      return '⛄';
+    }
+
+    // Check current consecutive birdies streak (from the end working backwards)
+    let currentBirdieStreak = 0;
+    for (let i = scores.length - 1; i >= 0; i--) {
+      const score = scores[i];
+      const hole = holes.find(h => h.number === score.hole);
+      
+      if (hole && score.strokes === hole.par - 1) {
+        currentBirdieStreak++;
+      } else {
+        break; // Streak is broken
+      }
+    }
+
+    // Fire emoji for 3+ current consecutive birdies - disappears when streak breaks
+    if (currentBirdieStreak >= 3) {
+      return '🔥';
+    }
+
+    // Bird emoji for 2+ current consecutive birdies - disappears when streak breaks
+    if (currentBirdieStreak >= 2) {
+      return '🐦';
+    }
+
+    // Check for permanent achievements within last 2 holes
+    const recentHoles = scores.filter((s: any) => s.hole > latestHoleNumber - 2);
+    
+    // Check for hole in one (ace) in last 2 holes
+    if (recentHoles.some((s: any) => {
+      const hole = holes.find(h => h.number === s.hole);
+      return s.strokes === 1 && hole && hole.par > 1;
+    })) {
+      return '💎';
+    }
+
+    // Check for eagle (2 under par) in last 2 holes
+    if (recentHoles.some((s: any) => {
+      const hole = holes.find(h => h.number === s.hole);
+      return hole && s.strokes <= hole.par - 2;
+    })) {
+      return '🦅';
+    }
+
+    return '';
+  };
 
   // Calculate scores for each golfer
   const leaderboardData = event.golfers.map((eventGolfer: any) => {
@@ -48,12 +109,13 @@ const LeaderboardTab: React.FC<Props> = ({ eventId }) => {
       return {
         id: golferId,
         name: displayName,
-        totalScore: null,
         totalStrokes: 0,
         toPar: null,
-        front9Score: null,
-        back9Score: null,
-        holesPlayed: 0
+        outStrokes: null,
+        inStrokes: null,
+        holesPlayed: 0,
+        front9Holes: 0,
+        back9Holes: 0
       };
     }
 
@@ -80,44 +142,59 @@ const LeaderboardTab: React.FC<Props> = ({ eventId }) => {
       }
     });
 
-    const toPar = holesPlayed === 18 ? totalStrokes - totalPar : null;
-    const front9Score = front9Holes === 9 ? front9Strokes - holes.slice(0, 9).reduce((sum, h) => sum + h.par, 0) : null;
-    const back9Score = back9Holes === 9 ? back9Strokes - holes.slice(9).reduce((sum, h) => sum + h.par, 0) : null;
+    // Calculate par for played holes to always show score to par
+    const front9Par = holes.slice(0, Math.min(9, front9Holes)).reduce((sum, h) => sum + h.par, 0);
+    const back9Par = holes.slice(9, 9 + back9Holes).reduce((sum, h) => sum + h.par, 0);
+    const totalPlayedPar = front9Par + back9Par;
+    
+    // Always calculate to par if any holes played
+    const toPar = holesPlayed > 0 ? totalStrokes - totalPlayedPar : null;
 
     return {
       id: golferId,
       name: displayName,
-      totalScore: holesPlayed === 18 ? totalStrokes : null,
       totalStrokes,
       toPar,
-      front9Score,
-      back9Score,
-      holesPlayed
+      outStrokes: front9Holes > 0 ? front9Strokes : null,
+      inStrokes: back9Holes > 0 ? back9Strokes : null,
+      holesPlayed,
+      front9Holes,
+      back9Holes,
+      emoji: getPlayerEmoji(scorecard),
+      scorecard: scorecard
     };
   });
 
-  // Sort by total score (ascending), then by holes played (descending)
-  const sortedLeaderboard = leaderboardData
-    .filter((player: any) => player.totalScore !== null)
+  // Sort by score to par (ascending), then by holes played (descending)
+  const playersWithScores = leaderboardData
+    .filter((player: any) => player.holesPlayed > 0)
     .sort((a: any, b: any) => {
-      if (a.totalScore !== b.totalScore) {
-        return a.totalScore! - b.totalScore!;
+      // If both have toPar, sort by toPar (lower is better)
+      if (a.toPar !== null && b.toPar !== null) {
+        if (a.toPar !== b.toPar) {
+          return a.toPar - b.toPar;
+        }
+        // If tied on toPar, prefer more holes played
+        return b.holesPlayed - a.holesPlayed;
       }
+      // If only one has toPar, that one goes first
+      if (a.toPar !== null) return -1;
+      if (b.toPar !== null) return 1;
+      // If neither has toPar, sort by holes played
       return b.holesPlayed - a.holesPlayed;
     });
 
   // Add position numbers
-  const leaderboardWithPositions = sortedLeaderboard.map((player: any, index: number) => ({
+  const leaderboardWithPositions = playersWithScores.map((player: any, index: number) => ({
     ...player,
     position: index + 1
   }));
 
-  // Add players who haven't completed all holes
-  const incompletePlayers = leaderboardData
-    .filter((player: any) => player.totalScore === null && player.holesPlayed > 0)
-    .sort((a: any, b: any) => b.holesPlayed - a.holesPlayed);
+  // Add players who haven't started
+  const playersWithoutScores = leaderboardData
+    .filter((player: any) => player.holesPlayed === 0);
 
-  const allPlayers = [...leaderboardWithPositions, ...incompletePlayers];
+  const allPlayers = [...leaderboardWithPositions, ...playersWithoutScores];
 
   const formatToPar = (toPar: number | null) => {
     if (toPar === null) return '-';
@@ -144,32 +221,9 @@ const LeaderboardTab: React.FC<Props> = ({ eventId }) => {
     <div className="space-y-4">
       <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
         <div className="bg-gradient-to-r from-primary-600 to-primary-700 text-white px-4 py-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Leaderboard</h2>
-            <div className="flex gap-2">
-              <button
-                onClick={() => setViewMode('compact')}
-                className={`px-3 py-1 rounded text-sm font-medium transition ${
-                  viewMode === 'compact'
-                    ? 'bg-white text-primary-700'
-                    : 'bg-primary-500/30 text-white hover:bg-primary-500/50'
-                }`}
-              >
-                Compact
-              </button>
-              <button
-                onClick={() => setViewMode('full')}
-                className={`px-3 py-1 rounded text-sm font-medium transition ${
-                  viewMode === 'full'
-                    ? 'bg-white text-primary-700'
-                    : 'bg-primary-500/30 text-white hover:bg-primary-500/50'
-                }`}
-              >
-                Full
-              </button>
-            </div>
-          </div>
-          <p className="text-sm opacity-90">{event.name} - {course?.name || 'Course'}</p>
+          <h2 className="text-lg font-semibold">Leaderboard</h2>
+          <p className="text-sm opacity-90">{event.name} - {course?.name || 'Course'} (Par {totalPar})</p>
+          <p className="text-xs opacity-75 mt-1">Click on any player to view their scorecard</p>
         </div>
 
         <div className="overflow-x-auto">
@@ -177,90 +231,185 @@ const LeaderboardTab: React.FC<Props> = ({ eventId }) => {
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
                 <th className="px-2 sm:px-4 py-3 text-left font-semibold text-slate-700">Pos</th>
-                <th className="px-2 sm:px-4 py-3 text-left font-semibold text-slate-700">Golfer</th>
-                <th className="px-2 sm:px-4 py-3 text-center font-semibold text-slate-700">Total</th>
+                <th className="px-2 sm:px-4 py-3 text-left font-semibold text-slate-700">Player</th>
                 <th className="px-2 sm:px-4 py-3 text-center font-semibold text-slate-700">To Par</th>
-                {viewMode === 'full' && (
-                  <>
-                    <th className="hidden sm:table-cell px-2 sm:px-4 py-3 text-center font-semibold text-slate-700">Front 9</th>
-                    <th className="hidden sm:table-cell px-2 sm:px-4 py-3 text-center font-semibold text-slate-700">Back 9</th>
-                  </>
-                )}
-                <th className="px-2 sm:px-4 py-3 text-center font-semibold text-slate-700">Holes</th>
+                <th className="px-2 sm:px-4 py-3 text-center font-semibold text-slate-700">Out</th>
+                <th className="px-2 sm:px-4 py-3 text-center font-semibold text-slate-700">In</th>
+                <th className="px-2 sm:px-4 py-3 text-center font-semibold text-slate-700">Thru</th>
               </tr>
             </thead>
             <tbody>
               {allPlayers.map((player, index) => (
-                <tr key={player.id} className={`border-b border-slate-100 hover:bg-slate-50 ${index < 3 ? 'bg-gradient-to-r from-yellow-50 to-transparent' : ''}`}>
-                  <td className={`px-2 sm:px-4 py-3 font-mono text-center ${getPositionColor(player.position || 0)}`}>
-                    {player.position ? (
-                      <span className={`inline-flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full text-xs sm:text-sm ${
-                        player.position === 1 ? 'bg-yellow-400 text-yellow-900' :
-                        player.position === 2 ? 'bg-gray-300 text-gray-800' :
-                        player.position === 3 ? 'bg-amber-600 text-white' :
-                        'bg-slate-100 text-slate-600'
-                      } font-bold`}>
-                        {player.position}
-                      </span>
-                    ) : (
-                      <span className="text-slate-400">-</span>
-                    )}
-                  </td>
-                  <td className="px-2 sm:px-4 py-3 font-medium text-slate-900">
-                    <div className="flex flex-col sm:flex-row sm:items-center sm:gap-2">
-                      <span className="truncate max-w-[120px] sm:max-w-none">{player.name}</span>
-                      {isMobile && viewMode === 'compact' && (
-                        <div className="flex gap-2 text-xs mt-1 sm:mt-0">
-                          {player.front9Score !== null && (
-                            <span className={player.front9Score < 0 ? 'text-green-600' : player.front9Score > 0 ? 'text-red-600' : 'text-gray-600'}>
-                              F9: {player.front9Score === 0 ? 'E' : (player.front9Score > 0 ? `+${player.front9Score}` : player.front9Score)}
-                            </span>
-                          )}
-                          {player.back9Score !== null && (
-                            <span className={player.back9Score < 0 ? 'text-green-600' : player.back9Score > 0 ? 'text-red-600' : 'text-gray-600'}>
-                              B9: {player.back9Score === 0 ? 'E' : (player.back9Score > 0 ? `+${player.back9Score}` : player.back9Score)}
-                            </span>
-                          )}
-                        </div>
+                <React.Fragment key={player.id}>
+                  <tr 
+                    className={`border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors ${
+                      player.position && player.position <= 3 ? 'bg-gradient-to-r from-yellow-50 to-transparent' : ''
+                    } ${expandedPlayer === player.id ? 'bg-blue-50' : ''}`}
+                    onClick={() => togglePlayerExpanded(player.id)}
+                  >
+                    <td className={`px-2 sm:px-4 py-3 font-mono text-center ${getPositionColor(player.position || 0)}`}>
+                      {player.position ? (
+                        <span className={`inline-flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full text-xs sm:text-sm ${
+                          player.position === 1 ? 'bg-yellow-400 text-yellow-900' :
+                          player.position === 2 ? 'bg-gray-300 text-gray-800' :
+                          player.position === 3 ? 'bg-amber-600 text-white' :
+                          'bg-slate-100 text-slate-600'
+                        } font-bold`}>
+                          {player.position}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">-</span>
                       )}
-                    </div>
-                  </td>
-                  <td className="px-2 sm:px-4 py-3 text-center font-mono font-semibold">
-                    {player.totalScore !== null ? (
-                      <span className="text-slate-800">{player.totalScore}</span>
-                    ) : (
-                      <span className="text-slate-400">-</span>
-                    )}
-                  </td>
-                  <td className={`px-2 sm:px-4 py-3 text-center font-mono font-semibold ${getToParColor(player.toPar)}`}>
-                    {formatToPar(player.toPar)}
-                  </td>
-                  {viewMode === 'full' && (
-                    <>
-                      <td className="hidden sm:table-cell px-2 sm:px-4 py-3 text-center font-mono">
-                        {player.front9Score !== null ? (
-                          <span className={player.front9Score < 0 ? 'text-green-600' : player.front9Score > 0 ? 'text-red-600' : 'text-gray-600'}>
-                            {player.front9Score === 0 ? 'E' : (player.front9Score > 0 ? `+${player.front9Score}` : player.front9Score)}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400">-</span>
-                        )}
+                    </td>
+                    <td className="px-2 sm:px-4 py-3 font-medium text-slate-900">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate max-w-[120px] sm:max-w-none">{player.name}</span>
+                        {player.emoji && <span className="text-lg">{player.emoji}</span>}
+                      </div>
+                    </td>
+                    <td className={`px-2 sm:px-4 py-3 text-center font-mono font-bold text-lg ${getToParColor(player.toPar)}`}>
+                      {formatToPar(player.toPar)}
+                    </td>
+                    <td className="px-2 sm:px-4 py-3 text-center font-mono text-slate-700">
+                      {player.outStrokes !== null ? (
+                        <span>{player.outStrokes}</span>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
+                    </td>
+                    <td className="px-2 sm:px-4 py-3 text-center font-mono text-slate-700">
+                      {player.inStrokes !== null ? (
+                        <span>{player.inStrokes}</span>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
+                    </td>
+                    <td className="px-2 sm:px-4 py-3 text-center text-slate-600 font-medium">
+                      {player.holesPlayed}
+                    </td>
+                  </tr>
+                  {expandedPlayer === player.id && (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+                        <div className="space-y-3">
+                          {/* Front 9 */}
+                          <div>
+                            <div className="text-xs font-semibold text-slate-500 mb-1">Front Nine</div>
+                            <div className="flex flex-col gap-1">
+                              {/* Hole numbers 1-9 */}
+                              <div className="flex gap-1">
+                                <div className="text-xs font-semibold text-slate-600 py-1 text-center w-12 shrink-0">Hole</div>
+                                {holes.slice(0, 9).map((hole) => (
+                                  <div key={`hole-${hole.number}`} className="text-xs font-semibold text-slate-600 py-1 text-center w-8 shrink-0">
+                                    {hole.number}
+                                  </div>
+                                ))}
+                                <div className="text-xs font-semibold text-slate-600 py-1 text-center w-10 shrink-0 ml-1">Out</div>
+                              </div>
+                              
+                              {/* Par 1-9 */}
+                              <div className="flex gap-1">
+                                <div className="text-xs font-semibold text-slate-600 py-1 text-center w-12 shrink-0">Par</div>
+                                {holes.slice(0, 9).map((hole) => (
+                                  <div key={`par-${hole.number}`} className="text-xs text-slate-600 py-1 text-center bg-slate-100 rounded w-8 shrink-0">
+                                    {hole.par}
+                                  </div>
+                                ))}
+                                <div className="text-xs text-slate-600 py-1 text-center bg-slate-200 rounded w-10 shrink-0 ml-1 font-semibold">
+                                  {holes.slice(0, 9).reduce((sum, h) => sum + h.par, 0)}
+                                </div>
+                              </div>
+                              
+                              {/* Player scores 1-9 */}
+                              <div className="flex gap-1">
+                                <div className="text-xs font-semibold text-slate-700 py-1 text-center w-12 shrink-0">Score</div>
+                                {holes.slice(0, 9).map((hole) => {
+                                  const playerScores = getPlayerScorecard(player.id);
+                                  const scoreForHole = playerScores.find((s: any) => s.hole === hole.number);
+                                  const strokes = scoreForHole?.strokes;
+                                  const toPar = strokes ? strokes - hole.par : null;
+                                  
+                                  return (
+                                    <div key={`score-${hole.number}`} className={`text-xs py-1 text-center font-mono rounded w-8 shrink-0 ${
+                                      strokes === null ? 'text-slate-400' :
+                                      toPar === null ? 'text-slate-700' :
+                                      toPar < 0 ? 'text-green-600 bg-green-50 font-semibold' :
+                                      toPar === 0 ? 'text-slate-700 bg-white' :
+                                      toPar === 1 ? 'text-orange-600 bg-orange-50 font-semibold' :
+                                      'text-red-600 bg-red-50 font-semibold'
+                                    }`}>
+                                      {strokes || '-'}
+                                    </div>
+                                  );
+                                })}
+                                <div className="text-xs py-1 text-center font-mono rounded w-10 shrink-0 ml-1 bg-slate-100 font-semibold">
+                                  {player.outStrokes || '-'}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Back 9 */}
+                          <div>
+                            <div className="text-xs font-semibold text-slate-500 mb-1">Back Nine</div>
+                            <div className="flex flex-col gap-1">
+                              {/* Hole numbers 10-18 */}
+                              <div className="flex gap-1">
+                                <div className="text-xs font-semibold text-slate-600 py-1 text-center w-12 shrink-0">Hole</div>
+                                {holes.slice(9, 18).map((hole) => (
+                                  <div key={`hole-${hole.number}`} className="text-xs font-semibold text-slate-600 py-1 text-center w-8 shrink-0">
+                                    {hole.number}
+                                  </div>
+                                ))}
+                                <div className="text-xs font-semibold text-slate-600 py-1 text-center w-10 shrink-0 ml-1">In</div>
+                              </div>
+                              
+                              {/* Par 10-18 */}
+                              <div className="flex gap-1">
+                                <div className="text-xs font-semibold text-slate-600 py-1 text-center w-12 shrink-0">Par</div>
+                                {holes.slice(9, 18).map((hole) => (
+                                  <div key={`par-${hole.number}`} className="text-xs text-slate-600 py-1 text-center bg-slate-100 rounded w-8 shrink-0">
+                                    {hole.par}
+                                  </div>
+                                ))}
+                                <div className="text-xs text-slate-600 py-1 text-center bg-slate-200 rounded w-10 shrink-0 ml-1 font-semibold">
+                                  {holes.slice(9, 18).reduce((sum, h) => sum + h.par, 0)}
+                                </div>
+                              </div>
+                              
+                              {/* Player scores 10-18 */}
+                              <div className="flex gap-1">
+                                <div className="text-xs font-semibold text-slate-700 py-1 text-center w-12 shrink-0">Score</div>
+                                {holes.slice(9, 18).map((hole) => {
+                                  const playerScores = getPlayerScorecard(player.id);
+                                  const scoreForHole = playerScores.find((s: any) => s.hole === hole.number);
+                                  const strokes = scoreForHole?.strokes;
+                                  const toPar = strokes ? strokes - hole.par : null;
+                                  
+                                  return (
+                                    <div key={`score-${hole.number}`} className={`text-xs py-1 text-center font-mono rounded w-8 shrink-0 ${
+                                      strokes === null ? 'text-slate-400' :
+                                      toPar === null ? 'text-slate-700' :
+                                      toPar < 0 ? 'text-green-600 bg-green-50 font-semibold' :
+                                      toPar === 0 ? 'text-slate-700 bg-white' :
+                                      toPar === 1 ? 'text-orange-600 bg-orange-50 font-semibold' :
+                                      'text-red-600 bg-red-50 font-semibold'
+                                    }`}>
+                                      {strokes || '-'}
+                                    </div>
+                                  );
+                                })}
+                                <div className="text-xs py-1 text-center font-mono rounded w-10 shrink-0 ml-1 bg-slate-100 font-semibold">
+                                  {player.inStrokes || '-'}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       </td>
-                      <td className="hidden sm:table-cell px-2 sm:px-4 py-3 text-center font-mono">
-                        {player.back9Score !== null ? (
-                          <span className={player.back9Score < 0 ? 'text-green-600' : player.back9Score > 0 ? 'text-red-600' : 'text-gray-600'}>
-                            {player.back9Score === 0 ? 'E' : (player.back9Score > 0 ? `+${player.back9Score}` : player.back9Score)}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400">-</span>
-                        )}
-                      </td>
-                    </>
+                    </tr>
                   )}
-                  <td className="px-2 sm:px-4 py-3 text-center text-slate-600">
-                    {player.holesPlayed}/18
-                  </td>
-                </tr>
+                </React.Fragment>
               ))}
             </tbody>
           </table>
@@ -273,31 +422,6 @@ const LeaderboardTab: React.FC<Props> = ({ eventId }) => {
           </div>
         )}
       </div>
-
-      {/* Course Info */}
-      {course && (
-        <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4">
-          <h3 className="font-semibold text-slate-800 mb-2">Course Information</h3>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-            <div>
-              <span className="text-slate-600">Par:</span>
-              <span className="ml-2 font-semibold">{totalPar}</span>
-            </div>
-            <div>
-              <span className="text-slate-600">Front 9:</span>
-              <span className="ml-2 font-semibold">{holes.slice(0, 9).reduce((sum, h) => sum + h.par, 0)}</span>
-            </div>
-            <div>
-              <span className="text-slate-600">Back 9:</span>
-              <span className="ml-2 font-semibold">{holes.slice(9).reduce((sum, h) => sum + h.par, 0)}</span>
-            </div>
-            <div>
-              <span className="text-slate-600">Holes:</span>
-              <span className="ml-2 font-semibold">{holes.length}</span>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

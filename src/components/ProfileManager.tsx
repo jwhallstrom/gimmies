@@ -66,7 +66,7 @@ const ProfileManager: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4" data-profile-manager>
       {/* Profile Avatar and Basic Info */}
       <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
         <div className="relative">
@@ -95,15 +95,31 @@ const ProfileManager: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
         <h4 className="font-medium text-gray-900">Edit Profile Information</h4>
         
         <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1 text-gray-700">Profile Name</label>
-            <input
-              type="text"
-              value={editProfileName}
-              onChange={(e) => setEditProfileName(e.target.value)}
-              className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              placeholder="Your profile name"
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1 text-gray-700">Profile Name</label>
+              <input
+                type="text"
+                value={editProfileName}
+                onChange={(e) => setEditProfileName(e.target.value)}
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                placeholder="Your profile name"
+              />
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium mb-1 text-gray-700">Handicap Index</label>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                max="50"
+                value={editHandicapIndex}
+                onChange={(e) => setEditHandicapIndex(e.target.value)}
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                placeholder="0.0"
+              />
+            </div>
           </div>
           
           <div className="grid grid-cols-2 gap-4">
@@ -138,20 +154,6 @@ const ProfileManager: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
               onChange={(e) => setEditEmail(e.target.value)}
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               placeholder="your@email.com"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium mb-1 text-gray-700">Handicap Index</label>
-            <input
-              type="number"
-              step="0.1"
-              min="0"
-              max="50"
-              value={editHandicapIndex}
-              onChange={(e) => setEditHandicapIndex(e.target.value)}
-              className="w-32 border border-gray-300 rounded px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-              placeholder="0.0"
             />
           </div>
         </div>
@@ -231,34 +233,26 @@ const ProfileManager: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
         </div>
       )}
 
-
-
-
-
-      {/* Save/Cancel Buttons */}
-      <div className="flex gap-3 pt-4 border-t">
-        <button
-          onClick={handleSaveProfile}
-          className="flex-1 bg-primary-600 text-white py-3 px-4 rounded font-medium hover:bg-primary-700 focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
-        >
-          Save Changes
-        </button>
-        <button
-          onClick={() => {
-            // Reset form to original values
-            if (currentProfile) {
-              setEditProfileName(currentProfile.name || '');
-              setEditFirstName(currentProfile.firstName || '');
-              setEditLastName(currentProfile.lastName || '');
-              setEditEmail(currentProfile.email || '');
-              setEditHandicapIndex(currentProfile.handicapIndex?.toString() || '');
-            }
-          }}
-          className="flex-1 bg-gray-600 text-white py-3 px-4 rounded font-medium hover:bg-gray-700 focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-        >
-          Reset
-        </button>
-      </div>
+      {/* Hidden buttons for header controls */}
+      <button
+        data-save
+        onClick={handleSaveProfile}
+        className="hidden"
+      />
+      <button
+        data-reset
+        onClick={() => {
+          // Reset form to original values
+          if (currentProfile) {
+            setEditProfileName(currentProfile.name || '');
+            setEditFirstName(currentProfile.firstName || '');
+            setEditLastName(currentProfile.lastName || '');
+            setEditEmail(currentProfile.email || '');
+            setEditHandicapIndex(currentProfile.handicapIndex?.toString() || '');
+          }
+        }}
+        className="hidden"
+      />
     </div>
   );
 };

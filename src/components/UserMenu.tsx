@@ -89,28 +89,68 @@ const UserMenu: React.FC = () => {
         </div>
       )}
 
-      {/* Profile Manager Modal */}
+      {/* Full-Screen Profile Manager - Must be above header (z-40) and footer (z-40) */}
       {showProfileManager && (
-        <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 p-4 pt-8"
-             onClick={(e) => {
-               // Close modal when clicking on backdrop
-               if (e.target === e.currentTarget) {
-                 setShowProfileManager(false);
-               }
-             }}>
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-md mx-auto max-h-[85vh] overflow-y-auto relative">
-            <div className="flex items-center justify-between p-4 border-b">
-              <h2 className="text-lg font-semibold text-gray-900">Edit Profile</h2>
-              <button
-                onClick={() => setShowProfileManager(false)}
-                className="text-gray-400 hover:text-gray-600 p-1"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
+        <div className="fullscreen-overlay bg-white flex flex-col">
+          {/* Header */}
+          <div className="bg-white border-b border-gray-200 px-4 py-4 flex-shrink-0 pt-safe">
+            <div className="flex items-center justify-between">
+              <h1 className="text-xl font-semibold text-gray-900">Edit Profile</h1>
+              <div className="flex items-center gap-2">
+                {/* Save Button */}
+                <button
+                  onClick={() => {
+                    // Trigger save from ProfileManager
+                    const profileManager = document.querySelector('[data-profile-manager]');
+                    if (profileManager) {
+                      const saveButton = profileManager.querySelector('button[data-save]') as HTMLButtonElement;
+                      saveButton?.click();
+                    }
+                    setShowProfileManager(false);
+                  }}
+                  className="text-green-600 hover:text-green-700 p-2 rounded-lg"
+                  title="Save Changes"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </button>
+                
+                {/* Reset Button */}
+                <button
+                  onClick={() => {
+                    // Trigger reset from ProfileManager
+                    const profileManager = document.querySelector('[data-profile-manager]');
+                    if (profileManager) {
+                      const resetButton = profileManager.querySelector('button[data-reset]') as HTMLButtonElement;
+                      resetButton?.click();
+                    }
+                  }}
+                  className="text-orange-600 hover:text-orange-700 p-2 rounded-lg"
+                  title="Reset Form"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                </button>
+                
+                {/* Close Button */}
+                <button
+                  onClick={() => setShowProfileManager(false)}
+                  className="text-gray-600 hover:text-gray-900 p-2 rounded-lg"
+                  title="Close"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
             </div>
-            <div className="p-4">
+          </div>
+          
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto p-4 bg-gray-50 pb-safe" style={{ minHeight: '0' }}>
+            <div className="max-w-md mx-auto">
               <ProfileManager onClose={() => setShowProfileManager(false)} />
             </div>
           </div>

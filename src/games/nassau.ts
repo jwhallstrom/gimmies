@@ -74,10 +74,24 @@ export function computeNassauForConfig(event: Event, config: NassauConfig, profi
       (config.teams || []).forEach(team => {
         // aggregate per hole: sort team members' scores (net/gross) and take best N
         let total = 0;
-        let allComplete = true;
         let parTotal = 0;
+        let allComplete = true;
         for (const h of holes) {
           const memberScores: number[] = [];
+          let holePar = 4; // default par
+          
+          // Get hole par from course data
+          if (event.course.courseId) {
+            try {
+              const { courseMap } = require('../data/courses');
+              const course = courseMap[event.course.courseId];
+              if (course) {
+                const holeData = course.holes.find((hole: any) => hole.number === h);
+                if (holeData) holePar = holeData.par;
+              }
+            } catch {}
+          }
+          
             team.golferIds.forEach(pid => {
               const sc = event.scorecards.find(s => s.golferId === pid);
               const gross = sc?.scores.find(s => s.hole === h)?.strokes ?? null;
@@ -88,8 +102,14 @@ export function computeNassauForConfig(event: Event, config: NassauConfig, profi
           memberScores.sort((a,b)=>a-b);
           const used = memberScores.slice(0, Math.min(bestCount, memberScores.length));
           total += used.reduce((a,b)=>a+b,0);
+          parTotal += holePar * used.length; // par for the number of scores used
         }
-        scores[team.id] = allComplete ? total : Number.POSITIVE_INFINITY;
+        // Store the score as strokes relative to par (negative = under par)
+        scores[team.id] = allComplete ? total - parTotal : Number.POSITIVE_INFINITY;
+        // Store the raw total for display purposes
+        if (allComplete) {
+          toPar[team.id] = total - parTotal;
+        }
       });
     }
     const minScore = Math.min(...Object.values(scores));

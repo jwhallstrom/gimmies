@@ -6,8 +6,7 @@ const LoginPage: React.FC = () => {
   const { users, currentUser, switchUser, createUser } = useStore();
   const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
-  const [username, setUsername] = useState('');
-  const [displayName, setDisplayName] = useState('');
+  const [name, setName] = useState('');
   const [error, setError] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -15,9 +14,13 @@ const LoginPage: React.FC = () => {
     setError('');
 
     if (isLogin) {
-      // Login - find existing user
-      const user = users.find(u => u.username.toLowerCase() === username.toLowerCase());
+      // Login - find existing user by display name or username
+      const user = users.find(u => 
+        u.username.toLowerCase() === name.toLowerCase() || 
+        u.displayName.toLowerCase() === name.toLowerCase()
+      );
       if (user) {
+        console.log('Login: Found user', user);
         switchUser(user.id);
         // Navigate to dashboard after successful login
         navigate('/');
@@ -26,25 +29,27 @@ const LoginPage: React.FC = () => {
       }
     } else {
       // Sign up - create new user
-      if (!username.trim()) {
-        setError('Username is required');
-        return;
-      }
-      if (!displayName.trim()) {
-        setError('Display name is required');
+      if (!name.trim()) {
+        setError('Name is required');
         return;
       }
 
-      const existingUser = users.find(u => u.username.toLowerCase() === username.toLowerCase());
+      const existingUser = users.find(u => 
+        u.username.toLowerCase() === name.toLowerCase() || 
+        u.displayName.toLowerCase() === name.toLowerCase()
+      );
       if (existingUser) {
-        setError('Username already exists');
+        setError('Name already exists');
         return;
       }
 
-      // Create user and automatically create a default profile
-      createUser(username.trim(), displayName.trim());
+      // Create user with name as both username and display name
+      const cleanName = name.trim();
+      console.log('Signup: Creating user with name', cleanName);
+      createUser(cleanName, cleanName);
       
-      // Navigate to dashboard after successful signup
+      // Navigate immediately - user and profile creation is now synchronous
+      console.log('Signup: Navigating to dashboard');
       navigate('/');
     }
   };
@@ -55,8 +60,19 @@ const LoginPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-primary-900 via-primary-800 to-primary-900">
-      <div className="bg-white/95 backdrop-blur rounded-xl shadow-2xl p-8 w-full max-w-md mx-4">
+    <div 
+      className="min-h-screen flex items-center justify-center bg-gradient-to-b from-primary-900 via-primary-800 to-primary-900 relative"
+      style={{
+        backgroundImage: 'url(/File_000.jpeg)',
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat'
+      }}
+    >
+      {/* Very light overlay for better text readability */}
+      <div className="absolute inset-0 bg-black/10"></div>
+      
+      <div className="bg-white/75 backdrop-blur-sm rounded-xl shadow-2xl p-8 w-full max-w-md mx-4 relative z-10">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-primary-800 mb-2">Gimmies</h1>
           <p className="text-gray-600">Golf Scoring & Gambling</p>
@@ -90,33 +106,17 @@ const LoginPage: React.FC = () => {
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Username
+              Name
             </label>
             <input
               type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
               className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
-              placeholder="Enter username"
+              placeholder="Enter your name"
               required
             />
           </div>
-
-          {!isLogin && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Display Name
-              </label>
-              <input
-                type="text"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary-500"
-                placeholder="Enter display name"
-                required
-              />
-            </div>
-          )}
 
           <button
             type="submit"

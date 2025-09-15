@@ -7,11 +7,19 @@ import AnalyticsPage from './AnalyticsPage';
 import EventPage from './EventPage';
 import JoinEventPage from './JoinEventPage';
 import UserMenu from '../components/UserMenu';
+import { ToastManager } from '../components/Toast';
 import useStore from '../state/store';
 
 const App: React.FC = () => {
   const { currentUser, currentProfile, events } = useStore();
   const location = useLocation();
+
+  // Debug logging
+  console.log('App render:', { 
+    currentUser: currentUser?.id, 
+    currentProfile: currentProfile?.id,
+    location: location.pathname 
+  });
 
   // Count user's events
   const userEventsCount = currentProfile ? events.filter(event =>
@@ -19,12 +27,13 @@ const App: React.FC = () => {
   ).length : 0;
 
   if (!currentUser) {
+    console.log('App: No current user, showing login');
     return <LoginPage />;
   }
 
   return (
     <div className="min-h-screen flex flex-col bg-gradient-to-b from-primary-900 via-primary-800 to-primary-900 text-gray-900">
-      <header className="bg-primary-900/80 backdrop-blur text-white px-4 py-3 flex items-center justify-between shadow-md sticky top-0 z-40">
+      <header className="bg-primary-900/80 backdrop-blur text-white px-4 py-3 pt-safe flex items-center justify-between shadow-md sticky top-0 z-40">
         <Link to="/">
           <img src="/gimmies-logo.png" alt="Gimmies" className="h-12 w-auto" />
         </Link>
@@ -39,7 +48,7 @@ const App: React.FC = () => {
           <Route path="/join/:code" element={<JoinEventPage />} />
         </Routes>
       </main>
-      <footer className="fixed bottom-0 inset-x-0 bg-white/90 backdrop-blur border-t border-primary-900/20 flex items-center justify-between px-4 py-2 z-40">
+      <footer className="fixed bottom-0 inset-x-0 bg-white/90 backdrop-blur border-t border-primary-900/20 flex items-center justify-between px-4 py-2 pb-safe z-40">
         <Link
           to="/"
           className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${
@@ -81,6 +90,7 @@ const App: React.FC = () => {
           <span className="text-xs">Analytics</span>
         </Link>
       </footer>
+      <ToastManager />
     </div>
   );
 };

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import useStore from '../../state/store';
 import { calculateEventPayouts } from '../../games/payouts';
 
@@ -7,8 +8,12 @@ type Props = { eventId: string };
 const currency = (n: number) => '$' + n.toFixed(2);
 
 const OverviewTab: React.FC<Props> = ({ eventId }) => {
-  const { profiles } = useStore();
-  const event = useStore((s: any) => s.events.find((e: any) => e.id === eventId));
+  const { profiles, completeEvent, currentProfile } = useStore();
+  const navigate = useNavigate();
+  const event = useStore((s: any) => 
+    s.events.find((e: any) => e.id === eventId) || 
+    s.completedEvents.find((e: any) => e.id === eventId)
+  );
   if (!event) return null;
   const payouts = calculateEventPayouts(event, profiles);
   const skinsArray = Array.isArray(payouts.skins) ? payouts.skins : (payouts.skins ? [payouts.skins as any] : []);
@@ -24,6 +29,20 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
   );
   
   const incomplete = event.scorecards.some((sc: any) => sc.scores.some((s: any) => s.strokes == null));
+  
+  const handleCompleteEvent = () => {
+    if (window.confirm('Are you sure you want to complete this event? This will finalize all scores and payouts, and move the event to history. This action cannot be undone.')) {
+      const success = completeEvent(eventId);
+      if (success) {
+        alert('Event completed successfully! Round data has been saved to your analytics. The event has been moved to your History tab.');
+        // Navigate back to events page - the useEffect will auto-switch to history tab
+        navigate('/events');
+      } else {
+        alert('Failed to complete event. Please ensure all scores are entered.');
+      }
+    }
+  };
+  
   // Build buy-in totals per golfer (fees paid regardless of eventual winnings)
   const buyinByGolfer: Record<string, number> = {};
   event.golfers.forEach((eventGolfer: any) => { 
@@ -58,7 +77,70 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
   const payoutByGolfer = payouts.totalByGolfer;
   return (
   <div className="space-y-6">
-      <section>
+      {/* Complete Event Button or Completed Status */}
+      {currentProfile && event.ownerProfileId === currentProfile.id && (
+        <div className="bg-white/90 backdrop-blur rounded-xl shadow-md p-4 border border-primary-900/5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold text-primary-800">
+                {event.isCompleted ? 'Event Completed' : 'Complete Event'}
+              </h3>
+              <p className="text-sm text-gray-600 mt-1">
+                {event.isCompleted
+                  ? `This event was completed on ${new Date(event.completedAt).toLocaleDateString()}. All scores and payouts are final.`
+                  : incomplete 
+                    ? 'Complete all scores before finishing the event.' 
+                    : 'Finalize scores, calculate payouts, and save round data to analytics.'
+                }
+              </p>
+            </div>
+            {!event.isCompleted && (
+              <div className="flex gap-2">
+                <button
+                  onClick={handleCompleteEvent}
+                  disabled={incomplete}
+                  className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                    incomplete
+                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                      : 'bg-green-600 hover:bg-green-700 text-white'
+                  }`}
+                  title={incomplete ? 'Complete all scores first' : 'Complete this event'}
+                >
+                  Complete Event
+                </button>
+                {/* Debug helper button - remove in production */}
+                {incomplete && currentProfile && event.ownerProfileId === currentProfile.id && (
+                  <button
+                    onClick={() => {
+                      if (window.confirm('Fill all empty scores with 4 (par) for testing purposes?')) {
+                        const { updateScore } = useStore.getState();
+                        event.scorecards.forEach((sc: any) => {
+                          sc.scores.forEach((s: any) => {
+                            if (s.strokes == null) {
+                              updateScore(eventId, sc.golferId, s.hole, 4);
+                            }
+                          });
+                        });
+                      }
+                    }}
+                    className="px-4 py-2 rounded-lg font-medium bg-blue-600 hover:bg-blue-700 text-white text-sm"
+                    title="Fill empty scores with 4 (for testing)"
+                  >
+                    Fill Test Scores
+                  </button>
+                )}
+              </div>
+            )}
+            {event.isCompleted && (
+              <div className="text-green-600 font-medium">
+                ✓ Completed
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      
+      <section className="border border-slate-200 rounded-lg p-3 bg-white shadow-sm">
         <h2 className="font-semibold mb-2 text-primary-900">Overview</h2>
         {incomplete && (
           <div className="mb-3 text-[11px] bg-amber-100 border border-amber-300 text-amber-900 px-3 py-2 rounded">
@@ -94,7 +176,7 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
         </table>
       </section>
       {payouts.nassau.length > 0 && (
-        <section>
+        <section className="border border-slate-200 rounded-lg p-3 bg-white shadow-sm">
           <h2 className="font-semibold mb-2 text-primary-900">Nassau</h2>
           {payouts.nassau.map(n => {
             const cfg = event.games.nassau.find((x: any) => x.id === n.configId);
@@ -129,9 +211,17 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
                       }
                       return null;
                     })();
+                    
+                    // For team segments, show par adjusted for team best count
+                    const cfg = event.games.nassau.find((x: any) => x.id === n.configId);
+                    const isTeamSegment = cfg?.teams && cfg.teams.length >= 2;
+                    const teamBestCount = cfg?.teamBestCount || 1;
+                    const adjustedPar = isTeamSegment && parForSegment ? parForSegment * teamBestCount : parForSegment;
+                    
                     return parForSegment ? (
                       <span key={seg.segment} className="text-gray-600">
-                        {seg.segment === 'front' ? 'Front 9' : seg.segment === 'back' ? 'Back 9' : 'Total'} Par: {parForSegment}
+                        {seg.segment === 'front' ? 'Front 9' : seg.segment === 'back' ? 'Back 9' : 'Total'} Par: {adjustedPar || parForSegment}
+                        {isTeamSegment && teamBestCount > 1 && ` (${teamBestCount} best)`}
                       </span>
                     ) : null;
                   })}
@@ -165,16 +255,26 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
                                   .map(([id, val]: any) => {
                                     const label = (golfersById[id]) ? golfersById[id] : (teamMap[id]?.name || id);
                                     const toParVal = seg.toPar && seg.toPar[id];
-                                    const toParStr = toParVal==null ? '' : (toParVal>0?`+${toParVal}`: toParVal===0?'E':`${toParVal}`);
-                                    const toParColor = toParVal==null ? '' : toParVal>0 ? 'text-red-600' : toParVal<0 ? 'text-green-600' : 'text-gray-600';
+                                    const isTeam = !!teamMap[id];
+                                    
+                                    // For teams, show the score as strokes relative to par
+                                    // For individuals, show raw strokes with toPar indicator
+                                    const displayScore = isTeam ? 
+                                      (toParVal != null ? (toParVal > 0 ? `+${toParVal}` : toParVal === 0 ? 'E' : toParVal.toString()) : '') :
+                                      val.toString();
+                                    
+                                    const scoreColor = isTeam ?
+                                      (toParVal == null ? '' : toParVal > 0 ? 'text-red-600' : toParVal < 0 ? 'text-green-600' : 'text-gray-600') :
+                                      '';
+                                    
                                     return (
                                       <span key={id} className="flex justify-between gap-2 items-center">
                                         <span className="truncate max-w-[90px]" title={label}>{label}</span>
                                         <div className="flex items-center gap-1">
-                                          <span className="font-mono">{val}</span>
-                                          {toParStr!=='' && (
-                                            <span className={`text-xs font-semibold px-1 py-0.5 rounded ${toParColor} bg-gray-100`}>
-                                              {toParStr}
+                                          <span className={`font-mono ${scoreColor}`}>{displayScore}</span>
+                                          {!isTeam && toParVal != null && (
+                                            <span className={`text-xs font-semibold px-1 py-0.5 rounded ${toParVal > 0 ? 'text-red-600' : toParVal < 0 ? 'text-green-600' : 'text-gray-600'} bg-gray-100`}>
+                                              {toParVal > 0 ? `+${toParVal}` : toParVal === 0 ? 'E' : toParVal.toString()}
                                             </span>
                                           )}
                                         </div>
