@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { nanoid } from 'nanoid/non-secure';
-import { courseMap, courses } from '../data/courses';
+import { courseMap, courses, courseTeesMap } from '../data/courses';
+import { calculateWHSHandicapIndex, distributeHandicapStrokes, applyESCAdjustment, calculateScoreDifferential } from '../utils/handicap';
 import { calculateEventPayouts } from '../games/payouts';
+import { IndividualRound, HandicapHistory, CombinedRound, ScoreEntry as HandicapScoreEntry } from '../types/handicap';
 
 // Domain models (simplified initial draft)
 export interface HoleDef { number: number; par: number; strokeIndex?: number; }
@@ -28,6 +30,8 @@ export interface GolferProfile {
   avatar?: string; // base64 or URL
   handicapIndex?: number;
   preferredTee?: string; // default tee preference
+  individualRounds?: IndividualRound[]; // Individual handicap rounds
+  handicapHistory?: HandicapHistory[]; // WHS calculation history
   stats: {
     roundsPlayed: number;
     averageScore: number;
@@ -197,6 +201,13 @@ interface State {
   // Toast notifications
   addToast: (message: string, type?: 'achievement' | 'info' | 'success' | 'error', duration?: number) => void;
   removeToast: (toastId: string) => void;
+  
+  // Individual Handicap Rounds
+  addIndividualRound: (round: Omit<IndividualRound, 'id' | 'createdAt'>) => string;
+  getProfileRounds: (profileId: string) => CombinedRound[];
+  calculateAndUpdateHandicap: (profileId: string) => void;
+  recalculateAllDifferentials: () => void;
+  deleteIndividualRound: (roundId: string) => void;
 }
 
 const defaultScoreArray = (courseId?: string) => {
@@ -898,6 +909,285 @@ export const useStore = create<State>()(
           toasts: get().toasts.filter(t => t.id !== toastId)
         });
       },
+
+      // Individual Handicap Rounds
+      addIndividualRound: (roundData: Omit<IndividualRound, 'id' | 'createdAt'>): string => {
+        const roundId = nanoid();
+        const newRound: IndividualRound = {
+          ...roundData,
+          id: roundId,
+          createdAt: new Date().toISOString()
+        };
+
+        // Find the profile to update
+        const profileToUpdate = get().profiles.find(p => p.id === roundData.profileId);
+        if (!profileToUpdate) return roundId;
+
+        // Create updated profile with new round and stats
+        const updatedProfile = {
+          ...profileToUpdate,
+          individualRounds: [...(profileToUpdate.individualRounds || []), newRound],
+          stats: {
+            ...profileToUpdate.stats,
+            roundsPlayed: profileToUpdate.stats.roundsPlayed + 1,
+            averageScore: profileToUpdate.stats.roundsPlayed > 0 
+              ? ((profileToUpdate.stats.averageScore * profileToUpdate.stats.roundsPlayed) + roundData.grossScore) / (profileToUpdate.stats.roundsPlayed + 1)
+              : roundData.grossScore,
+            bestScore: profileToUpdate.stats.bestScore === 0 || roundData.grossScore < profileToUpdate.stats.bestScore
+              ? roundData.grossScore
+              : profileToUpdate.stats.bestScore
+          }
+        };
+
+        set({
+          profiles: get().profiles.map(profile =>
+            profile.id === roundData.profileId ? updatedProfile : profile
+          ),
+          // Also update currentProfile if it's the same profile
+          currentProfile: get().currentProfile?.id === roundData.profileId ? updatedProfile : get().currentProfile
+        });
+
+        // Auto-calculate handicap after adding round
+        get().calculateAndUpdateHandicap(roundData.profileId);
+        
+        return roundId;
+      },
+
+      getProfileRounds: (profileId: string): CombinedRound[] => {
+        const profile = get().profiles.find(p => p.id === profileId);
+        const rounds: CombinedRound[] = [];
+
+        // Add individual rounds (includes converted event rounds)
+        if (profile?.individualRounds) {
+          profile.individualRounds.forEach(round => {
+            const courseTees = courseTeesMap[round.courseId];
+            rounds.push({
+              id: round.id,
+              type: 'individual',
+              date: round.date,
+              courseName: courseTees?.courseName || 'Unknown Course',
+              teeName: round.teeName,
+              grossScore: round.grossScore,
+              netScore: round.netScore,
+              scoreDifferential: round.scoreDifferential,
+              scores: round.scores
+            });
+          });
+        }
+
+        // Sort by date (most recent first)
+        return rounds.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      },
+
+      calculateAndUpdateHandicap: (profileId: string): void => {
+        const profile = get().profiles.find(p => p.id === profileId);
+        if (!profile?.individualRounds) return;
+
+        // Get all score differentials
+        const differentials = profile.individualRounds
+          .map(round => round.scoreDifferential)
+          .filter(diff => diff !== undefined && !isNaN(diff));
+
+        if (differentials.length === 0) return;
+
+  // Calculate WHS handicap index - pass ids so we can know which rounds were used
+  const roundEntries = profile.individualRounds.map(r => ({ id: r.id, differential: r.scoreDifferential }));
+  const whsResult = calculateWHSHandicapIndex(roundEntries as any);
+
+        // Create the updated profile object
+        const updatedProfile = {
+          ...profile,
+          handicapIndex: whsResult.handicapIndex,
+          handicapHistory: [
+            ...(profile.handicapHistory || []),
+            {
+              date: whsResult.calculationDate,
+              handicapIndex: whsResult.handicapIndex,
+              rounds: profile.individualRounds || [],
+              usedRoundIds: whsResult.usedRoundIds,
+              source: 'calculation' as const
+            }
+          ]
+        };
+
+        // Update profile with new handicap and record which rounds were used
+        set({
+          profiles: get().profiles.map(p =>
+            p.id === profileId ? updatedProfile : p
+          ),
+          // Also update currentProfile if it's the same profile
+          currentProfile: get().currentProfile?.id === profileId ? updatedProfile : get().currentProfile
+        });
+      },
+
+      recalculateAllDifferentials: (): void => {
+        const state = get();
+        
+        // First, check if any completed rounds should be added to individual rounds for handicap
+        state.profiles.forEach(profile => {
+          // Create a set of existing individual round dates/courses to avoid duplicates
+          const existingRounds = new Set(
+            profile.individualRounds?.map(r => `${r.date}-${r.courseId}-${r.teeName}`) || []
+          );
+          const completedRoundsForProfile = state.completedRounds.filter(cr => 
+            cr.golferId === profile.id && 
+            cr.courseId && 
+            !existingRounds.has(`${cr.datePlayed}-${cr.courseId}-${cr.teeName}`)
+          );
+          
+          completedRoundsForProfile.forEach(completedRound => {
+            if (!completedRound.courseId) return;
+            
+            // Convert completed event round to individual round
+            const courseTees = courseTeesMap[completedRound.courseId];
+            const tee = courseTees?.tees.find(t => t.name === completedRound.teeName);
+            
+            if (courseTees && tee && completedRound.holesPlayed >= 14) {
+              const currentHandicap = completedRound.handicapIndex || 0;
+              const courseHandicap = Math.round(currentHandicap * (tee.slopeRating / 113) + (tee.courseRating - tee.par));
+              
+              // Build scores array
+              const strokeDist = distributeHandicapStrokes(courseHandicap, completedRound.courseId);
+              const roundScores: HandicapScoreEntry[] = completedRound.holeScores.map(holeScore => ({
+                hole: holeScore.hole,
+                par: holeScore.par,
+                strokes: holeScore.strokes,
+                handicapStrokes: strokeDist[holeScore.hole - 1] || 0,
+                netStrokes: holeScore.strokes - (strokeDist[holeScore.hole - 1] || 0)
+              }));
+              
+              // Apply ESC and calculate differential
+              let adjustedGross = 0;
+              roundScores.forEach(s => {
+                const raw = s.strokes || 0;
+                const maxScore = applyESCAdjustment(raw, s.par, s.handicapStrokes);
+                adjustedGross += maxScore;
+              });
+              
+              const scoreDifferential = calculateScoreDifferential(adjustedGross, tee.courseRating, tee.slopeRating);
+              
+              const newIndividualRound: IndividualRound = {
+                id: nanoid(8),
+                profileId: profile.id,
+                date: completedRound.datePlayed,
+                courseId: completedRound.courseId,
+                teeName: completedRound.teeName || tee.name,
+                grossScore: completedRound.finalScore,
+                netScore: completedRound.finalScore - courseHandicap,
+                courseHandicap,
+                scoreDifferential,
+                courseRating: tee.courseRating,
+                slopeRating: tee.slopeRating,
+                scores: roundScores,
+                createdAt: new Date().toISOString()
+              };
+              
+              // Add to profile's individual rounds
+              set({
+                profiles: get().profiles.map(p =>
+                  p.id === profile.id ? {
+                    ...p,
+                    individualRounds: [...(p.individualRounds || []), newIndividualRound]
+                  } : p
+                )
+              });
+            }
+          });
+        });
+        
+        // For each profile, recompute round differentials if possible
+        const updatedProfiles = state.profiles.map(profile => {
+          if (!profile.individualRounds || profile.individualRounds.length === 0) return profile;
+
+          const recomputed = profile.individualRounds.map(r => {
+            try {
+              const courseTees = courseTeesMap[r.courseId];
+              if (!courseTees) return r;
+              const tee = courseTees.tees.find(t => t.name === r.teeName);
+              if (!tee) return r;
+
+              // Distribute strokes and apply ESC
+              const strokeDist = distributeHandicapStrokes(r.courseHandicap || 0, r.courseId);
+              let adjustedGross = 0;
+              r.scores.forEach(s => {
+                const raw = s.strokes || 0;
+                const par = s.par || 4;
+                const handicapStrokes = strokeDist[s.hole] || 0;
+                const adj = applyESCAdjustment(raw, par, handicapStrokes);
+                adjustedGross += adj;
+              });
+
+              const diff = calculateScoreDifferential(adjustedGross, tee.courseRating, tee.slopeRating);
+              return { ...r, scoreDifferential: diff };
+            } catch {
+              return r;
+            }
+          });
+
+          return { ...profile, individualRounds: recomputed };
+        });
+
+        // Find the updated current profile if it exists
+        const currentProfileId = get().currentProfile?.id;
+        const updatedCurrentProfile = currentProfileId 
+          ? updatedProfiles.find(p => p.id === currentProfileId) 
+          : null;
+
+        set({ 
+          profiles: updatedProfiles,
+          // Also update currentProfile if it was updated
+          currentProfile: updatedCurrentProfile || get().currentProfile
+        });
+
+        // Recalculate handicap for each profile that had rounds
+        updatedProfiles.forEach(p => {
+          if (p.individualRounds && p.individualRounds.length > 0) get().calculateAndUpdateHandicap(p.id);
+        });
+      },
+
+      deleteIndividualRound: (roundId: string): void => {
+        let affectedProfileId: string | null = null;
+        let affectedProfile: GolferProfile | null = null;
+
+        const updatedProfiles = get().profiles.map(profile => {
+          const updatedRounds = profile.individualRounds?.filter(round => {
+            if (round.id === roundId) {
+              affectedProfileId = profile.id;
+              return false;
+            }
+            return true;
+          });
+
+          if (updatedRounds?.length !== profile.individualRounds?.length) {
+            const updated = {
+              ...profile,
+              individualRounds: updatedRounds,
+              stats: {
+                ...profile.stats,
+                roundsPlayed: Math.max(0, profile.stats.roundsPlayed - 1)
+              }
+            };
+            if (profile.id === affectedProfileId) {
+              affectedProfile = updated;
+            }
+            return updated;
+          }
+          return profile;
+        });
+
+        set({
+          profiles: updatedProfiles,
+          // Also update currentProfile if it's the affected profile
+          currentProfile: get().currentProfile?.id === affectedProfileId && affectedProfile 
+            ? affectedProfile 
+            : get().currentProfile
+        });
+
+        // Recalculate handicap if a round was removed
+        if (affectedProfileId) {
+          get().calculateAndUpdateHandicap(affectedProfileId);
+        }
+      },
       
       completeEvent: (eventId: string): boolean => {
         const event: Event | undefined = get().events.find((e: Event) => e.id === eventId);
@@ -944,14 +1234,11 @@ export const useStore = create<State>()(
               // Get par for this hole
               let holePar = 4; // default
               if (event.course.courseId) {
-                try {
-                  const { courseMap } = require('../data/courses');
+                if (event.course.courseId && courseMap[event.course.courseId]) {
                   const course = courseMap[event.course.courseId];
-                  if (course) {
-                    const holeData = course.holes.find((h: any) => h.number === score.hole);
-                    if (holeData) holePar = holeData.par;
-                  }
-                } catch {}
+                  const holeData = course.holes.find((h: any) => h.number === score.hole);
+                  if (holeData) holePar = holeData.par;
+                }
               }
               
               totalScore += score.strokes;
@@ -1008,14 +1295,7 @@ export const useStore = create<State>()(
             eventName: event.name,
             datePlayed: event.date,
             courseId: event.course.courseId,
-            courseName: event.course.courseId ? (() => {
-              try {
-                const { courseMap } = require('../data/courses');
-                return courseMap[event.course.courseId]?.name || 'Unknown Course';
-              } catch {
-                return 'Unknown Course';
-              }
-            })() : 'Custom Course',
+            courseName: event.course.courseId ? (courseMap[event.course.courseId]?.name || 'Unknown Course') : 'Custom Course',
             teeName: eventGolfer.teeName,
             golferId,
             golferName,
@@ -1031,17 +1311,76 @@ export const useStore = create<State>()(
           
           newCompletedRounds.push(completedRound);
           
-          // Update profile stats
-          if (profile) {
+          // Update profile stats and add round for handicap calculation
+          if (profile && event.course.courseId) {
             const roundsPlayed = profile.stats.roundsPlayed + 1;
             const averageScore = ((profile.stats.averageScore * profile.stats.roundsPlayed) + totalScore) / roundsPlayed;
             const bestScore = Math.min(profile.stats.bestScore || totalScore, totalScore);
+            
+            // Convert event round to individual round for handicap calculation
+            const courseTees = courseTeesMap[event.course.courseId];
+            const tee = courseTees?.tees.find(t => t.name === eventGolfer.teeName);
+            
+            // Only add to handicap if we have valid course data
+            let newIndividualRound: IndividualRound | null = null;
+            if (courseTees && tee && holesPlayed >= 14) { // Need at least 14 holes for handicap
+              // Calculate course handicap and score differential
+              const currentHandicap = eventGolfer.handicapOverride ?? profile.handicapIndex ?? 0;
+              const courseHandicap = Math.round(currentHandicap * (tee.slopeRating / 113) + (tee.courseRating - tee.par));
+              
+              // Build scores array for differential calculation with proper handicap strokes
+              const strokeDist = distributeHandicapStrokes(courseHandicap, event.course.courseId);
+              const roundScores: HandicapScoreEntry[] = scorecard.scores.map(score => {
+                const courseHole = courseMap[event.course.courseId!]?.holes.find(h => h.number === score.hole);
+                const par = courseHole?.par || 4;
+                const handicapStrokes = strokeDist[score.hole - 1] || 0;
+                const strokes = score.strokes || 0;
+                
+                return {
+                  hole: score.hole,
+                  par,
+                  strokes,
+                  handicapStrokes,
+                  netStrokes: strokes - handicapStrokes
+                };
+              });
+              
+              // Apply ESC and calculate differential
+              let adjustedGross = 0;
+              roundScores.forEach(s => {
+                const raw = s.strokes || 0;
+                const par = s.par;
+                const strokesReceived = s.handicapStrokes;
+                const maxScore = applyESCAdjustment(raw, par, strokesReceived);
+                adjustedGross += maxScore;
+              });
+              
+              const scoreDifferential = calculateScoreDifferential(adjustedGross, tee.courseRating, tee.slopeRating);
+              
+              newIndividualRound = {
+                id: nanoid(8),
+                profileId: profile.id,
+                date: event.date,
+                courseId: event.course.courseId,
+                teeName: eventGolfer.teeName || tee.name,
+                grossScore: totalScore,
+                netScore: totalScore - courseHandicap,
+                courseHandicap,
+                scoreDifferential,
+                courseRating: tee.courseRating,
+                slopeRating: tee.slopeRating,
+                scores: roundScores,
+                createdAt: new Date().toISOString()
+              };
+            }
             
             set({
               profiles: get().profiles.map(p => 
                 p.id === profile.id ? {
                   ...p,
-                  handicapIndex: profile.handicapIndex, // Could implement handicap calculation here
+                  individualRounds: newIndividualRound 
+                    ? [...(p.individualRounds || []), newIndividualRound]
+                    : p.individualRounds,
                   stats: {
                     ...p.stats,
                     roundsPlayed,
@@ -1054,6 +1393,14 @@ export const useStore = create<State>()(
                 } : p
               )
             });
+            
+            // Calculate handicap if we added a new round
+            if (newIndividualRound) {
+              // Use setTimeout to ensure the store update above completes first
+              setTimeout(() => {
+                get().calculateAndUpdateHandicap(profile.id);
+              }, 0);
+            }
           }
         });
         

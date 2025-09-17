@@ -4,6 +4,9 @@ import LoginPage from './LoginPage';
 import Dashboard from './Dashboard';
 import EventsPage from './EventsPage';
 import AnalyticsPage from './AnalyticsPage';
+import HandicapPage from './HandicapPage';
+import AddScorePage from './AddScorePage';
+import RoundDetailPage from './RoundDetailPage';
 import EventPage from './EventPage';
 import JoinEventPage from './JoinEventPage';
 import UserMenu from '../components/UserMenu';
@@ -43,6 +46,9 @@ const App: React.FC = () => {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/events" element={<EventsPage />} />
+          <Route path="/handicap" element={<HandicapPage />} />
+          <Route path="/handicap/add-round" element={<AddScorePage />} />
+          <Route path="/handicap/round/:roundId" element={<RoundDetailPage />} />
           <Route path="/analytics" element={<AnalyticsPage />} />
           <Route path="/event/:id/*" element={<EventPage />} />
           <Route path="/join/:code" element={<JoinEventPage />} />
@@ -76,6 +82,19 @@ const App: React.FC = () => {
               {userEventsCount > 9 ? '9+' : userEventsCount}
             </span>
           )}
+        </Link>
+
+        <Link
+          to="/handicap"
+          className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${
+            location.pathname === '/handicap' ? 'text-primary-600' : 'text-primary-800 hover:text-primary-600'
+          }`}
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <circle cx="12" cy="12" r="10" strokeWidth={2}/>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h8M8 12a4 4 0 004-4m0 8a4 4 0 01-4-4" />
+          </svg>
+          <span className="text-xs">Handicap</span>
         </Link>
 
         <Link
