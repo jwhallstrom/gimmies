@@ -1,10 +1,21 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import useStore from '../state/store';
 import { courseTeesMap } from '../data/courses';
 
 const HandicapPage: React.FC = () => {
-  const { currentProfile, getProfileRounds, recalculateAllDifferentials, addToast } = useStore();
+  const { currentProfile, getProfileRounds, recalculateAllDifferentials, addToast, loadEventsFromCloud } = useStore();
+  const [isLoadingEvents, setIsLoadingEvents] = useState(false);
+
+  // Load events from cloud when component mounts (to get IndividualRounds from completed events)
+  useEffect(() => {
+    if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true' && currentProfile) {
+      setIsLoadingEvents(true);
+      loadEventsFromCloud().finally(() => {
+        setIsLoadingEvents(false);
+      });
+    }
+  }, [currentProfile?.id, loadEventsFromCloud]);
 
   if (!currentProfile) {
     return (

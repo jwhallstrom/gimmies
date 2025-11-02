@@ -1,5 +1,6 @@
 import { Event, NassauConfig, NassauTeam } from '../state/store';
 import { netScore } from './handicap';
+import { courseMap } from '../data/courses';
 
 export interface NassauSegmentResult {
   segment: 'front' | 'back' | 'total';
@@ -51,15 +52,19 @@ export function computeNassauForConfig(event: Event, config: NassauConfig, profi
     const holes = segmentHoles(segment);
   const scores: Record<string, number> = {};
   const toPar: Record<string, number> = {};
+    
+    console.log(`🏌️ Nassau ${segment} calculation:`, { holes, isTeam });
+    
     if (!isTeam) {
   players.forEach(pid => {
         const sc = event.scorecards.find(s => s.golferId === pid);
         if (!sc) return;
-        const sum = sc.scores
-          .filter(s => holes.includes(s.hole) && s.strokes != null)
-          .reduce((acc, s) => acc + (config.net ? (netScore(event, pid, s.hole, s.strokes, profiles) ?? 0) : (s.strokes ?? 0)), 0);
-        const playedHoles = sc.scores.filter(s => holes.includes(s.hole) && s.strokes != null).length;
+        const relevantScores = sc.scores.filter(s => holes.includes(s.hole) && s.strokes != null);
+        const sum = relevantScores.reduce((acc, s) => acc + (config.net ? (netScore(event, pid, s.hole, s.strokes, profiles) ?? 0) : (s.strokes ?? 0)), 0);
+        const playedHoles = relevantScores.length;
         scores[pid] = playedHoles === holes.length ? sum : Number.POSITIVE_INFINITY;
+        
+        console.log(`  Player ${pid}: ${playedHoles}/${holes.length} holes, score=${scores[pid]} (sum=${sum})`);
       });
       // compute par baseline for holes from course data if available
       const courseDef = event.course.courseId ? event.course.courseId : null;
@@ -71,25 +76,26 @@ export function computeNassauForConfig(event: Event, config: NassauConfig, profi
       // derive par per hole via first golfer scorecard metadata (par not stored there), so skip; we can't compute without course map here.
     } else {
       const bestCount = config.teamBestCount && config.teamBestCount > 0 ? config.teamBestCount : 1;
+      console.log(`  Team mode: bestCount=${bestCount}, teams=${config.teams?.length || 0}`);
+      
       (config.teams || []).forEach(team => {
         // aggregate per hole: sort team members' scores (net/gross) and take best N
         let total = 0;
         let parTotal = 0;
         let allComplete = true;
+        console.log(`  Calculating team ${team.id} (${team.name}):`, team.golferIds);
+        
         for (const h of holes) {
           const memberScores: number[] = [];
           let holePar = 4; // default par
           
           // Get hole par from course data
           if (event.course.courseId) {
-            try {
-              const { courseMap } = require('../data/courses');
-              const course = courseMap[event.course.courseId];
-              if (course) {
-                const holeData = course.holes.find((hole: any) => hole.number === h);
-                if (holeData) holePar = holeData.par;
-              }
-            } catch {}
+            const course = courseMap[event.course.courseId];
+            if (course) {
+              const holeData = course.holes.find((hole: any) => hole.number === h);
+              if (holeData) holePar = holeData.par;
+            }
           }
           
             team.golferIds.forEach(pid => {
@@ -101,15 +107,15 @@ export function computeNassauForConfig(event: Event, config: NassauConfig, profi
           if (memberScores.length === 0) { allComplete = false; break; }
           memberScores.sort((a,b)=>a-b);
           const used = memberScores.slice(0, Math.min(bestCount, memberScores.length));
-          total += used.reduce((a,b)=>a+b,0);
+          const holeTotal = used.reduce((a,b)=>a+b,0);
+          total += holeTotal;
           parTotal += holePar * used.length; // par for the number of scores used
+          console.log(`    Hole ${h}: par=${holePar}, memberScores=[${memberScores.join(', ')}], used=[${used.join(', ')}], holeTotal=${holeTotal}`);
         }
-        // Store the score as strokes relative to par (negative = under par)
-        scores[team.id] = allComplete ? total - parTotal : Number.POSITIVE_INFINITY;
-        // Store the raw total for display purposes
-        if (allComplete) {
-          toPar[team.id] = total - parTotal;
-        }
+        // Store the raw total strokes AND compute toPar using the accumulated parTotal
+        scores[team.id] = allComplete ? total : Number.POSITIVE_INFINITY;
+        toPar[team.id] = allComplete ? total - parTotal : 0;
+        console.log(`  Team ${team.id} final: total=${total}, parTotal=${parTotal}, toPar=${total - parTotal}`);
       });
     }
     const minScore = Math.min(...Object.values(scores));
@@ -130,23 +136,27 @@ export function computeNassauForConfig(event: Event, config: NassauConfig, profi
         });
       }
     }
-    // compute toPar if course info available
+    // compute toPar for INDIVIDUAL mode (team mode already computed toPar above)
     let parForSegment = 0;
-    if (event.course.courseId) {
-      // Lazy load course map locally to avoid top-level cycle
-      try {
-        const { courseMap } = require('../data/courses');
+    if (!isTeam) {
+      if (event.course.courseId) {
         const course = courseMap[event.course.courseId];
         if (course) {
           parForSegment = course.holes.filter((h: any)=>holes.includes(h.number)).reduce((a: number,h: any)=>a+h.par,0);
         }
-      } catch {}
+      }
+      if (parForSegment > 0) {
+        Object.entries(scores).forEach(([id, val]) => {
+          if (Number.isFinite(val)) {
+            toPar[id] = val - parForSegment;
+            console.log(`  ${id} toPar: ${val} - ${parForSegment} = ${toPar[id]}`);
+          }
+        });
+      }
     }
-    if (parForSegment > 0) {
-      Object.entries(scores).forEach(([id, val]) => {
-        if (Number.isFinite(val)) toPar[id] = val - parForSegment;
-      });
-    }
+    
+    console.log(`🏌️ Nassau ${segment} results:`, { scores, toPar, winners, parForSegment: isTeam ? 'N/A (team mode)' : parForSegment });
+    
     return { segment, winners, scores, toPar, pot: segmentPot, mode: isTeam ? 'team' : 'individual' };
   });
 

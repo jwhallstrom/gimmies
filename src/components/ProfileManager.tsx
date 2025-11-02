@@ -31,7 +31,7 @@ const ProfileManager: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
     }
   };
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
     if (currentProfile) {
       updateProfile(currentProfile.id, {
         name: editProfileName.trim() || currentProfile.name,
@@ -40,6 +40,26 @@ const ProfileManager: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
         email: editEmail.trim() || undefined,
         handicapIndex: editHandicapIndex ? parseFloat(editHandicapIndex) : undefined
       });
+      
+      // Save to cloud
+      console.log('Saving updated profile to cloud...');
+      try {
+        const { saveCloudProfile } = await import('../utils/profileSync');
+        const { profiles } = useStore.getState();
+        const updatedProfile = profiles.find(p => p.id === currentProfile.id);
+        
+        if (updatedProfile) {
+          const success = await saveCloudProfile(updatedProfile);
+          if (success) {
+            console.log('Profile changes saved to cloud!');
+          } else {
+            console.warn('Failed to save profile changes to cloud');
+          }
+        }
+      } catch (error) {
+        console.error('Error saving profile to cloud:', error);
+      }
+      
       onClose?.(); // Close the modal after saving
     }
   };

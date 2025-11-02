@@ -72,5 +72,11 @@ temp/
 # AWS deployment artifacts (if any)
 .aws/
 
+# AWS Amplify
+amplify_outputs.json
+.amplify/
+amplify/backend/amplify-meta.json
+amplify/backend/awscloudformation/
+
 # Local development
 .vscode/settings.json

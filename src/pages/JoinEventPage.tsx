@@ -10,33 +10,37 @@ const JoinEventPage: React.FC = () => {
   const [eventJoined, setEventJoined] = useState<any>(null);
 
   useEffect(() => {
-    if (code) {
-      // Check if user has a profile, if not redirect to dashboard to create one
-      const currentProfile = useStore.getState().currentProfile;
-      if (!currentProfile) {
-        setMessage('Please create a profile first to join events.');
-        setTimeout(() => {
-          navigate('/');
-        }, 2000);
-        return;
-      }
+    const handleJoin = async () => {
+      if (code) {
+        // Check if user has a profile, if not redirect to dashboard to create one
+        const currentProfile = useStore.getState().currentProfile;
+        if (!currentProfile) {
+          setMessage('Please create a profile first to join events.');
+          setTimeout(() => {
+            navigate('/');
+          }, 2000);
+          return;
+        }
 
-      const result = joinEventByCode(code.toUpperCase());
-      if (result.success) {
-        // Find the event that was just joined
-        const joinedEvent = events.find(e => e.shareCode === code.toUpperCase());
-        setEventJoined(joinedEvent);
-        setMessage('Successfully joined the event!');
-        // Redirect to the event after a short delay
-        setTimeout(() => {
-          if (joinedEvent) {
-            navigate(`/event/${joinedEvent.id}`);
-          }
-        }, 2000);
-      } else {
-        setMessage(result.error || 'Invalid or expired share code.');
+        const result = await joinEventByCode(code.toUpperCase());
+        if (result.success) {
+          // Find the event that was just joined
+          const joinedEvent = events.find(e => e.shareCode === code.toUpperCase());
+          setEventJoined(joinedEvent);
+          setMessage('Successfully joined the event!');
+          // Redirect to the event after a short delay
+          setTimeout(() => {
+            if (joinedEvent) {
+              navigate(`/event/${joinedEvent.id}`);
+            }
+          }, 2000);
+        } else {
+          setMessage(result.error || 'Invalid or expired share code.');
+        }
       }
-    }
+    };
+
+    handleJoin();
   }, [code, joinEventByCode, events, navigate]);
 
   return (

@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import useStore from '../state/store';
 import ProfileManager from './ProfileManager';
+import { useAuthMode } from '../hooks/useAuthMode';
 
 const UserMenu: React.FC = () => {
   const { currentUser, currentProfile, updateProfile, logout } = useStore();
+  const { isGuest, isAuthenticated } = useAuthMode();
   const [isOpen, setIsOpen] = useState(false);
   const [showProfileManager, setShowProfileManager] = useState(false);
 
@@ -35,6 +37,11 @@ const UserMenu: React.FC = () => {
           )}
         </div>
         <span className="text-sm font-medium text-gray-900">{currentProfile.name}</span>
+        {isGuest && (
+          <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded font-medium">
+            Guest
+          </span>
+        )}
         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
@@ -77,9 +84,21 @@ const UserMenu: React.FC = () => {
           <div className="p-4">
             <div className="text-xs text-gray-400 text-center mb-2">v0.1.0</div>
             <button
-              onClick={() => {
+              onClick={async () => {
+                try {
+                  // Sign out from Amplify
+                  const { signOut } = await import('aws-amplify/auth');
+                  await signOut();
+                } catch (err) {
+                  console.log('Amplify sign out error (may not be signed in):', err);
+                }
+                
+                // Clear local store
                 logout();
                 setIsOpen(false);
+                
+                // Force page reload to reset app state
+                window.location.href = '/';
               }}
               className="w-full text-left text-sm text-red-600 hover:text-red-700 font-medium"
             >

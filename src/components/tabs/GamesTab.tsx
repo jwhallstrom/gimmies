@@ -11,16 +11,27 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
     s.completedEvents.find((e: any) => e.id === eventId)
   );
   const profiles = useStore((s: any) => s.profiles);
+  const currentProfile = useStore((s: any) => s.currentProfile);
   const updateEvent = useStore((s: any) => s.updateEvent);
   if (!event) return null;
+  
+  // Check if current user is the event owner
+  const isOwner = currentProfile && event.ownerProfileId === currentProfile.id;
+  console.log('🎮 GamesTab: Is owner?', isOwner, 'Current profile:', currentProfile?.id, 'Owner:', event.ownerProfileId);
   
   // Helper function to get golfer data from EventGolfer
   const getGolferData = (eventGolfer: any) => {
     if (eventGolfer.profileId) {
       const profile = profiles.find((p: any) => p.id === eventGolfer.profileId);
-      return profile ? { id: eventGolfer.profileId, name: profile.name, handicapIndex: profile.handicapIndex } : null;
+      // Use displayName snapshot for cross-device compatibility
+      const name = profile ? profile.name : (eventGolfer.displayName || 'Unknown');
+      const handicapIndex = profile?.handicapIndex ?? eventGolfer.handicapSnapshot;
+      return { id: eventGolfer.profileId, name, handicapIndex };
     } else if (eventGolfer.customName) {
       return { id: eventGolfer.customName, name: eventGolfer.customName, handicapIndex: null };
+    } else if (eventGolfer.displayName) {
+      // Fallback for snapshot-only golfers
+      return { id: eventGolfer.displayName, name: eventGolfer.displayName, handicapIndex: eventGolfer.handicapSnapshot };
     }
     return null;
   };
@@ -221,19 +232,24 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
           </div>
         </div>
       )}
+      
+      {!event.isCompleted && !isOwner && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+          <div className="flex items-center gap-2 text-sm text-blue-800">
+            <span className="font-medium">ℹ️ View Only</span>
+            <span className="text-xs">Only the event owner can create and modify games</span>
+          </div>
+        </div>
+      )}
+      
       <section>
         <h2 className="font-semibold mb-2">Nassau (event)</h2>
         <div className="flex gap-2 mb-3">
           <button
             className="text-[10px] px-3 py-1 rounded bg-primary-600 text-white font-medium shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-400 disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={() => addNassau(false)}
-            disabled={event.isCompleted}
-          >Add Gross</button>
-          <button
-            className="text-[10px] px-3 py-1 rounded bg-primary-600 text-white font-medium shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-400 disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={() => addNassau(true)}
-            disabled={event.isCompleted}
-          >Add Net</button>
+            disabled={event.isCompleted || !isOwner}
+          >Add Nassau</button>
         </div>
         <div className="grid gap-3 max-w-lg">
           {event.games.nassau.map((n: any, i: number) => {
@@ -263,10 +279,10 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                   </div>
                   <div className="flex items-center gap-2">
                     <label className="flex items-center gap-1">Fee
-                      <input className="border rounded px-1 py-0.5 w-20" type="number" value={n.fee} onChange={e => updateCfg({ fee: Number(e.target.value) })} disabled={event.isCompleted} />
+                      <input className="border rounded px-1 py-0.5 w-20" type="number" value={n.fee} onChange={e => updateCfg({ fee: Number(e.target.value) })} disabled={event.isCompleted || !isOwner} />
                     </label>
                     <label className="flex items-center gap-1">Net
-                      <input type="checkbox" checked={n.net} onChange={e => updateCfg({ net: e.target.checked })} disabled={event.isCompleted} />
+                      <input type="checkbox" checked={n.net} onChange={e => updateCfg({ net: e.target.checked })} disabled={event.isCompleted || !isOwner} />
                     </label>
                     {(() => {
                       const teamsArr = (n.teams || []).filter((t:any)=> t.golferIds && t.golferIds.length>0);
@@ -275,6 +291,11 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                       const maxSelectable = minTeamSize; // can't exceed smallest team
                       const options = Array.from({length: maxSelectable}, (_,i)=> i+1);
                       const effectiveValue = current && current <= maxSelectable ? String(current) : '';
+                      const hasTeams = teamsArr.length > 0;
+                      
+                      // Only show Team Best dropdown if teams exist
+                      if (!hasTeams) return null;
+                      
                       return (
                         <label className="flex items-center gap-1" title={maxSelectable===0? 'Add players to teams to enable Team Best': 'Number of best scores per team used per segment'}>
                           Team Best
@@ -290,7 +311,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                         </label>
                       );
                     })()}
-                    <button type="button" onClick={() => removeNassau(n.id)} className="text-[10px] px-2 py-1 rounded border border-red-200 bg-red-50 text-red-600 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted}>Remove</button>
+                    <button type="button" onClick={() => removeNassau(n.id)} className="text-[10px] px-2 py-1 rounded border border-red-200 bg-red-50 text-red-600 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted || !isOwner}>Remove</button>
                   </div>
                 </div>
                 
@@ -302,12 +323,12 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-[9px] font-semibold tracking-wide text-primary-700">Playing</span>
                         {activeGolfers.length !== allGolfers.length && (
-                          <button className="text-[9px] underline disabled:opacity-50 disabled:cursor-not-allowed" onClick={()=> setList(allGolfers.map((gg:any)=>gg.id))} disabled={event.isCompleted}>All</button>
+                          <button className="text-[9px] underline disabled:opacity-50 disabled:cursor-not-allowed" onClick={()=> setList(allGolfers.map((gg:any)=>gg.id))} disabled={event.isCompleted || !isOwner}>All</button>
                         )}
                       </div>
                       <div className="flex flex-wrap gap-1">
                         {activeGolfers.map((g:any)=>(
-                          <button key={g.id} type="button" title="Tap to remove" onClick={()=> removeActive(g.id)} className="text-[9px] px-1.5 py-0.5 rounded border bg-primary-600 text-white border-primary-600 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted}>
+                          <button key={g.id} type="button" title="Tap to remove" onClick={()=> removeActive(g.id)} className="text-[9px] px-1.5 py-0.5 rounded border bg-primary-600 text-white border-primary-600 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted || !isOwner}>
                             {g.name}
                           </button>
                         ))}
@@ -318,12 +339,12 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-[9px] font-semibold tracking-wide text-gray-700">Not Playing</span>
                         {inactiveGolfers.length>0 && (
-                          <button className="text-[9px] underline disabled:opacity-50 disabled:cursor-not-allowed" onClick={()=> setList(allGolfers.map((gg:any)=>gg.id))} disabled={event.isCompleted}>Add All</button>
+                          <button className="text-[9px] underline disabled:opacity-50 disabled:cursor-not-allowed" onClick={()=> setList(allGolfers.map((gg:any)=>gg.id))} disabled={event.isCompleted || !isOwner}>Add All</button>
                         )}
                       </div>
                       <div className="flex flex-wrap gap-1">
                         {inactiveGolfers.map((g:any)=>(
-                          <button key={g.id} type="button" title="Tap to add" onClick={()=> addInactive(g.id)} className="text-[9px] px-1.5 py-0.5 rounded border bg-white text-primary-700 border-primary-300 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted}>
+                          <button key={g.id} type="button" title="Tap to add" onClick={()=> addInactive(g.id)} className="text-[9px] px-1.5 py-0.5 rounded border bg-white text-primary-700 border-primary-300 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted || !isOwner}>
                             {g.name}
                           </button>
                         ))}
@@ -338,15 +359,58 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                   <div>
                     <div className="flex items-center justify-between mb-1">
                       <span className="font-semibold text-[10px] tracking-wide">Team Options</span>
+                      {(() => {
+                        const hasTeams = (n.teams || []).filter((t:any)=> t.golferIds && t.golferIds.length>0).length > 0;
+                        if (hasTeams) {
+                          return <span className="text-[9px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded">Team Nassau</span>;
+                        } else {
+                          return <span className="text-[9px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded">Individual Nassau</span>;
+                        }
+                      })()}
                     </div>
+                    {(() => {
+                      const hasTeams = (n.teams || []).filter((t:any)=> t.golferIds && t.golferIds.length>0).length > 0;
+                      const canAddTeams = activeGolfers.length >= 4;
+                      
+                      if (!hasTeams && !canAddTeams) {
+                        return (
+                          <div className="text-[10px] text-gray-600 bg-gray-50 px-3 py-2 rounded border border-gray-200 mb-2">
+                            ℹ️ Individual Nassau - lowest total score wins each segment (front 9, back 9, total 18). Need 4+ golfers to create teams.
+                          </div>
+                        );
+                      }
+                      
+                      if (!hasTeams && canAddTeams) {
+                        return (
+                          <div className="text-[10px] text-blue-700 bg-blue-50 px-3 py-2 rounded border border-blue-200 mb-2">
+                            ℹ️ Individual Nassau mode. Add teams below for team play (optional).
+                          </div>
+                        );
+                      }
+                      
+                      return null;
+                    })()}
                     <div className="grid grid-cols-2 xs:grid-cols-3 sm:flex sm:flex-wrap gap-2">
-                      <button type="button" className="text-[10px] px-2 py-1 border border-primary-300 rounded bg-primary-50 text-primary-700 disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => {
-                        const teams = n.teams || [];
-                        updateCfg({ teams: [...teams, { id: 'T' + (teams.length + 1), name: 'Team ' + (teams.length + 1), golferIds: [] }] });
-                      }} disabled={event.isCompleted}>Add Team</button>
-                      <button type="button" className="text-[10px] px-2 py-1 border border-primary-300 rounded bg-white text-primary-700 disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => randomizeTeams(n, activeGolfers)} disabled={event.isCompleted}>Randomize</button>
-                      <button type="button" className="text-[10px] px-2 py-1 border border-primary-300 rounded bg-white text-primary-700 disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => autoBalanceTeams(n, activeGolfers)} disabled={event.isCompleted}>Auto-Balance</button>
-                      <button type="button" className="text-[10px] px-2 py-1 border border-primary-600 rounded bg-primary-600 text-white disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => setBulkAssignState({ nassauId: n.id, selected: new Set(), mode: 'assign' })} disabled={event.isCompleted}>Assign</button>
+                      {(() => {
+                        const canAddTeams = activeGolfers.length >= 4;
+                        return (
+                          <button 
+                            type="button" 
+                            className="text-[10px] px-2 py-1 border border-primary-300 rounded bg-primary-50 text-primary-700 disabled:opacity-50 disabled:cursor-not-allowed" 
+                            onClick={() => {
+                              const teams = n.teams || [];
+                              updateCfg({ teams: [...teams, { id: 'T' + (teams.length + 1), name: 'Team ' + (teams.length + 1), golferIds: [] }] });
+                            }} 
+                            disabled={event.isCompleted || !isOwner || !canAddTeams}
+                            title={!canAddTeams ? 'Need 4+ golfers to create teams' : 'Add a new team'}
+                          >
+                            Add Team{!canAddTeams ? ' (4+ golfers)' : ''}
+                          </button>
+                        );
+                      })()}
+                      <button type="button" className="text-[10px] px-2 py-1 border border-primary-300 rounded bg-white text-primary-700 disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => randomizeTeams(n, activeGolfers)} disabled={event.isCompleted || !isOwner}>Randomize</button>
+                      <button type="button" className="text-[10px] px-2 py-1 border border-primary-300 rounded bg-white text-primary-700 disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => autoBalanceTeams(n, activeGolfers)} disabled={event.isCompleted || !isOwner}>Auto-Balance</button>
+                      <button type="button" className="text-[10px] px-2 py-1 border border-primary-600 rounded bg-primary-600 text-white disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => setBulkAssignState({ nassauId: n.id, selected: new Set(), mode: 'assign' })} disabled={event.isCompleted || !isOwner}>Assign</button>
                     </div>
                   </div>
                   <div className="flex items-center justify-between">
@@ -359,11 +423,11 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                           <input className="border rounded px-1 py-0.5 flex-1 disabled:opacity-50" value={t.name} onChange={e => {
                             const teams = (n.teams || []).map((x: any) => x.id === t.id ? { ...x, name: e.target.value } : x);
                             updateCfg({ teams });
-                          }} disabled={event.isCompleted} />
+                          }} disabled={event.isCompleted || !isOwner} />
                           <button type="button" className="text-[10px] text-red-600 border border-red-200 rounded px-1 py-0.5 bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => {
                             const teams = (n.teams || []).filter((x: any) => x.id !== t.id);
                             updateCfg({ teams });
-                          }} disabled={event.isCompleted}>Remove</button>
+                          }} disabled={event.isCompleted || !isOwner}>Remove</button>
                         </div>
                         <div className="flex flex-wrap gap-1">
                           {(() => {
@@ -386,7 +450,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                                       updateCfg({ teams });
                                     }}
                                     className={`text-[10px] px-2 py-0.5 rounded border ${active ? 'bg-primary-600 text-white border-primary-600' : 'bg-white border-primary-300 text-primary-700'} disabled:opacity-50 disabled:cursor-not-allowed`}
-                                    disabled={event.isCompleted}
+                                    disabled={event.isCompleted || !isOwner}
                                   >{gg.name}</button>
                                 );
                               });
@@ -410,12 +474,12 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
           <button
             className="text-[10px] px-3 py-1 rounded bg-primary-600 text-white font-medium shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-400 disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={()=> addSkins(false)}
-            disabled={event.isCompleted}
+            disabled={event.isCompleted || !isOwner}
           >Add Gross</button>
           <button
             className="text-[10px] px-3 py-1 rounded bg-primary-600 text-white font-medium shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-400 disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={()=> addSkins(true)}
-            disabled={event.isCompleted}
+            disabled={event.isCompleted || !isOwner}
           >Add Net</button>
         </div>
         <div className="grid gap-3 max-w-lg">
@@ -430,12 +494,9 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                   <label className="flex items-center gap-1">Fee
                     <input className="border rounded px-1 py-0.5 w-20" type="number" value={sk.fee} onChange={e => {
                       updateEvent(eventId, { games: { ...event.games, skins: skinsArray.map((s:any)=> s.id===sk.id? { ...s, fee: Number(e.target.value)}: s) } });
-                    }} disabled={event.isCompleted} />
+                    }} disabled={event.isCompleted || !isOwner} />
                   </label>
-                  <label className="flex items-center gap-1">Net
-                    <input type="checkbox" checked={sk.net} onChange={e => updateEvent(eventId, { games: { ...event.games, skins: skinsArray.map((s:any)=> s.id===sk.id? { ...s, net: e.target.checked}: s) } })} disabled={event.isCompleted} />
-                  </label>
-                  <button type="button" onClick={()=> removeSkins(sk.id)} className="text-[10px] px-2 py-1 rounded border border-red-200 bg-red-50 text-red-600 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted}>Remove</button>
+                  <button type="button" onClick={()=> removeSkins(sk.id)} className="text-[10px] px-2 py-1 rounded border border-red-200 bg-red-50 text-red-600 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted || !isOwner}>Remove</button>
                 </div>
               </div>
             </div>
@@ -470,10 +531,10 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 <button onClick={closeBulk} className="text-[10px] px-2 py-0.5 rounded border">Close</button>
               </div>
               <div className="flex gap-2 items-center flex-wrap">
-                <label className="flex items-center gap-1"><input type="radio" name="bulkMode" checked={bulkAssignState.mode==='assign'} onChange={()=> setBulkAssignState(s=> s?{...s, mode:'assign'}:s)} disabled={event.isCompleted} /> Assign to Team</label>
-                <label className="flex items-center gap-1"><input type="radio" name="bulkMode" checked={bulkAssignState.mode==='roundRobin'} onChange={()=> setBulkAssignState(s=> s?{...s, mode:'roundRobin'}:s)} disabled={event.isCompleted} /> Even Round-Robin</label>
+                <label className="flex items-center gap-1"><input type="radio" name="bulkMode" checked={bulkAssignState.mode==='assign'} onChange={()=> setBulkAssignState(s=> s?{...s, mode:'assign'}:s)} disabled={event.isCompleted || !isOwner} /> Assign to Team</label>
+                <label className="flex items-center gap-1"><input type="radio" name="bulkMode" checked={bulkAssignState.mode==='roundRobin'} onChange={()=> setBulkAssignState(s=> s?{...s, mode:'roundRobin'}:s)} disabled={event.isCompleted || !isOwner} /> Even Round-Robin</label>
                 {bulkAssignState.mode==='assign' && (
-                  <select className="border rounded px-1 py-0.5 disabled:opacity-50" value={bulkAssignState.teamId || ''} onChange={e => setBulkAssignState(s=> s?{...s, teamId: e.target.value || undefined}:s)} disabled={event.isCompleted}>
+                  <select className="border rounded px-1 py-0.5 disabled:opacity-50" value={bulkAssignState.teamId || ''} onChange={e => setBulkAssignState(s=> s?{...s, teamId: e.target.value || undefined}:s)} disabled={event.isCompleted || !isOwner}>
                     <option value="">Select team</option>
                     {teams.map((t: any)=> <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
@@ -487,7 +548,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                   const sel = bulkAssignState.selected.has(gg.id);
                   return (
                     <label key={gg.id} className={`flex items-center gap-1 px-2 py-1 rounded border cursor-pointer ${sel ? 'bg-primary-600 text-white border-primary-600' : 'bg-white border-primary-300 text-primary-700'} disabled:opacity-50 disabled:cursor-not-allowed`} style={event.isCompleted ? { pointerEvents: 'none' } : {}}>
-                      <input type="checkbox" className="hidden" checked={sel} onChange={()=> toggleSelect(gg.id)} disabled={event.isCompleted} />
+                      <input type="checkbox" className="hidden" checked={sel} onChange={()=> toggleSelect(gg.id)} disabled={event.isCompleted || !isOwner} />
                       <span className="truncate">{gg.name}</span>
                       {gg.handicapIndex != null && <span className="text-[9px] opacity-70">({gg.handicapIndex})</span>}
                     </label>
@@ -510,3 +571,4 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
 };
 
 export default GamesTab;
+

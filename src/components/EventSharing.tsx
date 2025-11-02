@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
 import useStore from '../state/store';
+import { useAuthMode } from '../hooks/useAuthMode';
 
 type Props = { eventId: string };
 
 const EventSharing: React.FC<Props> = ({ eventId }) => {
   const { events, currentProfile, generateShareCode, joinEventByCode } = useStore();
+  const { isAuthenticated, isGuest } = useAuthMode();
   const [joinCode, setJoinCode] = useState('');
   const [message, setMessage] = useState('');
 
@@ -13,10 +15,55 @@ const EventSharing: React.FC<Props> = ({ eventId }) => {
 
   const isOwner = currentProfile?.id === event.ownerProfileId;
 
-  const handleGenerateCode = () => {
-    const code = generateShareCode(eventId);
-    setMessage('Share code generated! Copy and send to friends.');
-    setTimeout(() => setMessage(''), 3000);
+  // Show upgrade prompt for guest users
+  if (isGuest) {
+    return (
+      <div className="bg-gradient-to-r from-blue-50 to-green-50 border-2 border-blue-200 rounded-lg p-6">
+        <div className="flex items-start gap-4">
+          <div className="flex-shrink-0">
+            <svg className="w-12 h-12 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+          </div>
+          <div className="flex-1">
+            <h4 className="text-lg font-bold text-gray-900 mb-2">
+              🔒 Sign In to Share Events!
+            </h4>
+            <p className="text-gray-700 mb-4">
+              Event sharing and collaboration features require a cloud account to sync data across devices and with other players.
+            </p>
+            <div className="bg-white rounded-lg p-4 mb-4 border border-gray-200">
+              <p className="font-semibold text-gray-800 mb-2">With a free account, you can:</p>
+              <ul className="space-y-1 text-sm text-gray-700">
+                <li>✅ Share events with friends via code or link</li>
+                <li>✅ Join events created by others</li>
+                <li>✅ Real-time score updates across devices</li>
+                <li>✅ Event chat and collaboration</li>
+                <li>✅ Backup your data to the cloud</li>
+                <li>✅ Access from any device</li>
+              </ul>
+            </div>
+            <button
+              onClick={() => window.location.href = '/'}
+              className="bg-gradient-to-r from-green-600 to-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-green-700 hover:to-blue-700 transition-all shadow-lg"
+            >
+              Sign In or Create Account
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const handleGenerateCode = async () => {
+    const code = await generateShareCode(eventId);
+    if (code) {
+      setMessage('Share code generated! Copy and send to friends.');
+      setTimeout(() => setMessage(''), 3000);
+    } else {
+      setMessage('Failed to generate share code. Please try again.');
+      setTimeout(() => setMessage(''), 3000);
+    }
   };
 
   const shareUrl = event.shareCode ? `${window.location.origin}/join/${event.shareCode}` : '';

@@ -36,9 +36,9 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId }) => {
 
   if (!event) return <div className="text-sm text-red-600">Event not found.</div>;
 
-  const handleSend = () => {
+  const handleSend = async () => {
     if (!text.trim()) return;
-    addChatMessage(eventId, text);
+    await addChatMessage(eventId, text);
     setText('');
   };
 
@@ -72,6 +72,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId }) => {
         )}
         {messages.map(m => {
           const sender = m.profileId ? useStore.getState().profiles.find(p => p.id === m.profileId) : undefined;
+          // Use senderName snapshot for cross-device compatibility
+          const senderDisplayName = sender?.name || m.senderName || 'Unknown';
           const mine = m.profileId === currentProfile?.id;
           const isBot = m.profileId === 'gimmies-bot';
           
@@ -93,7 +95,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId }) => {
             <div key={m.id} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
               <div className={`max-w-[75%] rounded-lg px-3 py-1.5 shadow-sm border text-[12px] leading-snug ${mine ? 'bg-primary-600 text-white border-primary-700' : 'bg-primary-50 text-primary-900 border-primary-200'}`}>
                 <div className="flex items-center gap-2 mb-0.5">
-                  <span className={`font-semibold ${mine ? 'text-white' : 'text-primary-700'}`}>{sender?.name || 'Unknown'}</span>
+                  <span className={`font-semibold ${mine ? 'text-white' : 'text-primary-700'}`}>{senderDisplayName}</span>
                   <span className={`text-[10px] uppercase tracking-wide ${mine ? 'text-primary-200' : 'text-primary-500'}`}>{timeAgo(m.createdAt)}</span>
                 </div>
                 <div className="whitespace-pre-wrap break-words">{m.text}</div>

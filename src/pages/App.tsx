@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
-import LoginPage from './LoginPage';
+import { LoginPage } from '../components/auth/LoginPage';
+import { ProfileCompletion } from '../components/auth/ProfileCompletion';
 import Dashboard from './Dashboard';
 import EventsPage from './EventsPage';
 import AnalyticsPage from './AnalyticsPage';
@@ -9,18 +10,79 @@ import AddScorePage from './AddScorePage';
 import RoundDetailPage from './RoundDetailPage';
 import EventPage from './EventPage';
 import JoinEventPage from './JoinEventPage';
+import { AuthDemoPage } from './AuthDemoPage';
 import UserMenu from '../components/UserMenu';
 import { ToastManager } from '../components/Toast';
 import useStore from '../state/store';
 
 const App: React.FC = () => {
-  const { currentUser, currentProfile, events } = useStore();
+  const { currentUser, currentProfile, events, switchUser, createUser } = useStore();
   const location = useLocation();
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [amplifyUser, setAmplifyUser] = useState<any>(null);
+
+  // Check Amplify authentication state on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const { getCurrentUser, fetchUserAttributes } = await import('aws-amplify/auth');
+        const { fetchCloudProfile } = await import('../utils/profileSync');
+        const { loadIndividualRoundsFromCloud } = await import('../utils/roundSync');
+        
+        const user = await getCurrentUser();
+        const attributes = await fetchUserAttributes();
+        
+        setAmplifyUser(user);
+        console.log('Amplify user found:', user, 'attributes:', attributes);
+        
+        // Auto-create local user if Amplify user exists but no local user
+        if (user && !currentUser) {
+          console.log('Creating local user from Amplify user...');
+          const email = attributes.email || user.username;
+          const displayName = attributes.name || attributes.email || user.username;
+          createUser(email, displayName, true); // Skip automatic profile creation
+          
+          // Try to fetch existing cloud profile
+          console.log('Fetching cloud profile for user:', user.userId);
+          const cloudProfile = await fetchCloudProfile(user.userId);
+          
+          if (cloudProfile) {
+            console.log('Found existing cloud profile, loading into store:', cloudProfile);
+            
+            // Also load IndividualRounds from cloud
+            const cloudRounds = await loadIndividualRoundsFromCloud(cloudProfile.id);
+            console.log('Loaded', cloudRounds.length, 'individual rounds from cloud');
+            
+            // Import the store's profiles array and add this profile
+            const { profiles } = useStore.getState();
+            const existingProfile = profiles.find(p => p.userId === user.userId);
+            
+            if (!existingProfile) {
+              useStore.setState({ 
+                profiles: [...profiles, { ...cloudProfile, individualRounds: cloudRounds } as any],
+                currentProfile: { ...cloudProfile, individualRounds: cloudRounds } as any
+              });
+            }
+          } else {
+            console.log('No cloud profile found - user will need to complete profile');
+          }
+        }
+      } catch (err) {
+        console.log('No Amplify user signed in:', err);
+        setAmplifyUser(null);
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    };
+    
+    checkAuth();
+  }, [currentUser, createUser]);
 
   // Debug logging
   console.log('App render:', { 
     currentUser: currentUser?.id, 
     currentProfile: currentProfile?.id,
+    amplifyUser: amplifyUser?.userId,
     location: location.pathname 
   });
 
@@ -29,9 +91,92 @@ const App: React.FC = () => {
     event.golfers.some(golfer => golfer.profileId === currentProfile.id)
   ).length : 0;
 
-  if (!currentUser) {
-    console.log('App: No current user, showing login');
-    return <LoginPage />;
+  const handleLoginSuccess = () => {
+    console.log('Login successful, checking auth again...');
+    setIsCheckingAuth(true);
+    // Re-check auth after successful login
+    setTimeout(async () => {
+      try {
+        const { getCurrentUser, fetchUserAttributes } = await import('aws-amplify/auth');
+        const { fetchCloudProfile } = await import('../utils/profileSync');
+        const { loadIndividualRoundsFromCloud } = await import('../utils/roundSync');
+        
+        const user = await getCurrentUser();
+        const attributes = await fetchUserAttributes();
+        
+        setAmplifyUser(user);
+        console.log('User after login:', user, attributes);
+        
+        // Create local user if needed
+        if (user && !currentUser) {
+          const email = attributes.email || user.username;
+          const displayName = attributes.name || attributes.email || user.username;
+          createUser(email, displayName, true); // Skip automatic profile creation
+          
+          // Try to fetch existing cloud profile
+          const cloudProfile = await fetchCloudProfile(user.userId);
+          
+          if (cloudProfile) {
+            console.log('Loading cloud profile after login:', cloudProfile);
+            
+            // Also load IndividualRounds from cloud
+            const cloudRounds = await loadIndividualRoundsFromCloud(cloudProfile.id);
+            console.log('Loaded', cloudRounds.length, 'individual rounds from cloud');
+            
+            const { profiles } = useStore.getState();
+            useStore.setState({ 
+              profiles: [...profiles, { ...cloudProfile, individualRounds: cloudRounds } as any],
+              currentProfile: { ...cloudProfile, individualRounds: cloudRounds } as any
+            });
+          }
+        }
+      } catch (err) {
+        console.error('Failed to get user after login:', err);
+      } finally {
+        setIsCheckingAuth(false);
+      }
+    }, 100);
+  };
+
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-blue-50 to-green-100">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!amplifyUser && !currentUser) {
+    console.log('App: No user (Amplify or local), showing login');
+    return (
+      <LoginPage 
+        onSuccess={handleLoginSuccess}
+        onGuestMode={() => {
+          console.log('Guest mode selected, creating local-only user');
+          createUser('guest@local', 'Guest User', false); // Create local guest user
+        }}
+      />
+    );
+  }
+
+  // If we have a user but no profile, show profile completion
+  if (currentUser && !currentProfile) {
+    console.log('App: User exists but no profile, showing profile completion');
+    return (
+      <ProfileCompletion
+        userId={amplifyUser?.userId || currentUser.id} // Use Amplify userId, not local ID
+        email={amplifyUser?.signInDetails?.loginId || currentUser.username}
+        onComplete={() => {
+          console.log('Profile completion finished');
+          // Force a re-render to show the dashboard
+          setIsCheckingAuth(true);
+          setTimeout(() => setIsCheckingAuth(false), 100);
+        }}
+      />
+    );
   }
 
   return (
@@ -52,6 +197,7 @@ const App: React.FC = () => {
           <Route path="/analytics" element={<AnalyticsPage />} />
           <Route path="/event/:id/*" element={<EventPage />} />
           <Route path="/join/:code" element={<JoinEventPage />} />
+          <Route path="/auth-demo" element={<AuthDemoPage />} />
         </Routes>
       </main>
       <footer className="fixed bottom-0 inset-x-0 bg-white/90 backdrop-blur border-t border-primary-900/20 flex items-center justify-between px-4 py-2 pb-safe z-40">

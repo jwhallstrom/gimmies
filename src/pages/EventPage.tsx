@@ -1,6 +1,7 @@
 import React from 'react';
 import { useParams, Routes, Route, NavLink, useNavigate } from 'react-router-dom';
 import useStore from '../state/store';
+import { useEventSync } from '../hooks/useEventSync';
 import SetupTab from '../components/tabs/SetupTab';
 import ScorecardTab from '../components/tabs/ScorecardTab';
 import GamesTab from '../components/tabs/GamesTab';
@@ -10,6 +11,10 @@ import ChatTab from '../components/tabs/ChatTab';
 
 const EventPage: React.FC = () => {
   const { id } = useParams();
+  
+  // Auto-sync event from cloud every 30 seconds
+  useEventSync(id, 30000);
+  
   const event = useStore(s => 
     s.events.find(e => e.id === id) || 
     s.completedEvents.find(e => e.id === id)
@@ -82,23 +87,40 @@ const EventPage: React.FC = () => {
       <div className="flex items-center justify-between">
         <h1 className="text-lg font-semibold tracking-wide text-white drop-shadow-sm">{event.name || 'Untitled Event'}</h1>
         
-        {/* Delete Button */}
-        {currentProfile && event.ownerProfileId === currentProfile.id && (
+        {/* Delete/Leave Button */}
+        {currentProfile && event.ownerProfileId === currentProfile.id ? (
+          // Owner sees Delete button
           <button
-            onClick={() => {
-              if (window.confirm(`Are you sure you want to delete "${event.name || 'Untitled Event'}"? This action cannot be undone.`)) {
-                deleteEvent(event.id);
+            onClick={async () => {
+              if (window.confirm(`Are you sure you want to delete "${event.name || 'Untitled Event'}"? This will permanently delete the event, all scores, and chat messages from all devices. This action cannot be undone.`)) {
+                await deleteEvent(event.id);
                 navigate('/events');
               }
             }}
             className="text-red-400 hover:text-red-300 p-2 rounded-full hover:bg-red-900/20 transition-colors"
             title="Delete Event"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
             </svg>
           </button>
-        )}
+        ) : currentProfile ? (
+          // Non-owner sees Leave Event button
+          <button
+            onClick={async () => {
+              if (window.confirm(`Leave "${event.name || 'Untitled Event'}"? You can rejoin using the event code.`)) {
+                await useStore.getState().removeGolferFromEvent(event.id, currentProfile.id);
+                navigate('/events');
+              }
+            }}
+            className="text-yellow-400 hover:text-yellow-300 p-2 rounded-full hover:bg-yellow-900/20 transition-colors"
+            title="Leave Event"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
+          </button>
+        ) : null}
       </div>
       <div className="flex gap-2 overflow-x-auto pb-2 border-b border-primary-700/40 sticky top-[72px] bg-gradient-to-r from-primary-900 via-primary-800 to-primary-900 z-35 px-0 -mx-4 pl-4 pr-4 justify-center">
         {tabs.map(t => (

@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../../state/store';
 import { calculateEventPayouts } from '../../games/payouts';
+import { courseMap } from '../../data/courses';
 
 type Props = { eventId: string };
 
@@ -18,11 +19,13 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
   const payouts = calculateEventPayouts(event, profiles);
   const skinsArray = Array.isArray(payouts.skins) ? payouts.skins : (payouts.skins ? [payouts.skins as any] : []);
   
-  // Create mapping of golfer IDs to display names
+  // Create mapping of golfer IDs to display names using snapshots
   const golfersById = Object.fromEntries(
     event.golfers.map((eventGolfer: any) => {
-      const profile = eventGolfer.profileId ? profiles.find(p => p.id === eventGolfer.profileId) : null;
-      const displayName = profile ? profile.name : eventGolfer.customName;
+      // Use displayName snapshot first (cross-device compatible), fallback to profile lookup, then customName
+      const displayName = eventGolfer.displayName || 
+                         (eventGolfer.profileId ? profiles.find(p => p.id === eventGolfer.profileId)?.name : null) ||
+                         eventGolfer.customName;
       const golferId = eventGolfer.profileId || eventGolfer.customName;
       return [golferId, displayName];
     }).filter(([id, name]: [string, string]) => id && name)
@@ -35,8 +38,10 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
       const success = completeEvent(eventId);
       if (success) {
         alert('Event completed successfully! Round data has been saved to your analytics. The event has been moved to your History tab.');
-        // Navigate back to events page - the useEffect will auto-switch to history tab
-        navigate('/events');
+        // Small delay to ensure state propagates before navigation
+        setTimeout(() => {
+          navigate('/events');
+        }, 100);
       } else {
         alert('Failed to complete event. Please ensure all scores are entered.');
       }
@@ -157,8 +162,10 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
           </thead>
           <tbody>
             {event.golfers.map((eventGolfer: any) => {
-              const profile = eventGolfer.profileId ? profiles.find(p => p.id === eventGolfer.profileId) : null;
-              const displayName = profile ? profile.name : eventGolfer.customName;
+              // Use displayName snapshot (cross-device compatible)
+              const displayName = eventGolfer.displayName || 
+                                 (eventGolfer.profileId ? profiles.find(p => p.id === eventGolfer.profileId)?.name : null) ||
+                                 eventGolfer.customName;
               const golferId = eventGolfer.profileId || eventGolfer.customName;
               if (!displayName || !golferId) return null;
               
@@ -194,19 +201,14 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
                   {n.segments.map(seg => {
                     const parForSegment = (() => {
                       if (event.course.courseId) {
-                        try {
-                          const { courseMap } = require('../../data/courses');
-                          const course = courseMap[event.course.courseId];
-                          if (course) {
-                            const holes = seg.segment === 'front' ? [1,2,3,4,5,6,7,8,9] :
-                                       seg.segment === 'back' ? [10,11,12,13,14,15,16,17,18] :
-                                       [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18];
-                            return course.holes
-                              .filter((h: any) => holes.includes(h.number))
-                              .reduce((sum: number, h: any) => sum + h.par, 0);
-                          }
-                        } catch (e) {
-                          console.warn('Could not load course data for par calculation:', e);
+                        const course = courseMap[event.course.courseId];
+                        if (course) {
+                          const holes = seg.segment === 'front' ? [1,2,3,4,5,6,7,8,9] :
+                                     seg.segment === 'back' ? [10,11,12,13,14,15,16,17,18] :
+                                     [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18];
+                          return course.holes
+                            .filter((h: any) => holes.includes(h.number))
+                            .reduce((sum: number, h: any) => sum + h.par, 0);
                         }
                       }
                       return null;

@@ -31,13 +31,13 @@ export const davenportCCTees: CourseTees = {
   courseId: 'dcc',
   courseName: 'Davenport Country Club',
   tees: [
-    { name: 'Black', gender: 'men', courseRating: 73.3, slopeRating: 133, yardage: 6755, par: 71 },
-    { name: 'Blue', gender: 'men', courseRating: 71.7, slopeRating: 130, yardage: 6422, par: 71 },
-    { name: 'White', gender: 'men', courseRating: 70.4, slopeRating: 126, yardage: 6136, par: 71 },
-    { name: 'White/Silver', gender: 'men', courseRating: 67.8, slopeRating: 121, yardage: 5646, par: 71 },
-    { name: 'Silver', gender: 'men', courseRating: 65.8, slopeRating: 116, yardage: 5292, par: 71 },
-    { name: 'Silver/Gold (W)', gender: 'women', courseRating: 69.4, slopeRating: 118, yardage: 5087, par: 71 },
-    { name: 'Gold (W)', gender: 'women', courseRating: 68.2, slopeRating: 117, yardage: 4867, par: 71 }
+    { name: 'Black', gender: 'men', courseRating: 73.3, slopeRating: 133, yardage: 6755, par: 70 },
+    { name: 'Blue', gender: 'men', courseRating: 71.7, slopeRating: 130, yardage: 6422, par: 70 },
+    { name: 'White', gender: 'men', courseRating: 70.4, slopeRating: 126, yardage: 6136, par: 70 },
+    { name: 'White/Silver', gender: 'men', courseRating: 67.8, slopeRating: 121, yardage: 5646, par: 70 },
+    { name: 'Silver', gender: 'men', courseRating: 65.8, slopeRating: 116, yardage: 5292, par: 70 },
+    { name: 'Silver/Gold (W)', gender: 'women', courseRating: 69.4, slopeRating: 118, yardage: 5087, par: 70 },
+    { name: 'Gold (W)', gender: 'women', courseRating: 68.2, slopeRating: 117, yardage: 4867, par: 70 }
   ]
 };
 

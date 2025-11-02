@@ -53,6 +53,8 @@ export interface GolferProfile {
 export interface EventGolfer {
   profileId?: string; // references GolferProfile.id (optional for custom names)
   customName?: string; // custom name for casual players without profiles
+  displayName?: string; // ✅ Snapshot of name at join time (for cross-device visibility)
+  handicapSnapshot?: number | null; // ✅ Snapshot of handicap at join time
   teeName?: string; // event-specific tee override
   handicapOverride?: number | null; // event-specific handicap override
 }
@@ -70,6 +72,7 @@ export interface EventCourseSelection { courseId?: string; teeName?: string; }
 export interface ChatMessage {
   id: string;            // unique id
   profileId: string;     // sender profile id
+  senderName?: string;   // sender display name snapshot (for cross-device)
   text: string;          // message body (plain text for now)
   createdAt: string;     // ISO timestamp
 }
@@ -150,18 +153,21 @@ interface State {
   completedEvents: Event[]; // Completed events moved here
   completedRounds: CompletedRound[]; // Completed rounds for analytics
   toasts: Toast[]; // Toast notifications
+  isLoadingEventsFromCloud: boolean; // Prevent duplicate cloud loads
   
   createEvent: () => string | null;
   completeEvent: (eventId: string) => boolean; // Complete event and record rounds
-  setEventCourse: (eventId: string, courseId: string) => void;
-  setEventTee: (eventId: string, teeName: string) => void;
-  updateEvent: (id: string, patch: Partial<Event>) => void;
-  deleteEvent: (eventId: string) => void;
+  setEventCourse: (eventId: string, courseId: string) => Promise<void>;
+  setEventTee: (eventId: string, teeName: string) => Promise<void>;
+  updateEvent: (id: string, patch: Partial<Event>) => Promise<void>;
+  deleteEvent: (eventId: string) => Promise<void>;
+  loadEventsFromCloud: () => Promise<void>;
+  refreshEventFromCloud: (eventId: string) => Promise<boolean>;
   importData: (data: Event[]) => void;
   exportData: () => string;
   
   // User management
-  createUser: (username: string, displayName?: string) => void;
+  createUser: (username: string, displayName?: string, skipProfile?: boolean) => void;
   switchUser: (userId: string) => void;
   logout: () => void;
   deleteUser: (userId: string) => void;
@@ -176,24 +182,24 @@ interface State {
   importProfile: (profileData: string) => boolean;
   
   // Event golfer management
-  addGolferToEvent: (eventId: string, golferId: string, teeName?: string, handicapOverride?: number | null) => void;
-  updateEventGolfer: (eventId: string, golferId: string, patch: Partial<EventGolfer>) => void;
-  removeGolferFromEvent: (eventId: string, golferId: string) => void;
+  addGolferToEvent: (eventId: string, golferId: string, teeName?: string, handicapOverride?: number | null) => Promise<void>;
+  updateEventGolfer: (eventId: string, golferId: string, patch: Partial<EventGolfer>) => Promise<void>;
+  removeGolferFromEvent: (eventId: string, golferId: string) => Promise<void>;
   
   addGroup: (eventId: string) => void;
   assignGolferToGroup: (eventId: string, groupId: string, golferId: string) => void;
-  updateScore: (eventId: string, golferId: string, hole: number, strokes: number | null) => void;
+  updateScore: (eventId: string, golferId: string, hole: number, strokes: number | null) => Promise<void>;
   moveGolferToGroup: (eventId: string, golferId: string, targetGroupId: string | null) => void;
   setGroupTeeTime: (eventId: string, groupId: string, teeTime: string) => void;
   removeGroup: (eventId: string, groupId: string) => void;
-  removeNassau: (eventId: string, nassauId: string) => void;
-  removeSkins: (eventId: string, skinsId: string) => void;
+  removeNassau: (eventId: string, nassauId: string) => Promise<void>;
+  removeSkins: (eventId: string, skinsId: string) => Promise<void>;
   
   // Event sharing
-  generateShareCode: (eventId: string) => string;
-  joinEventByCode: (shareCode: string) => { success: boolean; error?: string };
+  generateShareCode: (eventId: string) => Promise<string>;
+  joinEventByCode: (shareCode: string) => Promise<{ success: boolean; error?: string; eventId?: string }>;
   // Chat
-  addChatMessage: (eventId: string, text: string) => void;
+  addChatMessage: (eventId: string, text: string) => Promise<void>;
   clearChat: (eventId: string) => void;
   // Scorecard permissions
   canEditScore: (eventId: string, golferId: string) => boolean;
@@ -216,6 +222,24 @@ const defaultScoreArray = (courseId?: string) => {
   return holes.map(h => ({ hole: h.number, strokes: null }));
 };
 
+// Helper function to sync event to cloud after updates
+const syncEventToCloud = async (eventId: string, get: () => State) => {
+  if (import.meta.env.VITE_ENABLE_CLOUD_SYNC !== 'true') return;
+  
+  const event = get().events.find(e => e.id === eventId);
+  const profile = get().currentProfile;
+  
+  if (event && profile) {
+    try {
+      const { saveEventToCloud } = await import('../utils/eventSync');
+      await saveEventToCloud(event, profile.id);
+      console.log('✅ Event synced to cloud:', eventId);
+    } catch (error) {
+      console.error('Failed to sync event to cloud:', error);
+    }
+  }
+};
+
 export const useStore = create<State>()(
   persist(
     (set: any, get: () => State) => ({
@@ -227,8 +251,9 @@ export const useStore = create<State>()(
       completedEvents: [],
       completedRounds: [],
       toasts: [],
+      isLoadingEventsFromCloud: false,
       
-      createUser: (username: string, displayName?: string) => {
+      createUser: (username: string, displayName?: string, skipProfile?: boolean) => {
         const user: User = {
           id: nanoid(8),
           username,
@@ -237,42 +262,46 @@ export const useStore = create<State>()(
           lastActive: new Date().toISOString()
         };
         
-        console.log('createUser: Creating user', user);
+        console.log('createUser: Creating user', user, 'skipProfile:', skipProfile);
         set({ users: [...get().users, user] });
         
         if (!get().currentUser) {
           console.log('createUser: Setting as current user');
           set({ currentUser: user });
           
-          // Immediately create a profile for the new user
-          console.log('createUser: Creating profile for new user');
-          const profile: GolferProfile = {
-            id: nanoid(8),
-            userId: user.id,
-            name: user.displayName,
-            stats: {
-              roundsPlayed: 0,
-              averageScore: 0,
-              bestScore: 0,
-              totalBirdies: 0,
-              totalEagles: 0
-            },
-            preferences: {
-              theme: 'auto',
-              defaultNetScoring: false,
-              autoAdvanceScores: true,
-              showHandicapStrokes: true
-            },
-            createdAt: new Date().toISOString(),
-            lastActive: new Date().toISOString()
-          };
-          
-          console.log('createUser: Adding profile to store');
-          set({ 
-            profiles: [...get().profiles, profile],
-            currentProfile: profile
-          });
-          console.log('createUser: User and profile creation complete');
+          // Only create profile automatically if skipProfile is false
+          if (!skipProfile) {
+            console.log('createUser: Creating profile for new user');
+            const profile: GolferProfile = {
+              id: nanoid(8),
+              userId: user.id,
+              name: user.displayName,
+              stats: {
+                roundsPlayed: 0,
+                averageScore: 0,
+                bestScore: 0,
+                totalBirdies: 0,
+                totalEagles: 0
+              },
+              preferences: {
+                theme: 'auto',
+                defaultNetScoring: false,
+                autoAdvanceScores: true,
+                showHandicapStrokes: true
+              },
+              createdAt: new Date().toISOString(),
+              lastActive: new Date().toISOString()
+            };
+            
+            console.log('createUser: Adding profile to store');
+            set({ 
+              profiles: [...get().profiles, profile],
+              currentProfile: profile
+            });
+            console.log('createUser: User and profile creation complete');
+          } else {
+            console.log('createUser: Skipping automatic profile creation');
+          }
         }
       },
       
@@ -417,6 +446,17 @@ export const useStore = create<State>()(
           const userProfiles = get().profiles.filter(p => p.userId === get().currentUser?.id && p.id !== profileId);
           set({ currentProfile: userProfiles.length > 0 ? userProfiles[0] : null });
         }
+        
+        // Delete from cloud
+        if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+          import('../utils/profileSync').then(({ deleteProfileFromCloud }) => {
+            deleteProfileFromCloud(profileId).then(() => {
+              console.log('✅ deleteProfile: Profile deleted from cloud:', profileId);
+            }).catch((err: unknown) => {
+              console.error('❌ deleteProfile: Failed to delete profile from cloud:', err);
+            });
+          });
+        }
       },
       
       exportProfile: (profileId: string) => {
@@ -464,9 +504,12 @@ export const useStore = create<State>()(
         const id = nanoid(8);
         const eventGolfer: EventGolfer = { 
           profileId: currentProfile.id,
+          displayName: currentProfile.name, // ✅ Save name snapshot at creation
+          handicapSnapshot: currentProfile.handicapIndex ?? null, // ✅ Save handicap snapshot
           teeName: undefined,
           handicapOverride: null 
         };
+        console.log('👤 createEvent: Creating EventGolfer with snapshot:', eventGolfer);
         const scorecard: PlayerScorecard = { 
           golferId: currentProfile.id, 
           scores: defaultScoreArray() 
@@ -494,7 +537,7 @@ export const useStore = create<State>()(
         return id;
       },
       
-      setEventCourse: (eventId: string, courseId: string) => {
+      setEventCourse: async (eventId: string, courseId: string) => {
         set({
           events: get().events.map(e => {
             if (e.id !== eventId) return e;
@@ -509,9 +552,10 @@ export const useStore = create<State>()(
             };
           })
         });
+        await syncEventToCloud(eventId, get);
       },
       
-      setEventTee: (eventId: string, teeName: string) => {
+      setEventTee: async (eventId: string, teeName: string) => {
         set({
           events: get().events.map(e => {
             if (e.id !== eventId) return e;
@@ -530,40 +574,482 @@ export const useStore = create<State>()(
             };
           })
         });
+        await syncEventToCloud(eventId, get);
       },
       
-      updateEvent: (id: string, patch: Partial<Event>) => {
+      updateEvent: async (id: string, patch: Partial<Event>) => {
+        console.log('📝 updateEvent: Updating event:', id, 'Patch:', Object.keys(patch));
+        
         set({
           events: get().events.map((e: Event) => 
             e.id === id ? { ...e, ...patch, lastModified: new Date().toISOString() } : e
           )
         });
+        
+        // Sync to cloud immediately
+        console.log('☁️ updateEvent: Syncing to cloud...');
+        await syncEventToCloud(id, get);
+        console.log('✅ updateEvent: Synced to cloud');
       },
       
-      deleteEvent: (eventId: string) => {
+      deleteEvent: async (eventId: string) => {
+        // Delete from local state
         set({
           events: get().events.filter(e => e.id !== eventId)
         });
+        
+        // Delete from cloud if cloud sync enabled
+        if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+          try {
+            const { deleteEventFromCloud } = await import('../utils/eventSync');
+            const success = await deleteEventFromCloud(eventId);
+            if (success) {
+              console.log('✅ Event deleted from cloud:', eventId);
+            } else {
+              console.warn('⚠️ Failed to delete event from cloud:', eventId);
+            }
+          } catch (error) {
+            console.error('❌ Error deleting event from cloud:', error);
+          }
+        }
       },
       
-      addGolferToEvent: (eventId: string, golferId: string, teeName?: string, handicapOverride?: number | null) => {
+      loadEventsFromCloud: async () => {
+        if (import.meta.env.VITE_ENABLE_CLOUD_SYNC !== 'true') {
+          console.log('⚠️ loadEventsFromCloud: Cloud sync disabled');
+          return;
+        }
+        
+        // Prevent duplicate simultaneous calls
+        if (get().isLoadingEventsFromCloud) {
+          console.log('⚠️ loadEventsFromCloud: Already loading, skipping duplicate call');
+          return;
+        }
+        
+        const currentProfile = get().currentProfile;
+        if (!currentProfile) {
+          console.warn('⚠️ loadEventsFromCloud: No current profile');
+          return;
+        }
+        
+        try {
+          set({ isLoadingEventsFromCloud: true });
+          console.log('📥 loadEventsFromCloud: Loading events for profile:', currentProfile.id);
+          const { loadUserEventsFromCloud, loadChatMessagesFromCloud } = await import('../utils/eventSync');
+          
+          // Load all events from cloud
+          const cloudEvents = await loadUserEventsFromCloud();
+          console.log('📥 loadEventsFromCloud: Loaded', cloudEvents.length, 'events from cloud');
+          
+          // Filter to only events where current profile is a golfer
+          const myEvents = cloudEvents.filter(event => 
+            event.golfers.some(g => g.profileId === currentProfile.id)
+          );
+          console.log('📥 loadEventsFromCloud: Filtered to', myEvents.length, 'events where user is a golfer');
+          
+          // Load chat messages for each event
+          for (const event of myEvents) {
+            const chatMessages = await loadChatMessagesFromCloud(event.id);
+            event.chat = chatMessages;
+          }
+          
+          // Separate active and completed events
+          const activeEvents = myEvents.filter(e => !e.isCompleted);
+          const completedEvents = myEvents.filter(e => e.isCompleted);
+          console.log('📥 loadEventsFromCloud: Active:', activeEvents.length, 'Completed:', completedEvents.length);
+          
+          // Log current state for debugging
+          console.log('🔍 Current completedRounds count:', get().completedRounds.length);
+          console.log('🔍 Current individualRounds count:', currentProfile.individualRounds?.length || 0);
+          
+          // Process completed events to create CompletedRounds and IndividualRounds for current user
+          const newCompletedRoundsFromCloud: CompletedRound[] = [];
+          const newIndividualRoundsFromCloud: IndividualRound[] = [];
+          
+          completedEvents.forEach(event => {
+            const eventGolfer = event.golfers.find(g => g.profileId === currentProfile.id);
+            if (!eventGolfer) {
+              console.log('⏭️ Skipping event (user not a golfer):', event.name);
+              return;
+            }
+            
+            const scorecard = event.scorecards.find(sc => sc.golferId === currentProfile.id);
+            if (!scorecard) {
+              console.log('⏭️ Skipping event (no scorecard):', event.name);
+              return;
+            }
+            
+            console.log('🔍 Processing event:', event.name, 'for user:', currentProfile.name);
+            
+            // Check if we already have a CompletedRound for this event
+            const existingCompletedRound = get().completedRounds.find(
+              r => r.eventId === event.id && r.golferId === currentProfile.id
+            );
+            
+            // Determine which tee name to use (for deduplication)
+            const effectiveTeeName = eventGolfer.teeName || event.course.teeName || currentProfile.preferredTee;
+            
+            // Check if we already have an IndividualRound for this event
+            const existingIndividualRound = currentProfile.individualRounds?.find(
+              r => r.date === event.date && r.courseId === event.course.courseId && r.teeName === effectiveTeeName
+            );
+            
+            console.log('🔍 effectiveTeeName:', effectiveTeeName, 'existingCompletedRound:', !!existingCompletedRound, 'existingIndividualRound:', !!existingIndividualRound);
+            
+            // Calculate common data needed for both types of rounds
+            let totalScore = 0;
+            let totalPar = 0;
+            let holesPlayed = 0;
+            const holeScores: any[] = [];
+            const stats = { birdies: 0, eagles: 0, pars: 0, bogeys: 0, doubleBogeys: 0, triplesOrWorse: 0 };
+            
+            scorecard.scores.forEach((score: any) => {
+              if (score.strokes != null) {
+                let holePar = 4;
+                if (event.course.courseId && courseMap[event.course.courseId]) {
+                  const course = courseMap[event.course.courseId];
+                  const holeData = course.holes.find((h: any) => h.number === score.hole);
+                  if (holeData) holePar = holeData.par;
+                }
+                
+                totalScore += score.strokes;
+                totalPar += holePar;
+                holesPlayed++;
+                
+                const toPar = score.strokes - holePar;
+                holeScores.push({ hole: score.hole, strokes: score.strokes, par: holePar, toPar });
+                
+                if (toPar <= -2) stats.eagles++;
+                else if (toPar === -1) stats.birdies++;
+                else if (toPar === 0) stats.pars++;
+                else if (toPar === 1) stats.bogeys++;
+                else if (toPar === 2) stats.doubleBogeys++;
+                else if (toPar >= 3) stats.triplesOrWorse++;
+              }
+            });
+            
+            // Create CompletedRound if it doesn't exist
+            let completedRoundForLinking: CompletedRound | undefined;
+            if (!existingCompletedRound) {
+              const completedRound: CompletedRound = {
+                id: nanoid(8),
+                eventId: event.id,
+                eventName: event.name,
+                datePlayed: event.date,
+                courseId: event.course.courseId,
+                courseName: event.course.courseId ? (courseMap[event.course.courseId]?.name || 'Unknown Course') : 'Custom Course',
+                teeName: eventGolfer.teeName,
+                golferId: currentProfile.id,
+                golferName: currentProfile.name,
+                handicapIndex: eventGolfer.handicapOverride ?? currentProfile.handicapIndex,
+                finalScore: totalScore,
+                scoreToPar: totalScore - totalPar,
+                holesPlayed,
+                holeScores,
+                gameResults: {}, // Could calculate from event.games if needed
+                stats,
+                createdAt: new Date().toISOString()
+              };
+              
+              completedRoundForLinking = completedRound;
+              newCompletedRoundsFromCloud.push(completedRound);
+              console.log('✅ Created CompletedRound for completed event:', event.name, 'Score:', totalScore);
+            } else {
+              completedRoundForLinking = existingCompletedRound;
+            }
+            
+            // Create IndividualRound if it doesn't exist and we have valid course data
+            if (!existingIndividualRound && event.course.courseId && holesPlayed >= 14) {
+              console.log('🔍 Creating IndividualRound for event:', event.name, 'courseId:', event.course.courseId, 'holesPlayed:', holesPlayed);
+              
+              const courseTees = courseTeesMap[event.course.courseId];
+              
+              // Try to find the tee - priority: eventGolfer.teeName > event.course.teeName > profile.preferredTee > middle tee
+              let tee = courseTees?.tees.find(t => t.name === eventGolfer.teeName);
+              
+              if (!tee && courseTees) {
+                // Try event's default tee
+                tee = courseTees.tees.find(t => t.name === event.course.teeName);
+                
+                if (!tee) {
+                  // Try user's preferred tee
+                  tee = courseTees.tees.find(t => t.name === currentProfile.preferredTee);
+                  
+                  // If still not found, use the middle tee (usually white/blue)
+                  if (!tee && courseTees.tees.length > 0) {
+                    const middleIndex = Math.floor(courseTees.tees.length / 2);
+                    tee = courseTees.tees[middleIndex];
+                    console.log('🔍 Using middle tee as fallback:', tee.name);
+                  }
+                }
+              }
+              
+              console.log('🔍 Course tees found:', !!courseTees, 'Tee found:', !!tee, 'eventGolfer.teeName:', eventGolfer.teeName, 'event.course.teeName:', event.course.teeName, 'Selected tee:', tee?.name);
+              
+              if (courseTees && tee) {
+                        // Calculate course handicap and score differential
+                        const currentHandicap = eventGolfer.handicapOverride ?? currentProfile.handicapIndex ?? 0;
+                        const courseHandicap = Math.round(currentHandicap * (tee.slopeRating / 113) + (tee.courseRating - tee.par));
+                        
+                        // Build scores array for differential calculation with proper handicap strokes
+                        const strokeDist = distributeHandicapStrokes(courseHandicap, event.course.courseId);
+                        const roundScores: any[] = scorecard.scores.map((score: any) => {
+                          const courseHole = courseMap[event.course.courseId!]?.holes.find((h: any) => h.number === score.hole);
+                          const par = courseHole?.par || 4;
+                          const handicapStrokes = strokeDist[score.hole - 1] || 0;
+                          const strokes = score.strokes || 0;
+                          
+                          return {
+                            hole: score.hole,
+                            par,
+                            strokes,
+                            handicapStrokes,
+                            netStrokes: strokes - handicapStrokes
+                          };
+                        });
+                        
+                        // Apply ESC and calculate differential
+                        let adjustedGross = 0;
+                        roundScores.forEach((s: any) => {
+                          const raw = s.strokes || 0;
+                          const par = s.par;
+                          const strokesReceived = s.handicapStrokes;
+                          const maxScore = applyESCAdjustment(raw, par, strokesReceived);
+                          adjustedGross += maxScore;
+                        });
+                        
+                        const scoreDifferential = calculateScoreDifferential(adjustedGross, tee.courseRating, tee.slopeRating);
+                        
+                        const individualRound: IndividualRound = {
+                          id: nanoid(8),
+                          profileId: currentProfile.id,
+                          date: event.date,
+                          courseId: event.course.courseId,
+                          teeName: tee.name, // Use the actual tee we selected
+                          grossScore: totalScore,
+                          netScore: totalScore - courseHandicap,
+                          courseHandicap,
+                          scoreDifferential,
+                          courseRating: tee.courseRating,
+                          slopeRating: tee.slopeRating,
+                          scores: roundScores,
+                          eventId: event.id, // Link to source event
+                          completedRoundId: completedRoundForLinking?.id, // Link to CompletedRound
+                          createdAt: new Date().toISOString()
+                        };
+                        
+                        newIndividualRoundsFromCloud.push(individualRound);
+                        console.log('✅ Created IndividualRound for completed event:', event.name, 'Differential:', scoreDifferential.toFixed(1), 'CompletedRoundId:', completedRoundForLinking?.id);
+                      } else {
+                        console.warn('❌ Could not create IndividualRound: Missing courseTees or tee data');
+                      }
+            } else if (event.course.courseId) {
+              console.log('⏭️ Skipping IndividualRound creation:', 
+                'holesPlayed:', holesPlayed, 
+                'needs14+:', holesPlayed >= 14);
+            }
+          });
+          
+          // Merge with existing local events (don't overwrite local changes)
+          const localEventIds = new Set(get().events.map(e => e.id));
+          const localCompletedEventIds = new Set(get().completedEvents.map(e => e.id));
+          
+          const newActiveEvents = activeEvents.filter(e => !localEventIds.has(e.id));
+          const newCompletedEvents = completedEvents.filter(e => !localCompletedEventIds.has(e.id));
+          
+          // Also remove any events from events[] that are actually completed (cleanup)
+          const completedEventIds = new Set(completedEvents.map(e => e.id));
+          const cleanedActiveEvents = get().events.filter(e => !completedEventIds.has(e.id));
+          
+          if (newActiveEvents.length > 0 || newCompletedEvents.length > 0 || cleanedActiveEvents.length !== get().events.length || newCompletedRoundsFromCloud.length > 0 || newIndividualRoundsFromCloud.length > 0) {
+            console.log('✅ loadEventsFromCloud: Adding', newActiveEvents.length, 'active and', newCompletedEvents.length, 'completed events');
+            console.log('✅ loadEventsFromCloud: Adding', newCompletedRoundsFromCloud.length, 'completed rounds from cloud events');
+            console.log('✅ loadEventsFromCloud: Adding', newIndividualRoundsFromCloud.length, 'individual rounds from cloud events');
+            console.log('✅ loadEventsFromCloud: Cleaning', get().events.length - cleanedActiveEvents.length, 'completed events from active array');
+            
+            // Update profiles with new IndividualRounds (deduplicate before adding)
+            set({
+              events: [...cleanedActiveEvents, ...newActiveEvents],
+              completedEvents: [...get().completedEvents, ...newCompletedEvents],
+              completedRounds: [...get().completedRounds, ...newCompletedRoundsFromCloud],
+              profiles: get().profiles.map(p => {
+                if (p.id === currentProfile.id) {
+                  const existingRounds = p.individualRounds || [];
+                  
+                  // Deduplicate: only add rounds that don't already exist
+                  // Check by ID first (exact match), then by date/course/tee (duplicate prevention)
+                  const roundsToAdd = newIndividualRoundsFromCloud.filter(newRound => {
+                    return !existingRounds.some(existing => 
+                      existing.id === newRound.id || // Exact ID match
+                      (existing.date === newRound.date && 
+                       existing.courseId === newRound.courseId && 
+                       existing.teeName === newRound.teeName &&
+                       existing.grossScore === newRound.grossScore) // Same score too
+                    );
+                  });
+                  
+                  console.log(`🔍 Deduplication: ${newIndividualRoundsFromCloud.length} new rounds, ${roundsToAdd.length} unique to add, ${existingRounds.length} existing`);
+                  
+                  return {
+                    ...p,
+                    individualRounds: [...existingRounds, ...roundsToAdd]
+                  };
+                }
+                return p;
+              })
+            });
+            
+            // Save new IndividualRounds to cloud
+            if (newIndividualRoundsFromCloud.length > 0) {
+              const roundsToAdd = newIndividualRoundsFromCloud.filter(newRound => {
+                const existingRounds = currentProfile.individualRounds || [];
+                return !existingRounds.some(existing => 
+                  existing.id === newRound.id || // Exact ID match
+                  (existing.date === newRound.date && 
+                   existing.courseId === newRound.courseId && 
+                   existing.teeName === newRound.teeName &&
+                   existing.grossScore === newRound.grossScore) // Same score too
+                );
+              });
+              
+              if (roundsToAdd.length > 0) {
+                console.log(`☁️ Saving ${roundsToAdd.length} new IndividualRounds to cloud...`);
+                import('../utils/roundSync').then(({ batchSaveIndividualRoundsToCloud }) => {
+                  batchSaveIndividualRoundsToCloud(roundsToAdd).then((savedCount) => {
+                    console.log(`✅ Saved ${savedCount}/${roundsToAdd.length} IndividualRounds to cloud`);
+                  }).catch((err: unknown) => {
+                    console.error('❌ Failed to save IndividualRounds to cloud:', err);
+                  });
+                });
+              }
+            }
+            
+            // Recalculate handicap if we added new rounds
+            if (newIndividualRoundsFromCloud.length > 0) {
+              setTimeout(() => {
+                get().calculateAndUpdateHandicap(currentProfile.id);
+              }, 0);
+            }
+          } else {
+            console.log('✅ loadEventsFromCloud: No new events to add');
+          }
+          
+          // Load CompletedRounds from cloud (for analytics)
+          try {
+            const { loadCompletedRoundsFromCloud } = await import('../utils/completedRoundSync');
+            const cloudCompletedRounds = await loadCompletedRoundsFromCloud(currentProfile.id);
+            
+            if (cloudCompletedRounds.length > 0) {
+              // Deduplicate: only add rounds that don't already exist
+              const existingCompletedRounds = get().completedRounds;
+              const roundsToAdd = cloudCompletedRounds.filter(newRound => {
+                return !existingCompletedRounds.some(existing => 
+                  existing.eventId === newRound.eventId && 
+                  existing.golferId === newRound.golferId
+                );
+              });
+              
+              if (roundsToAdd.length > 0) {
+                console.log(`✅ loadEventsFromCloud: Adding ${roundsToAdd.length} CompletedRounds from cloud`);
+                set({
+                  completedRounds: [...existingCompletedRounds, ...roundsToAdd]
+                });
+              } else {
+                console.log('✅ loadEventsFromCloud: All CompletedRounds already exist locally');
+              }
+            }
+          } catch (error) {
+            console.error('❌ loadEventsFromCloud: Failed to load CompletedRounds from cloud:', error);
+          }
+        } catch (error) {
+          console.error('❌ loadEventsFromCloud: Error:', error);
+        } finally {
+          set({ isLoadingEventsFromCloud: false });
+        }
+      },
+      
+      refreshEventFromCloud: async (eventId: string) => {
+        if (import.meta.env.VITE_ENABLE_CLOUD_SYNC !== 'true') return false;
+        
+        console.log('🔄 refreshEventFromCloud: Starting refresh for:', eventId);
+        const beforeRefresh = get().events.find(e => e.id === eventId);
+        console.log('🔄 refreshEventFromCloud: Local event before refresh has', beforeRefresh?.golfers.length, 'golfers');
+        
+        // Track chat messages before refresh
+        const chatCountBefore = beforeRefresh?.chat.length || 0;
+        
+        try {
+          const { loadEventById } = await import('../utils/eventSync');
+          const updatedEvent = await loadEventById(eventId);
+          
+          if (updatedEvent) {
+            console.log('🔄 refreshEventFromCloud: Cloud event has', updatedEvent.golfers.length, 'golfers');
+            
+            // Check for new chat messages
+            const chatCountAfter = updatedEvent.chat.length;
+            const newMessagesCount = chatCountAfter - chatCountBefore;
+            
+            // Merge with local events
+            set({
+              events: get().events.map(e => e.id === eventId ? updatedEvent : e)
+            });
+            console.log('✅ refreshEventFromCloud: Event refreshed from cloud with', updatedEvent.golfers.length, 'golfers');
+            
+            // Show notification for new chat messages (especially bot alerts)
+            if (newMessagesCount > 0) {
+              const lastMessage = updatedEvent.chat[updatedEvent.chat.length - 1];
+              if (lastMessage?.profileId === 'gimmies-bot') {
+                // Show achievement alert
+                get().addToast(lastMessage.text, 'achievement', 5000);
+              } else if (newMessagesCount === 1) {
+                // Show notification for single new message
+                const senderName = lastMessage?.senderName || 'Someone';
+                get().addToast(`💬 ${senderName}: ${lastMessage?.text.substring(0, 50)}${lastMessage?.text.length > 50 ? '...' : ''}`, 'info', 4000);
+              } else {
+                // Multiple new messages
+                get().addToast(`💬 ${newMessagesCount} new messages`, 'info', 3000);
+              }
+            }
+            
+            return true;
+          }
+          return false;
+        } catch (error) {
+          console.error('❌ refreshEventFromCloud: Failed to refresh event from cloud:', error);
+          return false;
+        }
+      },
+      
+      addGolferToEvent: async (eventId: string, golferId: string, teeName?: string, handicapOverride?: number | null) => {
+        console.log('➕ addGolferToEvent called:', { eventId, golferId, teeName, handicapOverride });
+        
         set({
           events: get().events.map(e => {
             if (e.id !== eventId) return e;
             
+            console.log('📝 Found event to modify:', e.id, 'Current golfers:', e.golfers.length);
+            
             // Check if golferId is a profile ID or custom name
             const isProfileId = get().profiles.some(p => p.id === golferId);
+            const profile = isProfileId ? get().profiles.find(p => p.id === golferId) : null;
+            
             const eventGolfer: EventGolfer = isProfileId 
               ? { 
-                  profileId: golferId, 
+                  profileId: golferId,
+                  displayName: profile?.name || 'Unknown', // ✅ Save name snapshot
+                  handicapSnapshot: profile?.handicapIndex ?? null, // ✅ Save handicap snapshot
                   teeName: teeName || undefined, 
                   handicapOverride: handicapOverride ?? null 
                 }
               : { 
-                  customName: golferId, 
+                  customName: golferId,
+                  displayName: golferId, // ✅ Custom name is the display name
+                  handicapSnapshot: null,
                   teeName: teeName || undefined, 
                   handicapOverride: handicapOverride ?? null 
                 };
+            
+            console.log('👤 Creating EventGolfer:', eventGolfer);
             
             const def = e.course.courseId ? courseMap[e.course.courseId] : undefined;
             const holes = def ? def.holes : Array.from({ length: 18 }).map((_, i) => ({ number: i + 1 }));
@@ -577,18 +1063,27 @@ export const useStore = create<State>()(
             } else {
               groups = groups.map(g => ({ ...g, golferIds: Array.from(new Set([...g.golferIds, golferId])) }));
             }
-            return { 
+            
+            const updatedEvent = { 
               ...e, 
               golfers: [...e.golfers, eventGolfer], 
               scorecards: [...e.scorecards, scorecard], 
               groups,
               lastModified: new Date().toISOString()
             };
+            
+            console.log('✅ Event updated with new golfer. New golfers count:', updatedEvent.golfers.length);
+            return updatedEvent;
           })
         });
+        
+        // Sync to cloud after adding golfer
+        console.log('☁️ Syncing event to cloud...');
+        await syncEventToCloud(eventId, get);
+        console.log('✅ addGolferToEvent complete');
       },
       
-      updateEventGolfer: (eventId: string, golferId: string, patch: Partial<EventGolfer>) => {
+      updateEventGolfer: async (eventId: string, golferId: string, patch: Partial<EventGolfer>) => {
         set({
           events: get().events.map(e => 
             e.id === eventId 
@@ -602,9 +1097,10 @@ export const useStore = create<State>()(
               : e
           )
         });
+        await syncEventToCloud(eventId, get);
       },
       
-      removeGolferFromEvent: (eventId: string, golferId: string) => {
+      removeGolferFromEvent: async (eventId: string, golferId: string) => {
         set({
           events: get().events.map(e => {
             if (e.id !== eventId) return e;
@@ -617,6 +1113,7 @@ export const useStore = create<State>()(
             };
           })
         });
+        await syncEventToCloud(eventId, get);
       },
       
       addGroup: (eventId: string) => {
@@ -653,7 +1150,7 @@ export const useStore = create<State>()(
         });
       },
       
-      updateScore: (eventId: string, golferId: string, hole: number, strokes: number | null) => {
+      updateScore: async (eventId: string, golferId: string, hole: number, strokes: number | null) => {
         const state = get();
         const event = state.events.find(e => e.id === eventId);
         if (!event) return;
@@ -738,10 +1235,12 @@ export const useStore = create<State>()(
           const msg: ChatMessage = {
             id: nanoid(10),
             profileId: 'gimmies-bot', // Special ID for bot messages
+            senderName: '🤖 Gimmies Bot', // Bot display name
             text: chatMessage.trim(),
             createdAt: new Date().toISOString()
           };
 
+          // Add to local state immediately
           set({
             events: get().events.map(e => {
               if (e.id !== eventId) return e;
@@ -751,9 +1250,21 @@ export const useStore = create<State>()(
             })
           });
 
+          // Save to cloud so it persists
+          if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+            import('../utils/eventSync').then(({ saveChatMessageToCloud }) => {
+              saveChatMessageToCloud(eventId, msg).catch((err: unknown) => {
+                console.error('❌ Failed to save achievement message to cloud:', err);
+              });
+            });
+          }
+
           // Also show toast notification for the achievement
           get().addToast(chatMessage.trim(), 'achievement', 5000);
         }
+        
+        // Sync to cloud after score update
+        await syncEventToCloud(eventId, get);
       },
       
       moveGolferToGroup: (eventId: string, profileId: string, targetGroupId: string | null) => {
@@ -778,7 +1289,7 @@ export const useStore = create<State>()(
         // Prevent removing the single auto group
       },
       
-      removeNassau: (eventId: string, nassauId: string) => {
+      removeNassau: async (eventId: string, nassauId: string) => {
         set({
           events: get().events.map(e => 
             e.id === eventId 
@@ -790,9 +1301,12 @@ export const useStore = create<State>()(
               : e
           )
         });
+        
+        // Sync to cloud
+        await syncEventToCloud(eventId, get);
       },
       
-      removeSkins: (eventId: string, skinsId: string) => {
+      removeSkins: async (eventId: string, skinsId: string) => {
         set({
           events: get().events.map(e => {
             if (e.id !== eventId) return e;
@@ -804,9 +1318,39 @@ export const useStore = create<State>()(
             };
           })
         });
+        
+        // Sync to cloud
+        await syncEventToCloud(eventId, get);
       },
       
-      generateShareCode: (eventId: string) => {
+      generateShareCode: async (eventId: string) => {
+        const event = get().events.find(e => e.id === eventId);
+        if (!event) return '';
+
+        const currentProfile = get().currentProfile;
+        if (!currentProfile) return '';
+
+        // If cloud sync is enabled, save to cloud
+        if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+          try {
+            const { saveEventToCloud } = await import('../utils/eventSync');
+            const shareCode = await saveEventToCloud(event, currentProfile.id);
+            
+            if (shareCode) {
+              // Update local state with the share code
+              set({
+                events: get().events.map(e => 
+                  e.id === eventId ? { ...e, shareCode, isPublic: true, lastModified: new Date().toISOString() } : e
+                )
+              });
+              return shareCode;
+            }
+          } catch (error) {
+            console.error('Failed to generate share code in cloud:', error);
+          }
+        }
+
+        // Fallback to local-only mode
         const shareCode = nanoid(6).toUpperCase();
         set({
           events: get().events.map(e => 
@@ -816,49 +1360,123 @@ export const useStore = create<State>()(
         return shareCode;
       },
       
-      joinEventByCode: (shareCode: string) => {
-        const event = get().events.find(e => e.shareCode === shareCode && e.isPublic);
-        if (!event) {
-          return { success: false, error: 'Event not found or share code is invalid.' };
-        }
-        
-        // Add current user to the event if not already joined
+      joinEventByCode: async (shareCode: string) => {
         const currentProfile = get().currentProfile;
         if (!currentProfile) {
           return { success: false, error: 'Please create a profile first to join events.' };
         }
+
+        console.log('🔍 Joining event with code:', shareCode, 'Profile:', currentProfile.name);
+
+        // If cloud sync is enabled, try to load from cloud first
+        if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+          try {
+            const { loadEventByShareCode } = await import('../utils/eventSync');
+            const cloudEvent = await loadEventByShareCode(shareCode);
+            
+            if (cloudEvent) {
+              console.log('📥 Event loaded from cloud:', cloudEvent.id, 'Golfers:', cloudEvent.golfers.length);
+              
+              // Check if already joined
+              const alreadyJoined = cloudEvent.golfers.some(g => g.profileId === currentProfile.id);
+              if (alreadyJoined) {
+                console.log('✅ Already joined this event');
+                // Ensure event is in local state
+                const localEvent = get().events.find(e => e.id === cloudEvent.id);
+                if (!localEvent) {
+                  set({ events: [...get().events, cloudEvent] });
+                }
+                return { success: true, eventId: cloudEvent.id };
+              }
+
+              // Add event to local state if not already there
+              const localEvent = get().events.find(e => e.id === cloudEvent.id);
+              if (!localEvent) {
+                console.log('📝 Adding event to local state');
+                set({ events: [...get().events, cloudEvent] });
+              } else {
+                console.log('📝 Event already in local state, updating');
+                set({ events: get().events.map(e => e.id === cloudEvent.id ? cloudEvent : e) });
+              }
+
+              // Add the user to the event (this will sync to cloud)
+              console.log('➕ Adding golfer to event...');
+              await get().addGolferToEvent(cloudEvent.id, currentProfile.id);
+              
+              // Verify the golfer was added
+              const updatedEvent = get().events.find(e => e.id === cloudEvent.id);
+              const wasAdded = updatedEvent?.golfers.some(g => g.profileId === currentProfile.id);
+              console.log('✅ Golfer added to event:', wasAdded, 'Total golfers:', updatedEvent?.golfers.length);
+              
+              return { success: true, eventId: cloudEvent.id };
+            }
+          } catch (error) {
+            console.error('❌ Failed to load event from cloud:', error);
+          }
+        }
+
+        // Fallback to local-only search
+        console.log('🔍 Searching for event locally...');
+        const event = get().events.find(e => e.shareCode === shareCode && e.isPublic);
+        if (!event) {
+          console.log('❌ Event not found');
+          return { success: false, error: 'Event not found or share code is invalid.' };
+        }
         
         const alreadyJoined = event.golfers.some(g => g.profileId === currentProfile.id);
         if (alreadyJoined) {
-          return { success: true };
+          console.log('✅ Already joined (local)');
+          return { success: true, eventId: event.id };
         }
         
         // Add the user to the event
-        get().addGolferToEvent(event.id, currentProfile.id);
-        return { success: true };
+        console.log('➕ Adding golfer to local event...');
+        await get().addGolferToEvent(event.id, currentProfile.id);
+        console.log('✅ Golfer added (local)');
+        return { success: true, eventId: event.id };
       },
 
       // Chat feature
-      addChatMessage: (eventId: string, text: string) => {
+      addChatMessage: async (eventId: string, text: string) => {
         const trimmed = text.trim();
         if (!trimmed) return;
         const currentProfile = get().currentProfile;
         if (!currentProfile) return;
+        
+        console.log('💬 addChatMessage: Adding message to event:', eventId);
+        
+        const msg: ChatMessage = {
+          id: nanoid(10),
+          profileId: currentProfile.id,
+          senderName: currentProfile.name, // Save display name for cross-device
+          text: trimmed.slice(0, 2000), // guard length
+          createdAt: new Date().toISOString()
+        };
+        
+        // Add to local state immediately for instant feedback
         set({
           events: get().events.map(e => {
             if (e.id !== eventId) return e;
-            const msg: ChatMessage = {
-              id: nanoid(10),
-              profileId: currentProfile.id,
-              text: trimmed.slice(0, 2000), // guard length
-              createdAt: new Date().toISOString()
-            };
             const existing = e.chat || [];
             // Keep only last 500 messages to limit growth
             const next = [...existing, msg].slice(-500);
+            
+            console.log('💬 addChatMessage: Message added locally. Total messages:', next.length);
             return { ...e, chat: next, lastModified: new Date().toISOString() };
           })
         });
+        
+        // Save individual message to cloud (NOT the entire event)
+        console.log('☁️ addChatMessage: Saving individual message to cloud...');
+        if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+          try {
+            const { saveChatMessageToCloud } = await import('../utils/eventSync');
+            await saveChatMessageToCloud(eventId, msg);
+            console.log('✅ addChatMessage: Message saved to cloud');
+          } catch (error) {
+            console.error('❌ addChatMessage: Failed to save message to cloud:', error);
+          }
+        }
       },
       clearChat: (eventId: string) => {
         set({
@@ -872,11 +1490,28 @@ export const useStore = create<State>()(
         const currentProfile = get().currentProfile;
         if (!event || !currentProfile) return false;
         
-        // Event owner can edit all scores
+        // Event owner can edit all scores in admin mode
         if (event.ownerProfileId === currentProfile.id) return true;
         
-        // Others can only edit their own scores
-        return golferId === currentProfile.id;
+        // Can always edit own score
+        if (golferId === currentProfile.id) return true;
+        
+        // In team mode, can edit team members' scores
+        if (event.scorecardView === 'team') {
+          // Find all teams in Nassau games that include the current user
+          const userTeams = event.games.nassau.flatMap(nassau =>
+            nassau.teams?.filter(team => team.golferIds.includes(currentProfile.id)) || []
+          );
+          
+          // Get all golfer IDs from the user's teams
+          const teamGolferIds = userTeams.flatMap(team => team.golferIds);
+          
+          // Can edit if golferId is in one of current user's teams
+          return teamGolferIds.includes(golferId);
+        }
+        
+        // Otherwise, can only edit own score
+        return false;
       },
       
       setScorecardView: (eventId: string, view: 'individual' | 'team' | 'admin') => {
@@ -949,6 +1584,17 @@ export const useStore = create<State>()(
 
         // Auto-calculate handicap after adding round
         get().calculateAndUpdateHandicap(roundData.profileId);
+        
+        // Sync to cloud
+        if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+          import('../utils/roundSync').then(({ saveIndividualRoundToCloud }) => {
+            saveIndividualRoundToCloud(newRound).then(() => {
+              console.log('✅ addIndividualRound: Round saved to cloud:', newRound.id);
+            }).catch((err: unknown) => {
+              console.error('❌ addIndividualRound: Failed to save round to cloud:', err);
+            });
+          });
+        }
         
         return roundId;
       },
@@ -1079,6 +1725,8 @@ export const useStore = create<State>()(
                 courseRating: tee.courseRating,
                 slopeRating: tee.slopeRating,
                 scores: roundScores,
+                eventId: completedRound.eventId, // Link back to source event
+                completedRoundId: completedRound.id, // Link to CompletedRound to prevent double-counting
                 createdAt: new Date().toISOString()
               };
               
@@ -1091,6 +1739,17 @@ export const useStore = create<State>()(
                   } : p
                 )
               });
+              
+              // Sync IndividualRound to cloud
+              if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+                import('../utils/roundSync').then(({ saveIndividualRoundToCloud }) => {
+                  saveIndividualRoundToCloud(newIndividualRound).then(() => {
+                    console.log('✅ recalculateAllDifferentials: IndividualRound saved to cloud:', newIndividualRound.id);
+                  }).catch((err: unknown) => {
+                    console.error('❌ recalculateAllDifferentials: Failed to save IndividualRound to cloud:', err);
+                  });
+                });
+              }
             }
           });
         });
@@ -1187,17 +1846,43 @@ export const useStore = create<State>()(
         if (affectedProfileId) {
           get().calculateAndUpdateHandicap(affectedProfileId);
         }
+        
+        // Delete from cloud
+        if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+          import('../utils/roundSync').then(({ deleteIndividualRoundFromCloud }) => {
+            deleteIndividualRoundFromCloud(roundId).then(() => {
+              console.log('✅ deleteIndividualRound: Round deleted from cloud:', roundId);
+            }).catch((err: unknown) => {
+              console.error('❌ deleteIndividualRound: Failed to delete round from cloud:', err);
+            });
+          });
+        }
       },
       
       completeEvent: (eventId: string): boolean => {
         const event: Event | undefined = get().events.find((e: Event) => e.id === eventId);
         if (!event) return false;
         
+        // Prevent completing an already-completed event
+        if (event.isCompleted) {
+          console.warn('⚠️ completeEvent: Event already completed:', eventId);
+          return false;
+        }
+        
+        // Check if event is already in completedEvents
+        const alreadyCompleted = get().completedEvents.some(e => e.id === eventId);
+        if (alreadyCompleted) {
+          console.warn('⚠️ completeEvent: Event already in completedEvents:', eventId);
+          return false;
+        }
+        
         // Check if all scores are complete
         const allScoresComplete = event.scorecards.every(sc => 
           sc.scores.every(s => s.strokes != null)
         );
         if (!allScoresComplete) return false;
+        
+        console.log(`🎯 completeEvent: Starting completion for event "${event.name}" (${eventId})`);
         
         // Calculate payouts for analytics
         const payouts = calculateEventPayouts(event, get().profiles);
@@ -1310,77 +1995,18 @@ export const useStore = create<State>()(
           };
           
           newCompletedRounds.push(completedRound);
+          console.log(`✅ completeEvent: Created CompletedRound for ${golferName} - ID: ${completedRound.id}, Score: ${totalScore}`);
           
-          // Update profile stats and add round for handicap calculation
-          if (profile && event.course.courseId) {
+          // Update profile stats (IndividualRounds now created separately for ALL participants below)
+          if (profile) {
             const roundsPlayed = profile.stats.roundsPlayed + 1;
             const averageScore = ((profile.stats.averageScore * profile.stats.roundsPlayed) + totalScore) / roundsPlayed;
             const bestScore = Math.min(profile.stats.bestScore || totalScore, totalScore);
-            
-            // Convert event round to individual round for handicap calculation
-            const courseTees = courseTeesMap[event.course.courseId];
-            const tee = courseTees?.tees.find(t => t.name === eventGolfer.teeName);
-            
-            // Only add to handicap if we have valid course data
-            let newIndividualRound: IndividualRound | null = null;
-            if (courseTees && tee && holesPlayed >= 14) { // Need at least 14 holes for handicap
-              // Calculate course handicap and score differential
-              const currentHandicap = eventGolfer.handicapOverride ?? profile.handicapIndex ?? 0;
-              const courseHandicap = Math.round(currentHandicap * (tee.slopeRating / 113) + (tee.courseRating - tee.par));
-              
-              // Build scores array for differential calculation with proper handicap strokes
-              const strokeDist = distributeHandicapStrokes(courseHandicap, event.course.courseId);
-              const roundScores: HandicapScoreEntry[] = scorecard.scores.map(score => {
-                const courseHole = courseMap[event.course.courseId!]?.holes.find(h => h.number === score.hole);
-                const par = courseHole?.par || 4;
-                const handicapStrokes = strokeDist[score.hole - 1] || 0;
-                const strokes = score.strokes || 0;
-                
-                return {
-                  hole: score.hole,
-                  par,
-                  strokes,
-                  handicapStrokes,
-                  netStrokes: strokes - handicapStrokes
-                };
-              });
-              
-              // Apply ESC and calculate differential
-              let adjustedGross = 0;
-              roundScores.forEach(s => {
-                const raw = s.strokes || 0;
-                const par = s.par;
-                const strokesReceived = s.handicapStrokes;
-                const maxScore = applyESCAdjustment(raw, par, strokesReceived);
-                adjustedGross += maxScore;
-              });
-              
-              const scoreDifferential = calculateScoreDifferential(adjustedGross, tee.courseRating, tee.slopeRating);
-              
-              newIndividualRound = {
-                id: nanoid(8),
-                profileId: profile.id,
-                date: event.date,
-                courseId: event.course.courseId,
-                teeName: eventGolfer.teeName || tee.name,
-                grossScore: totalScore,
-                netScore: totalScore - courseHandicap,
-                courseHandicap,
-                scoreDifferential,
-                courseRating: tee.courseRating,
-                slopeRating: tee.slopeRating,
-                scores: roundScores,
-                createdAt: new Date().toISOString()
-              };
-            }
             
             set({
               profiles: get().profiles.map(p => 
                 p.id === profile.id ? {
                   ...p,
-                  individualRounds: newIndividualRound 
-                    ? [...(p.individualRounds || []), newIndividualRound]
-                    : p.individualRounds,
                   stats: {
                     ...p.stats,
                     roundsPlayed,
@@ -1393,14 +2019,6 @@ export const useStore = create<State>()(
                 } : p
               )
             });
-            
-            // Calculate handicap if we added a new round
-            if (newIndividualRound) {
-              // Use setTimeout to ensure the store update above completes first
-              setTimeout(() => {
-                get().calculateAndUpdateHandicap(profile.id);
-              }, 0);
-            }
           }
         });
         
@@ -1413,6 +2031,98 @@ export const useStore = create<State>()(
           events: get().events.filter(e => e.id !== eventId), // Remove from active events
           completedEvents: [...get().completedEvents, completedEvent] // Add to completed events
         });
+        
+        // Create IndividualRounds for ALL participants and save to cloud
+        // (not just those with local profiles - others will load these from cloud)
+        if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true' && event.course.courseId) {
+          newCompletedRounds.forEach(completedRound => {
+            // Only create for participants with profileIds (not custom names)
+            const eventGolfer = event.golfers.find(g => g.profileId === completedRound.golferId);
+            if (!eventGolfer || !eventGolfer.profileId) return;
+            
+            const courseTees = courseTeesMap[event.course.courseId!];
+            const tee = courseTees?.tees.find(t => t.name === completedRound.teeName);
+            
+            if (courseTees && tee && completedRound.holesPlayed >= 14) {
+              const currentHandicap = completedRound.handicapIndex || 0;
+              const courseHandicap = Math.round(currentHandicap * (tee.slopeRating / 113) + (tee.courseRating - tee.par));
+              
+              // Build scores array
+              const strokeDist = distributeHandicapStrokes(courseHandicap, event.course.courseId!);
+              const roundScores: HandicapScoreEntry[] = completedRound.holeScores.map(holeScore => ({
+                hole: holeScore.hole,
+                par: holeScore.par,
+                strokes: holeScore.strokes,
+                handicapStrokes: strokeDist[holeScore.hole - 1] || 0,
+                netStrokes: holeScore.strokes - (strokeDist[holeScore.hole - 1] || 0)
+              }));
+              
+              // Apply ESC and calculate differential
+              let adjustedGross = 0;
+              roundScores.forEach(s => {
+                const raw = s.strokes || 0;
+                const maxScore = applyESCAdjustment(raw, s.par, s.handicapStrokes);
+                adjustedGross += maxScore;
+              });
+              
+              const scoreDifferential = calculateScoreDifferential(adjustedGross, tee.courseRating, tee.slopeRating);
+              
+              const individualRound: IndividualRound = {
+                id: nanoid(8),
+                profileId: eventGolfer.profileId,
+                date: event.date,
+                courseId: event.course.courseId!,
+                teeName: completedRound.teeName || tee.name,
+                grossScore: completedRound.finalScore,
+                netScore: completedRound.finalScore - courseHandicap,
+                courseHandicap,
+                scoreDifferential,
+                courseRating: tee.courseRating,
+                slopeRating: tee.slopeRating,
+                scores: roundScores,
+                eventId: event.id, // CRITICAL: Link to event to prevent double-counting
+                completedRoundId: completedRound.id, // CRITICAL: Link to CompletedRound to prevent double-counting
+                createdAt: new Date().toISOString()
+              };
+              
+              console.log(`✅ completeEvent: Creating IndividualRound for cloud for ${completedRound.golferName} - EventId: ${event.id}`);
+              
+              // Save to cloud (will be loaded by participant's browser)
+              import('../utils/roundSync').then(({ saveIndividualRoundToCloud }) => {
+                saveIndividualRoundToCloud(individualRound).then(() => {
+                  console.log(`✅ completeEvent: IndividualRound saved to cloud for ${completedRound.golferName}`);
+                }).catch((err: unknown) => {
+                  console.error(`❌ completeEvent: Failed to save IndividualRound to cloud for ${completedRound.golferName}:`, err);
+                });
+              });
+            }
+          });
+        }
+        
+        // Sync completed rounds to cloud
+        if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true' && newCompletedRounds.length > 0) {
+          import('../utils/completedRoundSync').then(({ batchSaveCompletedRoundsToCloud }) => {
+            batchSaveCompletedRoundsToCloud(newCompletedRounds).then((savedCount) => {
+              console.log(`✅ completeEvent: Saved ${savedCount}/${newCompletedRounds.length} CompletedRounds to cloud`);
+            }).catch((err: unknown) => {
+              console.error('❌ completeEvent: Failed to save CompletedRounds to cloud:', err);
+            });
+          });
+        }
+        
+        // Sync completed event to cloud
+        if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+          const currentProfile = get().currentProfile;
+          if (currentProfile) {
+            import('../utils/eventSync').then(({ saveEventToCloud }) => {
+              saveEventToCloud(completedEvent, currentProfile.id).then(() => {
+                console.log('✅ completeEvent: Completed event saved to cloud:', eventId);
+              }).catch((err: unknown) => {
+                console.error('❌ completeEvent: Failed to save completed event to cloud:', err);
+              });
+            });
+          }
+        }
         
         return true;
       },

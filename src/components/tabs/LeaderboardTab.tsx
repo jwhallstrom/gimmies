@@ -14,6 +14,11 @@ const LeaderboardTab: React.FC<Props> = ({ eventId }) => {
 
   if (!event) return null;
 
+  // Debug logging
+  console.log('🏆 LeaderboardTab: Event golfers:', event.golfers);
+  console.log('🏆 LeaderboardTab: Available profiles:', profiles);
+  console.log('🏆 LeaderboardTab: Event scorecards:', event.scorecards);
+
   const togglePlayerExpanded = (playerId: string) => {
     setExpandedPlayer(expandedPlayer === playerId ? null : playerId);
   };
@@ -97,7 +102,8 @@ const LeaderboardTab: React.FC<Props> = ({ eventId }) => {
   // Calculate scores for each golfer
   const leaderboardData = event.golfers.map((eventGolfer: any) => {
     const profile = eventGolfer.profileId ? profiles.find(p => p.id === eventGolfer.profileId) : null;
-    const displayName = profile ? profile.name : eventGolfer.customName;
+    // ✅ Use displayName snapshot if profile not found locally
+    const displayName = profile ? profile.name : (eventGolfer.displayName || eventGolfer.customName || 'Unknown');
     const golferId = eventGolfer.profileId || eventGolfer.customName;
 
     // Find the scorecard for this golfer

@@ -3,10 +3,23 @@ import useStore from '../state/store';
 import { Link, useNavigate } from 'react-router-dom';
 
 const EventsPage: React.FC = () => {
-  const { events, completedEvents, currentProfile, profiles, deleteEvent } = useStore();
+  const { events, completedEvents, currentProfile, profiles, deleteEvent, loadEventsFromCloud } = useStore();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
   const [previousCompletedCount, setPreviousCompletedCount] = useState(0);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(false);
+
+  // Load events from cloud when profile is available
+  useEffect(() => {
+    if (currentProfile && !isLoadingEvents) {
+      console.log('📥 EventsPage: Loading events from cloud for profile:', currentProfile.id);
+      setIsLoadingEvents(true);
+      loadEventsFromCloud().finally(() => {
+        console.log('✅ EventsPage: Finished loading events from cloud');
+        setIsLoadingEvents(false);
+      });
+    }
+  }, [currentProfile?.id]);
 
   // Auto-switch to history tab when a new event is completed
   useEffect(() => {
@@ -20,9 +33,14 @@ const EventsPage: React.FC = () => {
     setPreviousCompletedCount(currentCompletedCount);
   }, [completedEvents.length, currentProfile, previousCompletedCount]);
 
-  // Filter events to only show those the current user is participating in
+  // Filter events to only show ACTIVE events the current user is participating in
+  // Double-check: exclude any events that are marked completed OR exist in completedEvents array
+  const completedEventIds = new Set(completedEvents.map(e => e.id));
   const userEvents = events.filter(event =>
-    currentProfile && event.golfers.some(golfer => golfer.profileId === currentProfile.id)
+    currentProfile && 
+    event.golfers.some(golfer => golfer.profileId === currentProfile.id) &&
+    !event.isCompleted && // Exclude events marked as completed
+    !completedEventIds.has(event.id) // Also exclude if event ID exists in completedEvents
   );
 
   // Filter completed events to only show those the current user participated in
@@ -93,6 +111,17 @@ const EventsPage: React.FC = () => {
       {/* Tab Content */}
       {activeTab === 'active' && (
         <>
+          {/* Loading Indicator */}
+          {isLoadingEvents && (
+            <div className="bg-blue-100 border border-blue-300 text-blue-800 px-4 py-3 rounded-lg mb-4 flex items-center gap-2">
+              <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Loading events from cloud...
+            </div>
+          )}
+          
           {/* Active Events */}
           {userEvents.length > 0 ? (
             <div className="space-y-3">
@@ -103,7 +132,7 @@ const EventsPage: React.FC = () => {
                     {/* Delete Button */}
                     <button
                       onClick={() => {
-                        if (window.confirm(`Are you sure you want to delete "${event.name || 'Untitled Event'}"? This action cannot be undone.`)) {
+                        if (window.confirm(`Are you sure you want to delete "${event.name || 'Untitled Event'}"? This will permanently delete the event, all scores, and chat messages from all devices. This action cannot be undone.`)) {
                           deleteEvent(event.id);
                         }
                       }}

@@ -31,8 +31,13 @@ const AnalyticsPage: React.FC = () => {
       totalHoles: 0
     };
 
+    console.log('🔍 Analytics Debug - Starting calculation');
+    console.log('  myCompletedRounds count:', myCompletedRounds.length);
+    console.log('  allRounds count:', allRounds.length);
+
     // Add stats from completed event rounds
     myCompletedRounds.forEach(round => {
+      console.log(`  📊 CompletedRound ${round.id}: ${round.holesPlayed} holes, eventId: ${round.eventId}`);
       stats.eagles += round.stats.eagles || 0;
       stats.birdies += round.stats.birdies || 0;
       stats.pars += round.stats.pars || 0;
@@ -42,29 +47,56 @@ const AnalyticsPage: React.FC = () => {
       stats.totalHoles += round.holesPlayed || 0;
     });
 
-    // Add stats from individual rounds
+    console.log(`  After CompletedRounds: ${stats.totalHoles} total holes`);
+
+    // Add stats from individual rounds (manually added rounds only, NOT from events)
+    // Note: Individual rounds with a completedRoundId came from completed events and are
+    // already counted above in myCompletedRounds, so we skip them to avoid double-counting
     allRounds.forEach(round => {
       if (round.type === 'individual') {
-        round.scores.forEach(score => {
-          if (score.strokes !== null && score.strokes !== undefined) {
-            const toPar = score.strokes - score.par;
-            stats.totalHoles++;
-            
-            if (toPar <= -2) stats.eagles++;
-            else if (toPar === -1) stats.birdies++;
-            else if (toPar === 0) stats.pars++;
-            else if (toPar === 1) stats.bogeys++;
-            else if (toPar === 2) stats.doubleBogeys++;
-            else if (toPar >= 3) stats.triplesOrWorse++;
-          }
-        });
+        // Get the actual IndividualRound to check if it has a completedRoundId
+        const profile = useStore.getState().profiles.find(p => p.id === currentProfile.id);
+        const individualRound = profile?.individualRounds?.find(r => r.id === round.id);
+        
+        console.log(`  🔍 IndividualRound ${round.id}: completedRoundId = ${individualRound?.completedRoundId || 'NONE'}`);
+        
+        // Only count stats from manually-added individual rounds (no completedRoundId)
+        if (individualRound && !individualRound.completedRoundId) {
+          console.log(`    ✅ Counting this manual individual round (no completedRoundId)`);
+          round.scores.forEach(score => {
+            if (score.strokes !== null && score.strokes !== undefined) {
+              const toPar = score.strokes - score.par;
+              stats.totalHoles++;
+              
+              if (toPar <= -2) stats.eagles++;
+              else if (toPar === -1) stats.birdies++;
+              else if (toPar === 0) stats.pars++;
+              else if (toPar === 1) stats.bogeys++;
+              else if (toPar === 2) stats.doubleBogeys++;
+              else if (toPar >= 3) stats.triplesOrWorse++;
+            }
+          });
+        } else if (individualRound?.completedRoundId) {
+          console.log(`    ⏭️  Skipping (has completedRoundId: ${individualRound.completedRoundId} - already counted via CompletedRound)`);
+        }
       }
     });
+
+    console.log(`  Final total holes: ${stats.totalHoles}`);
 
     return stats;
   };
 
   const scoringStats = calculateScoringStats();
+  
+  // Calculate summary stats from CompletedRounds (not profile.stats which may be stale)
+  const roundsPlayed = myCompletedRounds.length;
+  const averageScore = roundsPlayed > 0 
+    ? myCompletedRounds.reduce((sum, r) => sum + r.finalScore, 0) / roundsPlayed
+    : 0;
+  const bestScore = roundsPlayed > 0
+    ? Math.min(...myCompletedRounds.map(r => r.finalScore))
+    : 0;
   
   // Prepare chart data
   const chartData = [
@@ -99,20 +131,20 @@ const AnalyticsPage: React.FC = () => {
       <div className="bg-white/90 backdrop-blur rounded-xl shadow-md p-4 border border-primary-900/5">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
           <div className="text-center">
-            <div className="text-2xl font-bold text-primary-600">{currentProfile.stats.roundsPlayed}</div>
+            <div className="text-2xl font-bold text-primary-600">{roundsPlayed}</div>
             <div className="text-sm text-gray-600">Rounds</div>
           </div>
           
           <div className="text-center">
             <div className="text-2xl font-bold text-primary-600">
-              {currentProfile.stats.averageScore > 0 ? currentProfile.stats.averageScore.toFixed(1) : 'N/A'}
+              {averageScore > 0 ? averageScore.toFixed(1) : 'N/A'}
             </div>
             <div className="text-sm text-gray-600">Avg Score</div>
           </div>
           
           <div className="text-center">
             <div className="text-2xl font-bold text-primary-600">
-              {currentProfile.stats.bestScore > 0 ? currentProfile.stats.bestScore : 'N/A'}
+              {bestScore > 0 ? bestScore : 'N/A'}
             </div>
             <div className="text-sm text-gray-600">Best Score</div>
           </div>

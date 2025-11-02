@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import useStore from '../state/store';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuthMode } from '../hooks/useAuthMode';
 
 const Dashboard: React.FC = () => {
-  const { events, currentProfile, currentUser, profiles, joinEventByCode, deleteEvent, createProfile, cleanupDuplicateProfiles } = useStore();
+  const { events, currentProfile, currentUser, profiles, joinEventByCode, deleteEvent, createProfile, cleanupDuplicateProfiles, loadEventsFromCloud } = useStore();
+  const { isGuest, isAuthenticated } = useAuthMode();
   const navigate = useNavigate();
   const [joinCode, setJoinCode] = useState('');
   const [joinMessage, setJoinMessage] = useState('');
@@ -11,6 +13,7 @@ const Dashboard: React.FC = () => {
   const [showProfileSetup, setShowProfileSetup] = useState(false);
   const [newProfileName, setNewProfileName] = useState('');
   const [isCreatingProfile, setIsCreatingProfile] = useState(false);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(false);
 
   // Filter events to only show those the current user is participating in
   const userEvents = events.filter(event =>
@@ -19,18 +22,44 @@ const Dashboard: React.FC = () => {
 
   console.log('User events count:', userEvents.length, 'Total events:', events.length);
 
-  const handleJoinEvent = () => {
+  const handleJoinEvent = async () => {
     if (!joinCode.trim()) return;
 
-    const result = joinEventByCode(joinCode.trim().toUpperCase());
+    const codeToJoin = joinCode.trim().toUpperCase();
+    console.log('📱 Dashboard: Attempting to join event with code:', codeToJoin);
+    
+    const result = await joinEventByCode(codeToJoin);
+    
     if (result.success) {
+      console.log('✅ Dashboard: Successfully joined event:', result.eventId);
       setJoinMessage('Successfully joined the event!');
       setJoinCode('');
       setShowJoinForm(false);
+      
+      // Navigate directly using the eventId returned from joinEventByCode
+      if (result.eventId) {
+        console.log('🚀 Dashboard: Navigating to event:', result.eventId);
+        setTimeout(() => {
+          navigate(`/event/${result.eventId}`);
+        }, 500); // Small delay to let success message show
+      } else {
+        // Fallback: Find the event we just joined
+        console.log('⚠️ Dashboard: No eventId returned, searching locally');
+        setTimeout(() => {
+          const joinedEvent = events.find(e => e.shareCode === codeToJoin);
+          if (joinedEvent) {
+            console.log('🚀 Dashboard: Found event locally:', joinedEvent.id);
+            navigate(`/event/${joinedEvent.id}`);
+          } else {
+            console.error('❌ Dashboard: Could not find joined event');
+          }
+        }, 500);
+      }
     } else {
+      console.error('❌ Dashboard: Failed to join event:', result.error);
       setJoinMessage(result.error || 'Invalid or expired share code.');
+      setTimeout(() => setJoinMessage(''), 3000);
     }
-    setTimeout(() => setJoinMessage(''), 3000);
   };
 
   const handleCreateProfile = () => {
@@ -167,6 +196,18 @@ const Dashboard: React.FC = () => {
     console.log('currentProfile changed:', currentProfile?.id);
   }, [currentProfile?.id]);
 
+  // Load events from cloud when profile is available
+  useEffect(() => {
+    if (currentProfile && !isLoadingEvents) {
+      console.log('📥 Dashboard: Loading events from cloud for profile:', currentProfile.id);
+      setIsLoadingEvents(true);
+      loadEventsFromCloud().finally(() => {
+        console.log('✅ Dashboard: Finished loading events from cloud');
+        setIsLoadingEvents(false);
+      });
+    }
+  }, [currentProfile?.id]);
+
   return (
     <div className="space-y-6">
       {/* Welcome Header */}
@@ -243,8 +284,11 @@ const Dashboard: React.FC = () => {
           onClick={() => setShowJoinForm(true)}
           className="bg-white/90 backdrop-blur text-primary-800 p-4 rounded-xl shadow-md hover:shadow-lg transition-shadow border border-primary-900/5"
         >
-          <div className="text-lg font-semibold mb-1">Join Event</div>
-          <div className="text-sm opacity-75">Enter a share code</div>
+          <div className="flex items-center gap-2">
+            <div className="text-lg font-semibold mb-1">Join Event</div>
+            {isGuest && <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">🔒</span>}
+          </div>
+          <div className="text-sm opacity-75">{isGuest ? 'Sign in to join events' : 'Enter a share code'}</div>
         </button>
 
         <div className="bg-white/90 backdrop-blur text-primary-800 p-4 rounded-xl shadow-md border border-primary-900/5">
@@ -257,10 +301,10 @@ const Dashboard: React.FC = () => {
 
       {/* Join Event Modal */}
       {showJoinForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md mx-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">Join an Event</h2>
+              <h2 className="text-xl font-semibold">{isGuest ? '🔒 Sign In Required' : 'Join an Event'}</h2>
               <button
                 onClick={() => setShowJoinForm(false)}
                 className="text-gray-400 hover:text-gray-600"
@@ -271,37 +315,81 @@ const Dashboard: React.FC = () => {
               </button>
             </div>
 
-            {joinMessage && (
-              <div className={`mb-4 p-3 rounded ${
-                joinMessage.includes('Successfully')
-                  ? 'bg-green-100 text-green-800'
-                  : 'bg-red-100 text-red-800'
-              }`}>
-                {joinMessage}
+            {/* Guest Mode Upgrade Prompt */}
+            {isGuest ? (
+              <div className="space-y-4">
+                <div className="bg-gradient-to-r from-blue-50 to-green-50 border-2 border-blue-200 rounded-lg p-4">
+                  <div className="flex items-start gap-3 mb-4">
+                    <svg className="w-10 h-10 text-blue-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                    </svg>
+                    <div>
+                      <h3 className="font-bold text-gray-900 mb-2">Join Events from Friends!</h3>
+                      <p className="text-sm text-gray-700 mb-3">
+                        Joining events requires a cloud account to sync data across devices and collaborate with other players in real-time.
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <div className="bg-white rounded-lg p-3 mb-4 border border-gray-200">
+                    <p className="font-semibold text-gray-800 text-sm mb-2">With a free account:</p>
+                    <ul className="space-y-1 text-xs text-gray-700">
+                      <li>✅ Join events via 6-digit codes</li>
+                      <li>✅ Share your events with friends</li>
+                      <li>✅ Real-time score updates</li>
+                      <li>✅ Event chat & collaboration</li>
+                      <li>✅ Access from any device</li>
+                    </ul>
+                  </div>
+                  
+                  <button
+                    onClick={() => window.location.href = '/'}
+                    className="w-full bg-gradient-to-r from-green-600 to-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-green-700 hover:to-blue-700 transition-all shadow-md"
+                  >
+                    Sign In or Create Free Account
+                  </button>
+                </div>
+                
+                <p className="text-xs text-gray-500 text-center">
+                  Your guest data will be safe - you can keep using the app locally anytime.
+                </p>
               </div>
+            ) : (
+              // Authenticated user - show join form
+              <>
+                {joinMessage && (
+                  <div className={`mb-4 p-3 rounded ${
+                    joinMessage.includes('Successfully')
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-red-100 text-red-800'
+                  }`}>
+                    {joinMessage}
+                  </div>
+                )}
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Share Code</label>
+                    <input
+                      type="text"
+                      value={joinCode}
+                      onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
+                      placeholder="Enter 6-character code"
+                      className="w-full border rounded px-3 py-2 text-center text-lg font-mono uppercase"
+                      maxLength={6}
+                    />
+                  </div>
+
+                  <button
+                    onClick={handleJoinEvent}
+                    disabled={!joinCode.trim() || joinCode.length !== 6}
+                    className="w-full bg-primary-600 text-white py-2 px-4 rounded disabled:opacity-50 hover:bg-primary-700"
+                  >
+                    Join Event
+                  </button>
+                </div>
+              </>
             )}
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Share Code</label>
-                <input
-                  type="text"
-                  value={joinCode}
-                  onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                  placeholder="Enter 6-character code"
-                  className="w-full border rounded px-3 py-2 text-center text-lg font-mono uppercase"
-                  maxLength={6}
-                />
-              </div>
-
-              <button
-                onClick={handleJoinEvent}
-                disabled={!joinCode.trim() || joinCode.length !== 6}
-                className="w-full bg-primary-600 text-white py-2 px-4 rounded disabled:opacity-50 hover:bg-primary-700"
-              >
-                Join Event
-              </button>
-            </div>
           </div>
         </div>
       )}

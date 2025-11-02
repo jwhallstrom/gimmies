@@ -12,6 +12,8 @@ export interface IndividualRound {
   courseRating: number;
   slopeRating: number;
   courseHandicap: number;
+  eventId?: string; // Optional - if this round came from a completed event
+  completedRoundId?: string; // Optional - links to CompletedRound if created from event
   createdAt: string;
 }
 
