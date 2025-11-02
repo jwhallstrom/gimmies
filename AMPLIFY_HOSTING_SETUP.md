@@ -1,15 +1,77 @@
 # 🚀 Amplify Hosting Deployment Guide
 
-## Current Status
+## ✅ DEPLOYMENT COMPLETE (Nov 2, 2025)
+
+**Production URL:** https://master.dtsoc1s7k1bk8.amplifyapp.com  
+**App ID:** dtsoc1sfk1bk8  
+**Service Role:** AmplifyGimmiesGolfServiceRole
+
+### Current Status
 - ✅ Amplify Gen 2 Backend deployed (Cognito, AppSync, DynamoDB)
-- ✅ GitHub repository up to date
-- ✅ amplify.yml build config committed
+- ✅ GitHub repository connected
+- ✅ amplify.yml build config working
+- ✅ IAM service role configured with proper permissions
 - ✅ Latest analytics fixes deployed (Oct 10-14 session)
-- ⏳ **NEXT: Connect Amplify Hosting**
+- ✅ Amplify Hosting active with CloudFront CDN
 
 ---
 
-## Step-by-Step: Connect GitHub to Amplify Hosting
+## Critical Setup Requirements (Already Completed)
+
+### 1. Required Dependencies in package.json
+```json
+{
+  "devDependencies": {
+    "@aws-amplify/backend-cli": "^1.2.1"  // REQUIRED for ampx pipeline-deploy
+  }
+}
+```
+
+### 2. IAM Service Role (AmplifyGimmiesGolfServiceRole)
+**Attached Policy:** `AdministratorAccess-Amplify`
+
+This role provides:
+- ✅ SSM parameter access for CDK bootstrap
+- ✅ CloudFormation stack deployment
+- ✅ Cognito, AppSync, DynamoDB creation
+- ✅ S3 and CloudFront management
+
+**If recreating:** IAM Console → Create role → AWS service → Amplify → Attach `AdministratorAccess-Amplify`
+
+### 3. amplify.yml Configuration
+```yaml
+version: 1
+backend:
+  phases:
+    build:
+      commands:
+        - npm ci
+        - npx ampx pipeline-deploy --branch $AWS_BRANCH --app-id $AWS_APP_ID
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - npm ci
+    build:
+      commands:
+        - npm run build
+  artifacts:
+    baseDirectory: dist
+    files:
+      - '**/*'
+  cache:
+    paths:
+      - node_modules/**/*
+```
+
+**Key points:**
+- Uses standard `npm ci` (no custom cache flags)
+- Backend deployment via `ampx pipeline-deploy`
+- Frontend builds to `dist/` directory
+
+---
+
+## Step-by-Step: Connect GitHub to Amplify Hosting (Reference)
 
 ### 1. Open AWS Amplify Console
 **URL:** https://console.aws.amazon.com/amplify/home?region=us-east-1
