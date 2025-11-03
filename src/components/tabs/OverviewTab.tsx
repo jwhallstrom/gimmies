@@ -80,18 +80,8 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
     const skinParticipants = sk.participantGolferIds && sk.participantGolferIds.length > 1 ? sk.participantGolferIds : event.golfers.map((g:any)=> g.profileId || g.customName).filter((id: string) => id);
     skinParticipants.forEach((gid: string) => { buyinByGolfer[gid] += sk.fee; });
   });
-  // Pinky: every golfer pays each pinky config fee
-  const pinkyConfigs: any[] = Array.isArray(event.games.pinky) ? event.games.pinky : [];
-  pinkyConfigs.forEach(pk => {
-    const pinkyParticipants = pk.participantGolferIds && pk.participantGolferIds.length > 1 ? pk.participantGolferIds : event.golfers.map((g:any)=> g.profileId || g.customName).filter((id: string) => id);
-    pinkyParticipants.forEach((gid: string) => { buyinByGolfer[gid] += pk.fee; });
-  });
-  // Greenie: every golfer pays each greenie config fee
-  const greenieConfigs: any[] = Array.isArray(event.games.greenie) ? event.games.greenie : [];
-  greenieConfigs.forEach(gr => {
-    const greenieParticipants = gr.participantGolferIds && gr.participantGolferIds.length > 1 ? gr.participantGolferIds : event.golfers.map((g:any)=> g.profileId || g.customName).filter((id: string) => id);
-    greenieParticipants.forEach((gid: string) => { buyinByGolfer[gid] += gr.fee; });
-  });
+  // Pinky: NO buy-in - players only pay if they get pinkys (penalty game)
+  // Greenie: NO buy-in - players only pay winners when they get greenies (performance game)
   const payoutByGolfer = payouts.totalByGolfer;
   return (
   <div className="space-y-6">
