@@ -57,6 +57,55 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
   const removeSkins = (id: string) => {
     useStore.getState().removeSkins(eventId, id);
   };
+  
+  // Pinky game management
+  const pinkyArray: any[] = Array.isArray(event.games.pinky) ? event.games.pinky : [];
+  const addPinky = () => {
+    updateEvent(eventId, { 
+      games: { 
+        nassau: event.games.nassau || [],
+        skins: event.games.skins || [],
+        pinky: [...pinkyArray, { id: nanoid(6), fee: 1 }],
+        greenie: event.games.greenie || []
+      } 
+    });
+  };
+  const removePinky = (id: string) => {
+    useStore.getState().removePinky(eventId, id);
+  };
+  const setPinkyCount = (pinkyId: string, golferId: string, count: number) => {
+    const currentResults = (event.pinkyResults && event.pinkyResults[pinkyId]) || [];
+    const updatedResults = currentResults.filter((r: any) => r.golferId !== golferId);
+    if (count > 0) {
+      updatedResults.push({ golferId, count });
+    }
+    useStore.getState().setPinkyResults(eventId, pinkyId, updatedResults);
+  };
+  
+  // Greenie game management
+  const greenieArray: any[] = Array.isArray(event.games.greenie) ? event.games.greenie : [];
+  const addGreenie = () => {
+    updateEvent(eventId, { 
+      games: { 
+        nassau: event.games.nassau || [],
+        skins: event.games.skins || [],
+        pinky: event.games.pinky || [],
+        greenie: [...greenieArray, { id: nanoid(6), fee: 1 }]
+      } 
+    });
+  };
+  const removeGreenie = (id: string) => {
+    useStore.getState().removeGreenie(eventId, id);
+  };
+  const setGreenieCount = (greenieId: string, golferId: string, count: number) => {
+    const currentResults = (event.greenieResults && event.greenieResults[greenieId]) || [];
+    const updatedResults = currentResults.filter((r: any) => r.golferId !== golferId);
+    if (count > 0) {
+      updatedResults.push({ golferId, count });
+    }
+    useStore.getState().setGreenieResults(eventId, greenieId, updatedResults);
+  };
+  
   // Local UI state for bulk assignment modal
   const [bulkAssignState, setBulkAssignState] = React.useState<{ nassauId: string | null; selected: Set<string>; mode: 'assign' | 'roundRobin'; teamId?: string } | null>(null);
 
@@ -506,6 +555,184 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
           )}
         </div>
       </section>
+      
+      <section>
+        <h2 className="font-semibold mb-2">Pinky (event)</h2>
+        <div className="mb-3 text-[10px] text-gray-600 bg-blue-50 border border-blue-200 rounded p-2">
+          <p><strong>How Pinky works:</strong> At the end of the round, each player declares how many "pinkys" they had. For each pinky, that player owes each other player the set fee amount.</p>
+          <p className="mt-1"><em>Example: Player A has 2 pinkys with $1 fee and 3 other players → Player A owes $6 total ($1 × 2 pinkys × 3 players).</em></p>
+        </div>
+        <div className="flex gap-2 mb-3">
+          <button
+            className="text-[10px] px-3 py-1 rounded bg-primary-600 text-white font-medium shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-400 disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={addPinky}
+            disabled={event.isCompleted || !isOwner}
+          >Add Pinky Game</button>
+        </div>
+        <div className="grid gap-3 max-w-lg">
+          {pinkyArray.map((pinky: any, i: number) => {
+            const pinkyResults = (event.pinkyResults && event.pinkyResults[pinky.id]) || [];
+            const participantIds = pinky.participantGolferIds && pinky.participantGolferIds.length > 1 ? pinky.participantGolferIds : allGolfers.map((g: any) => g.id);
+            const activeGolfers = allGolfers.filter((g: any) => participantIds.includes(g.id));
+            
+            return (
+              <div key={pinky.id} className="border rounded p-3 bg-white shadow-sm text-[11px] flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold">Pinky #{i + 1}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="flex items-center gap-1">Fee per Pinky
+                      <input 
+                        className="border rounded px-1 py-0.5 w-20" 
+                        type="number" 
+                        min="0.25"
+                        step="0.25"
+                        value={pinky.fee} 
+                        onChange={e => {
+                          updateEvent(eventId, { 
+                            games: { 
+                              ...event.games, 
+                              pinky: pinkyArray.map((p: any) => p.id === pinky.id ? { ...p, fee: Number(e.target.value) } : p) 
+                            } 
+                          });
+                        }} 
+                        disabled={event.isCompleted || !isOwner} 
+                      />
+                    </label>
+                    <button 
+                      type="button" 
+                      onClick={() => removePinky(pinky.id)} 
+                      className="text-[10px] px-2 py-1 rounded border border-red-200 bg-red-50 text-red-600 disabled:opacity-50 disabled:cursor-not-allowed" 
+                      disabled={event.isCompleted || !isOwner}
+                    >Remove</button>
+                  </div>
+                </div>
+                
+                <div className="border-t pt-2">
+                  <div className="text-[10px] font-semibold mb-2 text-gray-700">Player Pinky Counts:</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {activeGolfers.map((golfer: any) => {
+                      const result = pinkyResults.find((r: any) => r.golferId === golfer.id);
+                      const count = result?.count || 0;
+                      
+                      return (
+                        <div key={golfer.id} className="flex items-center gap-2">
+                          <label className="flex-1 truncate text-[10px]" title={golfer.name}>
+                            {golfer.name}:
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            className="border rounded px-1 py-0.5 w-14 text-center text-[10px]"
+                            value={count}
+                            onChange={e => setPinkyCount(pinky.id, golfer.id, Number(e.target.value))}
+                            disabled={!isOwner}
+                            placeholder="0"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {pinkyArray.length === 0 && (
+            <div className="text-[10px] text-gray-500">No pinky games added.</div>
+          )}
+        </div>
+      </section>
+      
+      <section>
+        <h2 className="font-semibold mb-2">Greenie (event)</h2>
+        <div className="mb-3 text-[10px] text-gray-600 bg-green-50 border border-green-200 rounded p-2">
+          <p><strong>How Greenie works:</strong> At the end of the round, each player declares how many "greenies" they had (hitting the green in regulation on par 3s). For each greenie, ALL OTHER players owe that player the set fee amount.</p>
+          <p className="mt-1"><em>Example: Player A has 2 greenies with $1 fee and 3 other players → Player A WINS $6 total ($1 × 2 greenies × 3 players). Each other player OWES $2.</em></p>
+        </div>
+        <div className="flex gap-2 mb-3">
+          <button
+            className="text-[10px] px-3 py-1 rounded bg-primary-600 text-white font-medium shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-400 disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={addGreenie}
+            disabled={event.isCompleted || !isOwner}
+          >Add Greenie Game</button>
+        </div>
+        <div className="grid gap-3 max-w-lg">
+          {greenieArray.map((greenie: any, i: number) => {
+            const greenieResults = (event.greenieResults && event.greenieResults[greenie.id]) || [];
+            const participantIds = greenie.participantGolferIds && greenie.participantGolferIds.length > 1 ? greenie.participantGolferIds : allGolfers.map((g: any) => g.id);
+            const activeGolfers = allGolfers.filter((g: any) => participantIds.includes(g.id));
+            
+            return (
+              <div key={greenie.id} className="border rounded p-3 bg-white shadow-sm text-[11px] flex flex-col gap-3">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold">Greenie #{i + 1}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="flex items-center gap-1">Fee per Greenie
+                      <input 
+                        className="border rounded px-1 py-0.5 w-20" 
+                        type="number" 
+                        min="0.25"
+                        step="0.25"
+                        value={greenie.fee} 
+                        onChange={e => {
+                          updateEvent(eventId, { 
+                            games: { 
+                              ...event.games, 
+                              greenie: greenieArray.map((g: any) => g.id === greenie.id ? { ...g, fee: Number(e.target.value) } : g) 
+                            } 
+                          });
+                        }} 
+                        disabled={event.isCompleted || !isOwner} 
+                      />
+                    </label>
+                    <button 
+                      type="button" 
+                      onClick={() => removeGreenie(greenie.id)} 
+                      className="text-[10px] px-2 py-1 rounded border border-red-200 bg-red-50 text-red-600 disabled:opacity-50 disabled:cursor-not-allowed" 
+                      disabled={event.isCompleted || !isOwner}
+                    >Remove</button>
+                  </div>
+                </div>
+                
+                <div className="border-t pt-2">
+                  <div className="text-[10px] font-semibold mb-2 text-gray-700">Player Greenie Counts:</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {activeGolfers.map((golfer: any) => {
+                      const result = greenieResults.find((r: any) => r.golferId === golfer.id);
+                      const count = result?.count || 0;
+                      
+                      return (
+                        <div key={golfer.id} className="flex items-center gap-2">
+                          <label className="flex-1 truncate text-[10px]" title={golfer.name}>
+                            {golfer.name}:
+                          </label>
+                          <input
+                            type="number"
+                            min="0"
+                            max="4"
+                            className="border rounded px-1 py-0.5 w-14 text-center text-[10px]"
+                            value={count}
+                            onChange={e => setGreenieCount(greenie.id, golfer.id, Number(e.target.value))}
+                            disabled={!isOwner}
+                            placeholder="0"
+                          />
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          {greenieArray.length === 0 && (
+            <div className="text-[10px] text-gray-500">No greenie games added.</div>
+          )}
+        </div>
+      </section>
+      
       {bulkAssignState && (() => {
         const nassau = event.games.nassau.find((nn: any) => nn.id === bulkAssignState.nassauId);
         if (!nassau) return null;

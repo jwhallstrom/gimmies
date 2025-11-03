@@ -16,6 +16,7 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
     s.completedEvents.find((e: any) => e.id === eventId)
   );
   if (!event) return null;
+  
   const payouts = calculateEventPayouts(event, profiles);
   const skinsArray = Array.isArray(payouts.skins) ? payouts.skins : (payouts.skins ? [payouts.skins as any] : []);
   
@@ -78,6 +79,18 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
   skinsConfigs.forEach(sk => {
     const skinParticipants = sk.participantGolferIds && sk.participantGolferIds.length > 1 ? sk.participantGolferIds : event.golfers.map((g:any)=> g.profileId || g.customName).filter((id: string) => id);
     skinParticipants.forEach((gid: string) => { buyinByGolfer[gid] += sk.fee; });
+  });
+  // Pinky: every golfer pays each pinky config fee
+  const pinkyConfigs: any[] = Array.isArray(event.games.pinky) ? event.games.pinky : [];
+  pinkyConfigs.forEach(pk => {
+    const pinkyParticipants = pk.participantGolferIds && pk.participantGolferIds.length > 1 ? pk.participantGolferIds : event.golfers.map((g:any)=> g.profileId || g.customName).filter((id: string) => id);
+    pinkyParticipants.forEach((gid: string) => { buyinByGolfer[gid] += pk.fee; });
+  });
+  // Greenie: every golfer pays each greenie config fee
+  const greenieConfigs: any[] = Array.isArray(event.games.greenie) ? event.games.greenie : [];
+  greenieConfigs.forEach(gr => {
+    const greenieParticipants = gr.participantGolferIds && gr.participantGolferIds.length > 1 ? gr.participantGolferIds : event.golfers.map((g:any)=> g.profileId || g.customName).filter((id: string) => id);
+    greenieParticipants.forEach((gid: string) => { buyinByGolfer[gid] += gr.fee; });
   });
   const payoutByGolfer = payouts.totalByGolfer;
   return (
@@ -349,6 +362,122 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
             {Object.entries(sk.winningsByGolfer).filter(([,v])=> (v as number) > 0).map(([gid, amt]: any) => (
               <span key={gid} className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">{golfersById[gid]} {currency(amt as number)}</span>
             ))}
+          </div>
+        </section>
+      ))}
+      
+      {/* Pinky Results */}
+      {payouts.pinky.length > 0 && payouts.pinky.map((pinky, idx) => (
+        <section key={pinky.configId} className="border border-slate-200 rounded-lg p-3 bg-white shadow-sm">
+          <h2 className="font-semibold mb-2 text-primary-900">
+            Pinky {payouts.pinky.length > 1 && <span className="text-[11px] font-normal ml-1">#{idx + 1}</span>}
+          </h2>
+          <div className="text-[11px] text-red-700 mb-2 font-medium">Fee per Pinky: {currency(pinky.feePerPinky)}</div>
+          
+          {pinky.results.length > 0 ? (
+            <div className="mb-3">
+              <table className="text-[10px] border-collapse w-full bg-white mb-3 rounded border border-slate-200 overflow-hidden">
+                <thead>
+                  <tr className="bg-slate-50">
+                    <th className="border border-slate-200 px-2 py-1">Player</th>
+                    <th className="border border-slate-200 px-2 py-1 text-center">Pinkys</th>
+                    <th className="border border-slate-200 px-2 py-1 text-right">Owes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pinky.results.map((result: any) => {
+                    const owes = pinky.owingsByGolfer[result.golferId] || 0;
+                    return (
+                      <tr key={result.golferId} className="odd:bg-slate-50/40">
+                        <td className="border border-slate-200 px-2 py-1">{golfersById[result.golferId]}</td>
+                        <td className="border border-slate-200 px-2 py-1 text-center">{result.count}</td>
+                        <td className={`border border-slate-200 px-2 py-1 text-right font-medium ${owes < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          {currency(Math.abs(owes))}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <div className="text-[10px] text-gray-600 bg-red-50 border border-red-200 rounded px-2 py-1">
+                ⚠️ Players with pinkys owe money to each other player
+              </div>
+            </div>
+          ) : (
+            <div className="text-[11px] text-gray-500">No pinkys recorded yet</div>
+          )}
+          
+          <div className="flex flex-wrap gap-2 text-[11px]">
+            <div className="font-semibold text-gray-700 w-full mb-1">Net Payouts:</div>
+            {Object.entries(pinky.owingsByGolfer)
+              .filter(([,v]) => v !== 0)
+              .map(([gid, amt]: any) => (
+                <span 
+                  key={gid} 
+                  className={`px-2 py-0.5 rounded-full ${amt > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}
+                >
+                  {golfersById[gid]} {amt > 0 ? '+' : ''}{currency(amt)}
+                </span>
+              ))
+            }
+          </div>
+        </section>
+      ))}
+      
+      {/* Greenie Results */}
+      {payouts.greenie.length > 0 && payouts.greenie.map((greenie, idx) => (
+        <section key={greenie.configId} className="border border-slate-200 rounded-lg p-3 bg-white shadow-sm">
+          <h2 className="font-semibold mb-2 text-primary-900">
+            Greenie {payouts.greenie.length > 1 && <span className="text-[11px] font-normal ml-1">#{idx + 1}</span>}
+          </h2>
+          <div className="text-[11px] text-green-700 mb-2 font-medium">Fee per Greenie: {currency(greenie.feePerGreenie)}</div>
+          
+          {greenie.results.length > 0 ? (
+            <div className="mb-3">
+              <table className="text-[10px] border-collapse w-full bg-white mb-3 rounded border border-slate-200 overflow-hidden">
+                <thead>
+                  <tr className="bg-slate-50">
+                    <th className="border border-slate-200 px-2 py-1">Player</th>
+                    <th className="border border-slate-200 px-2 py-1 text-center">Greenies</th>
+                    <th className="border border-slate-200 px-2 py-1 text-right">Wins</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {greenie.results.map((result: any) => {
+                    const wins = greenie.owingsByGolfer[result.golferId] || 0;
+                    return (
+                      <tr key={result.golferId} className="odd:bg-slate-50/40">
+                        <td className="border border-slate-200 px-2 py-1">{golfersById[result.golferId]}</td>
+                        <td className="border border-slate-200 px-2 py-1 text-center">{result.count}</td>
+                        <td className={`border border-slate-200 px-2 py-1 text-right font-medium ${wins > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {currency(Math.abs(wins))}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <div className="text-[10px] text-gray-600 bg-green-50 border border-green-200 rounded px-2 py-1">
+                ✅ Players with greenies collect money from each other player
+              </div>
+            </div>
+          ) : (
+            <div className="text-[11px] text-gray-500">No greenies recorded yet</div>
+          )}
+          
+          <div className="flex flex-wrap gap-2 text-[11px]">
+            <div className="font-semibold text-gray-700 w-full mb-1">Net Payouts:</div>
+            {Object.entries(greenie.owingsByGolfer)
+              .filter(([,v]) => v !== 0)
+              .map(([gid, amt]: any) => (
+                <span 
+                  key={gid} 
+                  className={`px-2 py-0.5 rounded-full ${amt > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}
+                >
+                  {golfersById[gid]} {amt > 0 ? '+' : ''}{currency(amt)}
+                </span>
+              ))
+            }
           </div>
         </section>
       ))}

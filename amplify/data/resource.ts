@@ -90,7 +90,9 @@ const schema = a.schema({
     golfersJson: a.json(), // EventGolfer[]
     groupsJson: a.json(), // Group[]
     scorecardsJson: a.json(), // PlayerScorecard[]
-    gamesJson: a.json(), // EventGameConfig (nassau, skins)
+    gamesJson: a.json(), // EventGameConfig (nassau, skins, pinky, greenie)
+    pinkyResultsJson: a.json(), // Pinky game results by config ID
+    greenieResultsJson: a.json(), // Greenie game results by config ID
     chatJson: a.json(), // ChatMessage[] - stored as JSON for quick sync
     
     // Chat messages for this event (relationship - not currently used, keeping for future)

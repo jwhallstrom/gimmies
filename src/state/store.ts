@@ -63,9 +63,13 @@ export interface Group { id: string; golferIds: string[]; teeTime?: string; }
 export interface NassauTeam { id: string; name: string; golferIds: string[]; }
 export interface NassauConfig { id: string; groupId: string; fee: number; net: boolean; pressesOff?: boolean; teams?: NassauTeam[]; teamBestCount?: number; participantGolferIds?: string[]; }
 export interface SkinsConfig { id: string; fee: number; net: boolean; participantGolferIds?: string[]; }
+export interface PinkyConfig { id: string; fee: number; participantGolferIds?: string[]; }
+export interface PinkyResult { golferId: string; count: number; }
+export interface GreenieConfig { id: string; fee: number; participantGolferIds?: string[]; }
+export interface GreenieResult { golferId: string; count: number; }
 export interface ScoreEntry { hole: number; strokes: number | null; }
 export interface PlayerScorecard { golferId: string; scores: ScoreEntry[]; }
-export interface EventGameConfig { nassau: NassauConfig[]; skins: SkinsConfig[]; }
+export interface EventGameConfig { nassau: NassauConfig[]; skins: SkinsConfig[]; pinky: PinkyConfig[]; greenie: GreenieConfig[]; }
 export interface EventCourseSelection { courseId?: string; teeName?: string; }
 
 // Event scoped chat message
@@ -96,6 +100,8 @@ export interface Event {
   groups: Group[];
   scorecards: PlayerScorecard[];
   games: EventGameConfig;
+  pinkyResults?: Record<string, PinkyResult[]>; // pinkyConfigId -> results array
+  greenieResults?: Record<string, GreenieResult[]>; // greenieConfigId -> results array
   ownerProfileId: string;
   scorecardView: 'individual' | 'team' | 'admin';
   isPublic: boolean;
@@ -194,6 +200,10 @@ interface State {
   removeGroup: (eventId: string, groupId: string) => void;
   removeNassau: (eventId: string, nassauId: string) => Promise<void>;
   removeSkins: (eventId: string, skinsId: string) => Promise<void>;
+  removePinky: (eventId: string, pinkyId: string) => Promise<void>;
+  setPinkyResults: (eventId: string, pinkyId: string, results: PinkyResult[]) => Promise<void>;
+  removeGreenie: (eventId: string, greenieId: string) => Promise<void>;
+  setGreenieResults: (eventId: string, greenieId: string, results: GreenieResult[]) => Promise<void>;
   
   // Event sharing
   generateShareCode: (eventId: string) => Promise<string>;
@@ -524,7 +534,7 @@ export const useStore = create<State>()(
           golfers: [eventGolfer],
           groups: [group],
           scorecards: [scorecard],
-          games: { nassau: [], skins: [] },
+          games: { nassau: [], skins: [], pinky: [], greenie: [] },
           ownerProfileId: currentProfile.id,
           scorecardView: 'individual', // Default to individual view for owner
           isPublic: false,
@@ -581,9 +591,25 @@ export const useStore = create<State>()(
         console.log('📝 updateEvent: Updating event:', id, 'Patch:', Object.keys(patch));
         
         set({
-          events: get().events.map((e: Event) => 
-            e.id === id ? { ...e, ...patch, lastModified: new Date().toISOString() } : e
-          )
+          events: get().events.map((e: Event) => {
+            if (e.id !== id) return e;
+            
+            // Ensure games object has all required arrays before merging
+            const currentGames = e.games || { nassau: [], skins: [], pinky: [], greenie: [] };
+            const updatedGames = patch.games ? {
+              nassau: patch.games.nassau ?? currentGames.nassau ?? [],
+              skins: patch.games.skins ?? currentGames.skins ?? [],
+              pinky: patch.games.pinky ?? currentGames.pinky ?? [],
+              greenie: patch.games.greenie ?? currentGames.greenie ?? []
+            } : currentGames;
+            
+            return {
+              ...e,
+              ...patch,
+              games: updatedGames,
+              lastModified: new Date().toISOString()
+            };
+          })
         });
         
         // Sync to cloud immediately
@@ -1314,6 +1340,74 @@ export const useStore = create<State>()(
             return { 
               ...e, 
               games: { ...e.games, skins: skinsArr.filter(s => s.id !== skinsId) },
+              lastModified: new Date().toISOString()
+            };
+          })
+        });
+        
+        // Sync to cloud
+        await syncEventToCloud(eventId, get);
+      },
+      
+      removePinky: async (eventId: string, pinkyId: string) => {
+        set({
+          events: get().events.map(e => {
+            if (e.id !== eventId) return e;
+            const pinkyArr = Array.isArray(e.games.pinky) ? e.games.pinky : [];
+            return { 
+              ...e, 
+              games: { ...e.games, pinky: pinkyArr.filter(p => p.id !== pinkyId) },
+              lastModified: new Date().toISOString()
+            };
+          })
+        });
+        
+        // Sync to cloud
+        await syncEventToCloud(eventId, get);
+      },
+      
+      setPinkyResults: async (eventId: string, pinkyId: string, results: PinkyResult[]) => {
+        set({
+          events: get().events.map(e => {
+            if (e.id !== eventId) return e;
+            const pinkyResults = e.pinkyResults || {};
+            return {
+              ...e,
+              pinkyResults: { ...pinkyResults, [pinkyId]: results },
+              lastModified: new Date().toISOString()
+            };
+          })
+        });
+        
+        // Sync to cloud
+        await syncEventToCloud(eventId, get);
+      },
+      
+      removeGreenie: async (eventId: string, greenieId: string) => {
+        set({
+          events: get().events.map(e => {
+            if (e.id !== eventId) return e;
+            const greenieArr = Array.isArray(e.games.greenie) ? e.games.greenie : [];
+            return { 
+              ...e, 
+              games: { ...e.games, greenie: greenieArr.filter(g => g.id !== greenieId) },
+              lastModified: new Date().toISOString()
+            };
+          })
+        });
+        
+        // Sync to cloud
+        await syncEventToCloud(eventId, get);
+      },
+      
+      setGreenieResults: async (eventId: string, greenieId: string, results: GreenieResult[]) => {
+        set({
+          events: get().events.map(e => {
+            if (e.id !== eventId) return e;
+            const greenieResults = e.greenieResults || {};
+            return {
+              ...e,
+              greenieResults: { ...greenieResults, [greenieId]: results },
               lastModified: new Date().toISOString()
             };
           })
@@ -2200,7 +2294,16 @@ export const useStore = create<State>()(
             
             // Ensure skins configs have new field shape (no change needed if absent)
             skinsVal = skinsVal.map((sc: any) => ({ ...sc }));
-            return { ...e, games: { nassau: Array.isArray(e.games.nassau) ? e.games.nassau : [], skins: skinsVal } };
+            
+            // Initialize pinky (new game type)
+            let pinkyVal = (e.games as any).pinky;
+            if (!Array.isArray(pinkyVal)) pinkyVal = [];
+            
+            // Initialize greenie (new game type)
+            let greenieVal = (e.games as any).greenie;
+            if (!Array.isArray(greenieVal)) greenieVal = [];
+            
+            return { ...e, games: { nassau: Array.isArray(e.games.nassau) ? e.games.nassau : [], skins: skinsVal, pinky: pinkyVal, greenie: greenieVal } };
           });
         }
         

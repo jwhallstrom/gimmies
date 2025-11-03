@@ -99,6 +99,8 @@ export async function saveEventToCloud(event: Event, currentProfileId: string): 
       groupsJson: JSON.stringify(event.groups || []),
       scorecardsJson: JSON.stringify(event.scorecards || []),
       gamesJson: JSON.stringify(event.games || {}),
+      pinkyResultsJson: JSON.stringify(event.pinkyResults || {}),
+      greenieResultsJson: JSON.stringify(event.greenieResults || {}),
       // chatJson removed - using ChatMessage table instead
       
       lastModified: event.lastModified || new Date().toISOString(),
@@ -159,6 +161,8 @@ export async function loadEventById(eventId: string): Promise<Event | null> {
     const groups = cloudEvent.groupsJson ? JSON.parse(cloudEvent.groupsJson as string) : [];
     const scorecards = cloudEvent.scorecardsJson ? JSON.parse(cloudEvent.scorecardsJson as string) : [];
     const games = cloudEvent.gamesJson ? JSON.parse(cloudEvent.gamesJson as string) : {};
+    const pinkyResults = cloudEvent.pinkyResultsJson ? JSON.parse(cloudEvent.pinkyResultsJson as string) : {};
+    const greenieResults = cloudEvent.greenieResultsJson ? JSON.parse(cloudEvent.greenieResultsJson as string) : {};
     
     console.log('📥 loadEventById: Parsed golfers:', golfers);
     console.log('📥 loadEventById: Parsed scorecards:', scorecards);
@@ -186,6 +190,8 @@ export async function loadEventById(eventId: string): Promise<Event | null> {
       groups,
       scorecards,
       games,
+      pinkyResults,
+      greenieResults,
       chat, // ✅ Use chat from cloud instead of empty array
       
       createdAt: cloudEvent.createdAt,
@@ -243,6 +249,8 @@ export async function loadEventByShareCode(shareCode: string): Promise<Event | n
       groups: cloudEvent.groupsJson ? JSON.parse(cloudEvent.groupsJson as string) : [],
       scorecards: cloudEvent.scorecardsJson ? JSON.parse(cloudEvent.scorecardsJson as string) : [],
       games: cloudEvent.gamesJson ? JSON.parse(cloudEvent.gamesJson as string) : {},
+      pinkyResults: cloudEvent.pinkyResultsJson ? JSON.parse(cloudEvent.pinkyResultsJson as string) : {},
+      greenieResults: cloudEvent.greenieResultsJson ? JSON.parse(cloudEvent.greenieResultsJson as string) : {},
       
       createdAt: cloudEvent.createdAt,
       lastModified: cloudEvent.lastModified || new Date().toISOString(),
@@ -290,6 +298,8 @@ export async function loadUserEventsFromCloud(): Promise<Event[]> {
       groups: cloudEvent.groupsJson ? JSON.parse(cloudEvent.groupsJson as string) : [],
       scorecards: cloudEvent.scorecardsJson ? JSON.parse(cloudEvent.scorecardsJson as string) : [],
       games: cloudEvent.gamesJson ? JSON.parse(cloudEvent.gamesJson as string) : {},
+      pinkyResults: cloudEvent.pinkyResultsJson ? JSON.parse(cloudEvent.pinkyResultsJson as string) : {},
+      greenieResults: cloudEvent.greenieResultsJson ? JSON.parse(cloudEvent.greenieResultsJson as string) : {},
       
       createdAt: cloudEvent.createdAt,
       lastModified: cloudEvent.lastModified || new Date().toISOString(),
