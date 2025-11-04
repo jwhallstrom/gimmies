@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import useStore from '../state/store';
-import { courseTeesMap } from '../data/courses';
 
 const HandicapPage: React.FC = () => {
   const { currentProfile, getProfileRounds, recalculateAllDifferentials, addToast, loadEventsFromCloud } = useStore();

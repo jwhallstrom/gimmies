@@ -1,16 +1,16 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import useStore from '../state/store';
-import { courses, allCourseTees, courseTeesMap } from '../data/courses';
 import { IndividualRound, ScoreEntry } from '../types/handicap';
 import { calculateCourseHandicap, distributeHandicapStrokes, calculateNetScore, applyESCAdjustment, calculateScoreDifferential } from '../utils/handicap';
+import { useCourses } from '../hooks/useCourses';
 
 const AddScorePage: React.FC = () => {
   const navigate = useNavigate();
   const { currentProfile, addIndividualRound, addToast } = useStore();
 
   const [formData, setFormData] = useState({
-    courseId: '',
+    courseId: '', // cloud courseId token
     teeName: '',
     date: new Date().toISOString().split('T')[0],
     grossScore: 0,
@@ -22,17 +22,17 @@ const AddScorePage: React.FC = () => {
   const [query, setQuery] = useState('');
   const [isSaving, setIsSaving] = useState(false);
 
-  // Prepare course / tees lookup
-  const selectedCourse = courses.find(c => c.id === formData.courseId);
-  const selectedTeeOption = courseTeesMap[formData.courseId];
-  const selectedTee = selectedTeeOption?.tees.find(t => t.name === formData.teeName);
+  // Load cloud courses
+  const { courses, searchCourses } = useCourses();
+  const selectedCourse = useMemo(() => courses.find(c => c.courseId === formData.courseId), [courses, formData.courseId]);
+  const selectedTee = selectedCourse?.tees.find(t => t.name === formData.teeName);
 
   // Simple client-side filter for course search. Limits results to 50 for performance.
-  const filteredCourses = React.useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return courses.slice(0, 50);
-    return courses.filter(c => c.name.toLowerCase().includes(q)).slice(0, 50);
-  }, [query]);
+  const filteredCourses = useMemo(() => {
+    const q = query.trim();
+    const list = q ? searchCourses(q) : courses;
+    return list.slice(0, 50);
+  }, [query, courses, searchCourses]);
 
   // Select course (do not auto-advance). Tee must be selected next.
   const handleCourseSelect = (courseId: string) => {
@@ -45,18 +45,18 @@ const AddScorePage: React.FC = () => {
   };
 
   const handleScoreSubmit = (grossScore: number) => {
-    if (!selectedCourse || !currentProfile) return;
+    if (!selectedCourse || !selectedTee || !currentProfile) return;
     
     // Calculate course handicap for stroke allocation
     const courseHandicap = calculateCourseHandicap(
       currentProfile.handicapIndex || 0,
-      selectedTee?.slopeRating || 113,
-      selectedTee?.courseRating || selectedTee?.par || 72,
-      selectedTee?.par || 72
+      selectedTee.slopeRating ?? 113,
+      (selectedTee.courseRating ?? selectedTee.par ?? 72),
+      selectedTee.par ?? 72
     );
 
     // Initialize scores with course data
-    const scores = selectedCourse.holes.map((hole) => ({
+    const scores = (selectedTee.holes || Array.from({ length: 18 }).map((_, i) => ({ number: i + 1, par: 4, strokeIndex: i + 1 })) ).map((hole) => ({
       hole: hole.number,
       par: hole.par,
       strokes: Math.ceil(grossScore / 18), // Rough distribution to start
@@ -82,13 +82,13 @@ const AddScorePage: React.FC = () => {
       // Calculate course handicap
       const courseHandicap = calculateCourseHandicap(
         currentProfile.handicapIndex || 0,
-        selectedTee.slopeRating,
-        selectedTee.courseRating,
-        selectedTee.par
+        selectedTee.slopeRating ?? 113,
+        (selectedTee.courseRating ?? selectedTee.par ?? 72),
+        selectedTee.par ?? 72
       );
 
       // Ensure all hole scores are present to compute differential
-      const holes = selectedCourse.holes;
+  const holes = selectedTee.holes || [];
       const scoreMap: Record<number, number | null> = {};
       (formData.scores || []).forEach(s => { scoreMap[s.hole] = s.strokes ?? null; });
       const missing = holes.some(h => scoreMap[h.number] == null);
@@ -99,7 +99,7 @@ const AddScorePage: React.FC = () => {
       }
 
       // Distribute handicap strokes and apply ESC per hole, then compute adjusted gross
-      const strokeDistribution = distributeHandicapStrokes(courseHandicap, formData.courseId);
+  const strokeDistribution = distributeHandicapStrokes(courseHandicap, formData.courseId, formData.teeName);
       let adjustedGross = 0;
       const enrichedScores = holes.map(h => {
         const raw = scoreMap[h.number] as number;
@@ -116,7 +116,7 @@ const AddScorePage: React.FC = () => {
       });
 
       // Calculate score differential using adjusted gross
-      const differential = calculateScoreDifferential(adjustedGross, selectedTee.courseRating, selectedTee.slopeRating);
+  const differential = calculateScoreDifferential(adjustedGross, (selectedTee.courseRating ?? selectedTee.par ?? 72), (selectedTee.slopeRating ?? 113));
 
       const round: Omit<IndividualRound, 'id' | 'createdAt'> = {
         profileId: currentProfile.id,
@@ -127,8 +127,8 @@ const AddScorePage: React.FC = () => {
         grossScore: formData.grossScore,
         netScore: formData.grossScore - courseHandicap,
         scoreDifferential: differential,
-        courseRating: selectedTee.courseRating,
-        slopeRating: selectedTee.slopeRating,
+        courseRating: (selectedTee.courseRating ?? selectedTee.par ?? 72) as number,
+        slopeRating: (selectedTee.slopeRating ?? 113) as number,
         courseHandicap
       } as Omit<IndividualRound, 'id' | 'createdAt'>;
 
@@ -203,14 +203,14 @@ const AddScorePage: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {filteredCourses.map(course => (
                     <button
-                      key={course.id}
-                      onClick={() => handleCourseSelect(course.id)}
-                      className={`text-left p-3 border ${formData.courseId === course.id ? 'border-primary-600 bg-primary-50' : 'border-gray-200'} rounded-lg hover:bg-primary-50 hover:border-primary-300 transition-colors`}
+                      key={course.courseId}
+                      onClick={() => handleCourseSelect(course.courseId)}
+                      className={`text-left p-3 border ${formData.courseId === course.courseId ? 'border-primary-600 bg-primary-50' : 'border-gray-200'} rounded-lg hover:bg-primary-50 hover:border-primary-300 transition-colors`}
                     >
                       <div className="flex items-center gap-3">
                         <div className="flex-1">
                           <div className="font-medium">{course.name}</div>
-                          <div className="text-sm text-gray-500">{course.holes.length} holes</div>
+                          <div className="text-sm text-gray-500">{course.tees?.[0]?.holes?.length || 18} holes</div>
                         </div>
                         <div className="text-sm text-gray-500">Select</div>
                       </div>
@@ -230,8 +230,8 @@ const AddScorePage: React.FC = () => {
                   className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 >
                   <option value="">-- Choose tees --</option>
-                  {courseTeesMap[selectedCourse.id]?.tees.map(tee => (
-                    <option key={tee.name} value={tee.name}>{`${tee.name} — ${tee.yardage}y • Par ${tee.par} • ${tee.courseRating}/${tee.slopeRating}`}</option>
+                  {selectedCourse.tees.map(tee => (
+                    <option key={tee.name} value={tee.name}>{`${tee.name}${tee.yardage ? ` — ${tee.yardage}y` : ''} • Par ${tee.par} • ${(tee.courseRating ?? tee.par ?? 72)}/${(tee.slopeRating ?? 113)}`}</option>
                   ))}
                 </select>
               </div>
@@ -263,12 +263,12 @@ const AddScorePage: React.FC = () => {
 
   if (step === 'score') {
     // Hole-by-hole entry using stacked layout (front/back stacked vertically)
-    const coursePar = selectedTee?.par || 72;
-    const holes = selectedCourse?.holes || Array.from({ length: 18 }).map((_, i) => ({ number: i + 1, par: 4, strokeIndex: i + 1 }));
+  const coursePar = selectedTee?.par || 72;
+  const holes = selectedTee?.holes || Array.from({ length: 18 }).map((_, i) => ({ number: i + 1, par: 4, strokeIndex: i + 1 }));
 
     // compute course handicap and stroke distribution
-    const courseHandicap = calculateCourseHandicap(currentProfile?.handicapIndex || 0, selectedTee?.slopeRating || 113, selectedTee?.courseRating || coursePar, coursePar);
-    const strokeDistribution = selectedCourse ? distributeHandicapStrokes(courseHandicap, selectedCourse.id) : {};
+  const courseHandicap = calculateCourseHandicap(currentProfile?.handicapIndex || 0, selectedTee?.slopeRating || 113, selectedTee?.courseRating || coursePar, coursePar);
+  const strokeDistribution = selectedCourse ? distributeHandicapStrokes(courseHandicap, selectedCourse.courseId, formData.teeName) : {};
 
     const front = holes.slice(0, 9);
     const back = holes.slice(9);

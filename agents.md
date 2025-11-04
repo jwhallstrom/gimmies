@@ -57,6 +57,18 @@ Output artifacts of interest:
 - Hashed JS/CSS under `dist/assets/`
 - PWA files: `sw.js`, `workbox-*.js`, `manifest.webmanifest`
 
+### 4.1 Amplify Hosting (Auto‑deploy via GitHub)
+If this repo is connected to AWS Amplify Hosting, a push to the tracked branch (e.g., `master`) automatically builds and deploys the app using the pipeline defined in `amplify.yml`.
+
+- Where it’s documented: see `AMPLIFY_HOSTING_SETUP.md` for the production URL, App ID, and CI/CD overview
+- Build spec: `amplify.yml` (backend deploy via `npx ampx pipeline-deploy`, frontend build publishes `dist/`)
+- How to deploy (CI/CD):
+  - Commit your changes and push to the configured branch (e.g., `master`)
+  - Amplify picks up the commit, runs the build, and deploys
+  - Check build logs in the Amplify Console → Build history
+
+Note: If Amplify Hosting is enabled, you typically do NOT need the S3 steps below; they’re provided for manual/static hosting scenarios.
+
 ---
 ## 5. AWS S3 Deployment (Static Hosting)
 Assumptions:

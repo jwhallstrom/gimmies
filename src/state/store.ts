@@ -1697,12 +1697,11 @@ export const useStore = create<State>()(
         if (profile?.individualRounds) {
           profile.individualRounds.forEach(round => {
             const course = getCourseById(round.courseId);
-            const courseTees = course?.tees ? { tees: course.tees } as any : undefined;
             rounds.push({
               id: round.id,
               type: 'individual',
               date: round.date,
-              courseName: courseTees?.courseName || 'Unknown Course',
+              courseName: course?.name || 'Unknown Course',
               teeName: round.teeName,
               grossScore: round.grossScore,
               netScore: round.netScore,

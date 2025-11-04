@@ -103,8 +103,13 @@ async function importCourses() {
   const allTees: TeeRow[] = parse(teesData, { columns: true, skip_empty_lines: true });
   console.log(`✅ Parsed ${allTees.length} tees`);
   
+  // Filter for Iowa and Illinois courses
+  const FILTER_STATES = process.env.FILTER_STATES?.split(',') || ['Iowa', 'Illinois'];
+  const filteredCourses = allCourses.filter(c => FILTER_STATES.includes(c.state));
+  console.log(`🔍 Filtered to ${filteredCourses.length} courses in: ${FILTER_STATES.join(', ')}`);
+  
   // Limit courses for testing (can be overridden with IMPORT_LIMIT env var)
-  const courses = IS_TEST ? allCourses.slice(0, LIMIT) : allCourses;
+  const courses = IS_TEST ? filteredCourses.slice(0, LIMIT) : filteredCourses;
   const courseTokens = new Set(courses.map(c => c.course_token));
   const tees = allTees.filter(t => courseTokens.has(t.course_token));
   
@@ -160,8 +165,8 @@ async function importCourses() {
         };
       });
       
-      // Create/update course in DynamoDB (upsert)
-      const result = await client.models.Course.update({
+      // Upsert: Check if course exists, then update or create
+      const courseData = {
         id: course.course_token, // Use course_token as the unique ID
         courseId: course.course_token,
         name: course.course_title,
@@ -169,12 +174,29 @@ async function importCourses() {
         teesJson: JSON.stringify(teesJson),
         isActive: true,
         lastUpdated: new Date().toISOString()
-      }, {
-        authMode: 'apiKey'
-      });
+      };
+      
+      // Try to get existing course
+      const { data: existingCourse } = await client.models.Course.get(
+        { id: course.course_token },
+        { authMode: 'apiKey' }
+      );
+      
+      let result;
+      if (existingCourse) {
+        // Update existing course
+        result = await client.models.Course.update(courseData, {
+          authMode: 'apiKey'
+        });
+      } else {
+        // Create new course
+        result = await client.models.Course.create(courseData, {
+          authMode: 'apiKey'
+        });
+      }
       
       if (result.errors) {
-        console.error(`❌ Error creating course ${course.course_token}:`, result.errors);
+        console.error(`❌ Error upserting course ${course.course_token}:`, result.errors);
         errors++;
       } else {
         imported++;
