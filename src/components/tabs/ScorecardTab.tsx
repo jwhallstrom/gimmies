@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import useStore from '../../state/store';
-import { courseMap } from '../../data/courses';
 import { strokesForHole, courseHandicap } from '../../games/handicap';
+import { useCourses } from '../../hooks/useCourses';
 
 type Props = { eventId: string };
 
@@ -10,7 +10,22 @@ const ScorecardTab: React.FC<Props> = ({ eventId }) => {
   const event = events.find((e: any) => e.id === eventId) || completedEvents.find((e: any) => e.id === eventId);
   if (!event) return null;
 
-  const holes = event.course.courseId ? courseMap[event.course.courseId].holes : Array.from({ length: 18 }).map((_, i) => ({ number: i + 1, par: 4 }));
+  // Load course data from DynamoDB (imported earlier)
+  const { courses } = useCourses();
+
+  // Determine holes for rendering:
+  // - Prefer the selected tee's holes from cloud data
+  // - Fallback to any tee's holes for the course
+  // - Fallback to 18 generic holes (par 4)
+  const selectedCourse = event.course.courseId
+    ? courses.find(c => c.courseId === event.course.courseId)
+    : undefined;
+  const selectedTeeName = event.course.teeName;
+  const selectedTee = selectedCourse?.tees.find(t => t.name === selectedTeeName);
+  const teeWithHoles = selectedTee || selectedCourse?.tees?.[0];
+  const holes = teeWithHoles?.holes?.length
+    ? teeWithHoles.holes
+    : Array.from({ length: 18 }).map((_, i) => ({ number: i + 1, par: 4, strokeIndex: i + 1 }));
   const front = holes.slice(0, 9);
   const back = holes.slice(9);
   const [view, setView] = useState<'front'|'back'|'full'>('full');

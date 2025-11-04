@@ -1,6 +1,6 @@
-// Basic handicap stroke allocation utilities (future expansion for slope/rating)
+// Handicap utilities using cloud-backed course/tee data.
 import { Event } from '../state/store';
-import { courseMap, courseTeesMap } from '../data/courses';
+import { getCourseById, getTee } from '../data/cloudCourses';
 
 // Returns strokes to apply for a golfer on a given hole based on simple index (1 stroke every 18, repeating)
 export function strokesForHole(event: Event, golferId: string, holeNumber: number, profiles: any[]): number {
@@ -18,17 +18,11 @@ export function strokesForHole(event: Event, golferId: string, holeNumber: numbe
   const ch = courseHandicap(event, golferId, profiles);
   const hcap = Math.max(0, ch == null ? 0 : ch);
   const courseId = event.course.courseId;
-  const def = courseId ? courseMap[courseId] : undefined;
-  if (!def) {
-    const base = Math.floor(hcap / 18);
-    const remainder = hcap % 18;
-    return base + (holeNumber <= remainder ? 1 : 0);
-  }
-  // Use strokeIndex ordering: holes with strokeIndex 1..remainder get the extra stroke
+  const tee = getTee(courseId, event.course.teeName);
   const base = Math.floor(hcap / 18);
   const remainder = hcap % 18;
-  const hole = def.holes.find(h => h.number === holeNumber);
-  if (!hole || !hole.strokeIndex) return base; // if no stroke index treat as easier
+  const hole = tee?.holes?.find(h => h.number === holeNumber);
+  if (!hole || !hole.strokeIndex) return base;
   return base + (hole.strokeIndex <= remainder ? 1 : 0);
 }
 
@@ -57,17 +51,20 @@ export function courseHandicap(event: Event, golferId: string, profiles: any[]):
     
   if (handicapIndex == null) return null;
   const courseId = event.course.courseId;
-  if (!courseId) return Math.round(handicapIndex); // fallback
-  const teesDef = courseTeesMap[courseId];
-  if (!teesDef) return Math.round(handicapIndex);
-  const eventTeeName = event.course.teeName || teesDef.tees[0]?.name;
-  const eventTee = teesDef.tees.find(t => t.name === eventTeeName);
-  const golferTeeName = golfer.teeName || eventTeeName;
-  const golferTee = teesDef.tees.find(t => t.name === golferTeeName) || eventTee;
+  if (!courseId) return Math.round(handicapIndex);
+  const course = getCourseById(courseId);
+  if (!course || !course.tees?.length) return Math.round(handicapIndex);
+  const eventTee = getTee(courseId, event.course.teeName) || course.tees[0];
+  const golferTeeName = golfer.teeName || eventTee?.name;
+  const golferTee = getTee(courseId, golferTeeName) || eventTee;
   if (!eventTee || !golferTee) return Math.round(handicapIndex);
-  const slope = golferTee.slopeRating;
-  const playerRatingMinusPar = golferTee.courseRating - golferTee.par; // (Rating - Par) for player's tee
-  const referenceRatingMinusPar = eventTee.courseRating - eventTee.par; // baseline reference
+  const slope = (golferTee.slopeRating ?? golferTee.slope ?? 113) || 113;
+  const courseRating = (golferTee.courseRating ?? golferTee.rating ?? null);
+  const eventRating = (eventTee.courseRating ?? eventTee.rating ?? null);
+  const playerPar = golferTee.par ?? 72;
+  const eventPar = eventTee.par ?? 72;
+  const playerRatingMinusPar = (courseRating != null ? courseRating : eventPar) - playerPar;
+  const referenceRatingMinusPar = (eventRating != null ? eventRating : eventPar) - eventPar;
   // Base WHS for player's tee
   let raw = handicapIndex * (slope / 113) + playerRatingMinusPar;
   // Normalize relative to reference so reference tee users keep exact WHS result, others adjust by rating difference

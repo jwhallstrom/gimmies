@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { nanoid } from 'nanoid/non-secure';
-import { courseMap, courses, courseTeesMap } from '../data/courses';
+import { getCourseById, getTee, getHole } from '../data/cloudCourses';
 import { calculateWHSHandicapIndex, distributeHandicapStrokes, applyESCAdjustment, calculateScoreDifferential } from '../utils/handicap';
 import { calculateEventPayouts } from '../games/payouts';
 import { IndividualRound, HandicapHistory, CombinedRound, ScoreEntry as HandicapScoreEntry } from '../types/handicap';
@@ -227,9 +227,9 @@ interface State {
 }
 
 const defaultScoreArray = (courseId?: string) => {
-  const def = courseId ? courseMap[courseId] : undefined;
-  const holes = def ? def.holes : Array.from({ length: 18 }).map((_, i) => ({ number: i + 1, par: 4 }));
-  return holes.map(h => ({ hole: h.number, strokes: null }));
+  const tee = getTee(courseId, undefined);
+  const holes = tee?.holes?.length ? tee.holes : Array.from({ length: 18 }).map((_, i) => ({ number: i + 1, par: 4 } as any));
+  return holes.map((h: any) => ({ hole: h.number, strokes: null }));
 };
 
 // Helper function to sync event to cloud after updates
@@ -732,11 +732,8 @@ export const useStore = create<State>()(
             scorecard.scores.forEach((score: any) => {
               if (score.strokes != null) {
                 let holePar = 4;
-                if (event.course.courseId && courseMap[event.course.courseId]) {
-                  const course = courseMap[event.course.courseId];
-                  const holeData = course.holes.find((h: any) => h.number === score.hole);
-                  if (holeData) holePar = holeData.par;
-                }
+                const holeData = getHole(event.course.courseId, score.hole, event.course.teeName);
+                if (holeData) holePar = holeData.par;
                 
                 totalScore += score.strokes;
                 totalPar += holePar;
@@ -763,7 +760,7 @@ export const useStore = create<State>()(
                 eventName: event.name,
                 datePlayed: event.date,
                 courseId: event.course.courseId,
-                courseName: event.course.courseId ? (courseMap[event.course.courseId]?.name || 'Unknown Course') : 'Custom Course',
+                courseName: event.course.courseId ? (getCourseById(event.course.courseId)?.name || 'Unknown Course') : 'Custom Course',
                 teeName: eventGolfer.teeName,
                 golferId: currentProfile.id,
                 golferName: currentProfile.name,
@@ -788,18 +785,19 @@ export const useStore = create<State>()(
             if (!existingIndividualRound && event.course.courseId && holesPlayed >= 14) {
               console.log('🔍 Creating IndividualRound for event:', event.name, 'courseId:', event.course.courseId, 'holesPlayed:', holesPlayed);
               
-              const courseTees = courseTeesMap[event.course.courseId];
+              const course = getCourseById(event.course.courseId);
+              const courseTees = course?.tees ? { tees: course.tees } as any : undefined;
               
               // Try to find the tee - priority: eventGolfer.teeName > event.course.teeName > profile.preferredTee > middle tee
-              let tee = courseTees?.tees.find(t => t.name === eventGolfer.teeName);
+              let tee = courseTees?.tees.find((t: any) => t.name === eventGolfer.teeName);
               
               if (!tee && courseTees) {
                 // Try event's default tee
-                tee = courseTees.tees.find(t => t.name === event.course.teeName);
+                tee = courseTees.tees.find((t: any) => t.name === event.course.teeName);
                 
                 if (!tee) {
                   // Try user's preferred tee
-                  tee = courseTees.tees.find(t => t.name === currentProfile.preferredTee);
+                  tee = courseTees.tees.find((t: any) => t.name === currentProfile.preferredTee);
                   
                   // If still not found, use the middle tee (usually white/blue)
                   if (!tee && courseTees.tees.length > 0) {
@@ -818,11 +816,11 @@ export const useStore = create<State>()(
                         const courseHandicap = Math.round(currentHandicap * (tee.slopeRating / 113) + (tee.courseRating - tee.par));
                         
                         // Build scores array for differential calculation with proper handicap strokes
-                        const strokeDist = distributeHandicapStrokes(courseHandicap, event.course.courseId);
+                        const strokeDist = distributeHandicapStrokes(courseHandicap, event.course.courseId, tee?.name);
                         const roundScores: any[] = scorecard.scores.map((score: any) => {
-                          const courseHole = courseMap[event.course.courseId!]?.holes.find((h: any) => h.number === score.hole);
+                          const courseHole = getHole(event.course.courseId!, score.hole, tee?.name);
                           const par = courseHole?.par || 4;
-                          const handicapStrokes = strokeDist[score.hole - 1] || 0;
+                          const handicapStrokes = strokeDist[score.hole] || 0;
                           const strokes = score.strokes || 0;
                           
                           return {
@@ -844,7 +842,9 @@ export const useStore = create<State>()(
                           adjustedGross += maxScore;
                         });
                         
-                        const scoreDifferential = calculateScoreDifferential(adjustedGross, tee.courseRating, tee.slopeRating);
+                        const cr0 = (tee.courseRating ?? (tee as any).rating ?? 72) as number;
+                        const sl0 = (tee.slopeRating ?? (tee as any).slope ?? 113) as number;
+                        const scoreDifferential = calculateScoreDifferential(adjustedGross, cr0, sl0);
                         
                         const individualRound: IndividualRound = {
                           id: nanoid(8),
@@ -1077,8 +1077,8 @@ export const useStore = create<State>()(
             
             console.log('👤 Creating EventGolfer:', eventGolfer);
             
-            const def = e.course.courseId ? courseMap[e.course.courseId] : undefined;
-            const holes = def ? def.holes : Array.from({ length: 18 }).map((_, i) => ({ number: i + 1 }));
+            const tee = getTee(e.course.courseId, e.course.teeName);
+            const holes = tee?.holes?.length ? tee.holes : Array.from({ length: 18 }).map((_, i) => ({ number: i + 1 }));
             const scorecard: PlayerScorecard = { 
               golferId, 
               scores: holes.map(h => ({ hole: h.number, strokes: null })) 
@@ -1188,10 +1188,8 @@ export const useStore = create<State>()(
 
         // Get course info for par calculations
         let holePar = 4; // default
-        if (event.course.courseId && courseMap[event.course.courseId]) {
-          const holeData = courseMap[event.course.courseId].holes.find(h => h.number === hole);
-          if (holeData) holePar = holeData.par;
-        }
+        const holeData = getHole(event.course.courseId, hole, event.course.teeName);
+        if (holeData) holePar = holeData.par;
 
         // Check for achievements if strokes is not null
         let chatMessage = '';
@@ -1220,10 +1218,8 @@ export const useStore = create<State>()(
             for (let i = allScores.length - 1; i >= 0; i--) {
               const score = allScores[i];
               let scorePar = 4;
-              if (event.course.courseId && courseMap[event.course.courseId]) {
-                const scoreHoleData = courseMap[event.course.courseId].holes.find(h => h.number === score.hole);
-                if (scoreHoleData) scorePar = scoreHoleData.par;
-              }
+              const scoreHoleData = getHole(event.course.courseId, score.hole, event.course.teeName);
+              if (scoreHoleData) scorePar = scoreHoleData.par;
               
               if (score.strokes === scorePar - 1) {
                 consecutiveBirdies++;
@@ -1700,7 +1696,8 @@ export const useStore = create<State>()(
         // Add individual rounds (includes converted event rounds)
         if (profile?.individualRounds) {
           profile.individualRounds.forEach(round => {
-            const courseTees = courseTeesMap[round.courseId];
+            const course = getCourseById(round.courseId);
+            const courseTees = course?.tees ? { tees: course.tees } as any : undefined;
             rounds.push({
               id: round.id,
               type: 'individual',
@@ -1779,21 +1776,23 @@ export const useStore = create<State>()(
             if (!completedRound.courseId) return;
             
             // Convert completed event round to individual round
-            const courseTees = courseTeesMap[completedRound.courseId];
-            const tee = courseTees?.tees.find(t => t.name === completedRound.teeName);
+            const course = getCourseById(completedRound.courseId!);
+            const tee = course?.tees.find((t: any) => t.name === completedRound.teeName);
             
-            if (courseTees && tee && completedRound.holesPlayed >= 14) {
+            if (tee && completedRound.holesPlayed >= 14) {
               const currentHandicap = completedRound.handicapIndex || 0;
-              const courseHandicap = Math.round(currentHandicap * (tee.slopeRating / 113) + (tee.courseRating - tee.par));
+              const cr1 = (tee.courseRating ?? (tee as any).rating ?? 72) as number;
+              const sl1 = (tee.slopeRating ?? (tee as any).slope ?? 113) as number;
+              const courseHandicap = Math.round(currentHandicap * (sl1 / 113) + (cr1 - tee.par));
               
               // Build scores array
-              const strokeDist = distributeHandicapStrokes(courseHandicap, completedRound.courseId);
+              const strokeDist = distributeHandicapStrokes(courseHandicap, completedRound.courseId!, completedRound.teeName);
               const roundScores: HandicapScoreEntry[] = completedRound.holeScores.map(holeScore => ({
                 hole: holeScore.hole,
                 par: holeScore.par,
                 strokes: holeScore.strokes,
-                handicapStrokes: strokeDist[holeScore.hole - 1] || 0,
-                netStrokes: holeScore.strokes - (strokeDist[holeScore.hole - 1] || 0)
+                handicapStrokes: strokeDist[holeScore.hole] || 0,
+                netStrokes: holeScore.strokes - (strokeDist[holeScore.hole] || 0)
               }));
               
               // Apply ESC and calculate differential
@@ -1804,7 +1803,7 @@ export const useStore = create<State>()(
                 adjustedGross += maxScore;
               });
               
-              const scoreDifferential = calculateScoreDifferential(adjustedGross, tee.courseRating, tee.slopeRating);
+              const scoreDifferential = calculateScoreDifferential(adjustedGross, cr1, sl1);
               
               const newIndividualRound: IndividualRound = {
                 id: nanoid(8),
@@ -1816,8 +1815,8 @@ export const useStore = create<State>()(
                 netScore: completedRound.finalScore - courseHandicap,
                 courseHandicap,
                 scoreDifferential,
-                courseRating: tee.courseRating,
-                slopeRating: tee.slopeRating,
+                courseRating: cr1,
+                slopeRating: sl1,
                 scores: roundScores,
                 eventId: completedRound.eventId, // Link back to source event
                 completedRoundId: completedRound.id, // Link to CompletedRound to prevent double-counting
@@ -1854,13 +1853,13 @@ export const useStore = create<State>()(
 
           const recomputed = profile.individualRounds.map(r => {
             try {
-              const courseTees = courseTeesMap[r.courseId];
-              if (!courseTees) return r;
-              const tee = courseTees.tees.find(t => t.name === r.teeName);
+              const course = getCourseById(r.courseId);
+              if (!course) return r;
+              const tee = course.tees.find(t => t.name === r.teeName);
               if (!tee) return r;
 
               // Distribute strokes and apply ESC
-              const strokeDist = distributeHandicapStrokes(r.courseHandicap || 0, r.courseId);
+              const strokeDist = distributeHandicapStrokes(r.courseHandicap || 0, r.courseId, r.teeName);
               let adjustedGross = 0;
               r.scores.forEach(s => {
                 const raw = s.strokes || 0;
@@ -1870,7 +1869,9 @@ export const useStore = create<State>()(
                 adjustedGross += adj;
               });
 
-              const diff = calculateScoreDifferential(adjustedGross, tee.courseRating, tee.slopeRating);
+              const cr2 = (tee.courseRating ?? (tee as any).rating ?? 72) as number;
+              const sl2 = (tee.slopeRating ?? (tee as any).slope ?? 113) as number;
+              const diff = calculateScoreDifferential(adjustedGross, cr2, sl2);
               return { ...r, scoreDifferential: diff };
             } catch {
               return r;
@@ -2013,11 +2014,8 @@ export const useStore = create<State>()(
               // Get par for this hole
               let holePar = 4; // default
               if (event.course.courseId) {
-                if (event.course.courseId && courseMap[event.course.courseId]) {
-                  const course = courseMap[event.course.courseId];
-                  const holeData = course.holes.find((h: any) => h.number === score.hole);
-                  if (holeData) holePar = holeData.par;
-                }
+                const holeData = getHole(event.course.courseId, score.hole, event.course.teeName);
+                if (holeData) holePar = holeData.par;
               }
               
               totalScore += score.strokes;
@@ -2074,7 +2072,7 @@ export const useStore = create<State>()(
             eventName: event.name,
             datePlayed: event.date,
             courseId: event.course.courseId,
-            courseName: event.course.courseId ? (courseMap[event.course.courseId]?.name || 'Unknown Course') : 'Custom Course',
+            courseName: event.course.courseId ? (getCourseById(event.course.courseId)?.name || 'Unknown Course') : 'Custom Course',
             teeName: eventGolfer.teeName,
             golferId,
             golferName,
@@ -2134,21 +2132,23 @@ export const useStore = create<State>()(
             const eventGolfer = event.golfers.find(g => g.profileId === completedRound.golferId);
             if (!eventGolfer || !eventGolfer.profileId) return;
             
-            const courseTees = courseTeesMap[event.course.courseId!];
-            const tee = courseTees?.tees.find(t => t.name === completedRound.teeName);
+            const course = getCourseById(event.course.courseId!);
+            const tee = course?.tees.find(t => t.name === completedRound.teeName);
             
-            if (courseTees && tee && completedRound.holesPlayed >= 14) {
+            if (tee && completedRound.holesPlayed >= 14) {
               const currentHandicap = completedRound.handicapIndex || 0;
-              const courseHandicap = Math.round(currentHandicap * (tee.slopeRating / 113) + (tee.courseRating - tee.par));
+              const cr = (tee.courseRating ?? (tee as any).rating ?? 72) as number;
+              const sl = (tee.slopeRating ?? (tee as any).slope ?? 113) as number;
+              const courseHandicap = Math.round(currentHandicap * (sl / 113) + (cr - tee.par));
               
               // Build scores array
-              const strokeDist = distributeHandicapStrokes(courseHandicap, event.course.courseId!);
+              const strokeDist = distributeHandicapStrokes(courseHandicap, event.course.courseId!, tee.name);
               const roundScores: HandicapScoreEntry[] = completedRound.holeScores.map(holeScore => ({
                 hole: holeScore.hole,
                 par: holeScore.par,
                 strokes: holeScore.strokes,
-                handicapStrokes: strokeDist[holeScore.hole - 1] || 0,
-                netStrokes: holeScore.strokes - (strokeDist[holeScore.hole - 1] || 0)
+                handicapStrokes: strokeDist[holeScore.hole] || 0,
+                netStrokes: holeScore.strokes - (strokeDist[holeScore.hole] || 0)
               }));
               
               // Apply ESC and calculate differential
@@ -2159,7 +2159,7 @@ export const useStore = create<State>()(
                 adjustedGross += maxScore;
               });
               
-              const scoreDifferential = calculateScoreDifferential(adjustedGross, tee.courseRating, tee.slopeRating);
+              const scoreDifferential = calculateScoreDifferential(adjustedGross, cr, sl);
               
               const individualRound: IndividualRound = {
                 id: nanoid(8),
@@ -2171,8 +2171,8 @@ export const useStore = create<State>()(
                 netScore: completedRound.finalScore - courseHandicap,
                 courseHandicap,
                 scoreDifferential,
-                courseRating: tee.courseRating,
-                slopeRating: tee.slopeRating,
+                courseRating: cr,
+                slopeRating: sl,
                 scores: roundScores,
                 eventId: event.id, // CRITICAL: Link to event to prevent double-counting
                 completedRoundId: completedRound.id, // CRITICAL: Link to CompletedRound to prevent double-counting

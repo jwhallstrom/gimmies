@@ -6,6 +6,7 @@
 import { useState, useEffect } from 'react';
 import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../amplify/data/resource';
+import { setCoursesCache } from '../data/cloudCourses';
 
 const client = generateClient<Schema>();
 
@@ -24,8 +25,8 @@ export interface TeeData {
   slope: number | null;
   yardage?: number;
   gender?: string;
-  courseRating?: number;
-  slopeRating?: number;
+  courseRating?: number | null;
+  slopeRating?: number | null;
   holes: Array<{
     number: number;
     par: number;
@@ -46,19 +47,27 @@ export function useCourses() {
     try {
       setLoading(true);
       console.log('📚 Loading courses from DynamoDB...');
-      
-      const { data: coursesData, errors } = await client.models.Course.list({
-        authMode: 'apiKey'
-      });
 
-      if (errors) {
-        console.error('❌ Error loading courses:', errors);
-        setError('Failed to load courses');
-        return;
-      }
+      // Page through the entire dataset to avoid default API limits
+      const all: any[] = [];
+      let nextToken: string | undefined = undefined;
+      let page = 0;
+      do {
+        page += 1;
+        const result: any = await client.models.Course.list({
+          authMode: 'apiKey',
+          limit: 1000,
+          nextToken
+        });
+        const pageData = (result?.data ?? []) as any[];
+        const pageToken = (result?.nextToken ?? (result as any)?.nextToken) as string | undefined;
+        all.push(...pageData);
+        nextToken = pageToken;
+        console.log(`🔎 Loaded page ${page} (${pageData.length} items) nextToken=${!!nextToken}`);
+      } while (nextToken);
 
       // Parse JSON fields and convert to our format
-      const parsedCourses: CourseData[] = (coursesData || []).map(course => ({
+      const parsedCourses: CourseData[] = (all || []).map((course: any) => ({
         id: course.id,
         courseId: course.courseId,
         name: course.name || '',
@@ -66,13 +75,15 @@ export function useCourses() {
         tees: course.teesJson ? JSON.parse(course.teesJson as string).map((tee: any) => ({
           ...tee,
           // Map rating/slope to courseRating/slopeRating for backward compatibility
-          courseRating: tee.rating ?? tee.courseRating,
-          slopeRating: tee.slope ?? tee.slopeRating,
+          courseRating: tee.rating ?? tee.courseRating ?? null,
+          slopeRating: tee.slope ?? tee.slopeRating ?? null,
         })) : []
       }));
 
-      console.log(`✅ Loaded ${parsedCourses.length} courses from DynamoDB`);
+      console.log(`✅ Loaded ${parsedCourses.length} total courses from DynamoDB`);
       setCourses(parsedCourses);
+      // Populate global cache for non-React consumers (e.g., handicap utils)
+      setCoursesCache(parsedCourses as any);
       setError(null);
     } catch (err) {
       console.error('❌ Exception loading courses:', err);
@@ -84,9 +95,9 @@ export function useCourses() {
 
   const searchCourses = (query: string): CourseData[] => {
     if (!query.trim()) return courses;
-    
+
     const lowerQuery = query.toLowerCase();
-    return courses.filter(course => 
+    return courses.filter(course =>
       course.name.toLowerCase().includes(lowerQuery) ||
       course.location.toLowerCase().includes(lowerQuery)
     );

@@ -1,5 +1,5 @@
-// World Handicap System (WHS) Utilities
-import { courseMap, courseTeesMap } from '../data/courses';
+// World Handicap System (WHS) Utilities backed by cloud course data
+import { getCourseById, getTee } from '../data/cloudCourses';
 import { IndividualRound, WHSCalculation, ScoreEntry } from '../types/handicap';
 
 /**
@@ -41,25 +41,20 @@ export function applyESCAdjustment(strokes: number, par: number, handicapStrokes
  * Distribute handicap strokes across holes
  * Uses stroke index (1 = hardest hole gets first stroke)
  */
-export function distributeHandicapStrokes(courseHandicap: number, courseId: string): Record<number, number> {
-  const course = courseMap[courseId];
-  if (!course) return {};
+export function distributeHandicapStrokes(courseHandicap: number, courseId: string, teeName?: string): Record<number, number> {
+  const tee = getTee(courseId, teeName);
+  const holes = tee?.holes;
+  if (!holes || holes.length === 0) return {};
 
   const distribution: Record<number, number> = {};
-  
-  course.holes.forEach(hole => {
-    // Calculate strokes for this hole
-    const fullRounds = Math.floor(courseHandicap / 18);
-    const remainingStrokes = courseHandicap % 18;
-    
+  const fullRounds = Math.floor(courseHandicap / 18);
+  const remainingStrokes = courseHandicap % 18;
+
+  holes.forEach(hole => {
     let strokesForHole = fullRounds;
-    if (hole.strokeIndex <= remainingStrokes) {
-      strokesForHole += 1;
-    }
-    
+    if (hole.strokeIndex <= remainingStrokes) strokesForHole += 1;
     distribution[hole.number] = strokesForHole;
   });
-  
   return distribution;
 }
 
@@ -76,24 +71,26 @@ export function calculateNetScore(grossStrokes: number, handicapStrokes: number)
 export function processScores(
   holeScores: { hole: number; strokes: number | null }[],
   courseId: string,
-  courseHandicap: number
+  courseHandicap: number,
+  teeName?: string
 ): ScoreEntry[] {
-  const course = courseMap[courseId];
-  if (!course) return [];
+  const tee = getTee(courseId, teeName);
+  const holes = tee?.holes;
+  if (!holes || holes.length === 0) return [];
 
-  const strokeDistribution = distributeHandicapStrokes(courseHandicap, courseId);
-  
-  return course.holes.map(hole => {
+  const strokeDistribution = distributeHandicapStrokes(courseHandicap, courseId, teeName);
+
+  return holes.map(hole => {
     const scoreEntry = holeScores.find(s => s.hole === hole.number);
-    const grossStrokes = scoreEntry?.strokes || null;
+    const grossStrokes = scoreEntry?.strokes ?? null;
     const handicapStrokes = strokeDistribution[hole.number] || 0;
-    
+
     return {
       hole: hole.number,
       par: hole.par,
       strokes: grossStrokes,
       handicapStrokes,
-      netStrokes: grossStrokes ? calculateNetScore(grossStrokes, handicapStrokes) : undefined
+      netStrokes: grossStrokes != null ? calculateNetScore(grossStrokes, handicapStrokes) : undefined
     };
   });
 }
@@ -187,17 +184,9 @@ export function calculateWHSHandicapIndex(input: number[] | { id: string; differ
  * Get course and tee info for calculations
  */
 export function getCourseInfo(courseId: string, teeName: string) {
-  const courseTees = courseTeesMap[courseId];
-  const course = courseMap[courseId];
-  
-  if (!courseTees || !course) {
-    throw new Error(`Course ${courseId} not found`);
-  }
-  
-  const tee = courseTees.tees.find(t => t.name === teeName);
-  if (!tee) {
-    throw new Error(`Tee ${teeName} not found for course ${courseId}`);
-  }
-  
-  return { course, tee, courseTees };
+  const course = getCourseById(courseId);
+  if (!course) throw new Error(`Course ${courseId} not found`);
+  const tee = getTee(courseId, teeName);
+  if (!tee) throw new Error(`Tee ${teeName} not found for course ${courseId}`);
+  return { course, tee, courseTees: { courseName: course.name, tees: course.tees } as any };
 }
