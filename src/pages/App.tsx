@@ -187,7 +187,7 @@ const App: React.FC = () => {
         </Link>
         <UserMenu />
       </header>
-      <main className="flex-1 p-4 pb-24 max-w-5xl w-full mx-auto">
+      <main className="flex-1 p-4 pb-24 pb-safe max-w-5xl w-full mx-auto">
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/events" element={<EventsPage />} />
