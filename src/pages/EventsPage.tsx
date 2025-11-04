@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import useStore from '../state/store';
 import { Link, useNavigate } from 'react-router-dom';
+import { getCourseById } from '../data/cloudCourses';
 
 const EventsPage: React.FC = () => {
   const { events, completedEvents, currentProfile, profiles, deleteEvent, loadEventsFromCloud } = useStore();
@@ -148,7 +149,7 @@ const EventsPage: React.FC = () => {
                       <div className="font-semibold text-primary-800">{event.name || 'Untitled Event'}</div>
                       <div className="text-sm text-gray-600">
                         {event.date} • {event.golfers.length} players
-                        {event.course.courseId && ` • ${event.course.courseId}`}
+                        {event.course.courseId && ` • ${getCourseById(event.course.courseId)?.name || event.course.courseId}`}
                       </div>
                       {isOwner && (
                         <span className="text-xs bg-primary-100 text-primary-800 px-2 py-0.5 rounded w-fit mt-1">
@@ -199,7 +200,7 @@ const EventsPage: React.FC = () => {
                       </div>
                       <div className="text-sm text-gray-600">
                         {event.date} • {event.golfers.length} players
-                        {event.course.courseId && ` • ${event.course.courseId}`}
+                        {event.course.courseId && ` • ${getCourseById(event.course.courseId)?.name || event.course.courseId}`}
                         {event.completedAt && ` • Completed ${new Date(event.completedAt).toLocaleDateString()}`}
                       </div>
                       <div className="flex gap-2 mt-1">
