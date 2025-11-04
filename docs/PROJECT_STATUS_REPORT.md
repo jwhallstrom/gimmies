@@ -240,9 +240,10 @@ Local State (Zustand + IndexedDB)
 ### Deployment
 - **Development:** `npm run dev` (Vite dev server on port 5173/5174)
 - **Production Build:** `npm run build` (outputs to dist/)
-- **AWS S3 Deployment:** Two-phase caching strategy
-  - Long cache (1 year) for hashed assets
-  - Short cache (60 sec) for index.html
+- **Amplify Hosting:** Connected repo auto-builds on push; see `amplify.yml`
+  - Backend: `ampx pipeline-deploy`
+  - Frontend: publish `dist/`
+  - Optional S3 manual steps documented in `agents.md`
 
 ---
 

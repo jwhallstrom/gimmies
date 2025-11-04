@@ -32,7 +32,7 @@ jobs:
       run: npm run lint
 
     - name: Run tests
-      run: npm run test
+      run: npm run test:ci
 
     - name: Build
       run: npm run build
@@ -56,4 +56,10 @@ jobs:
       run: npx playwright install --with-deps
 
     - name: Run E2E tests
-      run: npm run test:e2e
+      run: npm run e2e
+
+    - name: Build (prod)
+      run: npm run build
+
+    - name: Run E2E tests (preview/prod)
+      run: npm run e2e:preview

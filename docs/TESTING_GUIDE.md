@@ -8,6 +8,7 @@
 
 ## Prerequisites
 ✅ Dev server running at http://localhost:5173/
+✅ Optional: Built preview running at http://localhost:4173/ (`npm run preview`)
 ✅ AWS Amplify sandbox deployed (us-east-1_IpbwW1NCP)
 ✅ Email/password auth working
 ✅ Guest mode working
@@ -255,6 +256,22 @@ Use this for rapid testing:
 - [ ] Auth user: Invalid code error ✅
 - [ ] Profile update → Sign out → Sign in → Persists ✅
 - [ ] Multi-device: Same profile loads ✅
+
+---
+
+## Running E2E Tests
+
+### Dev Server Mode (fast iteration)
+```bash
+npm run e2e
+```
+
+### Preview/Prod Bundle Mode (closer to production)
+```bash
+npm run build
+npm run e2e:preview
+```
+
 
 ---
 

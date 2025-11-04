@@ -10,14 +10,14 @@ A comprehensive Progressive Web App (PWA) for golf event management, scoring, an
 - **Gambling Games**: Nassau and Skins game configurations with automatic payout calculations
 - **Offline-First**: Full PWA with service worker caching for offline play
 - **Mobile Optimized**: Responsive design with touch-friendly navigation
-- **AWS Deployment**: Production-ready with optimized caching strategy
+- **AWS Deployment**: Amplify Hosting with CI/CD from GitHub
 
 ## 🛠️ Tech Stack
 
 - **Frontend**: React 18 + TypeScript + Vite
 - **Styling**: Tailwind CSS with custom design system
 - **State Management**: Zustand with persistence
-- **Database**: IndexedDB via Dexie (planned upgrade from localStorage)
+- **Data**: AWS Amplify (AppSync + DynamoDB) with local cache (Zustand + IndexedDB/Dexie)
 - **PWA**: Vite PWA plugin with Workbox
 - **Testing**: Vitest + React Testing Library, Playwright (E2E)
 - **Deployment**: AWS S3 with CloudFront (optional)
@@ -80,7 +80,8 @@ npm run dev          # Start development server
 npm run build        # Production build
 npm run preview      # Preview production build
 npm run test         # Run unit tests
-npm run test:e2e     # Run end-to-end tests
+npm run e2e          # Run end-to-end tests (dev server)
+npm run e2e:preview  # Run end-to-end tests against built preview
 npm run lint         # Code linting
 ```
 
@@ -91,11 +92,11 @@ src/
 │   ├── tabs/        # Event detail tabs
 │   └── ...
 ├── pages/           # Main application pages
-├── state/           # Zustand store and state management
+├── state/           # Zustand store (persisted to IndexedDB)
 ├── lib/             # Utility functions and helpers
 ├── games/           # Game logic and calculations
 ├── data/            # Static data and configurations
-└── db/              # Database layer (Dexie)
+└── utils/           # Shared utilities (e.g., idb storage)
 ```
 
 ### State Management
@@ -106,17 +107,15 @@ src/
 
 ## 🚀 Deployment
 
-### AWS S3 Deployment
-The app is optimized for AWS S3 static hosting with intelligent caching:
+### Amplify Hosting (Recommended)
+- Connected GitHub repo triggers build + deploy on push to your configured branch.
+- Build spec: `amplify.yml` (backend via `ampx pipeline-deploy`, frontend publishes `dist/`).
+- To deploy: commit and push; monitor in Amplify Console.
 
-```bash
-# Build and deploy
-npm run build
-aws s3 sync dist/ s3://your-bucket-name --delete --exclude "index.html" --cache-control "public,max-age=31536000,immutable"
-aws s3 cp dist/index.html s3://your-bucket-name/index.html --cache-control "public,max-age=60" --content-type "text/html"
-```
+See `AMPLIFY_HOSTING_SETUP.md` and `agents.md` for CI/CD details.
 
-See `agents.md` for detailed deployment instructions.
+### Optional: Static Hosting via S3
+If you need manual/static hosting for staging or special cases, see the “AWS S3 Deployment (Static Hosting)” section in `agents.md`.
 
 ## 🧪 Testing
 
@@ -168,3 +167,9 @@ For support or questions, please contact the development team.
 ---
 
 **Built with ❤️ for the golf community**
+### E2E Against Production Bundle
+```bash
+# Build the app, then run Playwright against vite preview
+npm run build
+npm run e2e:preview
+```

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+import { persist, createJSONStorage } from 'zustand/middleware';
+import { idbStorage } from '../utils/idbStorage';
 import { nanoid } from 'nanoid/non-secure';
 import { getCourseById, getTee, getHole } from '../data/cloudCourses';
 import { calculateWHSHandicapIndex, distributeHandicapStrokes, applyESCAdjustment, calculateScoreDifferential } from '../utils/handicap';
@@ -2226,6 +2227,7 @@ export const useStore = create<State>()(
     {
       name: 'gimmies-store',
       version: 4, // Increment version for migration
+      storage: createJSONStorage(() => idbStorage),
       migrate: (state: any, version: number) => {
         if (!state) return state;
         
