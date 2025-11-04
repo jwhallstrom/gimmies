@@ -49,6 +49,36 @@ body { font-family: ui-sans-serif, system-ui, sans-serif; }
   }
 }
 
+.footer-safe {
+  position: relative;
+}
+
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .footer-safe::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: env(safe-area-inset-bottom);
+    background: inherit;
+    pointer-events: none;
+  }
+}
+
+@supports (padding-bottom: constant(safe-area-inset-bottom)) {
+  .footer-safe::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: constant(safe-area-inset-bottom);
+    background: inherit;
+    pointer-events: none;
+  }
+}
+
 /* PWA Safe Area Support - standalone detection (WebKit + others) */
 @media (display-mode: standalone) {
   .pt-safe {
