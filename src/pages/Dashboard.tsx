@@ -292,7 +292,7 @@ const Dashboard: React.FC = () => {
         </button>
 
         <button
-          onClick={() => navigate('/handicap/add')}
+          onClick={() => navigate('/handicap/add-round')}
           disabled={!currentProfile}
           className={`w-full text-primary-800 p-4 rounded-xl shadow-md transition-shadow border border-primary-900/5 ${
             currentProfile 

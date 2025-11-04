@@ -26,6 +26,12 @@ body { font-family: ui-sans-serif, system-ui, sans-serif; }
   padding-right: var(--pr-safe-base);
 }
 
+/* Optional overrides for base padding */
+.pt-safe-base-0 { --pt-safe-base: 0; }
+.pb-safe-base-0 { --pb-safe-base: 0; }
+.pl-safe-base-0 { --pl-safe-base: 0; }
+.pr-safe-base-0 { --pr-safe-base: 0; }
+
 /* PWA Safe Area Support - standalone detection (WebKit + others) */
 @media (display-mode: standalone) {
   .pt-safe {
