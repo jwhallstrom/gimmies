@@ -2,12 +2,28 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { Amplify } from 'aws-amplify';
+import { registerSW } from 'virtual:pwa-register';
 import outputs from '../amplify_outputs.json';
 import App from './pages/App';
 import './styles.css';
 
 // Configure Amplify
 Amplify.configure(outputs);
+
+const updateSW = registerSW({
+  immediate: true,
+  onNeedRefresh() {
+    const event = new CustomEvent('pwa:need-refresh', {
+      detail: {
+        update: () => updateSW(true),
+      },
+    });
+    window.dispatchEvent(event);
+  },
+  onOfflineReady() {
+    window.dispatchEvent(new CustomEvent('pwa:offline-ready'));
+  },
+});
 
 if (typeof window !== 'undefined') {
   const mediaQuery =

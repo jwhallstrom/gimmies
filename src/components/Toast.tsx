@@ -70,21 +70,85 @@ const Toast: React.FC<ToastProps> = ({ message, type, duration = 4000, onClose }
 export const ToastManager: React.FC = () => {
   const toasts = useStore(s => s.toasts || []);
   const removeToast = useStore(s => s.removeToast);
+  const addToast = useStore(s => s.addToast);
+  const [updateReady, setUpdateReady] = useState<null | (() => void)>(null);
+
+  useEffect(() => {
+    type RefreshDetail = {
+      update: () => void;
+    };
+
+    const handleNeedRefresh = (event: Event) => {
+      const detail = (event as CustomEvent<RefreshDetail>).detail;
+      if (detail?.update) {
+        setUpdateReady(() => detail.update);
+      }
+    };
+
+    const handleOfflineReady = () => {
+      addToast('App ready to work offline', 'success', 3000);
+    };
+
+    window.addEventListener('pwa:need-refresh', handleNeedRefresh as EventListener);
+    window.addEventListener('pwa:offline-ready', handleOfflineReady as EventListener);
+
+    return () => {
+      window.removeEventListener('pwa:need-refresh', handleNeedRefresh as EventListener);
+      window.removeEventListener('pwa:offline-ready', handleOfflineReady as EventListener);
+    };
+  }, [addToast]);
 
   return (
-    <div className="fixed top-0 right-0 z-50 pointer-events-none">
-      <div className="p-4 space-y-2 pointer-events-auto">
-        {toasts.map((toast: any) => (
-          <Toast
-            key={toast.id}
-            message={toast.message}
-            type={toast.type}
-            duration={toast.duration}
-            onClose={() => removeToast(toast.id)}
-          />
-        ))}
+    <>
+      {updateReady && (
+        <div className="fixed bottom-24 right-4 z-[60] pointer-events-auto">
+          <div className="bg-white/95 backdrop-blur border border-primary-900/15 shadow-xl rounded-lg p-4 max-w-xs space-y-3">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-xl">
+                🔄
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-primary-900 text-sm">Update available</h3>
+                <p className="text-xs text-gray-600 mt-1">
+                  A newer version of Gimmies is ready. Reload to apply the latest features and fixes.
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end text-sm">
+              <button
+                className="px-3 py-1.5 rounded-md border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors"
+                onClick={() => setUpdateReady(null)}
+              >
+                Later
+              </button>
+              <button
+                className="px-3 py-1.5 rounded-md bg-primary-600 text-white font-semibold hover:bg-primary-700 transition-colors"
+                onClick={() => {
+                  const doUpdate = updateReady;
+                  setUpdateReady(null);
+                  doUpdate?.();
+                }}
+              >
+                Reload now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <div className="fixed top-0 right-0 z-50 pointer-events-none">
+        <div className="p-4 space-y-2 pointer-events-auto">
+          {toasts.map((toast: any) => (
+            <Toast
+              key={toast.id}
+              message={toast.message}
+              type={toast.type}
+              duration={toast.duration}
+              onClose={() => removeToast(toast.id)}
+            />
+          ))}
+        </div>
       </div>
-    </div>
+    </>
   );
 };
 
