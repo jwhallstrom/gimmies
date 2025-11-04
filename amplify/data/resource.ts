@@ -166,8 +166,8 @@ const schema = a.schema({
     lastUpdated: a.datetime(),
   })
   .authorization(allow => [
-    allow.authenticated().to(['read']),
-    allow.owner().to(['create', 'update', 'delete']), // Only admins can manage courses
+    allow.publicApiKey(), // Allow API key for all operations (courses are public data)
+    allow.authenticated(), // Authenticated users can do anything
   ]),
 });
 

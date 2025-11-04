@@ -63,7 +63,12 @@ export function useCourses() {
         courseId: course.courseId,
         name: course.name || '',
         location: course.location || '',
-        tees: course.teesJson ? JSON.parse(course.teesJson as string) : []
+        tees: course.teesJson ? JSON.parse(course.teesJson as string).map((tee: any) => ({
+          ...tee,
+          // Map rating/slope to courseRating/slopeRating for backward compatibility
+          courseRating: tee.rating ?? tee.courseRating,
+          slopeRating: tee.slope ?? tee.slopeRating,
+        })) : []
       }));
 
       console.log(`✅ Loaded ${parsedCourses.length} courses from DynamoDB`);

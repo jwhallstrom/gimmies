@@ -91,11 +91,17 @@ async function importCourses() {
   const IS_TEST = LIMIT < 1000;
   
   // Read CSV files
+  console.log('📖 Reading CSV files...');
   const coursesData = readFileSync('Courses.csv', 'utf-8');
   const teesData = readFileSync('tees.csv', 'utf-8');
   
+  console.log('🔄 Parsing courses CSV...');
   const allCourses: CourseRow[] = parse(coursesData, { columns: true, skip_empty_lines: true });
+  console.log(`✅ Parsed ${allCourses.length} courses`);
+  
+  console.log('🔄 Parsing tees CSV...');
   const allTees: TeeRow[] = parse(teesData, { columns: true, skip_empty_lines: true });
+  console.log(`✅ Parsed ${allTees.length} tees`);
   
   // Limit courses for testing (can be overridden with IMPORT_LIMIT env var)
   const courses = IS_TEST ? allCourses.slice(0, LIMIT) : allCourses;
@@ -120,8 +126,12 @@ async function importCourses() {
   let imported = 0;
   let errors = 0;
   
+  console.log('🚀 Starting import to DynamoDB...\n');
+  
   for (const course of courses) {
     try {
+      console.log(`Processing ${imported + 1}/${courses.length}: ${course.course_token} - ${course.course_title}`);
+      
       const courseTees = teesByCourse.get(course.course_token) || [];
       
       // Convert tees to our format
@@ -150,19 +160,25 @@ async function importCourses() {
         };
       });
       
-      // Create/update course in DynamoDB
-      await client.models.Course.update({
+      // Create/update course in DynamoDB (upsert)
+      const result = await client.models.Course.update({
         id: course.course_token, // Use course_token as the unique ID
         courseId: course.course_token,
         name: course.course_title,
         location: `${course.city}, ${course.state}, ${course.country}`,
-        holesJson: JSON.stringify([]), // We'll store holes in tees
         teesJson: JSON.stringify(teesJson),
         isActive: true,
         lastUpdated: new Date().toISOString()
+      }, {
+        authMode: 'apiKey'
       });
       
-      imported++;
+      if (result.errors) {
+        console.error(`❌ Error creating course ${course.course_token}:`, result.errors);
+        errors++;
+      } else {
+        imported++;
+      }
       
       if (imported % 100 === 0) {
         console.log(`✅ Imported ${imported}/${courses.length} courses...`);
