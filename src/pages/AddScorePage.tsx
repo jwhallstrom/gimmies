@@ -157,6 +157,18 @@ const AddScorePage: React.FC = () => {
     );
   }
 
+  const proceedToScoreEntry = () => {
+    if (!formData.courseId) {
+      addToast('Please select a course', 'error');
+      return;
+    }
+    if (!formData.teeName) {
+      addToast('Please select tees for the course', 'error');
+      return;
+    }
+    setStep('score');
+  };
+
   if (step === 'course') {
     return (
       <div className="space-y-6">
@@ -227,7 +239,7 @@ const AddScorePage: React.FC = () => {
                         </div>
 
                         {isSelected && (
-                          <div className="pt-3">
+                          <div className="pt-3 space-y-3">
                             <label htmlFor={`tee-select-${course.courseId}`} className="block text-sm font-medium text-gray-700 mb-2">Choose Tees</label>
                             <select
                               id={`tee-select-${course.courseId}`}
@@ -240,6 +252,16 @@ const AddScorePage: React.FC = () => {
                                 <option key={tee.name} value={tee.name}>{`${tee.name}${tee.yardage ? ` — ${tee.yardage}y` : ''} • Par ${tee.par} • ${(tee.courseRating ?? tee.par ?? 72)}/${(tee.slopeRating ?? 113)}`}</option>
                               ))}
                             </select>
+
+                            {formData.teeName && (
+                              <button
+                                type="button"
+                                onClick={proceedToScoreEntry}
+                                className="mt-2 w-full bg-primary-600 text-white py-3 rounded-lg font-medium hover:bg-primary-700 transition-colors"
+                              >
+                                Next
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
@@ -249,24 +271,6 @@ const AddScorePage: React.FC = () => {
               )}
             </div>
 
-            <div className="pt-4">
-              <button
-                onClick={() => {
-                  if (!formData.courseId) {
-                    addToast('Please select a course', 'error');
-                    return;
-                  }
-                  if (!formData.teeName) {
-                    addToast('Please select tees for the course', 'error');
-                    return;
-                  }
-                  setStep('score');
-                }}
-                className="w-full bg-primary-600 text-white py-3 rounded-lg font-medium hover:bg-primary-700 transition-colors"
-              >
-                Next
-              </button>
-            </div>
           </div>
         </div>
       </div>
