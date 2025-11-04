@@ -34,18 +34,18 @@ body { font-family: ui-sans-serif, system-ui, sans-serif; }
 .pr-safe-base-0 { --pr-safe-base: 0; }
 
 .pb-safe-tight {
-  padding-bottom: 0.5rem;
+  padding-bottom: 0.25rem;
 }
 
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
   .pb-safe-tight {
-    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom) * 0.35);
+    padding-bottom: max(0.25rem, calc(env(safe-area-inset-bottom) * 0.3));
   }
 }
 
 @supports (padding-bottom: constant(safe-area-inset-bottom)) {
   .pb-safe-tight {
-    padding-bottom: calc(0.5rem + constant(safe-area-inset-bottom) * 0.35);
+    padding-bottom: max(0.25rem, calc(constant(safe-area-inset-bottom) * 0.3));
   }
 }
 
