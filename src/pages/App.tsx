@@ -189,7 +189,7 @@ const App: React.FC = () => {
       </header>
       <main className="flex-1 relative w-full">
         <div className="absolute inset-0 overflow-y-auto">
-          <div className="px-4 pt-6 pb-24 pb-safe max-w-5xl w-full mx-auto">
+          <div className="px-4 pt-6 content-with-footer max-w-5xl w-full mx-auto">
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/events" element={<EventsPage />} />
@@ -204,7 +204,7 @@ const App: React.FC = () => {
           </div>
         </div>
       </main>
-      <footer className="footer-safe fixed bottom-0 inset-x-0 bg-white/90 backdrop-blur border-t border-primary-900/20 flex items-center justify-between px-4 pt-2 pb-safe-tight z-40">
+      <footer className="bottom-nav fixed bottom-0 inset-x-0 bg-white/90 backdrop-blur border-t border-primary-900/20 flex items-center justify-between z-40">
         <Link
           to="/"
           className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${

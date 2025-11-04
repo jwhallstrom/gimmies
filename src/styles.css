@@ -33,49 +33,35 @@ body { font-family: ui-sans-serif, system-ui, sans-serif; }
 .pl-safe-base-0 { --pl-safe-base: 0; }
 .pr-safe-base-0 { --pr-safe-base: 0; }
 
-.pb-safe-tight {
-  padding-bottom: 0.25rem;
+.bottom-nav {
+  padding: 0.5rem 1rem 0.75rem;
 }
 
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
-  .pb-safe-tight {
-    padding-bottom: max(0.25rem, calc(env(safe-area-inset-bottom) * 0.3));
+  .bottom-nav {
+    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
   }
 }
 
 @supports (padding-bottom: constant(safe-area-inset-bottom)) {
-  .pb-safe-tight {
-    padding-bottom: max(0.25rem, calc(constant(safe-area-inset-bottom) * 0.3));
+  .bottom-nav {
+    padding-bottom: calc(0.75rem + constant(safe-area-inset-bottom));
   }
 }
 
-.footer-safe {
-  position: relative;
+.content-with-footer {
+  padding-bottom: 5.5rem;
 }
 
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
-  .footer-safe::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: env(safe-area-inset-bottom);
-    background: inherit;
-    pointer-events: none;
+  .content-with-footer {
+    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
   }
 }
 
 @supports (padding-bottom: constant(safe-area-inset-bottom)) {
-  .footer-safe::after {
-    content: '';
-    position: absolute;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    height: constant(safe-area-inset-bottom);
-    background: inherit;
-    pointer-events: none;
+  .content-with-footer {
+    padding-bottom: calc(5.5rem + constant(safe-area-inset-bottom));
   }
 }
 
