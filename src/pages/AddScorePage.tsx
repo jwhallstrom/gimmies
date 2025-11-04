@@ -201,41 +201,53 @@ const AddScorePage: React.FC = () => {
                 <div className="text-sm text-gray-500">No courses found.</div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {filteredCourses.map(course => (
-                    <button
-                      key={course.courseId}
-                      onClick={() => handleCourseSelect(course.courseId)}
-                      className={`text-left p-3 border ${formData.courseId === course.courseId ? 'border-primary-600 bg-primary-50' : 'border-gray-200'} rounded-lg hover:bg-primary-50 hover:border-primary-300 transition-colors`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1">
-                          <div className="font-medium">{course.name}</div>
-                          <div className="text-sm text-gray-500">{course.tees?.[0]?.holes?.length || 18} holes</div>
+                  {filteredCourses.map(course => {
+                    const isSelected = formData.courseId === course.courseId;
+                    return (
+                      <div
+                        key={course.courseId}
+                        className={`p-3 border ${isSelected ? 'border-primary-600 bg-primary-50' : 'border-gray-200'} rounded-lg transition-colors`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1">
+                            <div className="font-medium">{course.name}</div>
+                            <div className="text-sm text-gray-500">{course.tees?.[0]?.holes?.length || 18} holes</div>
+                          </div>
+                          {isSelected ? (
+                            <span className="text-xs px-2 py-1 rounded bg-primary-600 text-white">Selected</span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => handleCourseSelect(course.courseId)}
+                              className="text-sm text-primary-700 border border-primary-200 hover:border-primary-400 px-3 py-1 rounded"
+                            >
+                              Select
+                            </button>
+                          )}
                         </div>
-                        <div className="text-sm text-gray-500">Select</div>
+
+                        {isSelected && (
+                          <div className="pt-3">
+                            <label htmlFor={`tee-select-${course.courseId}`} className="block text-sm font-medium text-gray-700 mb-2">Choose Tees</label>
+                            <select
+                              id={`tee-select-${course.courseId}`}
+                              value={formData.teeName}
+                              onChange={(e) => setFormData(prev => ({ ...prev, teeName: e.target.value }))}
+                              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                            >
+                              <option value="">-- Choose tees --</option>
+                              {course.tees.map(tee => (
+                                <option key={tee.name} value={tee.name}>{`${tee.name}${tee.yardage ? ` — ${tee.yardage}y` : ''} • Par ${tee.par} • ${(tee.courseRating ?? tee.par ?? 72)}/${(tee.slopeRating ?? 113)}`}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
                       </div>
-                    </button>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
-
-            {/* Tees dropdown shown after course selection */}
-            {selectedCourse && (
-              <div className="pt-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Select Tees</label>
-                <select
-                  value={formData.teeName}
-                  onChange={(e) => setFormData(prev => ({ ...prev, teeName: e.target.value }))}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                >
-                  <option value="">-- Choose tees --</option>
-                  {selectedCourse.tees.map(tee => (
-                    <option key={tee.name} value={tee.name}>{`${tee.name}${tee.yardage ? ` — ${tee.yardage}y` : ''} • Par ${tee.par} • ${(tee.courseRating ?? tee.par ?? 72)}/${(tee.slopeRating ?? 113)}`}</option>
-                  ))}
-                </select>
-              </div>
-            )}
 
             <div className="pt-4">
               <button
@@ -299,6 +311,8 @@ const AddScorePage: React.FC = () => {
           <button 
             onClick={() => setStep('course')}
             className="text-primary-600 hover:text-primary-700"
+            aria-label="Back to course selection"
+            title="Back to course selection"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -524,6 +538,8 @@ const AddScorePage: React.FC = () => {
         <button 
           onClick={() => setStep('score')}
           className="text-primary-600 hover:text-primary-700"
+          aria-label="Back to score entry"
+          title="Back to score entry"
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -533,36 +549,59 @@ const AddScorePage: React.FC = () => {
       </div>
 
       <div className="bg-white/90 backdrop-blur rounded-xl shadow-md p-6 border border-primary-900/5">
+        {(() => {
+          // Precompute adjusted gross and differential preview
+          const coursePar = selectedTee?.par || 72;
+          const courseRating = selectedTee?.courseRating ?? coursePar;
+          const slopeRating = selectedTee?.slopeRating ?? 113;
+          const ch = calculateCourseHandicap(currentProfile?.handicapIndex || 0, slopeRating, courseRating, coursePar);
+          const holes = selectedTee?.holes || [];
+          const dist = selectedCourse ? distributeHandicapStrokes(ch, selectedCourse.courseId, formData.teeName) : {};
+          const scoreMap: Record<number, number | null> = {};
+          (formData.scores || []).forEach(s => { scoreMap[s.hole] = s.strokes ?? null; });
+          let adj = 0;
+          holes.forEach(h => {
+            const raw = scoreMap[h.number];
+            if (typeof raw === 'number') {
+              const hs = dist[h.number] || 0;
+              adj += applyESCAdjustment(raw, h.par, hs);
+            }
+          });
+          const diff = holes.length > 0 ? calculateScoreDifferential(adj, courseRating, slopeRating) : undefined;
+          return (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              <div className="text-center p-4 bg-gray-50 rounded-lg">
+                <div className="text-2xl font-bold text-primary-600">{formData.grossScore}</div>
+                <div className="text-sm text-gray-600">Gross Score</div>
+              </div>
+              <div className="text-center p-4 bg-gray-50 rounded-lg">
+                <div className="text-2xl font-bold text-primary-600">{formData.grossScore - (selectedTee?.par || 72)}</div>
+                <div className="text-sm text-gray-600">vs Par</div>
+              </div>
+              <div className="text-center p-4 bg-gray-50 rounded-lg">
+                <div className="text-2xl font-bold text-primary-600">{selectedTee?.courseRating || '--'}</div>
+                <div className="text-sm text-gray-600">Course Rating</div>
+              </div>
+              <div className="text-center p-4 bg-gray-50 rounded-lg">
+                <div className="text-2xl font-bold text-primary-600">{selectedTee?.slopeRating || '--'}</div>
+                <div className="text-sm text-gray-600">Slope Rating</div>
+              </div>
+              <div className="text-center p-4 bg-gray-50 rounded-lg col-span-2 md:col-span-2">
+                <div className="text-2xl font-bold text-primary-600">{adj || '--'}</div>
+                <div className="text-sm text-gray-600">Adjusted Gross (WHS)</div>
+              </div>
+              <div className="text-center p-4 bg-gray-50 rounded-lg col-span-2 md:col-span-2">
+                <div className="text-2xl font-bold text-primary-600">{diff ?? '--'}</div>
+                <div className="text-sm text-gray-600">Score Differential (uses adjusted)</div>
+              </div>
+            </div>
+          );
+        })()}
         <div className="mb-6">
           <h3 className="font-semibold text-gray-900">{selectedCourse?.name}</h3>
           <p className="text-sm text-gray-600">
             {selectedTee?.name} • {formData.date}
           </p>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <div className="text-center p-4 bg-gray-50 rounded-lg">
-            <div className="text-2xl font-bold text-primary-600">{formData.grossScore}</div>
-            <div className="text-sm text-gray-600">Gross Score</div>
-          </div>
-          <div className="text-center p-4 bg-gray-50 rounded-lg">
-            <div className="text-2xl font-bold text-primary-600">
-              {formData.grossScore - (selectedTee?.par || 72)}
-            </div>
-            <div className="text-sm text-gray-600">vs Par</div>
-          </div>
-          <div className="text-center p-4 bg-gray-50 rounded-lg">
-            <div className="text-2xl font-bold text-primary-600">
-              {selectedTee?.courseRating || '--'}
-            </div>
-            <div className="text-sm text-gray-600">Course Rating</div>
-          </div>
-          <div className="text-center p-4 bg-gray-50 rounded-lg">
-            <div className="text-2xl font-bold text-primary-600">
-              {selectedTee?.slopeRating || '--'}
-            </div>
-            <div className="text-sm text-gray-600">Slope Rating</div>
-          </div>
         </div>
 
         <div className="space-y-4">
