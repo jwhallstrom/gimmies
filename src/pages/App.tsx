@@ -187,18 +187,22 @@ const App: React.FC = () => {
         </Link>
         <UserMenu />
       </header>
-      <main className="flex-1 px-4 pt-6 pb-24 pb-safe max-w-5xl w-full mx-auto">
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/events" element={<EventsPage />} />
-          <Route path="/handicap" element={<HandicapPage />} />
-          <Route path="/handicap/add-round" element={<AddScorePage />} />
-          <Route path="/handicap/round/:roundId" element={<RoundDetailPage />} />
-          <Route path="/analytics" element={<AnalyticsPage />} />
-          <Route path="/event/:id/*" element={<EventPage />} />
-          <Route path="/join/:code" element={<JoinEventPage />} />
-          <Route path="/auth-demo" element={<AuthDemoPage />} />
-        </Routes>
+      <main className="flex-1 relative w-full">
+        <div className="absolute inset-0 overflow-y-auto">
+          <div className="px-4 pt-6 pb-24 pb-safe max-w-5xl w-full mx-auto">
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/events" element={<EventsPage />} />
+              <Route path="/handicap" element={<HandicapPage />} />
+              <Route path="/handicap/add-round" element={<AddScorePage />} />
+              <Route path="/handicap/round/:roundId" element={<RoundDetailPage />} />
+              <Route path="/analytics" element={<AnalyticsPage />} />
+              <Route path="/event/:id/*" element={<EventPage />} />
+              <Route path="/join/:code" element={<JoinEventPage />} />
+              <Route path="/auth-demo" element={<AuthDemoPage />} />
+            </Routes>
+          </div>
+        </div>
       </main>
       <footer className="fixed bottom-0 inset-x-0 bg-white/90 backdrop-blur border-t border-primary-900/20 flex items-center justify-between px-4 py-2 pb-safe pb-safe-base-0 z-40">
         <Link
