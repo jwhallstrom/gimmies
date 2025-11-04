@@ -162,3 +162,27 @@ body.pwa-standalone .fullscreen-overlay {
   padding-right: constant(safe-area-inset-right);
   padding-right: env(safe-area-inset-right);
 }
+
+/* Use dynamic viewport units */
+body, html {
+  min-height: 100dvh;
+}
+
+/* Footer safe area compensation */
+footer {
+  position: fixed;
+  bottom: 0;
+  left: 0; right: 0;
+  height: 60px; /* whatever your footer height is */
+  padding-bottom: env(safe-area-inset-bottom);
+  background: #0d5a28; /* or your theme */
+}
+
+/* Avoid content being hidden under footer */
+main {
+  padding-bottom: calc(60px + env(safe-area-inset-bottom));
+}
+
+@media (display-mode: standalone) {
+  /* optional: tweaks only for installed PWAs */
+}
