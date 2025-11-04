@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import useStore from '../../state/store';
-import { courses, courseTeesMap } from '../../data/courses';
+import { CourseSearch } from '../CourseSearch';
+import { useCourses } from '../../hooks/useCourses';
 import EventSharing from '../EventSharing';
 
 type Props = { eventId: string };
@@ -11,15 +12,17 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
     s.completedEvents.find((e: any) => e.id === eventId)
   );
   const { currentProfile, profiles, addGolferToEvent, updateEventGolfer } = useStore();
+  const { courses } = useCourses();
+  
   if (!event) return null;
   
   // Check if current user is the event owner
   const isOwner = currentProfile && event.ownerProfileId === currentProfile.id;
   console.log('⚙️ SetupTab: Is owner?', isOwner, 'Current profile:', currentProfile?.id, 'Owner:', event.ownerProfileId);
   
-  const teeDetails = event.course.courseId && event.course.teeName
-    ? courseTeesMap[event.course.courseId]?.tees.find(t => t.name === event.course.teeName)
-    : null;
+  // Get course and tee data from DynamoDB courses
+  const selectedCourse = courses.find(c => c.courseId === event.course.courseId);
+  const teeDetails = selectedCourse?.tees.find(t => t.name === event.course.teeName);
   
   const [golferName, setGolferName] = useState('');
   const [customTeeName, setCustomTeeName] = useState('');
@@ -27,7 +30,7 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
   
   const courseSelected = !!event.course.courseId;
   const teeSelected = !!event.course.teeName;
-  const teesForCourse = courseSelected ? courseTeesMap[event.course.courseId!]?.tees || [] : [];
+  const teesForCourse = selectedCourse?.tees || [];
   
   const canAddGolfer = courseSelected && teeSelected && golferName.trim();
   
@@ -79,18 +82,13 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
       <div className="grid grid-cols-2 gap-4 max-w-md">
         <div>
           <label className="block text-xs font-medium mb-1">Course</label>
-          <select
-            className="w-full border border-gray-400 rounded px-2 py-1 text-sm"
-            value={event.course.courseId || ''}
-            onChange={e => {
-              const courseId = e.target.value;
+          <CourseSearch
+            selectedCourseId={event.course.courseId}
+            onSelect={(courseId) => {
               useStore.getState().setEventCourse(eventId, courseId);
             }}
             disabled={event.isCompleted || !isOwner}
-          >
-            <option value="">Select course</option>
-            {courses.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-          </select>
+          />
         </div>
         <div>
           <label className="block text-xs font-medium mb-1">Tee</label>
@@ -101,7 +99,7 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
             disabled={!event.course.courseId || event.isCompleted || !isOwner}
           >
             <option value="">Select tee</option>
-            {event.course.courseId && courseTeesMap[event.course.courseId]?.tees.map(t => (
+            {teesForCourse.map((t: any) => (
               <option key={t.name} value={t.name}>{t.name}</option>
             ))}
           </select>
@@ -111,9 +109,8 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
       {teeDetails && (
         <div className="text-[11px] text-primary-800 bg-primary-50 border border-primary-200 rounded p-2 flex flex-wrap gap-x-4 gap-y-1 max-w-xl">
           <span><span className="font-semibold">Tee:</span> {teeDetails.name}</span>
-          <span><span className="font-semibold">CR:</span> {teeDetails.courseRating}</span>
-          <span><span className="font-semibold">Slope:</span> {teeDetails.slopeRating}</span>
-          <span><span className="font-semibold">Yds:</span> {teeDetails.yardage}</span>
+          <span><span className="font-semibold">CR:</span> {teeDetails.rating || teeDetails.courseRating || 'N/A'}</span>
+          <span><span className="font-semibold">Slope:</span> {teeDetails.slope || teeDetails.slopeRating || 'N/A'}</span>
           <span><span className="font-semibold">Par:</span> {teeDetails.par}</span>
         </div>
       )}
@@ -149,7 +146,7 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
               console.warn('⚠️ SetupTab: Golfer with no displayName:', eventGolfer);
             }
             
-            const tees = event.course.courseId ? courseTeesMap[event.course.courseId]?.tees : [];
+            const tees = selectedCourse?.tees || [];
             return (
               <div key={eventGolfer.profileId || eventGolfer.customName} className="flex items-center gap-2 flex-wrap">
                 <div className="flex items-center gap-2 flex-1 min-w-[120px]">
