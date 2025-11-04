@@ -168,7 +168,7 @@ export function LoginPage({ onSuccess, onGuestMode }: LoginPageProps) {
 
   return (
     <div 
-      className="min-h-screen flex items-center justify-center bg-gradient-to-b from-primary-900 via-primary-800 to-primary-900 relative p-4 pt-safe pb-safe pl-safe pr-safe"
+      className="min-h-screen flex items-center justify-center bg-gradient-to-b from-primary-900 via-primary-800 to-primary-900 relative p-4 pt-safe pb-safe pb-safe-base-0 pl-safe pr-safe"
       style={{
         backgroundImage: 'url(/File_000.jpeg)',
         backgroundSize: 'cover',
