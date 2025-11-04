@@ -237,7 +237,7 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="relative">
           <button
             onClick={() => {
@@ -253,10 +253,10 @@ const Dashboard: React.FC = () => {
                 : 'bg-gray-400 cursor-not-allowed opacity-50'
             }`}
           >
-            <div className="text-lg font-semibold mb-1">New Event</div>
-            <div className="text-sm opacity-90">Create a new golf event</div>
+            <div className="text-lg font-semibold mb-1 text-center">New Event</div>
+            <div className="text-sm opacity-90 text-center">Create a new golf event</div>
             {!currentProfile && (
-              <div className="text-xs opacity-75 mt-1">Profile required</div>
+              <div className="text-xs opacity-75 mt-1 text-center">Profile required</div>
             )}
           </button>
           {!currentProfile && (
@@ -284,16 +284,29 @@ const Dashboard: React.FC = () => {
           onClick={() => setShowJoinForm(true)}
           className="bg-white/90 backdrop-blur text-primary-800 p-4 rounded-xl shadow-md hover:shadow-lg transition-shadow border border-primary-900/5"
         >
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 justify-center">
             <div className="text-lg font-semibold mb-1">Join Event</div>
             {isGuest && <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">🔒</span>}
           </div>
-          <div className="text-sm opacity-75">{isGuest ? 'Sign in to join events' : 'Enter a share code'}</div>
+          <div className="text-sm opacity-75 text-center">{isGuest ? 'Sign in to join events' : 'Enter a share code'}</div>
+        </button>
+
+        <button
+          onClick={() => navigate('/handicap/add')}
+          disabled={!currentProfile}
+          className={`w-full text-primary-800 p-4 rounded-xl shadow-md transition-shadow border border-primary-900/5 ${
+            currentProfile 
+              ? 'bg-white/90 backdrop-blur hover:shadow-lg' 
+              : 'bg-gray-200 cursor-not-allowed opacity-50'
+          }`}
+        >
+          <div className="text-lg font-semibold mb-1 text-center">Add New Round</div>
+          <div className="text-sm opacity-75 text-center">{currentProfile ? 'Track your handicap' : 'Profile required'}</div>
         </button>
 
         <div className="bg-white/90 backdrop-blur text-primary-800 p-4 rounded-xl shadow-md border border-primary-900/5">
-          <div className="text-lg font-semibold mb-1">Quick Stats</div>
-          <div className="text-sm opacity-75">
+          <div className="text-lg font-semibold mb-1 text-center">Quick Stats</div>
+          <div className="text-sm opacity-75 text-center">
             Avg Score: {currentProfile.stats.averageScore > 0 ? currentProfile.stats.averageScore.toFixed(1) : 'N/A'}
           </div>
         </div>
