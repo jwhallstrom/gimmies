@@ -204,7 +204,7 @@ const App: React.FC = () => {
           </div>
         </div>
       </main>
-      <footer className="fixed bottom-0 inset-x-0 bg-white/90 backdrop-blur border-t border-primary-900/20 flex items-center justify-between px-4 pt-2 pb-safe pb-safe-base-tight z-40">
+      <footer className="fixed bottom-0 inset-x-0 bg-white/90 backdrop-blur border-t border-primary-900/20 flex items-center justify-between px-4 pt-2 pb-safe-tight z-40">
         <Link
           to="/"
           className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${
