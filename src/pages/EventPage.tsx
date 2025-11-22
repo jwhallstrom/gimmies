@@ -84,7 +84,7 @@ const EventPage: React.FC = () => {
   ];
   return (
     <div className="space-y-4">
-      <div className="sticky sticky-header-top z-30 bg-gradient-to-r from-primary-900 via-primary-800 to-primary-900 -mx-4 px-4 pt-2 pb-2 shadow-sm">
+      <div className="sticky sticky-header-top z-30 bg-gradient-to-r from-primary-900 via-primary-800 to-primary-900 -mx-4 -mt-6 px-4 pt-6 pb-2 shadow-sm">
         <div className="flex items-center justify-between mb-2">
           <h1 className="text-lg font-semibold tracking-wide text-white drop-shadow-sm">{event.name || 'Untitled Event'}</h1>
           

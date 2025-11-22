@@ -34,7 +34,7 @@ body { font-family: ui-sans-serif, system-ui, sans-serif; }
 .pr-safe-base-0 { --pr-safe-base: 0; }
 
 .bottom-nav {
-  padding: 0.5rem 1rem 0;
+  padding: 0.25rem 1rem 0;
 }
 
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
@@ -171,8 +171,7 @@ body, html {
 /* Note: Footer safe area is handled by .bottom-nav class above */
 /* Main content padding is handled by .content-with-footer class */
 
-/* Sticky header top position accounting for safe area */
+/* Sticky header top position - stick to top of scroll container */
 .sticky-header-top {
-  top: 4.5rem;
-  top: calc(4.5rem + env(safe-area-inset-top));
+  top: 0;
 }
