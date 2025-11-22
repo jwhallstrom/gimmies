@@ -34,34 +34,34 @@ body { font-family: ui-sans-serif, system-ui, sans-serif; }
 .pr-safe-base-0 { --pr-safe-base: 0; }
 
 .bottom-nav {
-  padding: 0.5rem 1rem 0.75rem;
+  padding: 0.5rem 1rem 0;
 }
 
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
   .bottom-nav {
-    padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+    padding-bottom: env(safe-area-inset-bottom);
   }
 }
 
 @supports (padding-bottom: constant(safe-area-inset-bottom)) {
   .bottom-nav {
-    padding-bottom: calc(0.75rem + constant(safe-area-inset-bottom));
+    padding-bottom: constant(safe-area-inset-bottom);
   }
 }
 
 .content-with-footer {
-  padding-bottom: 5.5rem;
+  padding-bottom: 4rem;
 }
 
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
   .content-with-footer {
-    padding-bottom: calc(5.5rem + env(safe-area-inset-bottom));
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom));
   }
 }
 
 @supports (padding-bottom: constant(safe-area-inset-bottom)) {
   .content-with-footer {
-    padding-bottom: calc(5.5rem + constant(safe-area-inset-bottom));
+    padding-bottom: calc(4rem + constant(safe-area-inset-bottom));
   }
 }
 
@@ -170,3 +170,9 @@ body, html {
 
 /* Note: Footer safe area is handled by .bottom-nav class above */
 /* Main content padding is handled by .content-with-footer class */
+
+/* Sticky header top position accounting for safe area */
+.sticky-header-top {
+  top: 4.5rem;
+  top: calc(4.5rem + env(safe-area-inset-top));
+}

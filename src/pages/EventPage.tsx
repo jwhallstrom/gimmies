@@ -84,59 +84,61 @@ const EventPage: React.FC = () => {
   ];
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-semibold tracking-wide text-white drop-shadow-sm">{event.name || 'Untitled Event'}</h1>
-        
-        {/* Delete/Leave Button */}
-        {currentProfile && event.ownerProfileId === currentProfile.id ? (
-          // Owner sees Delete button
-          <button
-            onClick={async () => {
-              if (window.confirm(`Are you sure you want to delete "${event.name || 'Untitled Event'}"? This will permanently delete the event, all scores, and chat messages from all devices. This action cannot be undone.`)) {
-                await deleteEvent(event.id);
-                navigate('/events');
+      <div className="sticky sticky-header-top z-30 bg-gradient-to-r from-primary-900 via-primary-800 to-primary-900 -mx-4 px-4 pt-2 pb-2 shadow-sm">
+        <div className="flex items-center justify-between mb-2">
+          <h1 className="text-lg font-semibold tracking-wide text-white drop-shadow-sm">{event.name || 'Untitled Event'}</h1>
+          
+          {/* Delete/Leave Button */}
+          {currentProfile && event.ownerProfileId === currentProfile.id ? (
+            // Owner sees Delete button
+            <button
+              onClick={async () => {
+                if (window.confirm(`Are you sure you want to delete "${event.name || 'Untitled Event'}"? This will permanently delete the event, all scores, and chat messages from all devices. This action cannot be undone.`)) {
+                  await deleteEvent(event.id);
+                  navigate('/events');
+                }
+              }}
+              className="text-red-400 hover:text-red-300 p-2 rounded-full hover:bg-red-900/20 transition-colors"
+              title="Delete Event"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+          ) : currentProfile ? (
+            // Non-owner sees Leave Event button
+            <button
+              onClick={async () => {
+                if (window.confirm(`Leave "${event.name || 'Untitled Event'}"? You can rejoin using the event code.`)) {
+                  await useStore.getState().removeGolferFromEvent(event.id, currentProfile.id);
+                  navigate('/events');
+                }
+              }}
+              className="text-yellow-400 hover:text-yellow-300 p-2 rounded-full hover:bg-yellow-900/20 transition-colors"
+              title="Leave Event"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+            </button>
+          ) : null}
+        </div>
+        <div className="flex gap-2 overflow-x-auto pb-1 justify-center">
+          {tabs.map(t => (
+            <NavLink
+              key={t.path}
+              to={t.path}
+              end={t.path === ''}
+              title={t.label}
+              className={({ isActive }) =>
+                `flex flex-col items-center gap-1 p-2 rounded-lg transition-colors shadow-sm min-w-[60px] ${isActive ? 'bg-white text-primary-800' : 'bg-primary-700/40 text-primary-100 hover:bg-primary-600/60'}`
               }
-            }}
-            className="text-red-400 hover:text-red-300 p-2 rounded-full hover:bg-red-900/20 transition-colors"
-            title="Delete Event"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-            </svg>
-          </button>
-        ) : currentProfile ? (
-          // Non-owner sees Leave Event button
-          <button
-            onClick={async () => {
-              if (window.confirm(`Leave "${event.name || 'Untitled Event'}"? You can rejoin using the event code.`)) {
-                await useStore.getState().removeGolferFromEvent(event.id, currentProfile.id);
-                navigate('/events');
-              }
-            }}
-            className="text-yellow-400 hover:text-yellow-300 p-2 rounded-full hover:bg-yellow-900/20 transition-colors"
-            title="Leave Event"
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-          </button>
-        ) : null}
-      </div>
-      <div className="flex gap-2 overflow-x-auto pb-2 border-b border-primary-700/40 sticky top-[72px] bg-gradient-to-r from-primary-900 via-primary-800 to-primary-900 z-35 px-0 -mx-4 pl-4 pr-4 justify-center">
-        {tabs.map(t => (
-          <NavLink
-            key={t.path}
-            to={t.path}
-            end={t.path === ''}
-            title={t.label}
-            className={({ isActive }) =>
-              `flex flex-col items-center gap-1 p-2 rounded-lg transition-colors shadow-sm min-w-[60px] ${isActive ? 'bg-white text-primary-800' : 'bg-primary-700/40 text-primary-100 hover:bg-primary-600/60'}`
-            }
-          >
-            {t.icon}
-            <span className="text-xs text-center leading-tight">{t.label}</span>
-          </NavLink>
-        ))}
+            >
+              {t.icon}
+              <span className="text-xs text-center leading-tight">{t.label}</span>
+            </NavLink>
+          ))}
+        </div>
       </div>
       <Routes>
         <Route index element={<SetupTab eventId={event.id} />} />
