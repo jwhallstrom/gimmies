@@ -19,7 +19,7 @@ export default defineConfig({
         short_name: 'Gimmies',
         start_url: '/',
         display: 'standalone',
-        background_color: '#ffffff',
+        background_color: '#14532d',
         theme_color: '#14532d',
         description: 'On-course golf gambling games (Nassau & Skins)',
         icons: [
