@@ -1,5 +1,5 @@
-import React from 'react';
-import { useParams, Routes, Route, NavLink, useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
+import { useParams, Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import useStore from '../state/store';
 import { useEventSync } from '../hooks/useEventSync';
 import SetupTab from '../components/tabs/SetupTab';
@@ -8,9 +8,13 @@ import GamesTab from '../components/tabs/GamesTab';
 import OverviewTab from '../components/tabs/OverviewTab';
 import LeaderboardTab from '../components/tabs/LeaderboardTab';
 import ChatTab from '../components/tabs/ChatTab';
+import ShareModal from '../components/ShareModal';
+import { getCourseById } from '../data/cloudCourses';
 
 const EventPage: React.FC = () => {
   const { id } = useParams();
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const location = useLocation();
   
   // Auto-sync event from cloud every 30 seconds
   useEventSync(id, 30000);
@@ -22,17 +26,9 @@ const EventPage: React.FC = () => {
   const { deleteEvent, currentProfile } = useStore();
   const navigate = useNavigate();
   if (!event) return <div>Event not found.</div>;
+
+  // Define tabs (Removed Setup and Chat)
   const tabs = [
-    { 
-      path: '', 
-      label: 'Setup',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-        </svg>
-      )
-    },
     { 
       path: 'scorecard', 
       label: 'Score',
@@ -71,58 +67,63 @@ const EventPage: React.FC = () => {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
         </svg>
       )
-    },
-    { 
-      path: 'chat', 
-      label: 'Chat',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-        </svg>
-      )
     }
   ];
+
+  // Determine if we are on a "hidden" tab (Setup or Chat) to highlight the header icon
+  const isSetupActive = location.pathname.endsWith('/settings') || location.pathname.endsWith('/settings/');
+  const isChatActive = location.pathname.endsWith('/chat') || location.pathname.endsWith('/chat/');
+
+  const courseName = event.course.courseId ? getCourseById(event.course.courseId)?.name : null;
+
   return (
     <div className="space-y-4">
       <div className="sticky sticky-header-top z-30 bg-gradient-to-r from-primary-900 via-primary-800 to-primary-900 -mx-4 -mt-6 px-4 pt-6 pb-2 shadow-sm">
         <div className="flex items-center justify-between mb-2">
-          <h1 className="text-lg font-semibold tracking-wide text-white drop-shadow-sm">{event.name || 'Untitled Event'}</h1>
+          <div className="flex-1 mr-2 min-w-0">
+            <h1 className="text-lg font-semibold tracking-wide text-white drop-shadow-sm truncate">{event.name || 'Untitled Event'}</h1>
+            {courseName && (
+              <div className="text-xs text-primary-200 truncate font-medium">{courseName}</div>
+            )}
+          </div>
           
-          {/* Delete/Leave Button */}
-          {currentProfile && event.ownerProfileId === currentProfile.id ? (
-            // Owner sees Delete button
+          <div className="flex items-center gap-1">
+            {/* Share Button */}
             <button
-              onClick={async () => {
-                if (window.confirm(`Are you sure you want to delete "${event.name || 'Untitled Event'}"? This will permanently delete the event, all scores, and chat messages from all devices. This action cannot be undone.`)) {
-                  await deleteEvent(event.id);
-                  navigate('/events');
-                }
-              }}
-              className="text-red-400 hover:text-red-300 p-2 rounded-full hover:bg-red-900/20 transition-colors"
-              title="Delete Event"
+              onClick={() => setIsShareModalOpen(true)}
+              className="p-2 rounded-full text-primary-100 hover:bg-primary-700/50 transition-colors"
+              title="Invite Players"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
               </svg>
             </button>
-          ) : currentProfile ? (
-            // Non-owner sees Leave Event button
-            <button
-              onClick={async () => {
-                if (window.confirm(`Leave "${event.name || 'Untitled Event'}"? You can rejoin using the event code.`)) {
-                  await useStore.getState().removeGolferFromEvent(event.id, currentProfile.id);
-                  navigate('/events');
-                }
-              }}
-              className="text-yellow-400 hover:text-yellow-300 p-2 rounded-full hover:bg-yellow-900/20 transition-colors"
-              title="Leave Event"
+
+            {/* Chat Button */}
+            <NavLink
+              to="chat"
+              className={`p-2 rounded-full transition-colors ${isChatActive ? 'bg-white text-primary-800' : 'text-primary-100 hover:bg-primary-700/50'}`}
+              title="Chat"
             >
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
               </svg>
-            </button>
-          ) : null}
+            </NavLink>
+
+            {/* Settings/Setup Button */}
+            <NavLink
+              to="settings"
+              className={`p-2 rounded-full transition-colors ${isSetupActive ? 'bg-white text-primary-800' : 'text-primary-100 hover:bg-primary-700/50'}`}
+              title="Event Settings"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </NavLink>
+          </div>
         </div>
+        
         <div className="flex gap-2 overflow-x-auto pb-1 justify-center">
           {tabs.map(t => (
             <NavLink
@@ -140,14 +141,23 @@ const EventPage: React.FC = () => {
           ))}
         </div>
       </div>
+      
       <Routes>
-        <Route index element={<SetupTab eventId={event.id} />} />
+        {/* Default route is now Scorecard */}
+        <Route index element={<ScorecardTab eventId={event.id} />} />
         <Route path="scorecard" element={<ScorecardTab eventId={event.id} />} />
+        <Route path="settings" element={<SetupTab eventId={event.id} />} />
         <Route path="leaderboard" element={<LeaderboardTab eventId={event.id} />} />
         <Route path="games" element={<GamesTab eventId={event.id} />} />
         <Route path="overview" element={<OverviewTab eventId={event.id} />} />
         <Route path="chat" element={<ChatTab eventId={event.id} />} />
       </Routes>
+
+      <ShareModal 
+        eventId={event.id} 
+        isOpen={isShareModalOpen} 
+        onClose={() => setIsShareModalOpen(false)} 
+      />
     </div>
   );
 };

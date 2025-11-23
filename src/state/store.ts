@@ -622,7 +622,8 @@ export const useStore = create<State>()(
       deleteEvent: async (eventId: string) => {
         // Delete from local state
         set({
-          events: get().events.filter(e => e.id !== eventId)
+          events: get().events.filter(e => e.id !== eventId),
+          completedEvents: get().completedEvents.filter(e => e.id !== eventId)
         });
         
         // Delete from cloud if cloud sync enabled

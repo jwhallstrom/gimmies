@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import useStore from '../../state/store';
 import { CourseSearch } from '../CourseSearch';
 import { useCourses } from '../../hooks/useCourses';
-import EventSharing from '../EventSharing';
 
 type Props = { eventId: string };
 
 const SetupTab: React.FC<Props> = ({ eventId }) => {
+  const navigate = useNavigate();
   const event = useStore((s: any) => 
     s.events.find((e: any) => e.id === eventId) || 
     s.completedEvents.find((e: any) => e.id === eventId)
@@ -276,11 +277,33 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
         </div>
       </div>
       
-      {/* Event Sharing Section */}
-      <div className="border-t border-primary-200 pt-6 mt-8">
-        <h3 className="text-sm font-semibold mb-4 text-gray-800">Event Sharing</h3>
-        <EventSharing eventId={eventId} />
-      </div>
+      {/* Danger Zone */}
+      {isOwner && !event.isCompleted && (
+        <div className="border-t border-red-200 pt-6 mt-8">
+          <h3 className="text-sm font-semibold mb-2 text-red-800">Danger Zone</h3>
+          <p className="text-xs text-yellow-600 font-medium mb-3">
+            Deleting this event will remove it for all players. This action cannot be undone.
+          </p>
+          <button
+            type="button"
+            onClick={async () => {
+              if (window.confirm(`Are you sure you want to delete "${event.name || 'Untitled Event'}"? This will permanently delete the event, all scores, and chat messages from all devices. This action cannot be undone.`)) {
+                console.log('🗑️ Deleting event:', eventId);
+                await useStore.getState().deleteEvent(eventId);
+                useStore.getState().addToast('Event deleted successfully', 'success');
+                console.log('✅ Event deleted, navigating to home');
+                navigate('/');
+              }
+            }}
+            className="w-full py-2 px-4 bg-red-50 border border-red-200 text-red-600 rounded-lg text-sm font-medium hover:bg-red-100 transition-colors flex items-center justify-center gap-2"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
+            Delete Event
+          </button>
+        </div>
+      )}
     </form>
   );
 };

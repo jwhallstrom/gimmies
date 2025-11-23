@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import useStore from '../state/store';
 import { Link, useNavigate } from 'react-router-dom';
 import { getCourseById } from '../data/cloudCourses';
+import { CreateEventWizard } from '../components/CreateEventWizard';
 
 const EventsPage: React.FC = () => {
   const { events, completedEvents, currentProfile, profiles, deleteEvent, loadEventsFromCloud } = useStore();
@@ -9,6 +10,7 @@ const EventsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
   const [previousCompletedCount, setPreviousCompletedCount] = useState(0);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
 
   // Load events from cloud when profile is available
   useEffect(() => {
@@ -57,12 +59,7 @@ const EventsPage: React.FC = () => {
     <div className="space-y-6 relative">
       {/* Floating New Event Button */}
       <button
-        onClick={() => {
-          const eventId = useStore.getState().createEvent();
-          if (eventId) {
-            navigate(`/event/${eventId}`);
-          }
-        }}
+        onClick={() => setIsWizardOpen(true)}
         className="fixed bottom-20 right-4 z-50 bg-primary-600 hover:bg-primary-700 text-white p-4 rounded-full shadow-lg transition-all duration-200 hover:scale-110"
         title="Create New Event"
       >
@@ -70,6 +67,8 @@ const EventsPage: React.FC = () => {
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
         </svg>
       </button>
+
+      <CreateEventWizard isOpen={isWizardOpen} onClose={() => setIsWizardOpen(false)} />
 
       <div className="bg-white/90 backdrop-blur rounded-xl shadow-md p-6 border border-primary-900/5">
         <h1 className="text-2xl font-bold text-primary-800">My Events</h1>

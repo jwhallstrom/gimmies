@@ -39,8 +39,8 @@ const Toast: React.FC<ToastProps> = ({ message, type, duration = 4000, onClose }
 
   return (
     <div
-      className={`fixed top-20 right-4 z-50 max-w-sm rounded-lg border-2 p-4 transition-all duration-300 transform ${
-        isVisible ? 'translate-x-0 opacity-100' : 'translate-x-full opacity-0'
+      className={`w-full max-w-sm rounded-lg border-2 p-4 transition-all duration-300 transform shadow-lg ${
+        isVisible ? 'translate-y-0 opacity-100' : '-translate-y-4 opacity-0'
       } ${getToastStyles()}`}
     >
       <div className="flex items-start gap-3">
@@ -135,8 +135,8 @@ export const ToastManager: React.FC = () => {
           </div>
         </div>
       )}
-      <div className="fixed top-0 right-0 z-50 pointer-events-none">
-        <div className="p-4 space-y-2 pointer-events-auto">
+      <div className="fixed top-20 left-0 right-0 z-50 pointer-events-none flex justify-center">
+        <div className="px-4 space-y-2 pointer-events-auto w-full max-w-sm">
           {toasts.map((toast: any) => (
             <Toast
               key={toast.id}

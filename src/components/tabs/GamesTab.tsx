@@ -1,9 +1,36 @@
-import React from 'react';
+import React, { useState } from 'react';
 import useStore from '../../state/store';
 // Skins preview (holes won) moved to OverviewTab.
 import { nanoid } from 'nanoid/non-secure';
 
 type Props = { eventId: string };
+
+const GAME_TYPES = [
+  {
+    id: 'nassau',
+    name: 'Nassau',
+    description: 'Three bets in one: Front 9, Back 9, and Total 18. Can be played individually or as teams. The classic golf bet.',
+    hasNetOption: true
+  },
+  {
+    id: 'skins',
+    name: 'Skins',
+    description: 'Each hole is worth a "skin". The player with the lowest score on a hole wins the skin. Ties carry over to the next hole.',
+    hasNetOption: true
+  },
+  {
+    id: 'pinky',
+    name: 'Pinky',
+    description: 'At the end of the round, each player declares how many "pinkys" they had. For each pinky, that player owes each other player the set fee amount.',
+    hasNetOption: false
+  },
+  {
+    id: 'greenie',
+    name: 'Greenie',
+    description: 'At the end of the round, each player declares how many "greenies" they had (hitting the green in regulation on par 3s). For each greenie, ALL OTHER players owe that player the set fee amount.',
+    hasNetOption: false
+  }
+];
 
 const GamesTab: React.FC<Props> = ({ eventId }) => {
   const event = useStore((s: any) => 
@@ -13,6 +40,10 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
   const profiles = useStore((s: any) => s.profiles);
   const currentProfile = useStore((s: any) => s.currentProfile);
   const updateEvent = useStore((s: any) => s.updateEvent);
+  
+  const [showAddGame, setShowAddGame] = useState(false);
+  const [expandedDescription, setExpandedDescription] = useState<string | null>(null);
+
   if (!event) return null;
   
   // Check if current user is the event owner
@@ -182,94 +213,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
     closeBulk();
   };
 
-  // Participation Matrix setup
-  const nassauGames = event.games.nassau;
-  const skinsGames = skinsArray;
-  const golfers = allGolfers;
-  const toggleParticipation = (gameType: 'nassau' | 'skins', gameId: string, golferId: string) => {
-    if (gameType === 'nassau') {
-      updateEvent(eventId, {
-        games: {
-          ...event.games,
-          nassau: event.games.nassau.map((n:any)=> {
-            if (n.id !== gameId) return n;
-            const allIds = allGolfers.map((g:any)=>g.id);
-            let list = n.participantGolferIds && n.participantGolferIds.length>1 ? [...n.participantGolferIds] : [...allIds];
-            const active = list.includes(golferId);
-            list = active ? list.filter(id=>id!==golferId) : [...list, golferId];
-            if (list.length < 2) list = allIds; // enforce minimum
-            return { ...n, participantGolferIds: list.length===allIds.length ? undefined : list };
-          })
-        }
-      });
-    } else {
-      updateEvent(eventId, {
-        games: {
-          ...event.games,
-          skins: skinsGames.map((s:any)=> {
-            if (s.id !== gameId) return s;
-            const allIds = allGolfers.map((g:any)=>g.id);
-            let list = s.participantGolferIds && s.participantGolferIds.length>1 ? [...s.participantGolferIds] : [...allIds];
-            const active = list.includes(golferId);
-            list = active ? list.filter(id=>id!==golferId) : [...list, golferId];
-            if (list.length < 2) list = allIds;
-            return { ...s, participantGolferIds: list.length===allIds.length ? undefined : list };
-          })
-        }
-      });
-    }
-  };
-  const Matrix: React.FC = () => {
-    if (nassauGames.length===0 && skinsGames.length===0) return null;
-    return (
-      <div className="overflow-auto border rounded bg-white shadow-sm">
-        <table className="min-w-full text-[11px] border-collapse">
-          <thead>
-            <tr className="bg-slate-50">
-              <th className="border px-2 py-1 text-left">Golfer</th>
-              {nassauGames.map((n:any,i:number)=> {
-                const allIds = allGolfers.map((g:any)=>g.id);
-                const participantIds = n.participantGolferIds && n.participantGolferIds.length > 1 ? n.participantGolferIds : allIds;
-                return <th key={n.id} className="border px-2 py-1 text-center">N{i+1}<div className="text-[9px] font-normal">${n.fee} ({participantIds.length})</div></th>;
-              })}
-              {skinsGames.map((s:any,i:number)=> {
-                const allIds = allGolfers.map((g:any)=>g.id);
-                const participantIds = s.participantGolferIds && s.participantGolferIds.length>1 ? s.participantGolferIds : allIds;
-                return <th key={s.id} className="border px-2 py-1 text-center">S{i+1}<div className="text-[9px] font-normal">${s.fee} ({participantIds.length})</div></th>;
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {golfers.map((g:any) => (
-              <tr key={g.id} className="odd:bg-slate-50/40">
-                <td className="border px-2 py-1 font-medium whitespace-nowrap">{g.name}</td>
-                {nassauGames.map((n:any)=> {
-                  const allIds = allGolfers.map((g:any)=>g.id);
-                  const participantIds = n.participantGolferIds && n.participantGolferIds.length>1 ? n.participantGolferIds : allIds;
-                  const active = participantIds.includes(g.id);
-                  return (
-                    <td key={n.id} className="border px-1 py-0.5 text-center">
-                      <button onClick={()=> toggleParticipation('nassau', n.id, g.id)} className={`px-2 py-0.5 rounded text-[10px] border ${active? 'bg-primary-600 text-white border-primary-600':'bg-white border-slate-300 text-slate-600'}`}>{active? 'In':'Out'}</button>
-                    </td>
-                  );
-                })}
-                {skinsGames.map((s:any)=> {
-                  const allIds = allGolfers.map((g:any)=>g.id);
-                  const participantIds = s.participantGolferIds && s.participantGolferIds.length>1 ? s.participantGolferIds : allIds;
-                  const active = participantIds.includes(g.id);
-                  return (
-                    <td key={s.id} className="border px-1 py-0.5 text-center">
-                      <button onClick={()=> toggleParticipation('skins', s.id, g.id)} className={`px-2 py-0.5 rounded text-[10px] border ${active? 'bg-primary-600 text-white border-primary-600':'bg-white border-slate-300 text-slate-600'}`}>{active? 'In':'Out'}</button>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
+
 
   return (
     <div className="space-y-6">
@@ -290,17 +234,116 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
           </div>
         </div>
       )}
-      
-      <section>
-        <h2 className="font-semibold mb-2">Nassau (event)</h2>
-        <div className="flex gap-2 mb-3">
+
+      {/* Add Game Button */}
+      {!event.isCompleted && isOwner && (
+        <div className="relative">
           <button
-            className="text-[10px] px-3 py-1 rounded bg-primary-600 text-white font-medium shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-400 disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={() => addNassau(false)}
-            disabled={event.isCompleted || !isOwner}
-          >Add Nassau</button>
+            onClick={() => setShowAddGame(!showAddGame)}
+            className="w-full py-3 border-2 border-dashed border-primary-300 rounded-lg text-primary-600 font-medium hover:bg-primary-50 hover:border-primary-400 transition-colors flex items-center justify-center gap-2"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            Add Game
+          </button>
+
+          {showAddGame && (
+            <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-lg shadow-xl border border-gray-200 z-20 overflow-hidden">
+              <div className="p-2 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+                <span className="text-xs font-semibold text-gray-700 uppercase tracking-wider px-2">Select Game Type</span>
+                <button onClick={() => setShowAddGame(false)} className="text-gray-400 hover:text-gray-600 p-1" aria-label="Close menu">
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {GAME_TYPES.map((type) => (
+                  <div key={type.id} className="p-3 hover:bg-gray-50 transition-colors">
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-sm text-gray-900">{type.name}</span>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpandedDescription(expandedDescription === type.id ? null : type.id);
+                          }}
+                          className="text-gray-400 hover:text-primary-600 transition-colors"
+                          aria-label={expandedDescription === type.id ? "Hide description" : "Show description"}
+                        >
+                          <svg className={`w-4 h-4 transform transition-transform ${expandedDescription === type.id ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          </svg>
+                        </button>
+                      </div>
+                      <div className="flex gap-2">
+                        {type.hasNetOption ? (
+                          <>
+                            <button
+                              onClick={() => {
+                                if (type.id === 'nassau') addNassau(false);
+                                if (type.id === 'skins') addSkins(false);
+                                setShowAddGame(false);
+                              }}
+                              className="text-xs px-2 py-1 rounded bg-white border border-gray-300 text-gray-700 hover:border-primary-500 hover:text-primary-600"
+                            >
+                              Add Gross
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (type.id === 'nassau') addNassau(true);
+                                if (type.id === 'skins') addSkins(true);
+                                setShowAddGame(false);
+                              }}
+                              className="text-xs px-2 py-1 rounded bg-white border border-gray-300 text-gray-700 hover:border-primary-500 hover:text-primary-600"
+                            >
+                              Add Net
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => {
+                              if (type.id === 'pinky') addPinky();
+                              if (type.id === 'greenie') addGreenie();
+                              setShowAddGame(false);
+                            }}
+                            className="text-xs px-3 py-1 rounded bg-primary-600 text-white hover:bg-primary-700"
+                          >
+                            Add
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                    {expandedDescription === type.id && (
+                      <div className="text-xs text-gray-600 mt-2 bg-blue-50 p-2 rounded border border-blue-100">
+                        {type.description}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
-        <div className="grid gap-3 max-w-lg">
+      )}
+
+      {/* Empty State */}
+      {event.games.nassau.length === 0 && skinsArray.length === 0 && pinkyArray.length === 0 && greenieArray.length === 0 && (
+        <div className="text-center py-10 bg-gray-50 rounded-lg border border-gray-200">
+          <div className="text-4xl mb-3">🎮</div>
+          <h3 className="text-sm font-medium text-gray-900">No Games Configured</h3>
+          <p className="text-xs text-gray-500 mt-1">Add a game to start tracking bets and scores.</p>
+        </div>
+      )}
+      
+      {event.games.nassau.length > 0 && (
+        <section>
+          <h2 className="font-semibold mb-2 flex items-center gap-2">
+            <span className="w-1.5 h-4 bg-primary-600 rounded-full"></span>
+            Nassau
+          </h2>
+          <div className="grid gap-3 max-w-lg">
           {event.games.nassau.map((n: any, i: number) => {
             const updateCfg = (patch: any) => updateEvent(eventId, { games: { ...event.games, nassau: event.games.nassau.map((x: any) => x.id === n.id ? { ...x, ...patch } : x) } });
             const participantIds = n.participantGolferIds && n.participantGolferIds.length > 1 ? n.participantGolferIds : allGolfers.map((gg:any)=>gg.id);
@@ -469,7 +512,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                     {(n.teams || []).map((t: any, ti: number) => (
                       <div key={t.id} className="border rounded p-2 bg-white/70 flex flex-col gap-1">
                         <div className="flex items-center gap-2">
-                          <input className="border rounded px-1 py-0.5 flex-1 disabled:opacity-50" value={t.name} onChange={e => {
+                          <input className="border rounded px-1 py-0.5 flex-1 disabled:opacity-50" aria-label="Team Name" value={t.name} onChange={e => {
                             const teams = (n.teams || []).map((x: any) => x.id === t.id ? { ...x, name: e.target.value } : x);
                             updateCfg({ teams });
                           }} disabled={event.isCompleted || !isOwner} />
@@ -512,27 +555,36 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
               </div>
             );
           })}
-          {event.games.nassau.length===0 && (
-            <div className="text-[10px] text-gray-500">No Nassau games added.</div>
-          )}
-        </div>
-      </section>
-      <section>
-        <h2 className="font-semibold mb-2">Skins (event)</h2>
-        <div className="flex gap-2 mb-3">
-          <button
-            className="text-[10px] px-3 py-1 rounded bg-primary-600 text-white font-medium shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-400 disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={()=> addSkins(false)}
-            disabled={event.isCompleted || !isOwner}
-          >Add Gross</button>
-          <button
-            className="text-[10px] px-3 py-1 rounded bg-primary-600 text-white font-medium shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-400 disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={()=> addSkins(true)}
-            disabled={event.isCompleted || !isOwner}
-          >Add Net</button>
-        </div>
-        <div className="grid gap-3 max-w-lg">
-          {skinsArray.map((sk:any, i:number) => (
+          </div>
+        </section>
+      )}
+
+      {skinsArray.length > 0 && (
+        <section>
+          <h2 className="font-semibold mb-2 flex items-center gap-2">
+            <span className="w-1.5 h-4 bg-primary-600 rounded-full"></span>
+            Skins
+          </h2>
+          <div className="grid gap-3 max-w-lg">
+          {skinsArray.map((sk:any, i:number) => {
+            const updateCfg = (patch: any) => updateEvent(eventId, { games: { ...event.games, skins: skinsArray.map((s:any)=> s.id===sk.id? { ...s, ...patch } : s) } });
+            const participantIds = sk.participantGolferIds && sk.participantGolferIds.length > 1 ? sk.participantGolferIds : allGolfers.map((gg:any)=>gg.id);
+            const activeGolfers = allGolfers.filter((g:any)=> participantIds.includes(g.id));
+            const inactiveGolfers = allGolfers.filter((g:any)=> !participantIds.includes(g.id));
+            const setList = (listIds: string[]) => {
+              const normalized = listIds.length === allGolfers.length ? undefined : listIds;
+              updateCfg({ participantGolferIds: normalized });
+            };
+            const removeActive = (gid: string) => {
+              let list = participantIds.filter((id: string) => id !== gid);
+                if (list.length < 2) list = allGolfers.map((gg:any)=>gg.id);
+              setList(list);
+            };
+            const addInactive = (gid: string) => {
+              let list = [...participantIds, gid];
+              setList(list);
+            };
+            return (
             <div key={sk.id} className="border rounded p-3 bg-white shadow-sm text-[11px] flex flex-col gap-2">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -541,39 +593,83 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 </div>
                 <div className="flex items-center gap-2">
                   <label className="flex items-center gap-1">Fee
-                    <input className="border rounded px-1 py-0.5 w-20" type="number" value={sk.fee} onChange={e => {
-                      updateEvent(eventId, { games: { ...event.games, skins: skinsArray.map((s:any)=> s.id===sk.id? { ...s, fee: Number(e.target.value)}: s) } });
-                    }} disabled={event.isCompleted || !isOwner} />
+                    <input className="border rounded px-1 py-0.5 w-20" type="number" value={sk.fee} onChange={e => updateCfg({ fee: Number(e.target.value) })} disabled={event.isCompleted || !isOwner} />
                   </label>
                   <button type="button" onClick={()=> removeSkins(sk.id)} className="text-[10px] px-2 py-1 rounded border border-red-200 bg-red-50 text-red-600 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted || !isOwner}>Remove</button>
                 </div>
               </div>
+              
+              <div className="border-t pt-2 mt-2">
+                  <h4 className="font-semibold text-[10px] tracking-wide mb-2">Participants ({activeGolfers.length})</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[9px] font-semibold tracking-wide text-primary-700">Playing</span>
+                        {activeGolfers.length !== allGolfers.length && (
+                          <button className="text-[9px] underline disabled:opacity-50 disabled:cursor-not-allowed" onClick={()=> setList(allGolfers.map((gg:any)=>gg.id))} disabled={event.isCompleted || !isOwner}>All</button>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {activeGolfers.map((g:any)=>(
+                          <button key={g.id} type="button" title="Tap to remove" onClick={()=> removeActive(g.id)} className="text-[9px] px-1.5 py-0.5 rounded border bg-primary-600 text-white border-primary-600 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted || !isOwner}>
+                            {g.name}
+                          </button>
+                        ))}
+                        {activeGolfers.length===0 && <span className="text-[9px] text-gray-500">None</span>}
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[9px] font-semibold tracking-wide text-gray-700">Not Playing</span>
+                        {inactiveGolfers.length>0 && (
+                          <button className="text-[9px] underline disabled:opacity-50 disabled:cursor-not-allowed" onClick={()=> setList(allGolfers.map((gg:any)=>gg.id))} disabled={event.isCompleted || !isOwner}>Add All</button>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {inactiveGolfers.map((g:any)=>(
+                          <button key={g.id} type="button" title="Tap to add" onClick={()=> addInactive(g.id)} className="text-[9px] px-1.5 py-0.5 rounded border bg-white text-primary-700 border-primary-300 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted || !isOwner}>
+                            {g.name}
+                          </button>
+                        ))}
+                        {inactiveGolfers.length===0 && <span className="text-[9px] text-gray-500">None</span>}
+                      </div>
+                    </div>
+                  </div>
+              </div>
             </div>
-          ))}
-          {skinsArray.length===0 && (
-            <div className="text-[10px] text-gray-500">No skins games added.</div>
-          )}
-        </div>
-      </section>
+            );
+          })}
+          </div>
+        </section>
+      )}
       
-      <section>
-        <h2 className="font-semibold mb-2">Pinky (event)</h2>
-        <div className="mb-3 text-[10px] text-gray-600 bg-blue-50 border border-blue-200 rounded p-2">
-          <p><strong>How Pinky works:</strong> At the end of the round, each player declares how many "pinkys" they had. For each pinky, that player owes each other player the set fee amount.</p>
-          <p className="mt-1"><em>Example: Player A has 2 pinkys with $1 fee and 3 other players → Player A owes $6 total ($1 × 2 pinkys × 3 players).</em></p>
-        </div>
-        <div className="flex gap-2 mb-3">
-          <button
-            className="text-[10px] px-3 py-1 rounded bg-primary-600 text-white font-medium shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-400 disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={addPinky}
-            disabled={event.isCompleted || !isOwner}
-          >Add Pinky Game</button>
-        </div>
-        <div className="grid gap-3 max-w-lg">
+      {pinkyArray.length > 0 && (
+        <section>
+          <h2 className="font-semibold mb-2 flex items-center gap-2">
+            <span className="w-1.5 h-4 bg-primary-600 rounded-full"></span>
+            Pinky
+          </h2>
+          <div className="grid gap-3 max-w-lg">
           {pinkyArray.map((pinky: any, i: number) => {
             const pinkyResults = (event.pinkyResults && event.pinkyResults[pinky.id]) || [];
             const participantIds = pinky.participantGolferIds && pinky.participantGolferIds.length > 1 ? pinky.participantGolferIds : allGolfers.map((g: any) => g.id);
             const activeGolfers = allGolfers.filter((g: any) => participantIds.includes(g.id));
+            const inactiveGolfers = allGolfers.filter((g:any)=> !participantIds.includes(g.id));
+            
+            const updateCfg = (patch: any) => updateEvent(eventId, { games: { ...event.games, pinky: pinkyArray.map((p: any) => p.id === pinky.id ? { ...p, ...patch } : p) } });
+            const setList = (listIds: string[]) => {
+              const normalized = listIds.length === allGolfers.length ? undefined : listIds;
+              updateCfg({ participantGolferIds: normalized });
+            };
+            const removeActive = (gid: string) => {
+              let list = participantIds.filter((id: string) => id !== gid);
+                if (list.length < 2) list = allGolfers.map((gg:any)=>gg.id);
+              setList(list);
+            };
+            const addInactive = (gid: string) => {
+              let list = [...participantIds, gid];
+              setList(list);
+            };
             
             return (
               <div key={pinky.id} className="border rounded p-3 bg-white shadow-sm text-[11px] flex flex-col gap-3">
@@ -589,14 +685,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                         min="0.25"
                         step="0.25"
                         value={pinky.fee} 
-                        onChange={e => {
-                          updateEvent(eventId, { 
-                            games: { 
-                              ...event.games, 
-                              pinky: pinkyArray.map((p: any) => p.id === pinky.id ? { ...p, fee: Number(e.target.value) } : p) 
-                            } 
-                          });
-                        }} 
+                        onChange={e => updateCfg({ fee: Number(e.target.value) })} 
                         disabled={event.isCompleted || !isOwner} 
                       />
                     </label>
@@ -629,39 +718,85 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                             onChange={e => setPinkyCount(pinky.id, golfer.id, Number(e.target.value))}
                             disabled={!isOwner}
                             placeholder="0"
+                            aria-label={`Pinky count for ${golfer.name}`}
                           />
                         </div>
                       );
                     })}
                   </div>
                 </div>
+
+                {/* Participants Management */}
+                <div className="border-t pt-2 mt-1">
+                   <details className="group">
+                      <summary className="text-[9px] text-gray-500 cursor-pointer hover:text-gray-700 select-none list-none flex items-center gap-1">
+                         <span className="group-open:rotate-90 transition-transform">▶</span> Manage Participants
+                      </summary>
+                      <div className="mt-2 pl-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-[9px] font-semibold tracking-wide text-primary-700">Playing</span>
+                              </div>
+                              <div className="flex flex-wrap gap-1">
+                                {activeGolfers.map((g:any)=>(
+                                  <button key={g.id} type="button" title="Tap to remove" onClick={()=> removeActive(g.id)} className="text-[9px] px-1.5 py-0.5 rounded border bg-primary-600 text-white border-primary-600 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted || !isOwner}>
+                                    {g.name}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-[9px] font-semibold tracking-wide text-gray-700">Not Playing</span>
+                              </div>
+                              <div className="flex flex-wrap gap-1">
+                                {inactiveGolfers.map((g:any)=>(
+                                  <button key={g.id} type="button" title="Tap to add" onClick={()=> addInactive(g.id)} className="text-[9px] px-1.5 py-0.5 rounded border bg-white text-primary-700 border-primary-300 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted || !isOwner}>
+                                    {g.name}
+                                  </button>
+                                ))}
+                                {inactiveGolfers.length===0 && <span className="text-[9px] text-gray-500">None</span>}
+                              </div>
+                            </div>
+                          </div>
+                      </div>
+                   </details>
+                </div>
               </div>
             );
           })}
-          {pinkyArray.length === 0 && (
-            <div className="text-[10px] text-gray-500">No pinky games added.</div>
-          )}
-        </div>
-      </section>
+          </div>
+        </section>
+      )}
       
-      <section>
-        <h2 className="font-semibold mb-2">Greenie (event)</h2>
-        <div className="mb-3 text-[10px] text-gray-600 bg-green-50 border border-green-200 rounded p-2">
-          <p><strong>How Greenie works:</strong> At the end of the round, each player declares how many "greenies" they had (hitting the green in regulation on par 3s). For each greenie, ALL OTHER players owe that player the set fee amount.</p>
-          <p className="mt-1"><em>Example: Player A has 2 greenies with $1 fee and 3 other players → Player A WINS $6 total ($1 × 2 greenies × 3 players). Each other player OWES $2.</em></p>
-        </div>
-        <div className="flex gap-2 mb-3">
-          <button
-            className="text-[10px] px-3 py-1 rounded bg-primary-600 text-white font-medium shadow-sm hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-400 disabled:opacity-50 disabled:cursor-not-allowed"
-            onClick={addGreenie}
-            disabled={event.isCompleted || !isOwner}
-          >Add Greenie Game</button>
-        </div>
-        <div className="grid gap-3 max-w-lg">
+      {greenieArray.length > 0 && (
+        <section>
+          <h2 className="font-semibold mb-2 flex items-center gap-2">
+            <span className="w-1.5 h-4 bg-primary-600 rounded-full"></span>
+            Greenie
+          </h2>
+          <div className="grid gap-3 max-w-lg">
           {greenieArray.map((greenie: any, i: number) => {
             const greenieResults = (event.greenieResults && event.greenieResults[greenie.id]) || [];
             const participantIds = greenie.participantGolferIds && greenie.participantGolferIds.length > 1 ? greenie.participantGolferIds : allGolfers.map((g: any) => g.id);
             const activeGolfers = allGolfers.filter((g: any) => participantIds.includes(g.id));
+            const inactiveGolfers = allGolfers.filter((g:any)=> !participantIds.includes(g.id));
+            
+            const updateCfg = (patch: any) => updateEvent(eventId, { games: { ...event.games, greenie: greenieArray.map((g: any) => g.id === greenie.id ? { ...g, ...patch } : g) } });
+            const setList = (listIds: string[]) => {
+              const normalized = listIds.length === allGolfers.length ? undefined : listIds;
+              updateCfg({ participantGolferIds: normalized });
+            };
+            const removeActive = (gid: string) => {
+              let list = participantIds.filter((id: string) => id !== gid);
+                if (list.length < 2) list = allGolfers.map((gg:any)=>gg.id);
+              setList(list);
+            };
+            const addInactive = (gid: string) => {
+              let list = [...participantIds, gid];
+              setList(list);
+            };
             
             return (
               <div key={greenie.id} className="border rounded p-3 bg-white shadow-sm text-[11px] flex flex-col gap-3">
@@ -677,14 +812,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                         min="0.25"
                         step="0.25"
                         value={greenie.fee} 
-                        onChange={e => {
-                          updateEvent(eventId, { 
-                            games: { 
-                              ...event.games, 
-                              greenie: greenieArray.map((g: any) => g.id === greenie.id ? { ...g, fee: Number(e.target.value) } : g) 
-                            } 
-                          });
-                        }} 
+                        onChange={e => updateCfg({ fee: Number(e.target.value) })} 
                         disabled={event.isCompleted || !isOwner} 
                       />
                     </label>
@@ -718,20 +846,57 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                             onChange={e => setGreenieCount(greenie.id, golfer.id, Number(e.target.value))}
                             disabled={!isOwner}
                             placeholder="0"
+                            aria-label={`Greenie count for ${golfer.name}`}
                           />
                         </div>
                       );
                     })}
                   </div>
                 </div>
+
+                {/* Participants Management */}
+                <div className="border-t pt-2 mt-1">
+                   <details className="group">
+                      <summary className="text-[9px] text-gray-500 cursor-pointer hover:text-gray-700 select-none list-none flex items-center gap-1">
+                         <span className="group-open:rotate-90 transition-transform">▶</span> Manage Participants
+                      </summary>
+                      <div className="mt-2 pl-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-[9px] font-semibold tracking-wide text-primary-700">Playing</span>
+                              </div>
+                              <div className="flex flex-wrap gap-1">
+                                {activeGolfers.map((g:any)=>(
+                                  <button key={g.id} type="button" title="Tap to remove" onClick={()=> removeActive(g.id)} className="text-[9px] px-1.5 py-0.5 rounded border bg-primary-600 text-white border-primary-600 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted || !isOwner}>
+                                    {g.name}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <div>
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="text-[9px] font-semibold tracking-wide text-gray-700">Not Playing</span>
+                              </div>
+                              <div className="flex flex-wrap gap-1">
+                                {inactiveGolfers.map((g:any)=>(
+                                  <button key={g.id} type="button" title="Tap to add" onClick={()=> addInactive(g.id)} className="text-[9px] px-1.5 py-0.5 rounded border bg-white text-primary-700 border-primary-300 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted || !isOwner}>
+                                    {g.name}
+                                  </button>
+                                ))}
+                                {inactiveGolfers.length===0 && <span className="text-[9px] text-gray-500">None</span>}
+                              </div>
+                            </div>
+                          </div>
+                      </div>
+                   </details>
+                </div>
               </div>
             );
           })}
-          {greenieArray.length === 0 && (
-            <div className="text-[10px] text-gray-500">No greenie games added.</div>
-          )}
-        </div>
-      </section>
+          </div>
+        </section>
+      )}
       
       {bulkAssignState && (() => {
         const nassau = event.games.nassau.find((nn: any) => nn.id === bulkAssignState.nassauId);
@@ -761,7 +926,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 <label className="flex items-center gap-1"><input type="radio" name="bulkMode" checked={bulkAssignState.mode==='assign'} onChange={()=> setBulkAssignState(s=> s?{...s, mode:'assign'}:s)} disabled={event.isCompleted || !isOwner} /> Assign to Team</label>
                 <label className="flex items-center gap-1"><input type="radio" name="bulkMode" checked={bulkAssignState.mode==='roundRobin'} onChange={()=> setBulkAssignState(s=> s?{...s, mode:'roundRobin'}:s)} disabled={event.isCompleted || !isOwner} /> Even Round-Robin</label>
                 {bulkAssignState.mode==='assign' && (
-                  <select className="border rounded px-1 py-0.5 disabled:opacity-50" value={bulkAssignState.teamId || ''} onChange={e => setBulkAssignState(s=> s?{...s, teamId: e.target.value || undefined}:s)} disabled={event.isCompleted || !isOwner}>
+                  <select className="border rounded px-1 py-0.5 disabled:opacity-50" aria-label="Select team to assign" value={bulkAssignState.teamId || ''} onChange={e => setBulkAssignState(s=> s?{...s, teamId: e.target.value || undefined}:s)} disabled={event.isCompleted || !isOwner}>
                     <option value="">Select team</option>
                     {teams.map((t: any)=> <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
@@ -774,7 +939,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 {unassigned.map((gg: any) => {
                   const sel = bulkAssignState.selected.has(gg.id);
                   return (
-                    <label key={gg.id} className={`flex items-center gap-1 px-2 py-1 rounded border cursor-pointer ${sel ? 'bg-primary-600 text-white border-primary-600' : 'bg-white border-primary-300 text-primary-700'} disabled:opacity-50 disabled:cursor-not-allowed`} style={event.isCompleted ? { pointerEvents: 'none' } : {}}>
+                    <label key={gg.id} className={`flex items-center gap-1 px-2 py-1 rounded border cursor-pointer ${sel ? 'bg-primary-600 text-white border-primary-600' : 'bg-white border-primary-300 text-primary-700'} disabled:opacity-50 disabled:cursor-not-allowed ${event.isCompleted ? 'pointer-events-none' : ''}`}>
                       <input type="checkbox" className="hidden" checked={sel} onChange={()=> toggleSelect(gg.id)} disabled={event.isCompleted || !isOwner} />
                       <span className="truncate">{gg.name}</span>
                       {gg.handicapIndex != null && <span className="text-[9px] opacity-70">({gg.handicapIndex})</span>}
