@@ -19,6 +19,12 @@ const AnalyticsPage: React.FC = () => {
   // Get all rounds (individual + event rounds)
   const allRounds = getProfileRounds(currentProfile.id);
   
+  // Filter out individual rounds that are already represented by completed rounds
+  // (i.e., they have a completedRoundId)
+  const uniqueIndividualRounds = allRounds.filter(r => 
+    r.type === 'individual' && !r.completedRoundId
+  );
+  
   // Calculate comprehensive scoring statistics
   const calculateScoringStats = () => {
     const stats = {
@@ -33,11 +39,10 @@ const AnalyticsPage: React.FC = () => {
 
     console.log('🔍 Analytics Debug - Starting calculation');
     console.log('  myCompletedRounds count:', myCompletedRounds.length);
-    console.log('  allRounds count:', allRounds.length);
+    console.log('  uniqueIndividualRounds count:', uniqueIndividualRounds.length);
 
     // Add stats from completed event rounds
     myCompletedRounds.forEach(round => {
-      console.log(`  📊 CompletedRound ${round.id}: ${round.holesPlayed} holes, eventId: ${round.eventId}`);
       stats.eagles += round.stats.eagles || 0;
       stats.birdies += round.stats.birdies || 0;
       stats.pars += round.stats.pars || 0;
@@ -47,55 +52,42 @@ const AnalyticsPage: React.FC = () => {
       stats.totalHoles += round.holesPlayed || 0;
     });
 
-    console.log(`  After CompletedRounds: ${stats.totalHoles} total holes`);
-
-    // Add stats from individual rounds (manually added rounds only, NOT from events)
-    // Note: Individual rounds with a completedRoundId came from completed events and are
-    // already counted above in myCompletedRounds, so we skip them to avoid double-counting
-    allRounds.forEach(round => {
-      if (round.type === 'individual') {
-        // Get the actual IndividualRound to check if it has a completedRoundId
-        const profile = useStore.getState().profiles.find(p => p.id === currentProfile.id);
-        const individualRound = profile?.individualRounds?.find(r => r.id === round.id);
-        
-        console.log(`  🔍 IndividualRound ${round.id}: completedRoundId = ${individualRound?.completedRoundId || 'NONE'}`);
-        
-        // Only count stats from manually-added individual rounds (no completedRoundId)
-        if (individualRound && !individualRound.completedRoundId) {
-          console.log(`    ✅ Counting this manual individual round (no completedRoundId)`);
-          round.scores.forEach(score => {
-            if (score.strokes !== null && score.strokes !== undefined) {
-              const toPar = score.strokes - score.par;
-              stats.totalHoles++;
-              
-              if (toPar <= -2) stats.eagles++;
-              else if (toPar === -1) stats.birdies++;
-              else if (toPar === 0) stats.pars++;
-              else if (toPar === 1) stats.bogeys++;
-              else if (toPar === 2) stats.doubleBogeys++;
-              else if (toPar >= 3) stats.triplesOrWorse++;
-            }
-          });
-        } else if (individualRound?.completedRoundId) {
-          console.log(`    ⏭️  Skipping (has completedRoundId: ${individualRound.completedRoundId} - already counted via CompletedRound)`);
+    // Add stats from manual individual rounds
+    uniqueIndividualRounds.forEach(round => {
+      round.scores.forEach(score => {
+        if (score.strokes !== null && score.strokes !== undefined) {
+          const toPar = score.strokes - score.par;
+          stats.totalHoles++;
+          
+          if (toPar <= -2) stats.eagles++;
+          else if (toPar === -1) stats.birdies++;
+          else if (toPar === 0) stats.pars++;
+          else if (toPar === 1) stats.bogeys++;
+          else if (toPar === 2) stats.doubleBogeys++;
+          else if (toPar >= 3) stats.triplesOrWorse++;
         }
-      }
+      });
     });
-
-    console.log(`  Final total holes: ${stats.totalHoles}`);
 
     return stats;
   };
 
   const scoringStats = calculateScoringStats();
   
-  // Calculate summary stats from CompletedRounds (not profile.stats which may be stale)
-  const roundsPlayed = myCompletedRounds.length;
-  const averageScore = roundsPlayed > 0 
-    ? myCompletedRounds.reduce((sum, r) => sum + r.finalScore, 0) / roundsPlayed
-    : 0;
+  // Calculate summary stats combining both sources
+  const roundsPlayed = myCompletedRounds.length + uniqueIndividualRounds.length;
+  
+  const totalScoreSum = 
+    myCompletedRounds.reduce((sum, r) => sum + r.finalScore, 0) +
+    uniqueIndividualRounds.reduce((sum, r) => sum + r.grossScore, 0);
+    
+  const averageScore = roundsPlayed > 0 ? totalScoreSum / roundsPlayed : 0;
+  
   const bestScore = roundsPlayed > 0
-    ? Math.min(...myCompletedRounds.map(r => r.finalScore))
+    ? Math.min(
+        ...myCompletedRounds.map(r => r.finalScore),
+        ...uniqueIndividualRounds.map(r => r.grossScore)
+      )
     : 0;
   
   // Prepare chart data

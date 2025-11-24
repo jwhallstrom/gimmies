@@ -3,6 +3,7 @@ import useStore from '../state/store';
 import { Link } from 'react-router-dom';
 import ProfileManager from '../components/ProfileManager';
 import EventSharing from '../components/EventSharing';
+import { CreateEventWizard } from '../components/CreateEventWizard';
 
 const HomePage: React.FC = () => {
   const { events, currentProfile, currentUser, users, profiles, joinEventByCode, switchUser, createUser, deleteEvent, loadEventsFromCloud } = useStore();
@@ -10,6 +11,7 @@ const HomePage: React.FC = () => {
   const [joinCode, setJoinCode] = useState('');
   const [joinMessage, setJoinMessage] = useState('');
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
 
   // Load events from cloud when profile changes or component mounts
   useEffect(() => {
@@ -128,7 +130,7 @@ const HomePage: React.FC = () => {
             <div className="flex gap-2 text-xs">
               <button 
                 className="bg-gradient-to-r from-primary-500 to-primary-600 text-white px-3 py-1.5 rounded shadow active:scale-[0.97]" 
-                onClick={() => useStore.getState().createEvent()}
+                onClick={() => setIsWizardOpen(true)}
                 disabled={!currentProfile}
               >
                 New
@@ -259,12 +261,14 @@ const HomePage: React.FC = () => {
             })}
             
             {events.length === 0 && currentProfile && (
-              <div className="text-center py-8 text-gray-500">
+              <li className="text-center py-8 text-gray-500 list-none">
                 <div className="text-lg mb-2">No events yet</div>
                 <div className="text-sm">Create your first event to get started!</div>
-              </div>
+              </li>
             )}
           </ul>
+          
+          <CreateEventWizard isOpen={isWizardOpen} onClose={() => setIsWizardOpen(false)} />
         </div>
       )}
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import useStore from '../state/store';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthMode } from '../hooks/useAuthMode';
+import { CreateEventWizard } from '../components/CreateEventWizard';
 
 const Dashboard: React.FC = () => {
   const { events, currentProfile, currentUser, profiles, joinEventByCode, deleteEvent, createProfile, cleanupDuplicateProfiles, loadEventsFromCloud } = useStore();
@@ -10,6 +11,7 @@ const Dashboard: React.FC = () => {
   const [joinCode, setJoinCode] = useState('');
   const [joinMessage, setJoinMessage] = useState('');
   const [showJoinForm, setShowJoinForm] = useState(false);
+  const [showCreateWizard, setShowCreateWizard] = useState(false);
   const [showProfileSetup, setShowProfileSetup] = useState(false);
   const [newProfileName, setNewProfileName] = useState('');
   const [isCreatingProfile, setIsCreatingProfile] = useState(false);
@@ -240,12 +242,7 @@ const Dashboard: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="relative">
           <button
-            onClick={() => {
-              const eventId = useStore.getState().createEvent();
-              if (eventId) {
-                navigate(`/event/${eventId}`);
-              }
-            }}
+            onClick={() => setShowCreateWizard(true)}
             disabled={!currentProfile}
             className={`w-full text-white p-4 rounded-xl shadow-md transition-shadow ${
               currentProfile 
@@ -321,6 +318,7 @@ const Dashboard: React.FC = () => {
               <button
                 onClick={() => setShowJoinForm(false)}
                 className="text-gray-400 hover:text-gray-600"
+                aria-label="Close"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -406,6 +404,12 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Create Event Wizard */}
+      <CreateEventWizard 
+        isOpen={showCreateWizard} 
+        onClose={() => setShowCreateWizard(false)} 
+      />
 
     </div>
   );

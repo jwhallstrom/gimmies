@@ -54,4 +54,5 @@ export interface CombinedRound {
   scoreDifferential?: number;
   eventName?: string; // for event rounds
   scores: ScoreEntry[];
+  completedRoundId?: string; // Optional - links to CompletedRound if created from event
 }

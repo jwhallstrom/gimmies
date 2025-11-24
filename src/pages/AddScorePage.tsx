@@ -185,21 +185,35 @@ const AddScorePage: React.FC = () => {
           <h2 className="text-lg font-semibold mb-4">Select Course & Tees</h2>
           
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="date-input" className="block text-sm font-medium text-gray-700 mb-2">
               Date
             </label>
-            <input
-              type="date"
-              value={formData.date}
-              onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-            />
+            <div className="flex gap-2">
+              <input
+                id="date-input"
+                type="date"
+                value={formData.date}
+                onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                className="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              />
+              <button
+                onClick={() => setFormData(prev => ({ ...prev, date: new Date().toISOString().slice(0, 10) }))}
+                className="bg-gray-100 text-gray-700 p-3 rounded-lg hover:bg-gray-200 transition-colors"
+                title="Set to Today"
+                type="button"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Search Course</label>
+              <label htmlFor="course-search" className="block text-sm font-medium text-gray-700 mb-2">Search Course</label>
               <input
+                id="course-search"
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -380,6 +394,7 @@ const AddScorePage: React.FC = () => {
                         className={`w-full h-7 px-0.5 py-0 text-center text-[10px] outline-none focus:ring-2 focus:ring-primary-300 focus:bg-primary-50/70 transition rounded ${colorClass} ${handicapStrokes > 0 ? 'pl-2' : ''}`}
                         value={gross}
                         inputMode="numeric"
+                        aria-label={`Hole ${h.number} Score`}
                         onChange={e => {
                           const raw = e.target.value.replace(/[^0-9]/g, '');
                           const numeric = raw === '' ? null : parseInt(raw, 10);
@@ -464,6 +479,7 @@ const AddScorePage: React.FC = () => {
                         className={`w-full h-7 px-0.5 py-0 text-center text-[10px] outline-none focus:ring-2 focus:ring-primary-300 focus:bg-primary-50/70 transition rounded ${colorClass} ${handicapStrokes > 0 ? 'pl-2' : ''}`}
                         value={gross}
                         inputMode="numeric"
+                        aria-label={`Hole ${h.number} Score`}
                         onChange={e => {
                           const raw = e.target.value.replace(/[^0-9]/g, '');
                           const numeric = raw === '' ? null : parseInt(raw, 10);

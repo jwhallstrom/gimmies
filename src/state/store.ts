@@ -162,7 +162,7 @@ interface State {
   toasts: Toast[]; // Toast notifications
   isLoadingEventsFromCloud: boolean; // Prevent duplicate cloud loads
   
-  createEvent: () => string | null;
+  createEvent: (initialData?: Partial<Event>) => string | null;
   completeEvent: (eventId: string) => boolean; // Complete event and record rounds
   setEventCourse: (eventId: string, courseId: string) => Promise<void>;
   setEventTee: (eventId: string, teeName: string) => Promise<void>;
@@ -508,7 +508,7 @@ export const useStore = create<State>()(
         set({ profiles: uniqueProfiles });
       },
       
-      createEvent: () => {
+      createEvent: (initialData?: Partial<Event>) => {
         const currentProfile = get().currentProfile;
         if (!currentProfile) return null;
         
@@ -523,15 +523,15 @@ export const useStore = create<State>()(
         console.log('👤 createEvent: Creating EventGolfer with snapshot:', eventGolfer);
         const scorecard: PlayerScorecard = { 
           golferId: currentProfile.id, 
-          scores: defaultScoreArray() 
+          scores: defaultScoreArray(initialData?.course?.courseId) 
         };
         const group = { id: nanoid(5), golferIds: [currentProfile.id] };
         
         const newEvent: Event = {
           id,
-          name: '',
-          date: new Date().toISOString().slice(0, 10),
-          course: {},
+          name: initialData?.name || '',
+          date: initialData?.date || new Date().toISOString().slice(0, 10),
+          course: initialData?.course || {},
           golfers: [eventGolfer],
           groups: [group],
           scorecards: [scorecard],
@@ -541,7 +541,8 @@ export const useStore = create<State>()(
           isPublic: false,
           createdAt: new Date().toISOString(),
           lastModified: new Date().toISOString(),
-          chat: []
+          chat: [],
+          ...initialData // Spread any other initial data
         };
         set({ events: [...get().events, newEvent] });
         console.log('Event created with current user as golfer:', newEvent);
@@ -1708,7 +1709,8 @@ export const useStore = create<State>()(
               grossScore: round.grossScore,
               netScore: round.netScore,
               scoreDifferential: round.scoreDifferential,
-              scores: round.scores
+              scores: round.scores,
+              completedRoundId: round.completedRoundId
             });
           });
         }
