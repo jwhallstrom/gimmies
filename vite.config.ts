@@ -40,5 +40,19 @@ export default defineConfig({
         ]
       }
     })
-  ]
+  ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          // React core - loaded on every page
+          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+          // AWS Amplify - large bundle, only needed for auth/sync
+          'vendor-aws': ['aws-amplify', '@aws-amplify/ui-react'],
+          // Zustand state management
+          'vendor-state': ['zustand', 'idb-keyval'],
+        }
+      }
+    }
+  }
 });

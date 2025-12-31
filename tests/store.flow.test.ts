@@ -17,7 +17,7 @@ vi.mock('idb-keyval', () => {
 import { useStore } from '../src/state/store';
 
 beforeEach(() => {
-  // Reset key parts of state to avoid bleed between tests
+  // Reset data parts of state without replacing functions
   useStore.setState({
     users: [],
     profiles: [],
@@ -26,7 +26,7 @@ beforeEach(() => {
     events: [],
     completedEvents: [],
     completedRounds: [],
-  } as any, true);
+  });
 });
 
 describe('store flow (local only)', () => {

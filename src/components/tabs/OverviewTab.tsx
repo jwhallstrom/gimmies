@@ -1,16 +1,18 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../../state/store';
 import { calculateEventPayouts } from '../../games/payouts';
 import { courseMap } from '../../data/courses';
+import { EventSettlement } from '../wallet';
 
 type Props = { eventId: string };
 
 const currency = (n: number) => '$' + n.toFixed(2);
 
 const OverviewTab: React.FC<Props> = ({ eventId }) => {
-  const { profiles, completeEvent, currentProfile } = useStore();
+  const { profiles, completeEvent, currentProfile, getEventSettlements } = useStore();
   const navigate = useNavigate();
+  const [showSettlements, setShowSettlements] = useState(false);
   const event = useStore((s: any) => 
     s.events.find((e: any) => e.id === eventId) || 
     s.completedEvents.find((e: any) => e.id === eventId)
@@ -145,6 +147,42 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
               </div>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Settlement Section - Show when event is completed or has any pending settlements */}
+      {(event.isCompleted || getEventSettlements(eventId).length > 0) && (
+        <div className="bg-white/90 backdrop-blur rounded-xl shadow-md border border-primary-900/5 overflow-hidden">
+          <button
+            onClick={() => setShowSettlements(!showSettlements)}
+            className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">💰</span>
+              <div className="text-left">
+                <h3 className="font-semibold text-primary-800">Settlements</h3>
+                <p className="text-sm text-gray-600">
+                  {getEventSettlements(eventId).filter(s => s.status === 'pending').length > 0
+                    ? `${getEventSettlements(eventId).filter(s => s.status === 'pending').length} pending`
+                    : 'All settled'}
+                </p>
+              </div>
+            </div>
+            <svg 
+              className={`w-5 h-5 text-gray-400 transition-transform ${showSettlements ? 'rotate-180' : ''}`} 
+              fill="none" 
+              stroke="currentColor" 
+              viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          
+          {showSettlements && (
+            <div className="border-t border-gray-100">
+              <EventSettlement eventId={eventId} />
+            </div>
+          )}
         </div>
       )}
       

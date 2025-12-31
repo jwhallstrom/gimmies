@@ -1,19 +1,23 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, Suspense, lazy } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import { LoginPage } from '../components/auth/LoginPage';
 import { ProfileCompletion } from '../components/auth/ProfileCompletion';
-import Dashboard from './Dashboard';
-import EventsPage from './EventsPage';
-import AnalyticsPage from './AnalyticsPage';
-import HandicapPage from './HandicapPage';
-import AddScorePage from './AddScorePage';
-import RoundDetailPage from './RoundDetailPage';
-import EventPage from './EventPage';
-import JoinEventPage from './JoinEventPage';
-import { AuthDemoPage } from './AuthDemoPage';
+import Dashboard from './Dashboard'; // Keep eager - it's the landing page
 import UserMenu from '../components/UserMenu';
 import { ToastManager } from '../components/Toast';
+import LoadingSpinner from '../components/LoadingSpinner';
 import useStore from '../state/store';
+
+// Lazy load secondary routes for code splitting
+const EventsPage = lazy(() => import('./EventsPage'));
+const AnalyticsPage = lazy(() => import('./AnalyticsPage'));
+const HandicapPage = lazy(() => import('./HandicapPage'));
+const AddScorePage = lazy(() => import('./AddScorePage'));
+const RoundDetailPage = lazy(() => import('./RoundDetailPage'));
+const EventPage = lazy(() => import('./EventPage'));
+const JoinEventPage = lazy(() => import('./JoinEventPage'));
+const WalletPage = lazy(() => import('./WalletPage'));
+const AuthDemoPage = lazy(() => import('./AuthDemoPage').then(m => ({ default: m.AuthDemoPage })));
 
 const App: React.FC = () => {
   const { currentUser, currentProfile, events, switchUser, createUser } = useStore();
@@ -190,17 +194,20 @@ const App: React.FC = () => {
       <main className="flex-1 relative w-full">
         <div className="absolute inset-0 overflow-y-auto">
           <div className="px-4 pt-6 content-with-footer max-w-5xl w-full mx-auto">
-            <Routes>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/events" element={<EventsPage />} />
-              <Route path="/handicap" element={<HandicapPage />} />
-              <Route path="/handicap/add-round" element={<AddScorePage />} />
-              <Route path="/handicap/round/:roundId" element={<RoundDetailPage />} />
-              <Route path="/analytics" element={<AnalyticsPage />} />
-              <Route path="/event/:id/*" element={<EventPage />} />
-              <Route path="/join/:code" element={<JoinEventPage />} />
-              <Route path="/auth-demo" element={<AuthDemoPage />} />
-            </Routes>
+            <Suspense fallback={<LoadingSpinner message="Loading page..." />}>
+              <Routes>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/events" element={<EventsPage />} />
+                <Route path="/handicap" element={<HandicapPage />} />
+                <Route path="/handicap/add-round" element={<AddScorePage />} />
+                <Route path="/handicap/round/:roundId" element={<RoundDetailPage />} />
+                <Route path="/analytics" element={<AnalyticsPage />} />
+                <Route path="/wallet" element={<WalletPage />} />
+                <Route path="/event/:id/*" element={<EventPage />} />
+                <Route path="/join/:code" element={<JoinEventPage />} />
+                <Route path="/auth-demo" element={<AuthDemoPage />} />
+              </Routes>
+            </Suspense>
           </div>
         </div>
       </main>
@@ -245,6 +252,18 @@ const App: React.FC = () => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h8M8 12a4 4 0 004-4m0 8a4 4 0 01-4-4" />
           </svg>
           <span className="text-xs">Handicap</span>
+        </Link>
+
+        <Link
+          to="/wallet"
+          className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${
+            location.pathname === '/wallet' ? 'text-primary-600' : 'text-primary-800 hover:text-primary-600'
+          }`}
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+          </svg>
+          <span className="text-xs">Wallet</span>
         </Link>
 
         <Link
