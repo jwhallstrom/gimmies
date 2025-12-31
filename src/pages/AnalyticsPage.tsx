@@ -20,9 +20,9 @@ const AnalyticsPage: React.FC = () => {
   const allRounds = getProfileRounds(currentProfile.id);
   
   // Filter out individual rounds that are already represented by completed rounds
-  // (i.e., they have a completedRoundId)
+  // Handle missing type field - if it has grossScore and scores array, treat as individual
   const uniqueIndividualRounds = allRounds.filter(r => 
-    r.type === 'individual' && !r.completedRoundId
+    (r.type === 'individual' || (!r.type && r.grossScore !== undefined && r.scores)) && !r.completedRoundId
   );
   
   // Calculate comprehensive scoring statistics
