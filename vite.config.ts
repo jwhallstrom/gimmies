@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'prompt', // Show update prompt instead of auto-updating
       includeAssets: [
         'favicon.png',
         'apple-touch-icon.png',
@@ -29,6 +29,9 @@ export default defineConfig({
         ]
       },
       workbox: {
+        // Check for updates every hour
+        skipWaiting: false, // Let user control when to update
+        clientsClaim: true, // Take control of pages immediately after activation
         runtimeCaching: [
           {
             urlPattern: /.*\.(?:js|css|html)/,

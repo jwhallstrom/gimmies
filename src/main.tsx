@@ -23,6 +23,14 @@ const updateSW = registerSW({
   onOfflineReady() {
     window.dispatchEvent(new CustomEvent('pwa:offline-ready'));
   },
+  onRegisteredSW(swUrl, registration) {
+    // Check for updates every 5 minutes
+    if (registration) {
+      setInterval(() => {
+        registration.update();
+      }, 5 * 60 * 1000);
+    }
+  },
 });
 
 if (typeof window !== 'undefined') {
