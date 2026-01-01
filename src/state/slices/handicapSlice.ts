@@ -193,20 +193,26 @@ export const createHandicapSlice = (
           
           // Build scores array
           const strokeDist = distributeHandicapStrokes(courseHandicap, completedRound.courseId!, completedRound.teeName);
-          const roundScores: HandicapScoreEntry[] = completedRound.holeScores.map(holeScore => ({
-            hole: holeScore.hole,
-            par: holeScore.par,
-            strokes: holeScore.strokes,
-            handicapStrokes: strokeDist[holeScore.hole] || 0,
-            netStrokes: holeScore.strokes - (strokeDist[holeScore.hole] || 0)
-          }));
+          const roundScores: HandicapScoreEntry[] = completedRound.holeScores.map(holeScore => {
+            const handicapStrokes = strokeDist[holeScore.hole] || 0;
+            const strokes = holeScore.strokes;
+            return {
+              hole: holeScore.hole,
+              par: holeScore.par,
+              strokes,
+              handicapStrokes,
+              netStrokes: strokes - handicapStrokes,
+              adjustedStrokes: applyESCAdjustment(strokes ?? 0, holeScore.par, handicapStrokes),
+            };
+          });
           
           // Apply ESC and calculate differential
           let adjustedGross = 0;
           roundScores.forEach(s => {
-            const raw = s.strokes || 0;
-            const maxScore = applyESCAdjustment(raw, s.par, s.handicapStrokes);
-            adjustedGross += maxScore;
+            const adj = typeof s.adjustedStrokes === 'number'
+              ? s.adjustedStrokes
+              : applyESCAdjustment(s.strokes ?? 0, s.par, s.handicapStrokes);
+            adjustedGross += adj;
           });
           
           const scoreDifferential = calculateScoreDifferential(adjustedGross, cr1, sl1);
@@ -224,6 +230,7 @@ export const createHandicapSlice = (
             courseRating: cr1,
             slopeRating: sl1,
             scores: roundScores,
+            adjustedGrossScore: adjustedGross,
             eventId: completedRound.eventId, // Link back to source event
             completedRoundId: completedRound.id, // Link to CompletedRound to prevent double-counting
             createdAt: new Date().toISOString()
@@ -267,18 +274,19 @@ export const createHandicapSlice = (
           // Distribute strokes and apply ESC
           const strokeDist = distributeHandicapStrokes(r.courseHandicap || 0, r.courseId, r.teeName);
           let adjustedGross = 0;
-          r.scores.forEach(s => {
+          const updatedScores = r.scores.map(s => {
             const raw = s.strokes || 0;
             const par = s.par || 4;
-            const handicapStrokes = strokeDist[s.hole] || 0;
+            const handicapStrokes = s.handicapStrokes ?? (strokeDist[s.hole] || 0);
             const adj = applyESCAdjustment(raw, par, handicapStrokes);
             adjustedGross += adj;
+            return { ...s, handicapStrokes, adjustedStrokes: adj };
           });
 
           const cr2 = (tee.courseRating ?? (tee as any).rating ?? 72) as number;
           const sl2 = (tee.slopeRating ?? (tee as any).slope ?? 113) as number;
           const diff = calculateScoreDifferential(adjustedGross, cr2, sl2);
-          return { ...r, scoreDifferential: diff };
+          return { ...r, scores: updatedScores, adjustedGrossScore: adjustedGross, scoreDifferential: diff };
         } catch {
           return r;
         }

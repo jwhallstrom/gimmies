@@ -256,7 +256,15 @@ export const useStore = create<State>()(
                   const courseHole = getHole(event.course.courseId!, score.hole, tee?.name);
                   const par = courseHole?.par || 4;
                   const handicapStrokes = strokeDist[score.hole] || 0;
-                  return { hole: score.hole, par, strokes: score.strokes || 0, handicapStrokes, netStrokes: (score.strokes || 0) - handicapStrokes };
+                  const strokes = score.strokes || 0;
+                  return {
+                    hole: score.hole,
+                    par,
+                    strokes,
+                    handicapStrokes,
+                    netStrokes: strokes - handicapStrokes,
+                    adjustedStrokes: applyESCAdjustment(strokes, par, handicapStrokes),
+                  };
                 });
                 
                 let adjustedGross = 0;
@@ -267,6 +275,7 @@ export const useStore = create<State>()(
                   id: nanoid(8), profileId: currentProfile.id, date: event.date, courseId: event.course.courseId,
                   teeName: tee.name, grossScore: totalScore, netScore: totalScore - courseHandicap, courseHandicap,
                   scoreDifferential, courseRating: cr, slopeRating: sl, scores: roundScores,
+                  adjustedGrossScore: adjustedGross,
                   eventId: event.id, completedRoundId: completedRoundForLinking?.id, createdAt: new Date().toISOString()
                 };
                 newIndividualRoundsFromCloud.push(individualRound);
@@ -418,7 +427,8 @@ export const useStore = create<State>()(
           completedEvents: [...get().completedEvents, completedEvent]
         });
         
-        // Create IndividualRounds for cloud
+        // Create IndividualRounds for handicap + cloud
+        const newIndividualRounds: IndividualRound[] = [];
         if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true' && event.course.courseId) {
           newCompletedRounds.forEach(completedRound => {
             const eventGolfer = event.golfers.find(g => g.profileId === completedRound.golferId);
@@ -434,11 +444,18 @@ export const useStore = create<State>()(
               const courseHandicap = Math.round(currentHandicap * (sl / 113) + (cr - tee.par));
               const strokeDist = distributeHandicapStrokes(courseHandicap, event.course.courseId!, tee.name);
               
-              const roundScores: HandicapScoreEntry[] = completedRound.holeScores.map(h => ({
-                hole: h.hole, par: h.par, strokes: h.strokes,
-                handicapStrokes: strokeDist[h.hole] || 0,
-                netStrokes: h.strokes - (strokeDist[h.hole] || 0)
-              }));
+              const roundScores: HandicapScoreEntry[] = completedRound.holeScores.map(h => {
+                const handicapStrokes = strokeDist[h.hole] || 0;
+                const strokes = h.strokes;
+                return {
+                  hole: h.hole,
+                  par: h.par,
+                  strokes,
+                  handicapStrokes,
+                  netStrokes: strokes - handicapStrokes,
+                  adjustedStrokes: applyESCAdjustment(strokes ?? 0, h.par, handicapStrokes),
+                };
+              });
               
               let adjustedGross = 0;
               roundScores.forEach(s => { adjustedGross += applyESCAdjustment(s.strokes ?? 0, s.par, s.handicapStrokes || 0); });
@@ -449,14 +466,64 @@ export const useStore = create<State>()(
                 grossScore: completedRound.finalScore, netScore: completedRound.finalScore - courseHandicap,
                 courseHandicap, scoreDifferential: calculateScoreDifferential(adjustedGross, cr, sl),
                 courseRating: cr, slopeRating: sl, scores: roundScores,
+                adjustedGrossScore: adjustedGross,
                 eventId: event.id, completedRoundId: completedRound.id, createdAt: new Date().toISOString()
               };
+
+              newIndividualRounds.push(individualRound);
               
               import('../utils/roundSync').then(({ saveIndividualRoundToCloud }) => {
                 saveIndividualRoundToCloud(individualRound).catch(console.error);
               });
             }
           });
+        }
+
+        // Add event-derived IndividualRounds locally so Handicap updates immediately.
+        // Use conservative de-dupe so cloud re-load doesn't create duplicates.
+        if (newIndividualRounds.length > 0) {
+          const roundsByProfileId = new Map<string, IndividualRound[]>();
+          newIndividualRounds.forEach(r => {
+            const list = roundsByProfileId.get(r.profileId) || [];
+            list.push(r);
+            roundsByProfileId.set(r.profileId, list);
+          });
+
+          set((state: any) => {
+            const updatedProfiles = state.profiles.map((p: any) => {
+              const toAdd = roundsByProfileId.get(p.id);
+              if (!toAdd || toAdd.length === 0) return p;
+
+              const existing = p.individualRounds || [];
+              const filteredToAdd = toAdd.filter((nr: IndividualRound) =>
+                !existing.some((er: IndividualRound) =>
+                  er.id === nr.id ||
+                  (er.completedRoundId && nr.completedRoundId && er.completedRoundId === nr.completedRoundId) ||
+                  (er.date === nr.date && er.courseId === nr.courseId && er.teeName === nr.teeName && er.grossScore === nr.grossScore)
+                )
+              );
+
+              if (filteredToAdd.length === 0) return p;
+              return { ...p, individualRounds: [...existing, ...filteredToAdd] };
+            });
+
+            const updatedCurrentProfile = state.currentProfile
+              ? updatedProfiles.find((p: any) => p.id === state.currentProfile.id) || state.currentProfile
+              : state.currentProfile;
+
+            return { profiles: updatedProfiles, currentProfile: updatedCurrentProfile };
+          });
+
+          // Recompute handicap for affected profiles.
+          setTimeout(() => {
+            roundsByProfileId.forEach((_rounds, profileId) => {
+              try {
+                get().calculateAndUpdateHandicap(profileId);
+              } catch (e) {
+                console.error('Failed to recalculate handicap after completeEvent:', e);
+              }
+            });
+          }, 0);
         }
         
         // Sync to cloud

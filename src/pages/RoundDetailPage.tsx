@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import useStore from '../state/store';
 import { courseTeesMap } from '../data/courses';
+import { applyESCAdjustment } from '../utils/handicap';
 
 const RoundDetailPage: React.FC = () => {
   const { roundId } = useParams<{ roundId: string }>();
@@ -97,6 +98,24 @@ const RoundDetailPage: React.FC = () => {
   const front9Par = front9.reduce((sum, score) => sum + score.par, 0);
   const back9Par = back9.reduce((sum, score) => sum + score.par, 0);
 
+  const getAdjustedStrokes = (score: any): number | null => {
+    if (score?.strokes == null) return null;
+    if (typeof score.adjustedStrokes === 'number') return score.adjustedStrokes;
+    const hs = score.handicapStrokes || 0;
+    return applyESCAdjustment(score.strokes, score.par, hs);
+  };
+
+  const hasCompleteScores = round.scores.every(s => typeof s.strokes === 'number');
+  const adjustedGross = hasCompleteScores
+    ? round.scores.reduce((sum, s) => sum + (getAdjustedStrokes(s) || 0), 0)
+    : null;
+  const front9Adjusted = hasCompleteScores
+    ? front9.reduce((sum, s) => sum + (getAdjustedStrokes(s) || 0), 0)
+    : null;
+  const back9Adjusted = hasCompleteScores
+    ? back9.reduce((sum, s) => sum + (getAdjustedStrokes(s) || 0), 0)
+    : null;
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -150,8 +169,17 @@ const RoundDetailPage: React.FC = () => {
             <div className="text-sm text-gray-600">vs Par</div>
           </div>
           <div className="text-center p-4 bg-gray-50 rounded-lg">
-            <div className="text-3xl font-bold text-primary-600">{round.netScore}</div>
-            <div className="text-sm text-gray-600">Net Score</div>
+            {round.type === 'individual' ? (
+              <>
+                <div className="text-3xl font-bold text-primary-600">{adjustedGross ?? '--'}</div>
+                <div className="text-sm text-gray-600">Adjusted Gross (WHS)</div>
+              </>
+            ) : (
+              <>
+                <div className="text-3xl font-bold text-primary-600">{round.netScore}</div>
+                <div className="text-sm text-gray-600">Net Score</div>
+              </>
+            )}
           </div>
           <div className="text-center p-4 bg-gray-50 rounded-lg">
             <div className="text-3xl font-bold text-primary-600">
@@ -253,16 +281,16 @@ const RoundDetailPage: React.FC = () => {
                   ))}
                   <td className="text-center py-2 px-2 bg-gray-100 font-semibold">{front9Score}</td>
                 </tr>
-                {round.scores.some(s => s.netStrokes !== undefined || (s.handicapStrokes && s.handicapStrokes > 0)) && (
+                {round.type === 'individual' && (
                   <tr className="border-t">
-                    <td className="py-2 px-2 font-medium text-primary-700">Net</td>
+                    <td className="py-2 px-2 font-medium text-primary-700">Adj</td>
                     {front9.map((score, i) => (
                       <td key={i} className="text-center py-2 px-2 text-primary-700">
-                        {score.netStrokes !== undefined ? score.netStrokes : '-'}
+                        {getAdjustedStrokes(score) ?? '-'}
                       </td>
                     ))}
                     <td className="text-center py-2 px-2 bg-primary-50 font-semibold text-primary-700">
-                      {front9.reduce((sum, score) => sum + (score.netStrokes || 0), 0)}
+                      {front9Adjusted ?? '--'}
                     </td>
                   </tr>
                 )}
@@ -309,19 +337,19 @@ const RoundDetailPage: React.FC = () => {
                   <td className="text-center py-2 px-2 bg-gray-100 font-semibold">{back9Score}</td>
                   <td className="text-center py-2 px-2 bg-gray-200 font-semibold">{round.grossScore}</td>
                 </tr>
-                {round.scores.some(s => s.netStrokes !== undefined || (s.handicapStrokes && s.handicapStrokes > 0)) && (
+                {round.type === 'individual' && (
                   <tr className="border-t">
-                    <td className="py-2 px-2 font-medium text-primary-700">Net</td>
+                    <td className="py-2 px-2 font-medium text-primary-700">Adj</td>
                     {back9.map((score, i) => (
                       <td key={i} className="text-center py-2 px-2 text-primary-700">
-                        {score.netStrokes !== undefined ? score.netStrokes : '-'}
+                        {getAdjustedStrokes(score) ?? '-'}
                       </td>
                     ))}
                     <td className="text-center py-2 px-2 bg-primary-50 font-semibold text-primary-700">
-                      {back9.reduce((sum, score) => sum + (score.netStrokes || 0), 0)}
+                      {back9Adjusted ?? '--'}
                     </td>
                     <td className="text-center py-2 px-2 bg-primary-100 font-semibold text-primary-700">
-                      {round.netScore}
+                      {adjustedGross ?? '--'}
                     </td>
                   </tr>
                 )}

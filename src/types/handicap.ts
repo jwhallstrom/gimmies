@@ -12,6 +12,11 @@ export interface IndividualRound {
   courseRating: number;
   slopeRating: number;
   courseHandicap: number;
+  /**
+   * Optional convenience field for UI/debug. Can be derived from scores via ESC/net-double-bogey.
+   * Not required for handicap scoring and may not exist on older rounds.
+   */
+  adjustedGrossScore?: number;
   eventId?: string; // Optional - if this round came from a completed event
   completedRoundId?: string; // Optional - links to CompletedRound if created from event
   createdAt: string;
@@ -23,6 +28,11 @@ export interface ScoreEntry {
   strokes: number | null;
   handicapStrokes: number; // strokes received on this hole
   netStrokes?: number; // calculated net score
+  /**
+   * WHS adjusted strokes for the hole (net double bogey cap).
+   * If missing, it can be computed from strokes/par/handicapStrokes.
+   */
+  adjustedStrokes?: number;
 }
 
 export interface HandicapHistory {

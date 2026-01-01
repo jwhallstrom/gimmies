@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import useStore from '../state/store';
+import { applyESCAdjustment } from '../utils/handicap';
 
 const HandicapPage: React.FC = () => {
-  const { currentProfile, getProfileRounds, recalculateAllDifferentials, addToast, loadEventsFromCloud } = useStore();
+  const { currentProfile, getProfileRounds, loadEventsFromCloud } = useStore();
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
 
   // Load events from cloud when component mounts (to get IndividualRounds from completed events)
@@ -57,24 +58,6 @@ const HandicapPage: React.FC = () => {
             <h1 className="text-2xl font-bold text-primary-800">Handicap Tracker</h1>
             <p className="text-gray-600 mt-1">Track your individual rounds and handicap progression</p>
           </div>
-          {import.meta.env.DEV && (
-            <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  try {
-                    recalculateAllDifferentials();
-                    addToast('Recalculated differentials for all profiles', 'success');
-                  } catch (e) {
-                    console.error(e);
-                    addToast('Failed to recalculate differentials', 'error');
-                  }
-                }}
-                className="text-sm px-3 py-2 rounded bg-yellow-100 text-yellow-800"
-              >
-                Recompute Differentials
-              </button>
-            </div>
-          )}
           <div className="text-center">
             <div className="text-3xl font-bold text-primary-600">
               {currentProfile.handicapIndex !== undefined 
@@ -182,7 +165,19 @@ const HandicapPage: React.FC = () => {
                         {round.grossScore}
                       </div>
                       <div className="text-xs text-gray-500 mt-1">
-                        Net: {round.netScore}
+                        {(() => {
+                          const complete = round.scores.every(s => typeof s.strokes === 'number');
+                          if (!complete) return <>Adj: --</>;
+                          const adjustedGross = round.scores.reduce((sum, s) => {
+                            const raw = (s.strokes as number);
+                            const hs = s.handicapStrokes || 0;
+                            const adj = (typeof s.adjustedStrokes === 'number')
+                              ? s.adjustedStrokes
+                              : applyESCAdjustment(raw, s.par, hs);
+                            return sum + adj;
+                          }, 0);
+                          return <>Adj: {adjustedGross}</>;
+                        })()}
                       </div>
                       <div className="text-xs text-gray-500 mt-1">
                         Diff: {typeof round.scoreDifferential === 'number' ? round.scoreDifferential.toFixed(1) : '--'}

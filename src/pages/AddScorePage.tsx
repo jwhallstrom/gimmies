@@ -111,7 +111,8 @@ const AddScorePage: React.FC = () => {
           par: h.par,
           strokes: raw,
           handicapStrokes,
-          netStrokes: calculateNetScore(raw, handicapStrokes)
+          netStrokes: calculateNetScore(raw, handicapStrokes),
+          adjustedStrokes: adjusted
         } as ScoreEntry;
       });
 
@@ -129,7 +130,8 @@ const AddScorePage: React.FC = () => {
         scoreDifferential: differential,
         courseRating: (selectedTee.courseRating ?? selectedTee.par ?? 72) as number,
         slopeRating: (selectedTee.slopeRating ?? 113) as number,
-        courseHandicap
+        courseHandicap,
+        adjustedGrossScore: adjustedGross
       } as Omit<IndividualRound, 'id' | 'createdAt'>;
 
   console.debug('Saving individual round', round);
@@ -308,12 +310,14 @@ const AddScorePage: React.FC = () => {
         const nextScores = [...prev.scores];
         const idx = nextScores.findIndex(s => s.hole === holeNumber);
         const handicapStrokes = strokeDistribution[holeNumber] || 0;
+        const par = holes.find(h => h.number === holeNumber)?.par || 4;
         const entry = {
           hole: holeNumber,
-          par: holes.find(h => h.number === holeNumber)?.par || 4,
+          par,
           strokes: value,
           handicapStrokes,
-          netStrokes: value != null ? calculateNetScore(value, handicapStrokes) : undefined
+          netStrokes: value != null ? calculateNetScore(value, handicapStrokes) : undefined,
+          adjustedStrokes: value != null ? applyESCAdjustment(value, par, handicapStrokes) : undefined
         };
         if (idx === -1) nextScores.push(entry);
         else nextScores[idx] = entry;
@@ -418,12 +422,13 @@ const AddScorePage: React.FC = () => {
               </div>
 
               <div className="flex gap-0.5">
-                <div className="w-10 text-[10px] font-medium text-primary-700 py-1">Net</div>
+                <div className="w-10 text-[10px] font-medium text-primary-700 py-1">Adj</div>
                 {front.map(h => {
                   const s = formData.scores.find(ss => ss.hole === h.number);
-                  const net = s?.netStrokes ?? '';
+                  const handicapStrokes = strokeDistribution[h.number] || 0;
+                  const adj = s?.adjustedStrokes ?? (typeof s?.strokes === 'number' ? applyESCAdjustment(s.strokes, h.par, handicapStrokes) : undefined);
                   return (
-                    <div key={`net-${h.number}`} className="w-7 text-[10px] py-1 text-center text-primary-700 font-medium">{net !== undefined ? net : ''}</div>
+                    <div key={`adj-${h.number}`} className="w-7 text-[10px] py-1 text-center text-primary-700 font-medium">{typeof adj === 'number' ? adj : ''}</div>
                   );
                 })}
                 <div className="w-8 text-[10px] py-1 text-center font-medium text-primary-700 bg-primary-50 rounded ml-0.5">{''}</div>
@@ -502,12 +507,13 @@ const AddScorePage: React.FC = () => {
               </div>
 
               <div className="flex gap-0.5">
-                <div className="w-10 text-[10px] font-medium text-primary-700 py-1">Net</div>
+                <div className="w-10 text-[10px] font-medium text-primary-700 py-1">Adj</div>
                 {back.map(h => {
                   const s = formData.scores.find(ss => ss.hole === h.number);
-                  const net = s?.netStrokes ?? '';
+                  const handicapStrokes = strokeDistribution[h.number] || 0;
+                  const adj = s?.adjustedStrokes ?? (typeof s?.strokes === 'number' ? applyESCAdjustment(s.strokes, h.par, handicapStrokes) : undefined);
                   return (
-                    <div key={`net-${h.number}`} className="w-7 text-[10px] py-1 text-center text-primary-700 font-medium">{net !== undefined ? net : ''}</div>
+                    <div key={`adj-${h.number}`} className="w-7 text-[10px] py-1 text-center text-primary-700 font-medium">{typeof adj === 'number' ? adj : ''}</div>
                   );
                 })}
                 <div className="w-8 text-[10px] py-1 text-center font-medium text-primary-700 bg-primary-50 rounded ml-0.5">{''}</div>

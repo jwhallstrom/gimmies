@@ -221,7 +221,7 @@ const Dashboard: React.FC = () => {
           </div>
           <div className="text-right">
             <div className="text-sm text-gray-500">Total Rounds</div>
-            <div className="text-2xl font-bold text-primary-600">{currentProfile.stats.roundsPlayed}</div>
+            <div className="text-2xl font-bold text-primary-600">{currentProfile.individualRounds?.length ?? 0}</div>
             {profiles.filter(p => p.userId === currentUser.id).length > 1 && (
               <button
                 onClick={() => {
