@@ -4,30 +4,43 @@ A comprehensive Progressive Web App (PWA) for golf event management, scoring, an
 
 ## ✨ Features
 
-- **Event Management**: Create and join golf events with custom settings
+### Core Features
+- **Event Management**: Create and join golf events with custom settings and share codes
 - **Real-time Scoring**: Live scorecard updates with mobile-optimized interface
-- **Social Features**: Chat, event sharing, and group management
-- **Gambling Games**: Nassau and Skins game configurations with automatic payout calculations
-- **Offline-First**: Full PWA with service worker caching for offline play
+- **Handicap Tracking**: Full World Handicap System (WHS) implementation with score differentials
+- **Analytics Dashboard**: Performance tracking, trends, and detailed statistics
+- **Social Features**: In-event chat, event sharing, and group management
+
+### Gambling Games
+- **Nassau**: Front 9, Back 9, and Total with automatic press handling
+- **Skins**: Individual hole competitions with carryover options
+- **Greenies**: Par-3 closest-to-pin tracking
+- **Wallet System**: Settlement tracking and payout calculations
+
+### Technical Features
+- **Offline-First PWA**: Full service worker caching for offline play
+- **Cloud Sync**: AWS Amplify backend with real-time sync across devices
+- **Code Splitting**: Lazy-loaded routes for fast initial load (~238KB)
 - **Mobile Optimized**: Responsive design with touch-friendly navigation
-- **AWS Deployment**: Amplify Hosting with CI/CD from GitHub
 
 ## 🛠️ Tech Stack
 
-- **Frontend**: React 18 + TypeScript + Vite
-- **Styling**: Tailwind CSS with custom design system
-- **State Management**: Zustand with persistence
-- **Data**: AWS Amplify (AppSync + DynamoDB) with local cache (Zustand + IndexedDB/Dexie)
-- **PWA**: Vite PWA plugin with Workbox
-- **Testing**: Vitest + React Testing Library, Playwright (E2E)
-- **Deployment**: AWS S3 with CloudFront (optional)
-- **Icons**: Custom SVG icons with Heroicons integration
+| Category | Technology |
+|----------|------------|
+| **Frontend** | React 18 + TypeScript + Vite |
+| **Styling** | Tailwind CSS with custom design system |
+| **State** | Zustand with IndexedDB persistence |
+| **Backend** | AWS Amplify Gen 2 (AppSync + DynamoDB) |
+| **Auth** | AWS Cognito with Google OAuth |
+| **PWA** | vite-plugin-pwa with Workbox |
+| **Testing** | Vitest + Playwright (E2E) |
+| **Hosting** | AWS Amplify Hosting (CI/CD) |
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 - Node.js 18+
-- npm or yarn
+- npm
 
 ### Installation
 ```bash
@@ -44,132 +57,149 @@ npm run dev
 
 ### Build for Production
 ```bash
-# Build the app
-npm run build
-
-# Preview production build
-npm run preview
+npm run build      # Build the app
+npm run preview    # Preview production build locally
 ```
 
 ## 📱 App Structure
 
-### Core Pages
-- **Dashboard**: Overview of events and quick actions
-- **Events**: Browse and manage golf events
-- **Analytics**: Performance tracking and statistics
-- **Event Details**: Comprehensive event management with tabs:
-  - Setup: Event configuration
-  - Score: Live scorecard
-  - Leaders: Rankings and podium
-  - Games: Nassau/Skins configurations
-  - Payout: Financial calculations
-  - Chat: Event communication
+### Pages
+| Page | Description |
+|------|-------------|
+| **Dashboard** | Overview of recent events, stats, and quick actions |
+| **Events** | Browse, create, and join golf events |
+| **Analytics** | Performance charts, scoring trends, best rounds |
+| **Handicap** | WHS handicap tracking with round history |
+| **Profile** | User settings and preferences |
+| **Event Details** | Full event management with multiple tabs |
 
-### Key Components
-- **Event Management**: Full CRUD operations for golf events
-- **Player Profiles**: User management with profiles and settings
-- **Scoring System**: Real-time score tracking with validation
-- **Game Engine**: Automated calculations for gambling games
-- **PWA Features**: Offline support, install prompts, push notifications
+### Event Detail Tabs
+- **Overview**: Event summary, golfers, and status
+- **Setup**: Course selection, tees, game configuration
+- **Score**: Live scorecard with hole-by-hole entry
+- **Leaders**: Live leaderboard with gross/net rankings
+- **Games**: Nassau/Skins game status and standings
+- **Payout**: Settlement calculations and wallet integration
+- **Chat**: Real-time event communication
 
 ## 🏗️ Development
 
 ### Available Scripts
 ```bash
-npm run dev          # Start development server
+npm run dev          # Start dev server (hot reload)
 npm run build        # Production build
-npm run preview      # Preview production build
-npm run test         # Run unit tests
-npm run e2e          # Run end-to-end tests (dev server)
-npm run e2e:preview  # Run end-to-end tests against built preview
-npm run lint         # Code linting
+npm run preview      # Serve production build
+npm run test         # Run unit tests (Vitest)
+npm run e2e          # E2E tests against dev server
+npm run e2e:preview  # E2E tests against production build
+npm run lint         # ESLint
 ```
 
 ### Project Structure
 ```
 src/
 ├── components/       # Reusable UI components
-│   ├── tabs/        # Event detail tabs
-│   └── ...
-├── pages/           # Main application pages
-├── state/           # Zustand store (persisted to IndexedDB)
-├── lib/             # Utility functions and helpers
-├── games/           # Game logic and calculations
-├── data/            # Static data and configurations
-└── utils/           # Shared utilities (e.g., idb storage)
+│   ├── tabs/        # Event detail tab components
+│   ├── wallet/      # Wallet/settlement components
+│   └── ui/          # Base UI components
+├── pages/           # Route page components (lazy-loaded)
+├── state/           # Zustand store with slices
+│   └── slices/      # Modular state slices
+├── utils/           # Utilities (handicap, sync, storage)
+├── games/           # Game logic (Nassau, Skins, etc.)
+└── data/            # Static data (courses, tees)
+
+amplify/
+├── auth/            # Cognito configuration
+├── data/            # GraphQL schema & resolvers
+└── backend.ts       # Amplify backend definition
 ```
 
-### State Management
-- **Zustand Store**: Centralized state with persistence
-- **Event State**: Event creation, management, and real-time updates
-- **User State**: Profile management and authentication
-- **Game State**: Scoring and game calculations
+### Key Utilities
+- `src/utils/handicap.ts` — WHS calculations, ESC adjustment
+- `src/utils/idbStorage.ts` — IndexedDB persistence layer
+- `src/utils/eventSync.ts` — Cloud sync for events
+- `src/utils/roundSync.ts` — Cloud sync for rounds
+- `src/utils/profileSync.ts` — Cloud sync for profiles
 
 ## 🚀 Deployment
 
-### Amplify Hosting (Recommended)
-- Connected GitHub repo triggers build + deploy on push to your configured branch.
-- Build spec: `amplify.yml` (backend via `ampx pipeline-deploy`, frontend publishes `dist/`).
-- To deploy: commit and push; monitor in Amplify Console.
+### Amplify Hosting (Primary)
+The app auto-deploys via GitHub integration:
 
-See `AMPLIFY_HOSTING_SETUP.md` and `agents.md` for CI/CD details.
+1. Push to `master` branch
+2. Amplify builds and deploys automatically
+3. Monitor in AWS Amplify Console
 
-### Optional: Static Hosting via S3
-If you need manual/static hosting for staging or special cases, see the “AWS S3 Deployment (Static Hosting)” section in `agents.md`.
+See [AMPLIFY_HOSTING_SETUP.md](AMPLIFY_HOSTING_SETUP.md) for details.
+
+### Manual Deployment
+```bash
+npm run build
+# Deploy dist/ to your static host
+```
 
 ## 🧪 Testing
 
 ### Unit Tests
 ```bash
-npm run test
+npm run test           # Run once
+npm run test -- --watch  # Watch mode
 ```
 
-### End-to-End Tests
+### E2E Tests (Playwright)
 ```bash
-npm run test:e2e
+# Against dev server
+npm run e2e
+
+# Against production build (recommended for CI)
+npm run build && npm run e2e:preview
 ```
+
+## 📊 Data Model
+
+### Core Entities
+| Entity | Description | Storage |
+|--------|-------------|---------|
+| **Profile** | User profile with handicap data | Cloud + Local |
+| **Event** | Golf event with golfers and games | Cloud + Local |
+| **IndividualRound** | Handicap-tracked round | Cloud + Local |
+| **CompletedRound** | Event round with stats | Cloud + Local |
+
+### Sync Strategy
+- **Local-first**: All data persisted to IndexedDB
+- **Cloud sync**: Amplify DataStore for cross-device sync
+- **Offline support**: Full functionality without network
 
 ## 📋 Roadmap
 
-### Current Features ✅
+### ✅ Implemented
 - Event creation and management
 - Real-time scoring interface
-- Mobile-responsive design
+- WHS handicap tracking
+- Nassau and Skins games
+- Wallet/settlement system
+- Cross-device cloud sync
 - PWA with offline support
-- Social features (chat, sharing)
-- Game calculations (Nassau, Skins)
-- AWS deployment pipeline
+- Analytics dashboard
+- Code splitting (lazy routes)
 
-### Planned Features 🚧
-- Advanced handicap system
-- Tournament bracket support
+### 🚧 Planned
+- Tournament bracket mode
 - Push notifications
-- Advanced analytics
-- Wallet integration for buy-ins
-- Multi-course support
+- Photo sharing in events
+- Advanced statistics
+- Leaderboard history
+- Multi-round events
 
 ## 🤝 Contributing
 
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new features
-5. Submit a pull request
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
 
 ## 📄 License
 
 This project is private and proprietary.
 
-## 🆘 Support
-
-For support or questions, please contact the development team.
-
 ---
 
 **Built with ❤️ for the golf community**
-### E2E Against Production Bundle
-```bash
-# Build the app, then run Playwright against vite preview
-npm run build
-npm run e2e:preview
-```
