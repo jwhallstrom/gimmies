@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../../state/store';
 import { calculateEventPayouts } from '../../games/payouts';
+import { netScore } from '../../games/handicap';
 import { courseMap } from '../../data/courses';
 import { EventSettlement } from '../wallet';
 
@@ -122,12 +123,112 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
                 {incomplete && currentProfile && event.ownerProfileId === currentProfile.id && (
                   <button
                     onClick={() => {
-                      if (window.confirm('Fill all empty scores with 4 (par) for testing purposes?')) {
+                      const mode = window.prompt(
+                        'Fill empty scores for testing.\n\nEnter:\n- "par" to use the course par per hole\n- "demo" to use a demo pattern (par + small offsets per golfer)\n- "random" to generate realistic random scores\n\nOnly empty holes are filled.',
+                        'par'
+                      );
+
+                      if (!mode) return;
+
+                      const normalizedMode = mode.trim().toLowerCase();
+                      if (normalizedMode !== 'par' && normalizedMode !== 'demo' && normalizedMode !== 'random') {
+                        alert('Invalid mode. Enter "par", "demo", or "random".');
+                        return;
+                      }
+
+                      if (window.confirm('Proceed filling empty scores?')) {
                         const { updateScore } = useStore.getState();
+
+                        const holePar = (holeNumber: number) => {
+                          if (event.course.courseId) {
+                            const course = courseMap[event.course.courseId];
+                            const hole = course?.holes?.find((h: any) => h.number === holeNumber);
+                            if (hole?.par) return hole.par;
+                          }
+                          return 4;
+                        };
+
+                        const golferIndexById = new Map<string, number>();
+                        event.scorecards.forEach((sc: any, idx: number) => {
+                          if (sc?.golferId) golferIndexById.set(sc.golferId, idx);
+                        });
+
+                        const getHandicapIndexLike = (golferId: string) => {
+                          const eg = event.golfers.find((g: any) => (g.profileId || g.customName) === golferId);
+                          const profile = profiles.find((p: any) => p.id === golferId);
+                          const raw = eg?.handicapOverride ?? eg?.handicapSnapshot ?? profile?.handicapIndex ?? null;
+                          const n = raw == null ? null : Number(raw);
+                          return Number.isFinite(n as number) ? (n as number) : null;
+                        };
+
+                        // Simple seeded RNG so a single click produces consistent-looking randomness
+                        // across holes, but different clicks generate different sequences.
+                        let seed = (Date.now() & 0xffffffff) >>> 0;
+                        const rand = () => {
+                          // xorshift32
+                          seed ^= (seed << 13) >>> 0;
+                          seed ^= (seed >>> 17) >>> 0;
+                          seed ^= (seed << 5) >>> 0;
+                          return ((seed >>> 0) / 4294967296);
+                        };
+
+                        const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
+
+                        const randomScoreFor = (golferId: string, holeNumber: number) => {
+                          const par = holePar(holeNumber);
+                          const hcp = getHandicapIndexLike(golferId);
+
+                          // Convert handicap-ish number into a 0..1 "difficulty" factor.
+                          // 0 = scratch-ish, 1 = higher handicap.
+                          const difficulty = clamp(((hcp ?? 18) / 18), 0, 1);
+
+                          // Outcome deltas relative to par.
+                          // Weighted toward par/bogey with handicap shifting weight upward.
+                          const outcomes = [
+                            { d: -2, w: 0.02 * (1 - difficulty) },
+                            { d: -1, w: 0.10 * (1 - difficulty) + 0.03 },
+                            { d: 0, w: 0.45 * (1 - 0.35 * difficulty) },
+                            { d: 1, w: 0.35 + 0.25 * difficulty },
+                            { d: 2, w: 0.12 + 0.35 * difficulty },
+                            { d: 3, w: 0.04 * difficulty },
+                            { d: 4, w: 0.02 * difficulty },
+                          ];
+
+                          // Normalize weights and sample.
+                          const totalW = outcomes.reduce((sum, o) => sum + o.w, 0);
+                          let r = rand() * totalW;
+                          for (const o of outcomes) {
+                            r -= o.w;
+                            if (r <= 0) {
+                              // Keep it realistic: no 1s, and cap extreme highs a bit.
+                              const raw = par + o.d;
+                              const max = par + 5;
+                              return clamp(raw, 1, max);
+                            }
+                          }
+                          return par;
+                        };
+
                         event.scorecards.forEach((sc: any) => {
                           sc.scores.forEach((s: any) => {
                             if (s.strokes == null) {
-                              updateScore(eventId, sc.golferId, s.hole, 4);
+                              const par = holePar(s.hole);
+                              if (normalizedMode === 'par') {
+                                updateScore(eventId, sc.golferId, s.hole, par);
+                                return;
+                              }
+
+                              if (normalizedMode === 'demo') {
+                                // Demo pattern: par + small deterministic offset by golfer.
+                                // This makes "Team Best N" selections easy to validate.
+                                const golferIdx = golferIndexById.get(sc.golferId) ?? 0;
+                                const offset = golferIdx % 4; // 0..3
+                                updateScore(eventId, sc.golferId, s.hole, par + offset);
+                                return;
+                              }
+
+                              // Random realistic pattern.
+                              updateScore(eventId, sc.golferId, s.hole, randomScoreFor(sc.golferId, s.hole));
                             }
                           });
                         });
@@ -229,7 +330,57 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
           {payouts.nassau.map(n => {
             const cfg = event.games.nassau.find((x: any) => x.id === n.configId);
             const teams = cfg?.teams || [];
+            const isTeam = teams.length >= 2;
+            const bestCount = cfg?.teamBestCount && cfg.teamBestCount > 0 ? cfg.teamBestCount : 1;
             const teamMap: Record<string, { name: string; golferIds: string[] }> = Object.fromEntries(teams.map((t: any) => [t.id, { name: t.name, golferIds: t.golferIds }]));
+
+            // Participant restriction should match game computation logic.
+            const group = event.groups.find((gr: any) => gr.id === cfg?.groupId);
+            const basePlayers: string[] = group?.golferIds || [];
+            const participants: string[] = (cfg?.participantGolferIds && cfg.participantGolferIds.length > 1)
+              ? basePlayers.filter(id => cfg.participantGolferIds!.includes(id))
+              : basePlayers;
+
+            const holes = Array.from({ length: 18 }, (_, i) => i + 1);
+            const holePar = (holeNumber: number) => {
+              if (event.course.courseId) {
+                const course = courseMap[event.course.courseId];
+                const hole = course?.holes?.find((h: any) => h.number === holeNumber);
+                if (hole?.par) return hole.par;
+              }
+              return 4;
+            };
+
+            const teamsForGrid = (cfg?.teams || [])
+              .map((t: any) => ({
+                id: t.id,
+                name: t.name,
+                memberIds: (t.golferIds || []).filter((gid: string) => participants.includes(gid))
+              }))
+              .filter((t: any) => t.memberIds.length > 0);
+
+            const computeTeamHoleUsage = (team: any, holeNumber: number) => {
+              const members = team.memberIds.map((gid: string) => {
+                const sc = event.scorecards.find((s: any) => s.golferId === gid);
+                const gross = sc?.scores.find((s: any) => s.hole === holeNumber)?.strokes ?? null;
+                const value = gross == null
+                  ? null
+                  : (cfg?.net ? (netScore(event, gid, holeNumber, gross, profiles) ?? gross) : gross);
+                return { gid, label: golfersById[gid] || gid, value };
+              });
+
+              const scored = members
+                .filter((m: any) => m.value != null)
+                .sort((a: any, b: any) => (a.value as number) - (b.value as number));
+
+              const used = scored.slice(0, Math.min(bestCount, scored.length));
+              const usedIds = new Set<string>(used.map((u: any) => u.gid));
+              const usedTotal = used.length ? used.reduce((sum: number, u: any) => sum + (u.value as number), 0) : null;
+
+              return { members, usedIds, usedTotal };
+            };
+
+            const title = isTeam ? 'Team Stroke Nassau' : 'Nassau';
             return (
               <div key={n.configId} className="mb-4 border border-slate-200 rounded-lg p-3 bg-white shadow-sm">
                 <div className="text-[11px] text-primary-700 mb-2 font-medium flex flex-wrap gap-4">
@@ -237,6 +388,9 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
                   <span>Pot {currency(n.pot)}</span>
                   {cfg?.teamBestCount && teams.length > 0 && (
                     <span className="text-amber-700">Team Best {cfg.teamBestCount}</span>
+                  )}
+                  {isTeam && (
+                    <span className="text-amber-700">{title}</span>
                   )}
                   {/* Display par for each segment */}
                   {n.segments.map(seg => {
@@ -355,6 +509,78 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
                     <span key={gid} className="bg-primary-100 text-primary-800 px-2 py-0.5 rounded">{golfersById[gid]} {currency(amt)}</span>
                   ))}
                 </div>
+
+                {/* Team Stroke Nassau: show a grid that highlights which scores were counted (best-N) */}
+                {isTeam && teamsForGrid.length >= 2 && (
+                  <details className="mt-3">
+                    <summary className="cursor-pointer text-[11px] font-medium text-primary-800 select-none">
+                      Show score usage grid (counted scores highlighted)
+                    </summary>
+                    <div className="mt-2 text-[10px] text-gray-600">
+                      Shows {cfg?.net ? 'net' : 'gross'} scores by hole. Highlighted cells are the {bestCount} lowest score(s) used for each team on that hole.
+                    </div>
+                    <div className="mt-2 overflow-x-auto">
+                      <table className="text-[10px] border-collapse w-full bg-white rounded border border-slate-200 overflow-hidden">
+                        <thead>
+                          <tr className="bg-slate-50">
+                            <th className="border border-slate-200 px-1 py-0.5 text-center" rowSpan={2}>Hole</th>
+                            <th className="border border-slate-200 px-1 py-0.5 text-center" rowSpan={2}>Par</th>
+                            {teamsForGrid.map((t: any) => (
+                              <th key={t.id} className="border border-slate-200 px-1 py-0.5 text-center" colSpan={t.memberIds.length + 1}>
+                                {t.name}
+                              </th>
+                            ))}
+                          </tr>
+                          <tr className="bg-slate-50">
+                            {teamsForGrid.map((t: any) => (
+                              <React.Fragment key={t.id}>
+                                {t.memberIds.map((gid: string) => (
+                                  <th key={gid} className="border border-slate-200 px-1 py-0.5 text-center whitespace-nowrap">
+                                    {golfersById[gid] || gid}
+                                  </th>
+                                ))}
+                                <th className="border border-slate-200 px-1 py-0.5 text-center whitespace-nowrap">Used</th>
+                              </React.Fragment>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {holes.map(holeNumber => (
+                            <tr key={holeNumber} className="odd:bg-slate-50/40">
+                              <td className="border border-slate-200 px-1 py-0.5 text-center font-mono">{holeNumber}</td>
+                              <td className="border border-slate-200 px-1 py-0.5 text-center">{holePar(holeNumber)}</td>
+                              {teamsForGrid.map((team: any) => {
+                                const usage = computeTeamHoleUsage(team, holeNumber);
+                                return (
+                                  <React.Fragment key={team.id}>
+                                    {usage.members.map((m: any) => {
+                                      const used = usage.usedIds.has(m.gid);
+                                      const hasScore = m.value != null;
+                                      return (
+                                        <td
+                                          key={m.gid}
+                                          className={`border border-slate-200 px-1 py-0.5 text-center font-mono ${
+                                            !hasScore ? 'text-gray-400' : used ? 'bg-primary-100 text-primary-900 font-semibold' : ''
+                                          }`}
+                                          title={m.label}
+                                        >
+                                          {hasScore ? m.value : '—'}
+                                        </td>
+                                      );
+                                    })}
+                                    <td className="border border-slate-200 px-1 py-0.5 text-center font-mono font-semibold">
+                                      {usage.usedTotal != null ? usage.usedTotal : '—'}
+                                    </td>
+                                  </React.Fragment>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </details>
+                )}
               </div>
             );
           })}

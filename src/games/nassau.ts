@@ -35,13 +35,16 @@ export function computeNassauForConfig(event: Event, config: NassauConfig, profi
     : group.golferIds;
   if (players.length < 2) return null;
   const isTeam = !!(config.teams && config.teams.length >= 2);
-  // If team mode: only count golfers actually assigned to a team toward the pot.
+
+  // Determine who is participating/paying.
+  // Fee semantics: `config.fee` is a per-user buy-in for the Nassau (not per-segment).
   let payingPlayers = players;
   if (isTeam) {
     const teamGolferIds = new Set<string>();
     (config.teams || []).forEach(t => t.golferIds.forEach(gid => { if (players.includes(gid)) teamGolferIds.add(gid); }));
     payingPlayers = players.filter(p => teamGolferIds.has(p));
   }
+
   if (payingPlayers.length < 2) return null; // not enough paying participants
   const pot = payingPlayers.length * config.fee;
   const segmentPot = pot / 3; // equal split front/back/total
@@ -79,11 +82,15 @@ export function computeNassauForConfig(event: Event, config: NassauConfig, profi
       console.log(`  Team mode: bestCount=${bestCount}, teams=${config.teams?.length || 0}`);
       
       (config.teams || []).forEach(team => {
+        const teamMembers = team.golferIds.filter(gid => players.includes(gid));
+        if (teamMembers.length === 0) {
+          return;
+        }
         // aggregate per hole: sort team members' scores (net/gross) and take best N
         let total = 0;
         let parTotal = 0;
         let allComplete = true;
-        console.log(`  Calculating team ${team.id} (${team.name}):`, team.golferIds);
+        console.log(`  Calculating team ${team.id} (${team.name}):`, teamMembers);
         
         for (const h of holes) {
           const memberScores: number[] = [];
@@ -98,7 +105,7 @@ export function computeNassauForConfig(event: Event, config: NassauConfig, profi
             }
           }
           
-            team.golferIds.forEach(pid => {
+            teamMembers.forEach(pid => {
               const sc = event.scorecards.find(s => s.golferId === pid);
               const gross = sc?.scores.find(s => s.hole === h)?.strokes ?? null;
               const value = gross == null ? null : (config.net ? (netScore(event, pid, h, gross, profiles) ?? gross) : gross);
@@ -130,8 +137,10 @@ export function computeNassauForConfig(event: Event, config: NassauConfig, profi
         winners.forEach(teamId => {
           const team = (config.teams || []).find(t => t.id === teamId);
           if (team) {
-            const perGolfer = share / team.golferIds.length;
-            team.golferIds.forEach(gid => { winningsByGolfer[gid] = (winningsByGolfer[gid] || 0) + perGolfer; });
+            const participatingGolferIds = team.golferIds.filter(gid => payingPlayers.includes(gid));
+            if (participatingGolferIds.length === 0) return;
+            const perGolfer = share / participatingGolferIds.length;
+            participatingGolferIds.forEach(gid => { winningsByGolfer[gid] = (winningsByGolfer[gid] || 0) + perGolfer; });
           }
         });
       }

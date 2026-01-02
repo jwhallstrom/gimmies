@@ -454,7 +454,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                       {(() => {
                         const hasTeams = (n.teams || []).filter((t:any)=> t.golferIds && t.golferIds.length>0).length > 0;
                         if (hasTeams) {
-                          return <span className="text-[9px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded">Team Nassau</span>;
+                          return <span className="text-[9px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded">Team Stroke Nassau</span>;
                         } else {
                           return <span className="text-[9px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded">Individual Nassau</span>;
                         }
