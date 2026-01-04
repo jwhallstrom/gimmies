@@ -15,7 +15,7 @@ const GAME_TYPES = [
   {
     id: 'skins',
     name: 'Skins',
-    description: 'Each hole is worth a "skin". The player with the lowest score on a hole wins the skin. Ties carry over to the next hole.',
+    description: 'Each hole is worth a "skin". The player with the lowest score on a hole wins the skin. By default, ties are a push (no skin). You can optionally enable carryovers per Skins game.',
     hasNetOption: true
   },
   {
@@ -83,7 +83,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
   };
   const skinsArray: any[] = Array.isArray(event.games.skins) ? event.games.skins : (event.games.skins ? [event.games.skins] : []);
   const addSkins = (net: boolean) => {
-    updateEvent(eventId, { games: { ...event.games, skins: [...skinsArray, { id: nanoid(6), fee: 10, net }] } });
+    updateEvent(eventId, { games: { ...event.games, skins: [...skinsArray, { id: nanoid(6), fee: 10, net, carryovers: false }] } });
   };
   const removeSkins = (id: string) => {
     useStore.getState().removeSkins(eventId, id);
@@ -590,6 +590,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="font-semibold">Skins #{i+1}</span>
                   <span className="text-[10px] px-1 rounded bg-primary-100 text-primary-700">{sk.net ? 'Net' : 'Gross'}</span>
+                  <span className="text-[10px] px-1 rounded bg-slate-100 text-slate-700">{sk.carryovers ? 'Carryovers On' : 'No Carryovers'}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <label className="flex items-center gap-1">Fee
@@ -597,6 +598,18 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                   </label>
                   <button type="button" onClick={()=> removeSkins(sk.id)} className="text-[10px] px-2 py-1 rounded border border-red-200 bg-red-50 text-red-600 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted || !isOwner}>Remove</button>
                 </div>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <label className="flex items-center gap-2 text-[10px]">
+                  <input
+                    type="checkbox"
+                    checked={!!sk.carryovers}
+                    onChange={e => updateCfg({ carryovers: e.target.checked })}
+                    disabled={event.isCompleted || !isOwner}
+                  />
+                  Carryovers (ties carry)
+                </label>
               </div>
               
               <div className="border-t pt-2 mt-2">

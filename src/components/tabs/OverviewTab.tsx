@@ -4,6 +4,7 @@ import useStore from '../../state/store';
 import { calculateEventPayouts } from '../../games/payouts';
 import { netScore } from '../../games/handicap';
 import { courseMap } from '../../data/courses';
+import { useCourses } from '../../hooks/useCourses';
 import { EventSettlement } from '../wallet';
 
 type Props = { eventId: string };
@@ -19,6 +20,29 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
     s.completedEvents.find((e: any) => e.id === eventId)
   );
   if (!event) return null;
+
+  // Use cloud course data (selected tee) to ensure par values match the scorecard.
+  const { courses } = useCourses();
+  const selectedCourse = event.course.courseId
+    ? courses.find(c => c.courseId === event.course.courseId)
+    : undefined;
+  const selectedTeeName = event.course.teeName;
+  const selectedTee = selectedCourse?.tees.find(t => t.name === selectedTeeName);
+  const teeWithHoles = selectedTee || selectedCourse?.tees?.[0];
+  const courseHoles = teeWithHoles?.holes?.length
+    ? teeWithHoles.holes
+    : Array.from({ length: 18 }).map((_, i) => ({ number: i + 1, par: 4, strokeIndex: i + 1 }));
+
+  const getHolePar = (holeNumber: number) => {
+    const cloudHole = courseHoles.find(h => h.number === holeNumber);
+    if (cloudHole?.par) return cloudHole.par;
+    if (event.course.courseId) {
+      const staticCourse = courseMap[event.course.courseId];
+      const staticHole = staticCourse?.holes?.find((h: any) => h.number === holeNumber);
+      if (staticHole?.par) return staticHole.par;
+    }
+    return 4;
+  };
   
   const payouts = calculateEventPayouts(event, profiles);
   const skinsArray = Array.isArray(payouts.skins) ? payouts.skins : (payouts.skins ? [payouts.skins as any] : []);
@@ -139,14 +163,7 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
                       if (window.confirm('Proceed filling empty scores?')) {
                         const { updateScore } = useStore.getState();
 
-                        const holePar = (holeNumber: number) => {
-                          if (event.course.courseId) {
-                            const course = courseMap[event.course.courseId];
-                            const hole = course?.holes?.find((h: any) => h.number === holeNumber);
-                            if (hole?.par) return hole.par;
-                          }
-                          return 4;
-                        };
+                        const holePar = (holeNumber: number) => getHolePar(holeNumber);
 
                         const golferIndexById = new Map<string, number>();
                         event.scorecards.forEach((sc: any, idx: number) => {
@@ -342,14 +359,6 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
               : basePlayers;
 
             const holes = Array.from({ length: 18 }, (_, i) => i + 1);
-            const holePar = (holeNumber: number) => {
-              if (event.course.courseId) {
-                const course = courseMap[event.course.courseId];
-                const hole = course?.holes?.find((h: any) => h.number === holeNumber);
-                if (hole?.par) return hole.par;
-              }
-              return 4;
-            };
 
             const teamsForGrid = (cfg?.teams || [])
               .map((t: any) => ({
@@ -395,18 +404,15 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
                   {/* Display par for each segment */}
                   {n.segments.map(seg => {
                     const parForSegment = (() => {
-                      if (event.course.courseId) {
-                        const course = courseMap[event.course.courseId];
-                        if (course) {
-                          const holes = seg.segment === 'front' ? [1,2,3,4,5,6,7,8,9] :
-                                     seg.segment === 'back' ? [10,11,12,13,14,15,16,17,18] :
-                                     [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18];
-                          return course.holes
-                            .filter((h: any) => holes.includes(h.number))
-                            .reduce((sum: number, h: any) => sum + h.par, 0);
-                        }
-                      }
-                      return null;
+                      const holeNums = seg.segment === 'front'
+                        ? [1,2,3,4,5,6,7,8,9]
+                        : seg.segment === 'back'
+                          ? [10,11,12,13,14,15,16,17,18]
+                          : [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18];
+                      const parSum = courseHoles
+                        .filter(h => holeNums.includes(h.number))
+                        .reduce((sum, h) => sum + (h.par || 0), 0);
+                      return parSum > 0 ? parSum : null;
                     })();
                     
                     // For team segments, show par adjusted for team best count
@@ -548,7 +554,7 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
                           {holes.map(holeNumber => (
                             <tr key={holeNumber} className="odd:bg-slate-50/40">
                               <td className="border border-slate-200 px-1 py-0.5 text-center font-mono">{holeNumber}</td>
-                              <td className="border border-slate-200 px-1 py-0.5 text-center">{holePar(holeNumber)}</td>
+                              <td className="border border-slate-200 px-1 py-0.5 text-center">{getHolePar(holeNumber)}</td>
                               {teamsForGrid.map((team: any) => {
                                 const usage = computeTeamHoleUsage(team, holeNumber);
                                 return (
@@ -589,6 +595,14 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
     {skinsArray.length>0 && skinsArray.map((sk, idx) => sk && (
         <section key={sk.configId} className="border border-slate-200 rounded-lg p-3 bg-white shadow-sm">
       <h2 className="font-semibold mb-2 text-primary-900">Skins {skinsArray.length>1 && (<span className="text-[11px] font-normal ml-1">#{idx+1} {(() => { const cfg = (Array.isArray(event.games.skins)?event.games.skins:[event.games.skins]).find((c: any)=> c && c.id===sk.configId); return cfg?.net ? 'Net' : 'Gross'; })()}</span>)}</h2>
+          {(() => {
+            const cfg = (Array.isArray(event.games.skins) ? event.games.skins : [event.games.skins]).find((c: any) => c && c.id === sk.configId);
+            return (
+              <div className="text-[10px] text-slate-600 mb-1">
+                {cfg?.carryovers ? 'Carryovers: On (ties carry)' : 'Carryovers: Off (ties push)'}
+              </div>
+            );
+          })()}
           <div className="text-[11px] text-primary-700 mb-2 font-medium">Pot {currency(sk.totalPot)}</div>
           <div className="mb-3">
             <table className="text-[10px] border-collapse w-full bg-white mb-3 rounded border border-slate-200 overflow-hidden">
@@ -604,8 +618,12 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
                 {sk.holeResults.map((hr: any) => (
                   <tr key={hr.hole} className="odd:bg-slate-50/40">
                     <td className="border border-slate-200 px-1 py-0.5 text-center">{hr.hole}</td>
-                    <td className="border border-slate-200 px-1 py-0.5">{golfersById[hr.winners[0]]}</td>
-                    <td className="border border-slate-200 px-1 py-0.5 text-center">{hr.winningScore}</td>
+                    <td className="border border-slate-200 px-1 py-0.5">
+                      {Array.isArray(hr.winners) && hr.winners.length > 1
+                        ? `Tie${hr.carryIntoNext ? ' (carry)' : ''}: ${hr.winners.map((gid: string) => golfersById[gid]).join(', ')}`
+                        : golfersById[hr.winners?.[0]]}
+                    </td>
+                    <td className="border border-slate-200 px-1 py-0.5 text-center">{hr.winningScore ?? '—'}</td>
                     <td className="border border-slate-200 px-1 py-0.5 text-right">{currency(hr.potValue)}</td>
                   </tr>
                 ))}

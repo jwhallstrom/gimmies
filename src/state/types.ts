@@ -117,6 +117,7 @@ export interface SkinsConfig {
   id: string; 
   fee: number; 
   net: boolean; 
+  carryovers?: boolean;
   participantGolferIds?: string[]; 
 }
 
