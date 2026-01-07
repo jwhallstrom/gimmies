@@ -1,14 +1,13 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
-import { Amplify } from 'aws-amplify';
 import { registerSW } from 'virtual:pwa-register';
-import outputs from '../amplify_outputs.json';
+
+// Must run before any other Amplify usage
+import './amplify/configure';
+
 import App from './pages/App';
 import './styles.css';
-
-// Configure Amplify
-Amplify.configure(outputs);
 
 const updateSW = registerSW({
   immediate: true,

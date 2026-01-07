@@ -11,7 +11,7 @@ const ScorecardTab: React.FC<Props> = ({ eventId }) => {
   if (!event) return null;
 
   // Load course data from DynamoDB (imported earlier)
-  const { courses } = useCourses();
+  const { courses, loading: coursesLoading } = useCourses();
 
   // Determine holes for rendering:
   // - Prefer the selected tee's holes from cloud data
@@ -25,7 +25,13 @@ const ScorecardTab: React.FC<Props> = ({ eventId }) => {
   const teeWithHoles = selectedTee || selectedCourse?.tees?.[0];
   const holes = teeWithHoles?.holes?.length
     ? teeWithHoles.holes
-    : Array.from({ length: 18 }).map((_, i) => ({ number: i + 1, par: 4, strokeIndex: i + 1 }));
+    : Array.from({ length: 18 }).map((_, i) => ({
+        number: i + 1,
+        // If a real course is selected but holes haven't loaded yet, don't show incorrect par=4.
+        // For true "custom course" events (no courseId), keep the historical par=4 default.
+        par: event.course.courseId ? undefined : 4,
+        strokeIndex: i + 1,
+      }));
   const front = holes.slice(0, 9);
   const back = holes.slice(9);
   const [view, setView] = useState<'front'|'back'|'full'>('full');
@@ -179,8 +185,9 @@ const ScorecardTab: React.FC<Props> = ({ eventId }) => {
           const allScores = sc.scores.map((s: any) => s.strokes);
           const allComplete = allScores.every((v: any) => v != null);
           const totalScore = allComplete ? allScores.reduce((a: number, b: number) => a + b, 0) : null;
-          const coursePar = holes.reduce((a: any, h: any) => a + h.par, 0);
-          const scoreToPar = totalScore != null ? totalScore - coursePar : null;
+          const parsKnown = holes.every((h: any) => typeof h.par === 'number');
+          const coursePar = parsKnown ? holes.reduce((a: number, h: any) => a + (h.par as number), 0) : null;
+          const scoreToPar = totalScore != null && coursePar != null ? totalScore - coursePar : null;
 
           return (
             <div key={golferId} className="bg-white rounded-lg border border-primary-200 overflow-hidden shadow-sm">
@@ -213,6 +220,9 @@ const ScorecardTab: React.FC<Props> = ({ eventId }) => {
                 {(view === 'front' || view === 'full') && (
                 <div className="p-2 sm:p-3">
                   <div className="text-xs font-semibold text-slate-600 mb-1 sm:mb-2">Front Nine</div>
+                  {coursesLoading && event.course.courseId && !teeWithHoles?.holes?.length && (
+                    <div className="text-[10px] text-slate-500 mb-1">Loading course pars…</div>
+                  )}
                   <div className="space-y-0.5 sm:space-y-1">
                     {/* Hole numbers 1-9 */}
                     <div className="flex gap-0.5 sm:gap-1">
@@ -230,11 +240,13 @@ const ScorecardTab: React.FC<Props> = ({ eventId }) => {
                       <div className="w-10 sm:w-12 text-[10px] sm:text-xs font-semibold text-slate-600 py-1">Par</div>
                       {front.map((hole: any) => (
                         <div key={`par-${hole.number}`} className="w-7 sm:w-8 text-[10px] sm:text-xs text-slate-600 py-1 text-center bg-slate-100 rounded">
-                          {hole.par}
+                          {typeof hole.par === 'number' ? hole.par : '—'}
                         </div>
                       ))}
                       <div className="w-8 sm:w-10 text-[10px] sm:text-xs text-slate-600 py-1 text-center bg-slate-200 rounded ml-0.5 sm:ml-1 font-semibold">
-                        {front.reduce((a: any, h: any) => a + h.par, 0)}
+                        {front.every((h: any) => typeof h.par === 'number')
+                          ? front.reduce((a: number, h: any) => a + (h.par as number), 0)
+                          : '—'}
                       </div>
                     </div>
                     
@@ -243,10 +255,10 @@ const ScorecardTab: React.FC<Props> = ({ eventId }) => {
                       <div className="w-10 sm:w-12 text-[10px] sm:text-xs font-semibold text-slate-700 py-1">Score</div>
                       {sc.scores.slice(0, 9).map((s: any) => {
                         const holeMeta = holes.find((h: any) => h.number === s.hole);
-                        const par = holeMeta?.par ?? 4;
+                        const par = typeof holeMeta?.par === 'number' ? holeMeta.par : null;
                         const hcpStrokes = strokesForHole(event, golferId, s.hole, profiles);
                         const gross = s.strokes;
-                        const diff = gross != null ? gross - par : null;
+                        const diff = gross != null && par != null ? gross - par : null;
                         let colorClass = '';
                         if (diff != null) {
                           if (diff <= -3) colorClass = 'bg-fuchsia-600 text-white font-semibold';
@@ -272,6 +284,8 @@ const ScorecardTab: React.FC<Props> = ({ eventId }) => {
                               value={gross ?? ''}
                               disabled={!canEdit}
                               inputMode="numeric"
+                              aria-label={`${displayName} hole ${s.hole} score`}
+                              title={`${displayName} hole ${s.hole} score`}
                               data-golfer={golferId}
                               data-hole={s.hole}
                               onFocus={e => {
@@ -339,6 +353,9 @@ const ScorecardTab: React.FC<Props> = ({ eventId }) => {
                 {(view === 'back' || view === 'full') && (
                 <div className="p-2 sm:p-3 border-t border-slate-200">
                   <div className="text-xs font-semibold text-slate-600 mb-1 sm:mb-2">Back Nine</div>
+                  {coursesLoading && event.course.courseId && !teeWithHoles?.holes?.length && (
+                    <div className="text-[10px] text-slate-500 mb-1">Loading course pars…</div>
+                  )}
                   <div className="space-y-0.5 sm:space-y-1">
                     {/* Hole numbers 10-18 */}
                     <div className="flex gap-0.5 sm:gap-1">
@@ -356,11 +373,13 @@ const ScorecardTab: React.FC<Props> = ({ eventId }) => {
                       <div className="w-10 sm:w-12 text-[10px] sm:text-xs font-semibold text-slate-600 py-1">Par</div>
                       {back.map((hole: any) => (
                         <div key={`par-${hole.number}`} className="w-7 sm:w-8 text-[10px] sm:text-xs text-slate-600 py-1 text-center bg-slate-100 rounded">
-                          {hole.par}
+                          {typeof hole.par === 'number' ? hole.par : '—'}
                         </div>
                       ))}
                       <div className="w-8 sm:w-10 text-[10px] sm:text-xs text-slate-600 py-1 text-center bg-slate-200 rounded ml-0.5 sm:ml-1 font-semibold">
-                        {back.reduce((a: any, h: any) => a + h.par, 0)}
+                        {back.every((h: any) => typeof h.par === 'number')
+                          ? back.reduce((a: number, h: any) => a + (h.par as number), 0)
+                          : '—'}
                       </div>
                     </div>
                     
@@ -369,10 +388,10 @@ const ScorecardTab: React.FC<Props> = ({ eventId }) => {
                       <div className="w-10 sm:w-12 text-[10px] sm:text-xs font-semibold text-slate-700 py-1">Score</div>
                       {sc.scores.slice(9, 18).map((s: any) => {
                         const holeMeta = holes.find((h: any) => h.number === s.hole);
-                        const par = holeMeta?.par ?? 4;
+                        const par = typeof holeMeta?.par === 'number' ? holeMeta.par : null;
                         const hcpStrokes = strokesForHole(event, golferId, s.hole, profiles);
                         const gross = s.strokes;
-                        const diff = gross != null ? gross - par : null;
+                        const diff = gross != null && par != null ? gross - par : null;
                         let colorClass = '';
                         if (diff != null) {
                           if (diff <= -3) colorClass = 'bg-fuchsia-600 text-white font-semibold';
@@ -398,6 +417,8 @@ const ScorecardTab: React.FC<Props> = ({ eventId }) => {
                               value={gross ?? ''}
                               disabled={!canEdit}
                               inputMode="numeric"
+                              aria-label={`${displayName} hole ${s.hole} score`}
+                              title={`${displayName} hole ${s.hole} score`}
                               data-golfer={golferId}
                               data-hole={s.hole}
                               onFocus={e => {

@@ -202,7 +202,7 @@ const App: React.FC = () => {
                 <Route path="/handicap/add-round" element={<AddScorePage />} />
                 <Route path="/handicap/round/:roundId" element={<RoundDetailPage />} />
                 <Route path="/analytics" element={<AnalyticsPage />} />
-                <Route path="/wallet" element={<WalletPage />} />
+                <Route path="/wallet/*" element={<WalletPage />} />
                 <Route path="/event/:id/*" element={<EventPage />} />
                 <Route path="/join/:code" element={<JoinEventPage />} />
                 <Route path="/auth-demo" element={<AuthDemoPage />} />
@@ -257,7 +257,7 @@ const App: React.FC = () => {
         <Link
           to="/wallet"
           className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${
-            location.pathname === '/wallet' ? 'text-primary-600' : 'text-primary-800 hover:text-primary-600'
+            location.pathname.startsWith('/wallet') ? 'text-primary-600' : 'text-primary-800 hover:text-primary-600'
           }`}
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
