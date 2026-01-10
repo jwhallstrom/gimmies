@@ -37,6 +37,14 @@ export function setCoursesCache(courses: CloudCourse[]): void {
   coursesById = next;
 }
 
+export function upsertCoursesCache(courses: CloudCourse[]): void {
+  const next = new Map(coursesById);
+  for (const c of courses) {
+    next.set(c.courseId || c.id, c);
+  }
+  coursesById = next;
+}
+
 export function getCourseById(courseId?: string | null): CloudCourse | undefined {
   if (!courseId) return undefined;
   return coursesById.get(courseId);

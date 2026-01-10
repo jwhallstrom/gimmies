@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import useStore from '../../state/store';
-import { useCourses } from '../../hooks/useCourses';
+import { useCourse } from '../../hooks/useCourse';
 
 type Props = { eventId: string };
 
@@ -11,7 +11,7 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
     s.completedEvents.find((e: any) => e.id === eventId)
   );
   const { currentProfile, profiles, addGolferToEvent, updateEventGolfer, setGroupTeeTime } = useStore();
-  const { courses, loading: coursesLoading } = useCourses();
+  const { course: selectedCourse, loading: coursesLoading } = useCourse(event?.course?.courseId);
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [golferName, setGolferName] = useState('');
@@ -21,11 +21,6 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
   if (!event) return null;
 
   const isOwner = currentProfile && event.ownerProfileId === currentProfile.id;
-
-  const selectedCourse = useMemo(
-    () => courses.find((c: any) => c.courseId === event.course.courseId),
-    [courses, event.course.courseId]
-  );
 
   const courseSelected = !!event.course.courseId;
   const teeSelected = !!event.course.teeName;

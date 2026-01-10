@@ -50,7 +50,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId }) => {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-270px)] max-h-[520px] bg-white/90 backdrop-blur rounded-xl shadow-sm border border-primary-900/10">
+    <div className="flex flex-col h-[calc(100dvh-270px)] max-h-[500px] bg-white/90 backdrop-blur rounded-xl shadow-sm border border-primary-900/10">
       <div className="flex items-center justify-between px-4 py-2 border-b border-primary-900/10 bg-gradient-to-r from-primary-50 to-white rounded-t-xl">
         <h2 className="font-semibold text-primary-800 text-sm tracking-wide">Event Chat</h2>
         {messages.length > 0 && (

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import useStore from '../../state/store';
-import { useCourses } from '../../hooks/useCourses';
+import { useCourse } from '../../hooks/useCourse';
 
 type Props = { eventId: string };
 
@@ -30,12 +30,8 @@ const LeaderboardTab: React.FC<Props> = ({ eventId }) => {
     return scorecard?.scores || [];
   };
 
-  // Load course data from DynamoDB
-  const { courses, loading: coursesLoading } = useCourses();
-
-  const selectedCourse = event.course.courseId
-    ? courses.find((c: any) => c.courseId === event.course.courseId)
-    : undefined;
+  // Load only the selected course from DynamoDB (faster than loading full catalog)
+  const { course: selectedCourse, loading: coursesLoading } = useCourse(event.course.courseId);
   const selectedTeeName = event.course.teeName;
   const selectedTee = selectedCourse?.tees?.find((t: any) => t.name === selectedTeeName);
   const teeWithHoles = selectedTee || selectedCourse?.tees?.[0];
