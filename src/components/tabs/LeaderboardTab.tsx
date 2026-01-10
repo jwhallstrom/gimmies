@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import useStore from '../../state/store';
-import { courseMap } from '../../data/courses';
+import { useCourses } from '../../hooks/useCourses';
 
 type Props = { eventId: string };
 
@@ -30,15 +30,42 @@ const LeaderboardTab: React.FC<Props> = ({ eventId }) => {
     return scorecard?.scores || [];
   };
 
-  const course = event.course.courseId ? courseMap[event.course.courseId] : null;
-  const holes = course ? course.holes : Array.from({ length: 18 }).map((_, i) => ({ number: i + 1, par: 4 }));
+  // Load course data from DynamoDB
+  const { courses, loading: coursesLoading } = useCourses();
+
+  const selectedCourse = event.course.courseId
+    ? courses.find((c: any) => c.courseId === event.course.courseId)
+    : undefined;
+  const selectedTeeName = event.course.teeName;
+  const selectedTee = selectedCourse?.tees?.find((t: any) => t.name === selectedTeeName);
+  const teeWithHoles = selectedTee || selectedCourse?.tees?.[0];
+
+  // Determine holes for scoring:
+  // - Prefer the selected tee's holes from cloud data
+  // - Fallback to any tee's holes for the course
+  // - Fallback to 18 generic holes (par 4) only for true custom-course events
+  const holes = teeWithHoles?.holes?.length
+    ? teeWithHoles.holes
+    : Array.from({ length: 18 }).map((_, i) => ({
+        number: i + 1,
+        par: event.course.courseId ? undefined : 4,
+      }));
+
+  const parsKnown = holes.every((h: any) => typeof h.par === 'number');
+  const holeParByNumber: Record<number, number> = {};
+  if (parsKnown) {
+    holes.forEach((h: any) => {
+      holeParByNumber[h.number] = h.par as number;
+    });
+  }
 
   // Calculate total par for the course
-  const totalPar = holes.reduce((sum, hole) => sum + hole.par, 0);
+  const totalPar = parsKnown ? holes.reduce((sum: number, hole: any) => sum + (hole.par as number), 0) : null;
 
   // Function to get emoji based on recent performance
   const getPlayerEmoji = (scorecard: any) => {
     if (!scorecard?.scores || scorecard.scores.length === 0) return '';
+    if (!parsKnown) return '';
 
     const scores = scorecard.scores
       .filter((s: any) => s.strokes != null)
@@ -58,9 +85,9 @@ const LeaderboardTab: React.FC<Props> = ({ eventId }) => {
     let currentBirdieStreak = 0;
     for (let i = scores.length - 1; i >= 0; i--) {
       const score = scores[i];
-      const hole = holes.find(h => h.number === score.hole);
-      
-      if (hole && score.strokes === hole.par - 1) {
+      const par = holeParByNumber[score.hole];
+
+      if (typeof par === 'number' && score.strokes === par - 1) {
         currentBirdieStreak++;
       } else {
         break; // Streak is broken
@@ -82,16 +109,16 @@ const LeaderboardTab: React.FC<Props> = ({ eventId }) => {
     
     // Check for hole in one (ace) in last 2 holes
     if (recentHoles.some((s: any) => {
-      const hole = holes.find(h => h.number === s.hole);
-      return s.strokes === 1 && hole && hole.par > 1;
+      const par = holeParByNumber[s.hole];
+      return s.strokes === 1 && typeof par === 'number' && par > 1;
     })) {
       return '💎';
     }
 
     // Check for eagle (2 under par) in last 2 holes
     if (recentHoles.some((s: any) => {
-      const hole = holes.find(h => h.number === s.hole);
-      return hole && s.strokes <= hole.par - 2;
+      const par = holeParByNumber[s.hole];
+      return typeof par === 'number' && s.strokes <= par - 2;
     })) {
       return '🦅';
     }
@@ -133,10 +160,18 @@ const LeaderboardTab: React.FC<Props> = ({ eventId }) => {
     let front9Holes = 0;
     let back9Holes = 0;
 
+    let totalPlayedPar: number | null = parsKnown ? 0 : null;
+
     scorecard.scores.forEach((score: any) => {
       if (score.strokes != null) {
         totalStrokes += score.strokes;
         holesPlayed++;
+
+        if (totalPlayedPar != null) {
+          const par = holeParByNumber[score.hole];
+          if (typeof par === 'number') totalPlayedPar += par;
+          else totalPlayedPar = null;
+        }
 
         if (score.hole <= 9) {
           front9Strokes += score.strokes;
@@ -148,13 +183,8 @@ const LeaderboardTab: React.FC<Props> = ({ eventId }) => {
       }
     });
 
-    // Calculate par for played holes to always show score to par
-    const front9Par = holes.slice(0, Math.min(9, front9Holes)).reduce((sum, h) => sum + h.par, 0);
-    const back9Par = holes.slice(9, 9 + back9Holes).reduce((sum, h) => sum + h.par, 0);
-    const totalPlayedPar = front9Par + back9Par;
-    
-    // Always calculate to par if any holes played
-    const toPar = holesPlayed > 0 ? totalStrokes - totalPlayedPar : null;
+    // Always calculate to par if any holes played AND pars are known
+    const toPar = holesPlayed > 0 && totalPlayedPar != null ? totalStrokes - totalPlayedPar : null;
 
     return {
       id: golferId,
@@ -228,8 +258,11 @@ const LeaderboardTab: React.FC<Props> = ({ eventId }) => {
       <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
         <div className="bg-gradient-to-r from-primary-600 to-primary-700 text-white px-4 py-3">
           <h2 className="text-lg font-semibold">Leaderboard</h2>
-          <p className="text-sm opacity-90">{event.name} - {course?.name || 'Course'} (Par {totalPar})</p>
+          <p className="text-sm opacity-90">{event.name} - {selectedCourse?.name || 'Course'} (Par {totalPar ?? '—'})</p>
           <p className="text-xs opacity-75 mt-1">Click on any player to view their scorecard</p>
+          {coursesLoading && event.course.courseId && !teeWithHoles?.holes?.length && (
+            <p className="text-xs opacity-75 mt-1">Loading course pars…</p>
+          )}
         </div>
 
         <div className="overflow-x-auto">
@@ -318,11 +351,13 @@ const LeaderboardTab: React.FC<Props> = ({ eventId }) => {
                                 <div className="text-xs font-semibold text-slate-600 py-1 text-center w-12 shrink-0">Par</div>
                                 {holes.slice(0, 9).map((hole) => (
                                   <div key={`par-${hole.number}`} className="text-xs text-slate-600 py-1 text-center bg-slate-100 rounded w-8 shrink-0">
-                                    {hole.par}
+                                    {typeof hole.par === 'number' ? hole.par : '—'}
                                   </div>
                                 ))}
                                 <div className="text-xs text-slate-600 py-1 text-center bg-slate-200 rounded w-10 shrink-0 ml-1 font-semibold">
-                                  {holes.slice(0, 9).reduce((sum, h) => sum + h.par, 0)}
+                                  {parsKnown
+                                    ? holes.slice(0, 9).reduce((sum: number, h: any) => sum + (h.par as number), 0)
+                                    : '—'}
                                 </div>
                               </div>
                               
@@ -333,18 +368,19 @@ const LeaderboardTab: React.FC<Props> = ({ eventId }) => {
                                   const playerScores = getPlayerScorecard(player.id);
                                   const scoreForHole = playerScores.find((s: any) => s.hole === hole.number);
                                   const strokes = scoreForHole?.strokes;
-                                  const toPar = strokes ? strokes - hole.par : null;
+                                  const par = holeParByNumber[hole.number];
+                                  const toPar = strokes != null && typeof par === 'number' ? strokes - par : null;
                                   
                                   return (
                                     <div key={`score-${hole.number}`} className={`text-xs py-1 text-center font-mono rounded w-8 shrink-0 ${
-                                      strokes === null ? 'text-slate-400' :
+                                      strokes == null ? 'text-slate-400' :
                                       toPar === null ? 'text-slate-700' :
                                       toPar < 0 ? 'text-green-600 bg-green-50 font-semibold' :
                                       toPar === 0 ? 'text-slate-700 bg-white' :
                                       toPar === 1 ? 'text-orange-600 bg-orange-50 font-semibold' :
                                       'text-red-600 bg-red-50 font-semibold'
                                     }`}>
-                                      {strokes || '-'}
+                                      {strokes ?? '-'}
                                     </div>
                                   );
                                 })}
@@ -375,11 +411,13 @@ const LeaderboardTab: React.FC<Props> = ({ eventId }) => {
                                 <div className="text-xs font-semibold text-slate-600 py-1 text-center w-12 shrink-0">Par</div>
                                 {holes.slice(9, 18).map((hole) => (
                                   <div key={`par-${hole.number}`} className="text-xs text-slate-600 py-1 text-center bg-slate-100 rounded w-8 shrink-0">
-                                    {hole.par}
+                                    {typeof hole.par === 'number' ? hole.par : '—'}
                                   </div>
                                 ))}
                                 <div className="text-xs text-slate-600 py-1 text-center bg-slate-200 rounded w-10 shrink-0 ml-1 font-semibold">
-                                  {holes.slice(9, 18).reduce((sum, h) => sum + h.par, 0)}
+                                  {parsKnown
+                                    ? holes.slice(9, 18).reduce((sum: number, h: any) => sum + (h.par as number), 0)
+                                    : '—'}
                                 </div>
                               </div>
                               
@@ -390,18 +428,19 @@ const LeaderboardTab: React.FC<Props> = ({ eventId }) => {
                                   const playerScores = getPlayerScorecard(player.id);
                                   const scoreForHole = playerScores.find((s: any) => s.hole === hole.number);
                                   const strokes = scoreForHole?.strokes;
-                                  const toPar = strokes ? strokes - hole.par : null;
+                                  const par = holeParByNumber[hole.number];
+                                  const toPar = strokes != null && typeof par === 'number' ? strokes - par : null;
                                   
                                   return (
                                     <div key={`score-${hole.number}`} className={`text-xs py-1 text-center font-mono rounded w-8 shrink-0 ${
-                                      strokes === null ? 'text-slate-400' :
+                                      strokes == null ? 'text-slate-400' :
                                       toPar === null ? 'text-slate-700' :
                                       toPar < 0 ? 'text-green-600 bg-green-50 font-semibold' :
                                       toPar === 0 ? 'text-slate-700 bg-white' :
                                       toPar === 1 ? 'text-orange-600 bg-orange-50 font-semibold' :
                                       'text-red-600 bg-red-50 font-semibold'
                                     }`}>
-                                      {strokes || '-'}
+                                      {strokes ?? '-'}
                                     </div>
                                   );
                                 })}
