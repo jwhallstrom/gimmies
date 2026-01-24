@@ -1,5 +1,15 @@
-import React, { useState } from 'react';
-import { NavLink } from 'react-router-dom';
+/**
+ * GolfersTab - Redesigned with Tournament-quality UX
+ * 
+ * Key improvements:
+ * - Clean card-based golfer list
+ * - Better visual hierarchy
+ * - Inline preference editing
+ * - Big add button with clear flow
+ * - Mobile-first design
+ */
+
+import React, { useState, useMemo } from 'react';
 import useStore from '../../state/store';
 import { useCourse } from '../../hooks/useCourse';
 
@@ -10,322 +20,368 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
     s.events.find((e: any) => e.id === eventId) ||
     s.completedEvents.find((e: any) => e.id === eventId)
   );
-  const { currentProfile, profiles, addGolferToEvent, updateEventGolfer, setGroupTeeTime } = useStore();
-  const { course: selectedCourse, loading: coursesLoading } = useCourse(event?.course?.courseId);
+  const { currentProfile, profiles, addGolferToEvent, updateEventGolfer, removeGolferFromEvent } = useStore();
+  const { course: selectedCourse } = useCourse(event?.course?.courseId);
 
-  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
   const [golferName, setGolferName] = useState('');
   const [customTeeName, setCustomTeeName] = useState('');
   const [customHandicap, setCustomHandicap] = useState('');
   const [guestGamePreference, setGuestGamePreference] = useState<'all' | 'skins' | 'none'>('all');
+  const [editingGolferId, setEditingGolferId] = useState<string | null>(null);
 
   if (!event) return null;
 
   const isOwner = currentProfile && event.ownerProfileId === currentProfile.id;
-
   const courseSelected = !!event.course.courseId;
   const teeSelected = !!event.course.teeName;
   const teesForCourse = selectedCourse?.tees || [];
-
   const canAddGolfer = courseSelected && teeSelected && golferName.trim();
+
+  // Build golfer display data
+  const golferData = useMemo(() => {
+    return event.golfers.map((eg: any) => {
+      const golferId = eg.profileId || eg.customName || eg.displayName;
+      const profile = eg.profileId ? profiles.find((p: any) => p.id === eg.profileId) : null;
+      const name = profile?.name || eg.displayName || eg.customName || 'Unknown';
+      const handicap = eg.handicapOverride ?? eg.handicapSnapshot ?? profile?.handicapIndex;
+      const teeName = eg.teeName || event.course.teeName;
+      const gamePreference = eg.gamePreference || 'all';
+      const isCurrentUser = currentProfile?.id === eg.profileId;
+      
+      return {
+        id: golferId,
+        name,
+        handicap,
+        teeName,
+        gamePreference,
+        isCurrentUser,
+        isOwnerProfile: eg.profileId === event.ownerProfileId,
+        hasProfile: !!eg.profileId,
+        avatar: profile?.avatar,
+      };
+    });
+  }, [event.golfers, profiles, currentProfile?.id, event.ownerProfileId]);
 
   const handleAddGolfer = async () => {
     if (!canAddGolfer || event.isCompleted) return;
-
+    
     const teeName = customTeeName || undefined;
     const handicapOverride = customHandicap ? parseFloat(customHandicap) : null;
     const name = golferName.trim();
 
     await addGolferToEvent(eventId, name, teeName, handicapOverride);
-    // Apply preference to guests too.
     await updateEventGolfer(eventId, name, { gamePreference: guestGamePreference } as any);
 
     setGolferName('');
     setCustomTeeName('');
     setCustomHandicap('');
     setGuestGamePreference('all');
-    setIsAddOpen(false);
+    setShowAddModal(false);
+  };
+
+  const handleRemoveGolfer = (golferId: string, name: string) => {
+    if (event.isCompleted) return;
+    if (window.confirm(`Remove ${name} from this event?`)) {
+      removeGolferFromEvent(eventId, golferId);
+    }
+  };
+
+  const handleUpdatePreference = (golferId: string, preference: 'all' | 'skins' | 'none') => {
+    updateEventGolfer(eventId, golferId, { gamePreference: preference } as any);
+    setEditingGolferId(null);
+  };
+
+  const preferenceLabels = {
+    all: { label: 'All Games', color: 'bg-green-100 text-green-700 border-green-200' },
+    skins: { label: 'Skins Only', color: 'bg-blue-100 text-blue-700 border-blue-200' },
+    none: { label: 'No Games', color: 'bg-gray-100 text-gray-600 border-gray-200' },
   };
 
   return (
-    <div className="space-y-4 max-w-xl">
+    <div className="space-y-4">
+      {/* Completed Banner */}
       {event.isCompleted && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-          <div className="flex items-center gap-2 text-sm text-green-800">
-            <span className="font-medium">✓ Event Completed</span>
-            <span className="text-xs">Golfers are read-only</span>
+        <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
+          <div className="text-2xl">✓</div>
+          <div>
+            <div className="font-semibold text-green-800">Event Completed</div>
+            <div className="text-sm text-green-600">Golfer list is locked</div>
           </div>
         </div>
       )}
 
-      <div className="border border-slate-200 rounded-lg p-3 bg-white shadow-sm">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <h2 className="text-sm font-semibold text-primary-900">Golfers</h2>
-            <div className="text-[11px] text-slate-600">Who is playing in this event</div>
-          </div>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-lg font-bold text-gray-900">Golfers</h2>
+          <p className="text-sm text-gray-500">{golferData.length} player{golferData.length !== 1 ? 's' : ''} in this event</p>
+        </div>
+        
+        {!event.isCompleted && (
           <button
-            type="button"
-            onClick={() => setIsAddOpen(true)}
-            disabled={!courseSelected || !teeSelected || event.isCompleted}
-            className={`text-xs px-3 py-1 rounded font-medium border ${
-              courseSelected && teeSelected && !event.isCompleted
-                ? 'bg-primary-600 text-white border-primary-700 hover:bg-primary-700'
-                : 'bg-neutral-200 text-neutral-500 border-neutral-300 cursor-not-allowed'
+            onClick={() => setShowAddModal(true)}
+            disabled={!courseSelected || !teeSelected}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all ${
+              courseSelected && teeSelected
+                ? 'bg-primary-600 text-white hover:bg-primary-700 shadow-md shadow-primary-200'
+                : 'bg-gray-200 text-gray-500 cursor-not-allowed'
             }`}
           >
-            + Add guest golfer
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            Add Golfer
           </button>
+        )}
+      </div>
+
+      {/* Setup Prompt */}
+      {(!courseSelected || !teeSelected) && !event.isCompleted && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <div className="text-2xl">⚠️</div>
+            <div>
+              <div className="font-semibold text-amber-800">Setup Required</div>
+              <p className="text-sm text-amber-700 mt-1">
+                {!courseSelected 
+                  ? 'Select a course in Settings before adding golfers.'
+                  : 'Select a tee in Settings before adding golfers.'}
+              </p>
+            </div>
+          </div>
         </div>
+      )}
 
-        {!isOwner && (
-          <div className="mt-2 text-[11px] text-slate-600">
-            You can add guests. Only the event admin can remove golfers or edit handicaps.
-          </div>
-        )}
-
-        {!courseSelected || !teeSelected ? (
-          <div className="mt-2 text-[11px] text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1">
-            {!isOwner ? (
-              <>Waiting on the event admin to select the course + tee.</>
-            ) : (
-              <>
-                Select course and tee in{' '}
-                <NavLink to="../settings" className="underline">Settings</NavLink>
-                {' '}before adding golfers.
-              </>
-            )}
-          </div>
-        ) : null}
-
-        {event.groups[0] && (
-          <div className="mt-2 flex items-center gap-2 text-[11px] bg-white border border-primary-200 rounded px-2 py-1 w-fit">
-            <span className="font-medium">Tee Time</span>
-            <input
-              type="time"
-              value={event.groups[0].teeTime || ''}
-              onChange={e => setGroupTeeTime(eventId, event.groups[0].id, e.target.value)}
-              className="border border-gray-400 rounded px-1 py-0.5 text-[11px]"
-              aria-label="Tee time"
-              title="Tee time"
-              disabled={event.isCompleted || !isOwner}
-            />
-          </div>
-        )}
-
-        <div className="mt-3 space-y-2">
-          {event.golfers.map((eventGolfer: any) => {
-            const profile = eventGolfer.profileId ? profiles.find((p: any) => p.id === eventGolfer.profileId) : null;
-            const displayName = profile ? profile.name : (eventGolfer.displayName || eventGolfer.customName || 'Unknown');
-            const displayInitial = displayName.charAt(0).toUpperCase();
-            const handicapValue = eventGolfer.handicapOverride ?? (profile?.handicapIndex ?? eventGolfer.handicapSnapshot ?? '');
-
-            const tees = selectedCourse?.tees || [];
-            const golferKey = eventGolfer.profileId || eventGolfer.customName;
-            const isSelf = Boolean(currentProfile && eventGolfer.profileId && eventGolfer.profileId === currentProfile.id);
-            const canEditPreference = !event.isCompleted && (isOwner || isSelf);
-            const pref: 'all' | 'skins' | 'none' = (eventGolfer.gamePreference as any) || 'all';
-
-            return (
-              <div key={golferKey} className="flex items-center gap-2 flex-wrap">
-                <div className="flex items-center gap-2 flex-1 min-w-[120px]">
-                  <div className="w-8 h-8 bg-primary-600 rounded-full flex items-center justify-center text-white font-semibold text-sm">
-                    {displayInitial}
-                  </div>
-                  <div>
-                    <div className="font-medium text-sm text-slate-900">{displayName}</div>
-                    {profile && profile.handicapIndex != null && (
-                      <div className="text-xs text-slate-600">Hcp Index: {profile.handicapIndex}</div>
+      {/* Golfer List */}
+      {golferData.length === 0 ? (
+        <div className="bg-gray-50 rounded-xl p-8 text-center">
+          <div className="text-4xl mb-3">👥</div>
+          <div className="font-semibold text-gray-700 mb-1">No golfers yet</div>
+          <p className="text-sm text-gray-500">Add golfers to start the event</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {golferData.map((golfer: any) => (
+            <div
+              key={golfer.id}
+              className={`bg-white rounded-xl border p-4 ${
+                golfer.isCurrentUser ? 'border-primary-300 bg-primary-50/30' : 'border-gray-200'
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                {/* Avatar */}
+                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${
+                  golfer.avatar 
+                    ? '' 
+                    : golfer.hasProfile 
+                      ? 'bg-primary-100 text-primary-700' 
+                      : 'bg-gray-200 text-gray-600'
+                }`}>
+                  {golfer.avatar ? (
+                    <img src={golfer.avatar} alt="" className="w-full h-full rounded-full object-cover" />
+                  ) : (
+                    golfer.name.charAt(0).toUpperCase()
+                  )}
+                </div>
+                
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-gray-900 truncate">{golfer.name}</span>
+                    {golfer.isOwnerProfile && (
+                      <span className="px-1.5 py-0.5 bg-primary-100 text-primary-700 text-[10px] font-bold rounded">
+                        HOST
+                      </span>
                     )}
-                    {eventGolfer.customName && (
-                      <div className="text-xs text-slate-600">Guest (event-only)</div>
+                    {golfer.isCurrentUser && !golfer.isOwnerProfile && (
+                      <span className="px-1.5 py-0.5 bg-green-100 text-green-700 text-[10px] font-bold rounded">
+                        YOU
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 text-sm text-gray-500 mt-0.5">
+                    {golfer.handicap != null && (
+                      <span>HCP: {typeof golfer.handicap === 'number' ? golfer.handicap.toFixed(1) : golfer.handicap}</span>
+                    )}
+                    {golfer.teeName && (
+                      <span className="text-xs px-2 py-0.5 bg-gray-100 rounded">{golfer.teeName}</span>
                     )}
                   </div>
                 </div>
-
-                <select
-                  className="border border-gray-400 rounded px-2 py-1 text-xs"
-                  value={pref}
-                  onChange={(e) => updateEventGolfer(eventId, golferKey, { gamePreference: e.target.value as any })}
-                  aria-label={`${displayName} game participation`}
-                  title="Game participation"
-                  disabled={!canEditPreference}
-                >
-                  <option value="all">All games</option>
-                  <option value="skins">Skins only</option>
-                  <option value="none">Leaderboard only</option>
-                </select>
-
-                {tees && tees.length > 0 && (
-                  <select
-                    className="border border-gray-400 rounded px-2 py-1 text-xs"
-                    value={eventGolfer.teeName || ''}
-                    onChange={e => updateEventGolfer(eventId, golferKey, { teeName: e.target.value || undefined })}
-                    aria-label={`${displayName} tee override`}
-                    title={`${displayName} tee override`}
-                    disabled={event.isCompleted || !isOwner}
-                  >
-                    <option value="">Event Tee</option>
-                    {tees.map((t: any) => (
-                      <option key={t.name} value={t.name}>{t.name}</option>
-                    ))}
-                  </select>
+                
+                {/* Game Preference */}
+                {!event.isCompleted && (
+                  <div className="relative">
+                    {editingGolferId === golfer.id ? (
+                      <div className="flex gap-1">
+                        {(['all', 'skins', 'none'] as const).map(pref => (
+                          <button
+                            key={pref}
+                            onClick={() => handleUpdatePreference(golfer.id, pref)}
+                            className={`px-2 py-1 text-xs rounded-lg font-medium border ${
+                              preferenceLabels[pref].color
+                            }`}
+                          >
+                            {pref === 'all' ? '🎯' : pref === 'skins' ? '💰' : '📊'}
+                          </button>
+                        ))}
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setEditingGolferId(golfer.id)}
+                        className={`px-2.5 py-1 text-xs rounded-lg font-medium border ${
+                          preferenceLabels[golfer.gamePreference as keyof typeof preferenceLabels]?.color || preferenceLabels.all.color
+                        }`}
+                      >
+                        {preferenceLabels[golfer.gamePreference as keyof typeof preferenceLabels]?.label || 'All Games'}
+                      </button>
+                    )}
+                  </div>
                 )}
-
-                <input
-                  type="number"
-                  step="0.1"
-                  min="0"
-                  max="54"
-                  className="w-14 border border-gray-400 rounded px-1 py-1 text-sm text-center"
-                  value={handicapValue}
-                  placeholder="0.0"
-                  onChange={e => {
-                    const v = e.target.value;
-                    updateEventGolfer(eventId, golferKey, { handicapOverride: v === '' ? null : parseFloat(v) });
-                  }}
-                  title="Handicap override"
-                  disabled={event.isCompleted || !isOwner}
-                />
-
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (confirm('Remove golfer from event?')) {
-                      useStore.getState().removeGolferFromEvent(eventId, golferKey);
-                    }
-                  }}
-                  aria-label="Delete golfer"
-                  title="Delete golfer"
-                  className="p-1.5 rounded border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center disabled:opacity-50 disabled:cursor-not-allowed"
-                  disabled={event.isCompleted || !isOwner}
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M3 6h18" />
-                    <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
-                    <path d="M10 11v6" />
-                    <path d="M14 11v6" />
-                    <path d="M5 6l1 14a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-14" />
-                  </svg>
-                </button>
+                
+                {/* Remove Button (owner only, not self) */}
+                {isOwner && !golfer.isCurrentUser && !event.isCompleted && (
+                  <button
+                    onClick={() => handleRemoveGolfer(golfer.id, golfer.name)}
+                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
-      </div>
+      )}
 
-      {isAddOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md bg-white rounded-lg shadow-lg border border-slate-200">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
-              <div>
-                <div className="font-semibold text-sm text-primary-900">Add Guest Golfer</div>
-                <div className="text-[11px] text-slate-600">Guests only exist inside this event</div>
-              </div>
+      {/* Preference Legend */}
+      {golferData.length > 0 && !event.isCompleted && (
+        <div className="bg-gray-50 rounded-xl p-3 border border-gray-200">
+          <div className="text-xs font-semibold text-gray-600 mb-2">Game Preferences</div>
+          <div className="flex flex-wrap gap-2">
+            <div className="flex items-center gap-1.5 text-xs text-gray-600">
+              <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded font-medium">All Games</span>
+              <span>Nassau, Skins, etc.</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-gray-600">
+              <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded font-medium">Skins Only</span>
+              <span>Just skins</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-gray-600">
+              <span className="px-2 py-0.5 bg-gray-100 text-gray-600 rounded font-medium">No Games</span>
+              <span>Score only</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Golfer Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-xl shadow-2xl max-h-[85vh] overflow-y-auto animate-slide-up">
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-4 flex items-center justify-between">
+              <h3 className="text-lg font-bold text-gray-900">Add Golfer</h3>
               <button
-                type="button"
-                onClick={() => setIsAddOpen(false)}
-                className="p-2 rounded-full hover:bg-slate-100"
-                aria-label="Close"
-                title="Close"
+                onClick={() => setShowAddModal(false)}
+                className="p-2 -mr-2 text-gray-400 hover:text-gray-600 rounded-lg"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
-
-            <div className="p-4 space-y-3">
-              {!courseSelected || !teeSelected ? (
-                <div className="text-[11px] text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1">
-                  Select course and tee in{' '}
-                  <NavLink to="../settings" className="underline" onClick={() => setIsAddOpen(false)}>
-                    Settings
-                  </NavLink>
-                  {' '}first.
-                </div>
-              ) : null}
-
-              <div className="flex flex-col">
-                <label className="text-[10px] font-medium mb-0.5">Golfer Name</label>
+            
+            {/* Modal Content */}
+            <div className="p-4 space-y-4">
+              {/* Name */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Golfer Name *
+                </label>
                 <input
                   type="text"
-                  className="border border-gray-400 rounded px-2 py-1 text-sm"
                   value={golferName}
                   onChange={e => setGolferName(e.target.value)}
-                  disabled={!courseSelected || !teeSelected || event.isCompleted}
                   placeholder="Enter name"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  autoFocus
                 />
               </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div className="flex flex-col">
-                  <label className="text-[10px] font-medium mb-0.5">Tee Override</label>
+              
+              {/* Tee Selection */}
+              {teesForCourse.length > 0 && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Tee (optional override)
+                  </label>
                   <select
-                    className="border border-gray-400 rounded px-2 py-1 text-xs"
                     value={customTeeName}
                     onChange={e => setCustomTeeName(e.target.value)}
-                    aria-label="Tee override"
-                    title="Tee override"
-                    disabled={!courseSelected || !teeSelected || event.isCompleted}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                   >
-                    <option value="">Event Tee ({event.course.teeName || ''})</option>
-                    {teesForCourse.map((t: any) => (
-                      <option key={t.name} value={t.name}>{t.name}</option>
+                    <option value="">Use event default ({event.course.teeName})</option>
+                    {teesForCourse.map((tee: any) => (
+                      <option key={tee.name} value={tee.name}>{tee.name}</option>
                     ))}
                   </select>
                 </div>
-
-                <div className="flex flex-col">
-                  <label className="text-[10px] font-medium mb-0.5">Hcp Index Override</label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    min="0"
-                    max="54"
-                    className="border border-gray-400 rounded px-2 py-1 text-sm text-center"
-                    value={customHandicap}
-                    onChange={e => setCustomHandicap(e.target.value)}
-                    disabled={!courseSelected || !teeSelected || event.isCompleted}
-                    placeholder="0.0"
-                  />
-                </div>
+              )}
+              
+              {/* Handicap */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Handicap Index (optional)
+                </label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={customHandicap}
+                  onChange={e => setCustomHandicap(e.target.value)}
+                  placeholder="e.g., 15.2"
+                  className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                />
               </div>
-
-              <div className="flex flex-col">
-                <label className="text-[10px] font-medium mb-0.5">Game participation</label>
-                <select
-                  className="border border-gray-400 rounded px-2 py-1 text-sm"
-                  value={guestGamePreference}
-                  onChange={(e) => setGuestGamePreference(e.target.value as any)}
-                  disabled={event.isCompleted}
-                >
-                  <option value="all">All games</option>
-                  <option value="skins">Skins only</option>
-                  <option value="none">Leaderboard only</option>
-                </select>
-                <div className="text-[10px] text-slate-600 mt-1">
-                  You can change this later. “Leaderboard only” means no buy-ins for games.
+              
+              {/* Game Preference */}
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">
+                  Game Participation
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {(['all', 'skins', 'none'] as const).map(pref => (
+                    <button
+                      key={pref}
+                      type="button"
+                      onClick={() => setGuestGamePreference(pref)}
+                      className={`py-3 rounded-xl text-sm font-medium border-2 transition-all ${
+                        guestGamePreference === pref
+                          ? 'border-primary-600 bg-primary-50 text-primary-700'
+                          : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                      }`}
+                    >
+                      {pref === 'all' ? '🎯 All' : pref === 'skins' ? '💰 Skins' : '📊 None'}
+                    </button>
+                  ))}
                 </div>
-              </div>
-
-              <div className="text-[10px] text-gray-700">
-                Tee and handicap can be overridden for this specific event.
               </div>
             </div>
-
-            <div className="px-4 py-3 border-t border-slate-200 flex justify-end">
+            
+            {/* Modal Footer */}
+            <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4">
               <button
-                type="button"
-                disabled={!canAddGolfer || event.isCompleted}
                 onClick={handleAddGolfer}
-                className={`text-xs px-3 py-1 rounded font-medium border ${
-                  canAddGolfer && !event.isCompleted
-                    ? 'bg-primary-600 text-white border-primary-700 hover:bg-primary-700'
-                    : 'bg-neutral-200 text-neutral-500 border-neutral-300 cursor-not-allowed'
+                disabled={!golferName.trim()}
+                className={`w-full py-3.5 rounded-xl font-bold text-base transition-all ${
+                  golferName.trim()
+                    ? 'bg-primary-600 text-white hover:bg-primary-700 shadow-lg shadow-primary-200'
+                    : 'bg-gray-200 text-gray-500 cursor-not-allowed'
                 }`}
               >
-                Add
+                Add Golfer
               </button>
             </div>
           </div>

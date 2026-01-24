@@ -1,4 +1,14 @@
-import React, { useState } from 'react';
+/**
+ * EventPage - Redesigned with Tournament-quality UX
+ * 
+ * Key improvements:
+ * - Cleaner gradient header with clear hierarchy
+ * - Pill-style tab navigation (matches Tournament)
+ * - Better visual feedback and flow
+ * - Mobile-first with large tap targets
+ */
+
+import React, { useState, useMemo } from 'react';
 import { useParams, Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import useStore from '../state/store';
 import { useEventSync } from '../hooks/useEventSync';
@@ -17,7 +27,9 @@ const EventPage: React.FC = () => {
   const { id } = useParams();
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   
   // Auto-sync event from cloud every 30 seconds
   useEventSync(id, 30000);
@@ -27,113 +39,91 @@ const EventPage: React.FC = () => {
     s.completedEvents.find(e => e.id === id)
   );
   const { deleteEvent, currentProfile } = useStore();
-  const navigate = useNavigate();
-  if (!event) return <div>Event not found.</div>;
+  
+  if (!event) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-5xl mb-4">🔍</div>
+          <div className="text-lg font-semibold text-gray-700">Event not found</div>
+          <button
+            onClick={() => navigate('/')}
+            className="mt-4 px-6 py-2 bg-primary-600 text-white rounded-xl font-medium"
+          >
+            Back to Home
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const isGroupHub = event.hubType === 'group';
-
-  // Check if event has active games/scoring (determines if event tabs are enabled)
-  const hasGames =
-    ((event.games?.nassau?.length ?? 0) +
+  const isOwner = Boolean(currentProfile && event.ownerProfileId === currentProfile.id);
+  const courseName = event.course.courseId ? getCourseById(event.course.courseId)?.name : null;
+  
+  // Calculate event stats for header
+  const stats = useMemo(() => {
+    const golferCount = event.golfers.length;
+    const scoresEntered = event.scorecards.filter(sc => sc.scores.length > 0).length;
+    const hasGames = (
+      (event.games?.nassau?.length ?? 0) +
       (event.games?.skins?.length ?? 0) +
       (event.games?.pinky?.length ?? 0) +
-      (event.games?.greenie?.length ?? 0)) > 0;
+      (event.games?.greenie?.length ?? 0)
+    ) > 0;
+    
+    return { golferCount, scoresEntered, hasGames };
+  }, [event]);
 
-  // Define tabs - keep the core flow available even before games are configured.
+  // Define tabs based on hub type
   const tabs = isGroupHub
     ? [
-        {
-          path: 'chat',
-          label: 'Chat',
-          icon: (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-            </svg>
-          ),
-          alwaysEnabled: true,
-        },
+        { path: 'chat', label: 'Chat', icon: '💬' },
       ]
     : [
-    {
-      path: 'chat',
-      label: 'Chat',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-        </svg>
-      ),
-      alwaysEnabled: true
-    },
-    {
-      path: 'golfers',
-      label: 'Golfers',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a4 4 0 00-4-4h-1" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20H2v-2a4 4 0 014-4h1" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0z" />
-        </svg>
-      ),
-      alwaysEnabled: true
-    },
-    { 
-      path: 'scorecard', 
-      label: 'Score',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M3 14h18m-9-4v8m-7 0h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
-        </svg>
-      ),
-      alwaysEnabled: true
-    },
-    { 
-      path: 'games', 
-      label: 'Games',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-        </svg>
-      ),
-      alwaysEnabled: true,
-      ownerOnly: true
-    },
-    { 
-      path: 'overview', 
-      label: 'Payout',
-      icon: (
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
-        </svg>
-      ),
-      requiresGames: true
+        { path: 'chat', label: 'Chat', icon: '💬' },
+        { path: 'golfers', label: 'Golfers', icon: '👥' },
+        { path: 'scorecard', label: 'Score', icon: '📊' },
+        { path: 'overview', label: 'Results', icon: '🏆' },
+        ...(isOwner ? [
+          { path: 'games', label: 'Games', icon: '🎯', ownerOnly: true },
+          { path: 'settings', label: 'Settings', icon: '⚙️', ownerOnly: true },
+        ] : []),
+      ];
+
+  const handleDelete = () => {
+    if (window.confirm(`Delete "${event.name}"? This cannot be undone.`)) {
+      deleteEvent(id!);
+      navigate('/');
     }
-  ];
+  };
 
-  const isOwner = Boolean(currentProfile && event.ownerProfileId === currentProfile.id);
-  const visibleTabs = tabs.filter((t: any) => !t.ownerOnly || isOwner);
-
-  // Determine if we are on settings tab to highlight the header icon
-  const isSetupActive = location.pathname.endsWith('/settings') || location.pathname.endsWith('/settings/');
-
-  const courseName = event.course.courseId ? getCourseById(event.course.courseId)?.name : null;
+  // Determine current tab for highlighting
+  const currentPath = location.pathname.split('/').pop() || 'chat';
+  const isOnTab = tabs.some(t => t.path === currentPath);
 
   return (
-    <div className="space-y-4">
-      <div className="sticky sticky-header-top z-30 bg-gradient-to-r from-primary-900 via-primary-800 to-primary-900 -mx-4 -mt-6 px-4 pt-6 pb-2 shadow-sm">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex-1 mr-2 min-w-0">
-            <h1 className="text-lg font-semibold tracking-wide text-white drop-shadow-sm truncate">{event.name || 'Untitled Event'}</h1>
-            {courseName && (
-              <div className="text-xs text-primary-200 truncate font-medium">{courseName}</div>
-            )}
-          </div>
+    <div className="min-h-screen -mx-4 -mt-6">
+      {/* Header */}
+      <div className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 px-4 pt-6 pb-4 shadow-lg">
+        {/* Top Row: Back + Actions */}
+        <div className="flex items-center justify-between mb-3">
+          <button
+            onClick={() => navigate('/')}
+            className="flex items-center gap-1 text-white/80 hover:text-white transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+            </svg>
+            <span className="text-sm font-medium">Home</span>
+          </button>
           
           <div className="flex items-center gap-1">
-            {/* Share/Invite Button (events only) */}
+            {/* Share Button */}
             {!isGroupHub && (
               <button
                 onClick={() => setIsShareModalOpen(true)}
-                className="p-2 rounded-full text-primary-100 hover:bg-primary-700/50 transition-colors"
+                className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
                 title="Invite Players"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -142,11 +132,11 @@ const EventPage: React.FC = () => {
               </button>
             )}
             
-            {/* Notify Group Button (owner only, when there are golfers) */}
+            {/* Notify Button (owner only) */}
             {isOwner && event.golfers.length > 0 && (
               <button
                 onClick={() => setShowNotifications(true)}
-                className="p-2 rounded-full text-primary-100 hover:bg-primary-700/50 transition-colors"
+                className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
                 title="Notify Group"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -154,108 +144,140 @@ const EventPage: React.FC = () => {
                 </svg>
               </button>
             )}
-
-            {/* Settings/Setup Button */}
-            <NavLink
-              to="settings"
-              className={`p-2 rounded-full transition-colors ${isSetupActive ? 'bg-white text-primary-800' : 'text-primary-100 hover:bg-primary-700/50'}`}
-              title={isGroupHub ? 'Group Settings' : 'Event Settings'}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </NavLink>
+            
+            {/* Menu Button */}
+            <div className="relative">
+              <button
+                onClick={() => setShowMenu(!showMenu)}
+                className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
+                </svg>
+              </button>
+              
+              {showMenu && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-xl shadow-xl border border-gray-200 py-1 z-50">
+                    {isOwner && (
+                      <button
+                        onClick={() => { setShowMenu(false); handleDelete(); }}
+                        className="w-full px-4 py-2.5 text-left text-red-600 hover:bg-red-50 flex items-center gap-2"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                        Delete Event
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
         
-        <div className="flex gap-2 overflow-x-auto pb-1 justify-center">
-          {visibleTabs.map(t => {
-            const isDisabled = (t as any).requiresGames && !hasGames;
-            
-            if (isDisabled) {
-              return (
-                <div
-                  key={t.path}
-                  title={`${t.label} (Add a game first)`}
-                  className="flex flex-col items-center gap-1 p-2 rounded-lg shadow-sm min-w-[60px] bg-primary-900/40 text-primary-400 cursor-not-allowed opacity-50"
-                >
-                  {t.icon}
-                  <span className="text-xs text-center leading-tight">{t.label}</span>
-                </div>
-              );
-            }
+        {/* Event Info */}
+        <div className="mb-4">
+          <h1 className="text-xl font-bold text-white mb-1">
+            {event.name || 'Untitled Event'}
+          </h1>
+          {courseName && (
+            <p className="text-primary-200 text-sm font-medium">{courseName}</p>
+          )}
+          <p className="text-primary-300 text-xs mt-1">
+            {new Date(event.date).toLocaleDateString('en-US', { 
+              weekday: 'short', 
+              month: 'short', 
+              day: 'numeric' 
+            })}
+            {event.isCompleted && (
+              <span className="ml-2 px-2 py-0.5 bg-green-500/20 text-green-300 rounded-full text-[10px] font-bold">
+                COMPLETED
+              </span>
+            )}
+          </p>
+        </div>
+        
+        {/* Quick Stats */}
+        {!isGroupHub && (
+          <div className="grid grid-cols-3 gap-2 mb-4">
+            <div className="bg-white/10 rounded-xl px-3 py-2 text-center">
+              <div className="text-lg font-bold text-white">{stats.golferCount}</div>
+              <div className="text-[10px] text-primary-200 font-medium">Golfers</div>
+            </div>
+            <div className="bg-white/10 rounded-xl px-3 py-2 text-center">
+              <div className="text-lg font-bold text-white">{stats.scoresEntered}</div>
+              <div className="text-[10px] text-primary-200 font-medium">Scoring</div>
+            </div>
+            <div className="bg-white/10 rounded-xl px-3 py-2 text-center">
+              <div className="text-lg font-bold text-white">{stats.hasGames ? '✓' : '—'}</div>
+              <div className="text-[10px] text-primary-200 font-medium">Games</div>
+            </div>
+          </div>
+        )}
+        
+        {/* Tab Navigation - Pill Style */}
+        <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
+          {tabs.map(tab => {
+            const isActive = currentPath === tab.path || (!isOnTab && tab.path === 'chat');
             
             return (
               <NavLink
-                key={t.path}
-                to={t.path}
-                end={t.path === ''}
-                title={t.label}
-                className={({ isActive }) =>
-                  `flex flex-col items-center gap-1 p-2 rounded-lg transition-colors shadow-sm min-w-[60px] ${isActive ? 'bg-white text-primary-800' : 'bg-primary-700/40 text-primary-100 hover:bg-primary-600/60'}`
-                }
+                key={tab.path}
+                to={tab.path}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl font-medium text-sm whitespace-nowrap transition-all ${
+                  isActive
+                    ? 'bg-white text-primary-800 shadow-md'
+                    : 'bg-white/10 text-white/80 hover:bg-white/20 hover:text-white'
+                }`}
               >
-                {t.icon}
-                <span className="text-xs text-center leading-tight">{t.label}</span>
+                <span>{tab.icon}</span>
+                <span>{tab.label}</span>
               </NavLink>
             );
           })}
         </div>
       </div>
       
-      <Routes>
-        {/* Default route is Chat (group-first experience) */}
-        <Route index element={<ChatTab eventId={event.id} />} />
-        <Route path="chat" element={<ChatTab eventId={event.id} />} />
-        <Route path="scorecard" element={<ScoreHubTab eventId={event.id} />} />
-        <Route path="golfers" element={<GolfersTab eventId={event.id} />} />
-        <Route
-          path="settings"
-          element={
-            isOwner ? (
-              <SetupTab eventId={event.id} />
-            ) : (
-              <div className="bg-white border border-slate-200 rounded-xl p-4 text-sm text-slate-700">
-                Only the event admin can change settings.
-              </div>
-            )
-          }
-        />
-        <Route
-          path="games"
-          element={
-            isOwner ? (
-              <GamesTab eventId={event.id} />
-            ) : (
-              <div className="bg-white border border-slate-200 rounded-xl p-4 text-sm text-slate-700">
-                Only the event admin can set up games.
-              </div>
-            )
-          }
-        />
-        <Route
-          path="games/nassau/:nassauId/teams"
-          element={
-            isOwner ? (
-              <NassauTeamsPage eventId={event.id} />
-            ) : (
-              <div className="bg-white border border-slate-200 rounded-xl p-4 text-sm text-slate-700">
-                Only the event admin can pick teams.
-              </div>
-            )
-          }
-        />
-        <Route path="overview" element={<OverviewTab eventId={event.id} />} />
-      </Routes>
-
+      {/* Content Area */}
+      <div className="px-4 py-4">
+        <Routes>
+          <Route index element={<ChatTab eventId={event.id} />} />
+          <Route path="chat" element={<ChatTab eventId={event.id} />} />
+          
+          {!isGroupHub && (
+            <>
+              <Route path="golfers" element={<GolfersTab eventId={event.id} />} />
+              <Route path="scorecard" element={<ScoreHubTab eventId={event.id} />} />
+              <Route path="overview" element={<OverviewTab eventId={event.id} />} />
+              
+              {/* Owner-only routes */}
+              <Route 
+                path="settings" 
+                element={isOwner ? <SetupTab eventId={event.id} /> : <AccessDenied />} 
+              />
+              <Route 
+                path="games" 
+                element={isOwner ? <GamesTab eventId={event.id} /> : <AccessDenied />} 
+              />
+              <Route 
+                path="games/nassau/:nassauId/teams" 
+                element={isOwner ? <NassauTeamsPage eventId={event.id} /> : <AccessDenied />} 
+              />
+            </>
+          )}
+        </Routes>
+      </div>
+      
+      {/* Modals */}
       <ShareModal 
         eventId={event.id} 
         isOpen={isShareModalOpen} 
         onClose={() => setIsShareModalOpen(false)} 
       />
       
-      {/* Notification Modal (owner only) */}
       {showNotifications && (
         <EventNotifications
           event={event}
@@ -265,5 +287,13 @@ const EventPage: React.FC = () => {
     </div>
   );
 };
+
+// Access denied component
+const AccessDenied: React.FC = () => (
+  <div className="text-center py-12">
+    <div className="text-4xl mb-3">🔒</div>
+    <p className="text-gray-600">Only the event owner can access this</p>
+  </div>
+);
 
 export default EventPage;
