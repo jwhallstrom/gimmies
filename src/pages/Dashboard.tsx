@@ -17,11 +17,26 @@ import { CreateGroupWizard } from '../components/CreateGroupWizard';
 import { useEventsAdapter, useWalletAdapter } from '../adapters';
 import type { Event } from '../state/types';
 import useStore from '../state/store';
+import { getHole } from '../data/cloudCourses';
 
 type Tab = 'events' | 'groups';
 
 const formatDateShort = (iso: string) =>
   new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+const clamp = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+
+type TickerItem = {
+  id: string;
+  type: 'leader' | 'player' | 'update' | 'info' | 'betting';
+  highlight?: boolean;
+  payload: {
+    text: string;
+    score?: number | null;
+    thru?: number | null;
+    isFinal?: boolean;
+  };
+};
 
 const Dashboard: React.FC = () => {
   const {
@@ -37,8 +52,6 @@ const Dashboard: React.FC = () => {
 
   const [showCreateWizard, setShowCreateWizard] = useState(false);
   const [showCreateGroupWizard, setShowCreateGroupWizard] = useState(false);
-  const [showJoinModal, setShowJoinModal] = useState(false);
-  const [joinCode, setJoinCode] = useState('');
   const [tab, setTab] = useState<Tab>('events');
 
   // Load events on mount
@@ -48,23 +61,27 @@ const Dashboard: React.FC = () => {
   }, [currentProfile?.id]);
 
   // Separate active events from groups
-  const { activeEvents, groups } = useMemo(() => {
+  const { activeEvents, completedEvents, groups } = useMemo(() => {
     const active: Event[] = [];
+    const completed: Event[] = [];
     const groupList: Event[] = [];
     
     userEvents.forEach(e => {
       if (e.hubType === 'group') {
         groupList.push(e);
-      } else if (!e.isCompleted) {
+      } else if (e.isCompleted) {
+        completed.push(e);
+      } else {
         active.push(e);
       }
     });
     
     // Sort by recent activity
     active.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
+    completed.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
     groupList.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
     
-    return { activeEvents: active, groups: groupList };
+    return { activeEvents: active, completedEvents: completed, groups: groupList };
   }, [userEvents]);
 
   // Quick stats
@@ -76,20 +93,158 @@ const Dashboard: React.FC = () => {
     return { handicap, lastRound, netBalance };
   }, [currentProfile, wallet]);
 
-  const handleJoinEvent = async () => {
-    if (!joinCode.trim()) return;
-    const { joinEventByCode } = useStore.getState();
-    try {
-      const eventId = await joinEventByCode(joinCode.trim().toUpperCase());
-      if (eventId) {
-        navigate(`/event/${eventId}`);
+  // Ticker event (most recent active or completed event)
+  const tickerEvent = useMemo(() => {
+    const candidates = [...activeEvents];
+    if (candidates.length) return candidates[0];
+    const done = [...completedEvents];
+    return done.length ? done[0] : null;
+  }, [activeEvents, completedEvents]);
+
+  // Generate ticker items from event data
+  const tickerItems = useMemo<TickerItem[]>(() => {
+    if (!tickerEvent) return [];
+
+    const event = tickerEvent;
+    const courseId = event.course?.courseId;
+    const teeName = event.course?.teeName;
+
+    const resolveGolferName = (golferId: string) => {
+      const eventGolfer = (event.golfers || []).find((g: any) => g.profileId === golferId || g.customName === golferId);
+      const profile = eventGolfer?.profileId ? (profiles || []).find((p: any) => p.id === eventGolfer.profileId) : null;
+      return profile ? profile.name : (eventGolfer?.displayName || eventGolfer?.customName || golferId || 'Unknown');
+    };
+
+    const scorecards = event.scorecards || [];
+    const holesCount = scorecards[0]?.scores?.length || 18;
+
+    const rows = scorecards.map((sc: any) => {
+      const scores = Array.isArray(sc?.scores) ? sc.scores : [];
+      const completed = scores.filter((s: any) => s?.strokes != null).length;
+      const onHole = completed >= holesCount ? null : Math.min(completed + 1, holesCount);
+
+      const gross = scores.reduce((sum: number, s: any) => sum + (typeof s?.strokes === 'number' ? s.strokes : 0), 0);
+      const parSoFar = scores.reduce((sum: number, s: any) => {
+        if (s?.strokes == null) return sum;
+        const holeNo = Number(s.hole);
+        const hole = courseId ? getHole(courseId, holeNo, teeName) : undefined;
+        const par = typeof hole?.par === 'number' ? hole.par : 4;
+        return sum + par;
+      }, 0);
+
+      const toPar = completed === 0 ? 0 : (courseId ? gross - parSoFar : null);
+      const name = resolveGolferName(sc.golferId);
+      const isFinal = completed >= holesCount;
+
+      return { golferId: sc.golferId, name, toPar, thru: completed, onHole, isFinal };
+    });
+
+    // Sort by score, then progress.
+    rows.sort((a: any, b: any) => {
+      if (typeof a.toPar === 'number' && typeof b.toPar === 'number' && a.toPar !== b.toPar) return a.toPar - b.toPar;
+      if ((b.thru || 0) !== (a.thru || 0)) return (b.thru || 0) - (a.thru || 0);
+      return a.name.localeCompare(b.name);
+    });
+
+    // Rank w/ ties
+    const playerStrings = rows.slice(0, 10).map((r: any, idx: number) => {
+      const betterCount = rows.slice(0, idx).filter((p: any) => typeof p.toPar === 'number' && typeof r.toPar === 'number' && p.toPar < r.toPar).length;
+      const rank = betterCount + 1;
+      const isTied = rows.filter((p: any) => typeof p.toPar === 'number' && typeof r.toPar === 'number' && p.toPar === r.toPar).length > 1;
+      const rankLabel = `${isTied ? 'T' : ''}${rank}.`;
+      const statusLabel = r.isFinal ? 'F' : `Thru ${r.thru || 0}`;
+      const onHoleLabel = r.isFinal || (r.thru || 0) === 0 ? '' : ` (${r.onHole || 1})`;
+      return {
+        id: `p-${r.golferId}`,
+        type: 'player' as const,
+        payload: {
+          text: `${rankLabel} ${r.name}`,
+          score: typeof r.toPar === 'number' ? r.toPar : null,
+          thru: r.thru,
+          isFinal: !!r.isFinal,
+        },
+        _status: `${statusLabel}${onHoleLabel}`,
+      };
+    });
+
+    const leader = rows[0];
+    const leaderStatus = leader
+      ? (leader.isFinal ? 'F' : `Thru ${leader.thru || 0}`)
+      : null;
+
+    const items: TickerItem[] = [];
+
+    // Event name first
+    items.push({
+      id: 'event-name',
+      type: 'info',
+      highlight: true,
+      payload: { text: (event.name || 'Event').trim() || 'Event' },
+    });
+
+    if (leader) {
+      items.push({
+        id: 'leader',
+        type: 'leader',
+        highlight: true,
+        payload: {
+          text: `LEADER: ${leader.name}`,
+          score: typeof leader.toPar === 'number' ? leader.toPar : null,
+          thru: leader.thru,
+          isFinal: !!leader.isFinal,
+        },
+      });
+      if (leaderStatus) {
+        items.push({
+          id: 'leader-status',
+          type: 'info',
+          payload: { text: leaderStatus },
+        });
       }
-    } catch (err) {
-      alert('Could not find event with that code');
     }
-    setShowJoinModal(false);
-    setJoinCode('');
-  };
+
+    // Top players
+    playerStrings.forEach((p: any) => {
+      items.push({
+        id: p.id,
+        type: 'player',
+        payload: { ...p.payload, text: `${p.payload.text} ${p._status}` },
+      });
+    });
+
+    // Live updates from bot messages
+    const now = Date.now();
+    const updates = (event.chat || [])
+      .filter((m: any) => (m?.senderName || '').toLowerCase().includes('gimmies bot'))
+      .filter((m: any) => {
+        const t = new Date(m.createdAt).getTime();
+        return Number.isFinite(t) && now - t < 2 * 60 * 60 * 1000;
+      })
+      .slice(-2)
+      .reverse();
+
+    updates.forEach((m: any, idx: number) => {
+      items.push({
+        id: `u-${idx}`,
+        type: 'update',
+        highlight: true,
+        payload: { text: m.text || 'Update' },
+      });
+    });
+
+    return items;
+  }, [tickerEvent?.id, tickerEvent?.lastModified, profiles]);
+
+  const tickerDurationSeconds = useMemo(() => {
+    const base = 30;
+    const extra = Math.min(20, Math.max(0, tickerItems.length - 6) * 1.5);
+    return Math.round(base + extra);
+  }, [tickerItems.length]);
+
+  // Home course from profile
+  const homeCourse = currentProfile?.preferences?.homeCourseName ||
+    (currentProfile?.preferences as any)?.homeCourse ||
+    null;
 
   if (!currentProfile) {
     return (
@@ -103,10 +258,10 @@ const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="space-y-6 pb-24">
+    <div className="space-y-5 pb-32">
       {/* Header */}
       <header className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 -mx-4 -mt-6 px-4 pt-8 pb-6 shadow-lg">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-3">
             {/* Avatar */}
             <Link to="/profile" className="block">
@@ -120,9 +275,11 @@ const Dashboard: React.FC = () => {
             </Link>
             <div>
               <h1 className="text-xl font-bold text-white">
-                Hey, {currentProfile.name?.split(' ')[0] || 'Golfer'}!
+                {currentProfile.name || 'Golfer'}
               </h1>
-              <p className="text-primary-200 text-sm">Ready to play?</p>
+              <p className="text-primary-200 text-sm">
+                {homeCourse ? `⛳ ${homeCourse}` : 'Tap profile to set home course'}
+              </p>
             </div>
           </div>
           
@@ -138,8 +295,8 @@ const Dashboard: React.FC = () => {
           </Link>
         </div>
 
-        {/* Quick Stats */}
-        <div className="grid grid-cols-3 gap-3">
+        {/* Quick Stats - Only Handicap and Wallet */}
+        <div className="grid grid-cols-2 gap-3">
           <Link to="/handicap" className="bg-white/10 hover:bg-white/15 rounded-xl p-3 text-center transition-colors">
             <div className="text-2xl font-bold text-white">
               {stats.handicap != null ? stats.handicap.toFixed(1) : '—'}
@@ -152,33 +309,25 @@ const Dashboard: React.FC = () => {
             </div>
             <div className="text-[10px] text-primary-200 font-medium uppercase tracking-wide">Wallet</div>
           </Link>
-          <Link to="/analytics" className="bg-white/10 hover:bg-white/15 rounded-xl p-3 text-center transition-colors">
-            <div className="text-2xl font-bold text-white">
-              {(currentProfile?.individualRounds || []).length}
-            </div>
-            <div className="text-[10px] text-primary-200 font-medium uppercase tracking-wide">Rounds</div>
-          </Link>
         </div>
       </header>
 
-      {/* Quick Actions */}
-      <section className="grid grid-cols-2 gap-3">
+      {/* Quick Actions - Compact Buttons */}
+      <section className="flex gap-3">
         <button
           onClick={() => setShowCreateWizard(true)}
-          className="bg-gradient-to-br from-primary-600 to-primary-700 rounded-2xl p-5 text-left text-white shadow-lg shadow-primary-200 hover:shadow-xl transition-all"
+          className="flex-1 bg-gradient-to-r from-primary-600 to-primary-700 rounded-xl py-3 px-4 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
         >
-          <div className="text-3xl mb-2">⛳</div>
-          <div className="font-bold text-lg">New Event</div>
-          <div className="text-primary-200 text-sm">Start a round</div>
+          <span>⛳</span>
+          <span>Create Event</span>
         </button>
         
         <button
-          onClick={() => setShowJoinModal(true)}
-          className="bg-white rounded-2xl p-5 text-left border border-gray-200 shadow-md hover:shadow-lg hover:border-primary-300 transition-all"
+          onClick={() => navigate('/join')}
+          className="flex-1 bg-white rounded-xl py-3 px-4 border border-gray-200 font-bold text-sm text-gray-900 shadow-sm hover:shadow-md hover:border-primary-300 transition-all flex items-center justify-center gap-2"
         >
-          <div className="text-3xl mb-2">🎫</div>
-          <div className="font-bold text-lg text-gray-900">Join Event</div>
-          <div className="text-gray-500 text-sm">Enter a code</div>
+          <span>🎫</span>
+          <span>Join Event</span>
         </button>
       </section>
 
@@ -282,24 +431,59 @@ const Dashboard: React.FC = () => {
         </div>
       </section>
 
-      {/* Tournaments Link */}
-      <Link
-        to="/tournaments"
-        className="block bg-gradient-to-r from-gray-800 to-gray-900 rounded-2xl p-5 text-white shadow-lg hover:shadow-xl transition-all"
-      >
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="text-2xl">🏆</span>
-              <span className="font-bold text-lg">Tournaments</span>
-            </div>
-            <p className="text-gray-400 text-sm">Discover and join tournaments</p>
+      {/* Score Ticker - Fixed at bottom */}
+      <div className="fixed left-4 right-4 bottom-[5.25rem] z-30">
+        <button
+          onClick={() => tickerEvent ? navigate(`/event/${tickerEvent.id}`) : navigate('/events')}
+          className="w-full gimmies-ticker rounded-xl bg-[#1561AE] border border-white/10 px-3 py-2.5 shadow-lg shadow-primary-900/25"
+          aria-label="Activity ticker"
+          style={{ ['--gimmies-ticker-duration' as any]: `${tickerDurationSeconds}s` }}
+        >
+          <div className="gimmies-ticker__inner text-[11px] font-black text-white">
+            <span className="gimmies-ticker__track">
+              {tickerEvent ? (
+                <>
+                  {(tickerItems.length ? [...tickerItems, ...tickerItems] : []).map((item, idx) => {
+                    const score = item.payload.score;
+                    const scoreText =
+                      typeof score === 'number'
+                        ? (score === 0 ? 'E' : `${score > 0 ? '+' : ''}${score}`)
+                        : '';
+
+                    const scoreClass =
+                      typeof score === 'number'
+                        ? (score < 0 ? 'text-red-500' : score === 0 ? 'text-white' : 'text-slate-200')
+                        : 'text-white';
+
+                    const isHighlight = !!item.highlight || item.type === 'leader' || item.type === 'update' || item.type === 'betting';
+                    const itemClass = isHighlight ? 'text-orange-300' : 'text-white';
+
+                    return (
+                      <span key={`${item.id}-${idx}`} className="inline-flex items-center">
+                        <span className={itemClass}>
+                          {item.payload.text}
+                          {scoreText ? (
+                            <>
+                              {' '}
+                              <span className={scoreClass}>{scoreText}</span>
+                            </>
+                          ) : null}
+                        </span>
+                        <span className="mx-2 text-white/40">•</span>
+                      </span>
+                    );
+                  })}
+                </>
+              ) : (
+                <>
+                  <span className="text-orange-400">GIMMIES</span> • Create or join an event to get started •{' '}
+                  <span className="text-orange-400">GIMMIES</span> • Create or join an event to get started •{' '}
+                </>
+              )}
+            </span>
           </div>
-          <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
-        </div>
-      </Link>
+        </button>
+      </div>
 
       {/* Modals */}
       <CreateEventWizard
@@ -319,45 +503,6 @@ const Dashboard: React.FC = () => {
           navigate(`/event/${groupId}/chat`);
         }}
       />
-
-      {/* Join Modal */}
-      {showJoinModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden animate-slide-up">
-            <div className="p-6">
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Join Event</h3>
-              <input
-                type="text"
-                value={joinCode}
-                onChange={e => setJoinCode(e.target.value.toUpperCase())}
-                placeholder="Enter event code"
-                className="w-full px-4 py-3 border border-gray-300 rounded-xl text-lg text-center font-mono tracking-widest uppercase focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                autoFocus
-                maxLength={8}
-              />
-            </div>
-            <div className="px-6 pb-6 flex gap-3">
-              <button
-                onClick={() => { setShowJoinModal(false); setJoinCode(''); }}
-                className="flex-1 py-3 border border-gray-300 rounded-xl font-semibold text-gray-700 hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleJoinEvent}
-                disabled={!joinCode.trim()}
-                className={`flex-1 py-3 rounded-xl font-semibold ${
-                  joinCode.trim()
-                    ? 'bg-primary-600 text-white hover:bg-primary-700'
-                    : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                }`}
-              >
-                Join
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

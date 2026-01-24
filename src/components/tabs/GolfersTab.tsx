@@ -4,9 +4,10 @@
  * Key improvements:
  * - Clean card-based golfer list
  * - Better visual hierarchy
- * - Inline preference editing
+ * - Inline preference editing (events only)
  * - Big add button with clear flow
  * - Mobile-first design
+ * - Supports both Groups (members) and Events (golfers)
  */
 
 import React, { useState, useMemo } from 'react';
@@ -32,11 +33,14 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
 
   if (!event) return null;
 
+  const isGroupHub = event.hubType === 'group';
   const isOwner = currentProfile && event.ownerProfileId === currentProfile.id;
-  const courseSelected = !!event.course.courseId;
-  const teeSelected = !!event.course.teeName;
+  const courseSelected = !!event.course?.courseId;
+  const teeSelected = !!event.course?.teeName;
   const teesForCourse = selectedCourse?.tees || [];
-  const canAddGolfer = courseSelected && teeSelected && golferName.trim();
+  
+  // Groups can always add members, Events need course/tee setup
+  const canAddGolfer = isGroupHub ? golferName.trim() : (courseSelected && teeSelected && golferName.trim());
 
   // Build golfer display data
   const golferData = useMemo(() => {
@@ -66,12 +70,18 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
   const handleAddGolfer = async () => {
     if (!canAddGolfer || event.isCompleted) return;
     
-    const teeName = customTeeName || undefined;
-    const handicapOverride = customHandicap ? parseFloat(customHandicap) : null;
     const name = golferName.trim();
-
-    await addGolferToEvent(eventId, name, teeName, handicapOverride);
-    await updateEventGolfer(eventId, name, { gamePreference: guestGamePreference } as any);
+    
+    if (isGroupHub) {
+      // Groups: just add member by name, no tee/handicap/game preference needed
+      await addGolferToEvent(eventId, name, undefined, null);
+    } else {
+      // Events: include tee, handicap, and game preference
+      const teeName = customTeeName || undefined;
+      const handicapOverride = customHandicap ? parseFloat(customHandicap) : null;
+      await addGolferToEvent(eventId, name, teeName, handicapOverride);
+      await updateEventGolfer(eventId, name, { gamePreference: guestGamePreference } as any);
+    }
 
     setGolferName('');
     setCustomTeeName('');

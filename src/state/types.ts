@@ -229,6 +229,14 @@ export interface Event {
   isCompleted?: boolean; // Mark event as completed (read-only)
   completedAt?: string; // When the event was completed
   
+  /**
+   * Event lifecycle status:
+   * - 'setup': Admin configuring games, picking teams (users can still enter scores)
+   * - 'started': Games locked, event officially in progress
+   * - 'completed': Final, all payouts approved (legacy: isCompleted = true)
+   */
+  status?: 'setup' | 'started' | 'completed';
+  
   // Wallet settings for this event
   walletSettings?: EventWalletSettings;
 }
