@@ -7,8 +7,38 @@ import { useState, useEffect } from 'react';
 import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../amplify/data/resource';
 import { setCoursesCache } from '../data/cloudCourses';
+import { courses as localCourses, courseTeesMap } from '../data/courses';
 
-const client = generateClient<Schema>();
+function getLocalCourses(): CourseData[] {
+  return (localCourses || []).map((course) => {
+    const teesDef = courseTeesMap[course.id];
+    const holes = (course.holes || []).map((h) => ({
+      number: h.number,
+      par: h.par,
+      strokeIndex: h.strokeIndex,
+    }));
+
+    const tees: TeeData[] = (teesDef?.tees || []).map((t) => ({
+      name: t.name,
+      par: t.par,
+      rating: t.courseRating,
+      slope: t.slopeRating,
+      yardage: t.yardage,
+      gender: t.gender,
+      courseRating: t.courseRating,
+      slopeRating: t.slopeRating,
+      holes,
+    }));
+
+    return {
+      id: course.id,
+      courseId: course.id,
+      name: course.name || '',
+      location: '',
+      tees,
+    };
+  });
+}
 
 export interface CourseData {
   id: string;
@@ -44,9 +74,22 @@ export function useCourses() {
   }, []);
 
   const loadCourses = async () => {
+    // Default: run fully locally unless cloud sync is explicitly enabled.
+    if (import.meta.env.VITE_ENABLE_CLOUD_SYNC !== 'true') {
+      const local = getLocalCourses();
+      setCourses(local);
+      setCoursesCache(local as any);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
     try {
       setLoading(true);
       console.log('📚 Loading courses from DynamoDB...');
+
+      // Create client lazily so local mode doesn't crash when Amplify isn't configured.
+      const client = generateClient<Schema>();
 
       // Page through the entire dataset to avoid default API limits
       const all: any[] = [];
@@ -87,7 +130,12 @@ export function useCourses() {
       setError(null);
     } catch (err) {
       console.error('❌ Exception loading courses:', err);
-      setError('Failed to load courses');
+
+      // Fall back to local courses so the app remains usable without AWS.
+      const local = getLocalCourses();
+      setCourses(local);
+      setCoursesCache(local as any);
+      setError('Cloud courses unavailable; using local course list');
     } finally {
       setLoading(false);
     }

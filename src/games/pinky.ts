@@ -19,7 +19,16 @@ export interface PinkySummary {
  */
 export function computePinky(event: Event, config: PinkyConfig, pinkyResults: PinkyResult[]): PinkySummary | null {
   // Get all participants
-  let players = event.golfers.map(g => g.profileId || g.customName).filter((id): id is string => id !== undefined);
+  const prefFor = (gid: string): 'all' | 'skins' | 'none' => {
+    const eg = event.golfers.find((g: any) => (g.profileId || g.customName || g.displayName) === gid);
+    return (eg?.gamePreference as any) || 'all';
+  };
+  const eligible = (gid: string) => prefFor(gid) === 'all';
+
+  let players = event.golfers
+    .map((g: any) => g.profileId || g.customName || g.displayName)
+    .filter((id: any): id is string => id !== undefined && id !== null && id !== '')
+    .filter(eligible);
   if (config.participantGolferIds && config.participantGolferIds.length > 1) {
     players = players.filter(p => config.participantGolferIds!.includes(p));
   }

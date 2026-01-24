@@ -1,11 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import useStore from '../../state/store';
 import { strokesForHole, courseHandicap } from '../../games/handicap';
 import { useCourse } from '../../hooks/useCourse';
 
-type Props = { eventId: string };
+type Props = {
+  eventId: string;
+  /** Optional: scroll/highlight a specific golfer card */
+  focusGolferId?: string | null;
+  /** Optional: choose initial entry mode (used by quick actions) */
+  initialEntryMode?: 'cards' | 'team';
+};
 
-const ScorecardTab: React.FC<Props> = ({ eventId }) => {
+const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMode }) => {
   const { events, completedEvents, profiles, currentProfile, updateScore, canEditScore, setScorecardView } = useStore();
   const event = events.find((e: any) => e.id === eventId) || completedEvents.find((e: any) => e.id === eventId);
   if (!event) return null;
@@ -32,6 +38,10 @@ const ScorecardTab: React.FC<Props> = ({ eventId }) => {
   const front = holes.slice(0, 9);
   const back = holes.slice(9);
   const [view, setView] = useState<'front'|'back'|'full'>('full');
+  const [entryMode, setEntryMode] = useState<'cards' | 'team'>('cards');
+  const [teamHole, setTeamHole] = useState(1);
+  const [flashGolferId, setFlashGolferId] = useState<string | null>(null);
+  const cardRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
   // On very small screens default to full to avoid horizontal scroll.
   useEffect(()=>{
@@ -97,6 +107,7 @@ const ScorecardTab: React.FC<Props> = ({ eventId }) => {
 
   const isEventOwner = currentProfile?.id === event.ownerProfileId;
   const hasNassauGames = event.games.nassau.length > 0;
+  const isTeamScorecard = event.scorecardView === 'team' && hasNassauGames;
 
   // Auto-switch from team view to individual if no Nassau games exist
   React.useEffect(() => {
@@ -104,6 +115,35 @@ const ScorecardTab: React.FC<Props> = ({ eventId }) => {
       setScorecardView(eventId, 'individual');
     }
   }, [event.scorecardView, hasNassauGames, isEventOwner, eventId, setScorecardView]);
+
+  // Keep team entry mode safe: if view isn't "team", fall back to cards.
+  useEffect(() => {
+    if (entryMode === 'team' && !isTeamScorecard) setEntryMode('cards');
+  }, [entryMode, isTeamScorecard]);
+
+  // Allow parent to request an initial entry mode.
+  useEffect(() => {
+    if (!initialEntryMode) return;
+    if (initialEntryMode === 'team' && !isTeamScorecard) return;
+    setEntryMode(initialEntryMode);
+  }, [initialEntryMode, isTeamScorecard]);
+
+  // Scroll/highlight a golfer when requested.
+  useEffect(() => {
+    if (!focusGolferId) return;
+    // Wait a tick so layout has mounted.
+    const t = window.setTimeout(() => {
+      const el = cardRefs.current[focusGolferId];
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setFlashGolferId(focusGolferId);
+        window.setTimeout(() => setFlashGolferId(null), 1400);
+      }
+    }, 50);
+    return () => window.clearTimeout(t);
+  }, [focusGolferId]);
+
+  const teamHoleMeta = useMemo(() => holes.find((h: any) => h.number === teamHole) || null, [holes, teamHole]);
 
   return (
     <div className="overflow-x-auto rounded-lg shadow-inner bg-white/95 backdrop-blur border border-primary-900/10">
@@ -122,6 +162,26 @@ const ScorecardTab: React.FC<Props> = ({ eventId }) => {
               className={`px-2 py-1 capitalize tracking-wide ${view===v? 'bg-primary-600 text-white':'text-primary-700 hover:bg-primary-100'}`}>{v}</button>
           ))}
         </div>
+
+        {/* Team entry: faster for updating multiple teammates per hole */}
+        {isTeamScorecard && visibleGolfers.length > 1 && (
+          <div className="flex gap-1 text-[11px] font-extrabold rounded-md overflow-hidden border border-primary-200 bg-primary-50">
+            <button
+              type="button"
+              onClick={() => setEntryMode('cards')}
+              className={`px-2 py-1 tracking-wide ${entryMode === 'cards' ? 'bg-primary-600 text-white' : 'text-primary-700 hover:bg-primary-100'}`}
+            >
+              Scorecards
+            </button>
+            <button
+              type="button"
+              onClick={() => setEntryMode('team')}
+              className={`px-2 py-1 tracking-wide ${entryMode === 'team' ? 'bg-primary-600 text-white' : 'text-primary-700 hover:bg-primary-100'}`}
+            >
+              Team entry
+            </button>
+          </div>
+        )}
 
         {/* Scorecard View Toggle - Available to all users if Nassau games exist */}
         {hasNassauGames && (
@@ -167,8 +227,77 @@ const ScorecardTab: React.FC<Props> = ({ eventId }) => {
           <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded bg-red-600 block"></span> 3+</span>
         </div>
       </div>
-      {/* All views now use the stacked card layout */}
-      <div className="space-y-3 p-1 sm:p-2">
+
+      {/* Team entry view */}
+      {entryMode === 'team' && isTeamScorecard ? (
+        <div className="p-3 space-y-3">
+          <div className="rounded-xl border border-slate-200 bg-white p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <div className="text-[10px] font-bold tracking-[0.15em] text-slate-400 uppercase">Team entry</div>
+                <div className="font-extrabold text-slate-900">
+                  Hole {teamHole}{teamHoleMeta?.par ? ` • Par ${teamHoleMeta.par}` : ''}
+                </div>
+                <div className="text-[11px] text-slate-600">Enter your team’s scores for this hole.</div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTeamHole((h) => Math.max(1, h - 1))}
+                  className="px-3 py-2 rounded-lg text-xs font-extrabold border border-slate-200 bg-white hover:bg-slate-50"
+                >
+                  Prev
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTeamHole((h) => Math.min(18, h + 1))}
+                  className="px-3 py-2 rounded-lg text-xs font-extrabold border border-slate-200 bg-white hover:bg-slate-50"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {visibleGolfers.map((eventGolfer: any) => {
+                const profile = eventGolfer.profileId ? profiles.find((p: any) => p.id === eventGolfer.profileId) : null;
+                const name = eventGolfer.displayName || (profile ? profile.name : eventGolfer.customName);
+                const gid = eventGolfer.profileId || eventGolfer.customName;
+                if (!name || !gid) return null;
+                const canEdit = canEditScore(eventId, gid) && !event.isCompleted;
+                const sc = event.scorecards.find((s: any) => s.golferId === gid);
+                const existing = sc?.scores?.find((s: any) => s.hole === teamHole)?.strokes ?? null;
+                return (
+                  <label key={gid} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+                    <div className="min-w-0">
+                      <div className="text-sm font-extrabold text-slate-900 truncate">{name}</div>
+                      {!canEdit && <div className="text-[10px] text-slate-500">Read-only</div>}
+                    </div>
+                    <input
+                      type="number"
+                      min="1"
+                      max="20"
+                      value={existing == null ? '' : existing}
+                      onFocus={(e) => e.currentTarget.select()}
+                      onChange={(e) => {
+                        const raw = e.target.value;
+                        const strokes = raw === '' ? null : Number(raw);
+                        updateScore(eventId, gid, teamHole, Number.isFinite(strokes as number) ? (strokes as number) : null);
+                      }}
+                      disabled={!canEdit}
+                      className="w-20 text-center text-lg font-black border border-slate-300 rounded-xl px-2 py-2 bg-white disabled:opacity-50"
+                      aria-label={`Score for ${name} on hole ${teamHole}`}
+                      placeholder="—"
+                    />
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* All views now use the stacked card layout */
+        <div className="space-y-3 p-1 sm:p-2">
         {visibleGolfers.map((eventGolfer: any) => {
           const profile = eventGolfer.profileId ? profiles.find(p => p.id === eventGolfer.profileId) : null;
           const displayName = eventGolfer.displayName || (profile ? profile.name : eventGolfer.customName);
@@ -187,7 +316,13 @@ const ScorecardTab: React.FC<Props> = ({ eventId }) => {
           const scoreToPar = totalScore != null && coursePar != null ? totalScore - coursePar : null;
 
           return (
-            <div key={golferId} className="bg-white rounded-lg border border-primary-200 overflow-hidden shadow-sm">
+            <div
+              key={golferId}
+              ref={(el) => { cardRefs.current[golferId] = el; }}
+              className={`bg-white rounded-lg border overflow-hidden shadow-sm transition-shadow ${
+                flashGolferId === golferId ? 'border-primary-600 shadow-md ring-2 ring-primary-200' : 'border-primary-200'
+              }`}
+            >
                 {/* Golfer header */}
                 <div className="bg-primary-50 px-2 sm:px-3 py-2 border-b border-primary-200">
                   <div className="flex items-center justify-between">
@@ -498,6 +633,7 @@ const ScorecardTab: React.FC<Props> = ({ eventId }) => {
             );
           })}
         </div>
+      )}
     </div>
   );
 };

@@ -52,6 +52,11 @@ export interface GolferProfile {
     defaultNetScoring: boolean;
     autoAdvanceScores: boolean;
     showHandicapStrokes: boolean;
+    // Stored inside preferencesJson in cloud (no schema change required)
+    homeCourseId?: string;   // canonical id for default behaviors
+    homeCourseName?: string; // display name snapshot
+    homeCourse?: string;     // legacy free-text (fallback display only)
+    favoriteCourseIds?: string[]; // pinned courses for fast selection (local + cloud prefs)
   };
   createdAt: string;
   lastActive: string;
@@ -65,6 +70,13 @@ export interface EventGolfer {
   handicapSnapshot?: number | null; // Snapshot of handicap at join time
   teeName?: string; // event-specific tee override
   handicapOverride?: number | null; // event-specific handicap override
+  /**
+   * Participation preference for bets/games.
+   * - 'all': participates in all configured games
+   * - 'skins': participates in skins only
+   * - 'none': participates in no games (leaderboard/score only)
+   */
+  gamePreference?: 'all' | 'skins' | 'none';
 }
 
 // ============================================================================
@@ -105,12 +117,24 @@ export interface NassauTeam {
 export interface NassauConfig { 
   id: string; 
   groupId: string; 
-  fee: number; 
+  /**
+   * Legacy single-fee field (historically ambiguous).
+   * If `fees` is not provided, UI + payout logic treat this as a per-segment fee
+   * for Front/Back/Total (i.e., 5 means 5/5/5).
+   */
+  fee: number;
+  /**
+   * Per-segment fees (per player): Out (front 9), In (back 9), Total (18).
+   * Example: { out: 5, in: 5, total: 10 }.
+   */
+  fees?: { out: number; in: number; total: number };
   net: boolean; 
   pressesOff?: boolean; 
   teams?: NassauTeam[]; 
   teamBestCount?: number; 
-  participantGolferIds?: string[]; 
+  participantGolferIds?: string[];
+  /** If true, golfers can join a team themselves (UI enforcement TBD). */
+  allowGolferTeamSelect?: boolean;
 }
 
 export interface SkinsConfig { 
@@ -178,6 +202,14 @@ export interface Toast {
 
 export interface Event {
   id: string;
+  /**
+   * Distinguish long-lived chat crews ("groups") from actual rounds ("events").
+   * - 'event': a playable round with scoring/games
+   * - 'group': a chat crew hub that can spawn events later
+   */
+  hubType?: 'event' | 'group';
+  /** When an event is created from a group, link it here (future). */
+  parentGroupId?: string;
   name: string;
   date: string;
   course: EventCourseSelection;
@@ -325,4 +357,98 @@ export interface ProfileWallet {
   biggestLoss: number;
   
   lastUpdated: string;
+}
+
+// ============================================================================
+// Tournament Types (Prototype Feature)
+// ============================================================================
+
+export type TournamentFormat = 'stroke' | 'stableford' | 'scramble' | 'best_ball' | 'match_play' | 'skins';
+export type TournamentVisibility = 'public' | 'private' | 'invite_only';
+export type TournamentStatus = 'draft' | 'registration_open' | 'in_progress' | 'completed' | 'cancelled';
+
+export interface TournamentDivision {
+  id: string;
+  name: string;
+  handicapMin?: number;
+  handicapMax?: number;
+  gender?: 'men' | 'women' | 'mixed';
+}
+
+export interface TournamentTeeTime {
+  id: string;
+  time: string; // HH:MM format
+  groupNumber: number;
+  golferIds: string[]; // TournamentRegistration ids
+  roundNumber: number;
+}
+
+export interface TournamentRegistration {
+  id: string;
+  tournamentId: string;
+  profileId?: string;           // null for guest
+  guestName?: string;           // For non-registered players
+  displayName?: string;         // Snapshot of name at join time
+  handicapSnapshot?: number | null;
+  divisionId?: string;
+  teamId?: string;
+  gamePreference?: 'all' | 'skins' | 'none';
+  paymentStatus: 'pending' | 'paid' | 'refunded';
+  waitingListPosition?: number;
+  createdAt: string;
+}
+
+export interface TournamentRound {
+  id: string;
+  roundNumber: number;
+  date: string;
+  courseId?: string;
+  courseName?: string;
+  teeName?: string;
+  scorecards: TournamentScorecard[];
+  isComplete: boolean;
+}
+
+export interface TournamentScorecard {
+  registrationId: string; // Links to TournamentRegistration
+  scores: ScoreEntry[];
+  grossTotal?: number;
+  netTotal?: number;
+}
+
+export interface TournamentStanding {
+  registrationId: string;
+  position: number;
+  isTied: boolean;
+  grossTotal: number;
+  netTotal: number;
+  roundTotals: { roundNumber: number; gross: number; net: number }[];
+  thru: number; // holes completed in current round
+}
+
+export interface Tournament {
+  id: string;
+  name: string;
+  organizerId: string;          // ownerProfileId
+  courseId?: string;
+  courseName?: string;
+  dates: string[];              // ISO date strings for multi-day events
+  rounds: number;               // Number of rounds (e.g., 1 or 2)
+  format: TournamentFormat;
+  visibility: TournamentVisibility;
+  passcode?: string;            // For invite_only
+  entryFeeCents: number;        // Entry fee in cents
+  maxPlayers: number;
+  status: TournamentStatus;
+  divisions: TournamentDivision[];
+  teeTimes: TournamentTeeTime[];
+  registrations: TournamentRegistration[];
+  roundsData: TournamentRound[];
+  standings: TournamentStanding[];
+  hasBettingOverlay: boolean;   // Optional Gimmies games
+  bettingGames?: EventGameConfig; // Reuse existing game config
+  description?: string;
+  rules?: string;
+  createdAt: string;
+  updatedAt: string;
 }

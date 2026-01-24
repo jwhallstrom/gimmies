@@ -1,416 +1,710 @@
-import React, { useState, useEffect } from 'react';
-import useStore from '../state/store';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthMode } from '../hooks/useAuthMode';
 import { CreateEventWizard } from '../components/CreateEventWizard';
+import { CreateGroupWizard } from '../components/CreateGroupWizard';
+import { useEventsAdapter, useWalletAdapter } from '../adapters';
+import type { Event } from '../state/types';
+import useStore from '../state/store';
+import { fileToAvatarDataUrl } from '../utils/avatarImage';
+import { getHole } from '../data/cloudCourses';
+
+type SocialTab = 'groups' | 'events';
+
+const formatDateShort = (iso: string) =>
+  new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+const clamp = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+
+const getEventLastMessage = (e: Event) => (e.chat && e.chat.length ? e.chat[e.chat.length - 1] : null);
 
 const Dashboard: React.FC = () => {
-  const { events, currentProfile, currentUser, profiles, joinEventByCode, deleteEvent, createProfile, cleanupDuplicateProfiles, loadEventsFromCloud } = useStore();
-  const { isGuest, isAuthenticated } = useAuthMode();
+  const {
+    events,
+    userEvents,
+    currentProfile,
+    currentUser,
+    joinEventByCode,
+    loadEventsFromCloud,
+    profiles,
+  } = useEventsAdapter();
+  const { wallet, pendingSettlements } = useWalletAdapter();
+  const { isGuest } = useAuthMode();
+
   const navigate = useNavigate();
-  const [joinCode, setJoinCode] = useState('');
-  const [joinMessage, setJoinMessage] = useState('');
-  const [showJoinForm, setShowJoinForm] = useState(false);
+  const updateProfile = useStore((s) => s.updateProfile);
+  const avatarInputRef = useRef<HTMLInputElement | null>(null);
+
   const [showCreateWizard, setShowCreateWizard] = useState(false);
-  const [showProfileSetup, setShowProfileSetup] = useState(false);
-  const [newProfileName, setNewProfileName] = useState('');
-  const [isCreatingProfile, setIsCreatingProfile] = useState(false);
-  const [isLoadingEvents, setIsLoadingEvents] = useState(false);
+  const [showCreateGroupWizard, setShowCreateGroupWizard] = useState(false);
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [socialTab, setSocialTab] = useState<SocialTab>('groups');
 
-  // Filter events to only show those the current user is participating in
-  const userEvents = events.filter(event =>
-    currentProfile && event.golfers.some(golfer => golfer.profileId === currentProfile.id)
-  );
-
-  console.log('User events count:', userEvents.length, 'Total events:', events.length);
-
-  const handleJoinEvent = async () => {
-    if (!joinCode.trim()) return;
-
-    const codeToJoin = joinCode.trim().toUpperCase();
-    console.log('📱 Dashboard: Attempting to join event with code:', codeToJoin);
-    
-    const result = await joinEventByCode(codeToJoin);
-    
-    if (result.success) {
-      console.log('✅ Dashboard: Successfully joined event:', result.eventId);
-      setJoinMessage('Successfully joined the event!');
-      setJoinCode('');
-      setShowJoinForm(false);
-      
-      // Navigate directly using the eventId returned from joinEventByCode
-      if (result.eventId) {
-        console.log('🚀 Dashboard: Navigating to event:', result.eventId);
-        setTimeout(() => {
-          navigate(`/event/${result.eventId}`);
-        }, 500); // Small delay to let success message show
-      } else {
-        // Fallback: Find the event we just joined
-        console.log('⚠️ Dashboard: No eventId returned, searching locally');
-        setTimeout(() => {
-          const joinedEvent = events.find(e => e.shareCode === codeToJoin);
-          if (joinedEvent) {
-            console.log('🚀 Dashboard: Found event locally:', joinedEvent.id);
-            navigate(`/event/${joinedEvent.id}`);
-          } else {
-            console.error('❌ Dashboard: Could not find joined event');
-          }
-        }, 500);
-      }
-    } else {
-      console.error('❌ Dashboard: Failed to join event:', result.error);
-      setJoinMessage(result.error || 'Invalid or expired share code.');
-      setTimeout(() => setJoinMessage(''), 3000);
-    }
-  };
-
-  const handleCreateProfile = () => {
-    if (newProfileName.trim()) {
-      createProfile(newProfileName.trim());
-      setShowProfileSetup(false);
-      setNewProfileName('');
-    }
-  };
-
-  // Handle profile setup for new users - ensure only one profile per user
+  // Keep cloud events fresh when landing on the dashboard.
   useEffect(() => {
-    console.log('Dashboard useEffect triggered:', {
-      currentUser: currentUser?.id,
-      currentProfile: currentProfile?.id,
-      isCreatingProfile,
-      profilesCount: profiles.length
+    if (!currentProfile) return;
+    loadEventsFromCloud().catch(() => {});
+  }, [currentProfile?.id]);
+
+  const lastRound = useMemo(() => {
+    const rounds = currentProfile?.individualRounds || [];
+    const sorted = [...rounds].sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return sorted[0] || null;
+  }, [currentProfile?.id, currentProfile?.individualRounds]);
+
+  // Separate groups (ongoing/permanent feel) from events (game sessions)
+  // For now, treat completed events as "archived" and active/upcoming as both
+  const { activeEvents, completedEvents } = useMemo(() => {
+    const active: Event[] = [];
+    const completed: Event[] = [];
+    
+    userEvents.forEach(e => {
+      if (e.hubType === 'group') return; // groups are not playable events
+      if (e.isCompleted) {
+        completed.push(e);
+      } else {
+        active.push(e);
+      }
+    });
+    
+    // Sort by most recent activity
+    active.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
+    completed.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
+    
+    return { activeEvents: active, completedEvents: completed };
+  }, [userEvents]);
+
+  // For the "groups" view - all events sorted by chat activity
+  const allGroupsSorted = useMemo(() => {
+    return [...userEvents]
+      .filter((e) => e.hubType === 'group')
+      .sort((a, b) => {
+      const aLastChat = a.chat?.length ? new Date(a.chat[a.chat.length - 1].createdAt).getTime() : 0;
+      const bLastChat = b.chat?.length ? new Date(b.chat[b.chat.length - 1].createdAt).getTime() : 0;
+      return bLastChat - aLastChat;
+    });
+  }, [userEvents]);
+
+  const tickerEvent = useMemo(() => {
+    const candidates = [...activeEvents];
+    if (candidates.length) return candidates[0];
+    const done = [...completedEvents];
+    return done.length ? done[0] : null;
+  }, [activeEvents, completedEvents]);
+
+  type TickerItem = {
+    id: string;
+    type: 'leader' | 'player' | 'update' | 'info' | 'betting';
+    highlight?: boolean;
+    payload: {
+      text: string;
+      score?: number | null; // to-par
+      thru?: number | null;
+      isFinal?: boolean;
+    };
+  };
+
+  const tickerItems = useMemo<TickerItem[]>(() => {
+    if (!tickerEvent) return [];
+
+    const event = tickerEvent;
+    const courseId = event.course?.courseId;
+    const teeName = event.course?.teeName;
+
+    const resolveGolferName = (golferId: string) => {
+      const eventGolfer = (event.golfers || []).find((g: any) => g.profileId === golferId || g.customName === golferId);
+      const profile = eventGolfer?.profileId ? (profiles || []).find((p: any) => p.id === eventGolfer.profileId) : null;
+      return profile ? profile.name : (eventGolfer?.displayName || eventGolfer?.customName || golferId || 'Unknown');
+    };
+
+    const scorecards = event.scorecards || [];
+    const holesCount = scorecards[0]?.scores?.length || 18;
+
+    const rows = scorecards.map((sc: any) => {
+      const scores = Array.isArray(sc?.scores) ? sc.scores : [];
+      const completed = scores.filter((s: any) => s?.strokes != null).length;
+      const onHole = completed >= holesCount ? null : Math.min(completed + 1, holesCount);
+
+      const gross = scores.reduce((sum: number, s: any) => sum + (typeof s?.strokes === 'number' ? s.strokes : 0), 0);
+      const parSoFar = scores.reduce((sum: number, s: any) => {
+        if (s?.strokes == null) return sum;
+        const holeNo = Number(s.hole);
+        const hole = courseId ? getHole(courseId, holeNo, teeName) : undefined;
+        const par = typeof hole?.par === 'number' ? hole.par : 4;
+        return sum + par;
+      }, 0);
+
+      const toPar = completed === 0 ? 0 : (courseId ? gross - parSoFar : null);
+      const name = resolveGolferName(sc.golferId);
+      const isFinal = completed >= holesCount;
+
+      return { golferId: sc.golferId, name, toPar, thru: completed, onHole, isFinal };
     });
 
-    if (currentUser && !currentProfile && !isCreatingProfile) {
-      const userProfiles = profiles.filter(p => p.userId === currentUser.id);
-      console.log('Profile setup check:', { 
-        currentUser: currentUser.id, 
-        currentProfile: (currentProfile as any)?.id || null, 
-        userProfilesCount: userProfiles.length,
-        isCreatingProfile 
+    // Sort by score, then progress.
+    rows.sort((a: any, b: any) => {
+      if (typeof a.toPar === 'number' && typeof b.toPar === 'number' && a.toPar !== b.toPar) return a.toPar - b.toPar;
+      if ((b.thru || 0) !== (a.thru || 0)) return (b.thru || 0) - (a.thru || 0);
+      return a.name.localeCompare(b.name);
+    });
+
+    // Rank w/ ties ("T3").
+    const playerStrings = rows.slice(0, 10).map((r: any, idx: number) => {
+      const betterCount = rows.slice(0, idx).filter((p: any) => typeof p.toPar === 'number' && typeof r.toPar === 'number' && p.toPar < r.toPar).length;
+      const rank = betterCount + 1;
+      const isTied = rows.filter((p: any) => typeof p.toPar === 'number' && typeof r.toPar === 'number' && p.toPar === r.toPar).length > 1;
+      const rankLabel = `${isTied ? 'T' : ''}${rank}.`;
+      const statusLabel = r.isFinal ? 'F' : `Thru ${r.thru || 0}`;
+      const onHoleLabel = r.isFinal || (r.thru || 0) === 0 ? '' : ` (${r.onHole || 1})`;
+      return {
+        id: `p-${r.golferId}`,
+        type: 'player' as const,
+        payload: {
+          text: `${rankLabel} ${r.name}`,
+          score: typeof r.toPar === 'number' ? r.toPar : null,
+          thru: r.thru,
+          isFinal: !!r.isFinal,
+        },
+        // stash status in text tail (rendered separately)
+        _status: `${statusLabel}${onHoleLabel}`,
+      };
+    });
+
+    const leader = rows[0];
+    const leaderStatus = leader
+      ? (leader.isFinal ? 'F' : `Thru ${leader.thru || 0}`)
+      : null;
+
+    const items: TickerItem[] = [];
+
+    // Tournament/Event name FIRST (biggest context cue)
+    items.push({
+      id: 'event-name',
+      type: 'info',
+      highlight: true,
+      payload: { text: (event.name || 'Event').trim() || 'Event' },
+    });
+
+    if (leader) {
+      items.push({
+        id: 'leader',
+        type: 'leader',
+        highlight: true,
+        payload: {
+          text: `LEADER: ${leader.name}`,
+          score: typeof leader.toPar === 'number' ? leader.toPar : null,
+          thru: leader.thru,
+          isFinal: !!leader.isFinal,
+        },
       });
-      
-      if (userProfiles.length === 0) {
-        // No profiles exist for this user, create one
-        console.log('Creating new profile for user:', currentUser.displayName);
-        setIsCreatingProfile(true);
-        createProfile(currentUser.displayName);
-        
-        // Reset the flag after state updates
-        setTimeout(() => {
-          console.log('Resetting isCreatingProfile flag');
-          setIsCreatingProfile(false);
-        }, 500); // Increased timeout
-      } else if (userProfiles.length === 1 && !currentProfile) {
-        // User has exactly one profile but it's not set as current
-        console.log('Setting existing profile as current:', userProfiles[0].id);
-        useStore.getState().setCurrentProfile(userProfiles[0].id);
-      } else if (userProfiles.length > 1) {
-        console.log('User has multiple profiles, showing cleanup option');
+      if (leaderStatus) {
+        items.push({
+          id: 'leader-status',
+          type: 'info',
+          payload: { text: leaderStatus },
+        });
       }
     }
-  }, [currentUser?.id, currentProfile?.id, profiles.length, isCreatingProfile]);
 
-  // Fallback: If we're stuck in loading state too long, force reset
-  useEffect(() => {
-    if (currentUser && !currentProfile && isCreatingProfile) {
-      const timer = setTimeout(() => {
-        console.log('Fallback: Resetting isCreatingProfile flag due to timeout');
-        setIsCreatingProfile(false);
-      }, 3000); // 3 second fallback
-      
-      return () => clearTimeout(timer);
-    }
-  }, [currentUser, currentProfile, isCreatingProfile]);
-
-  // If user exists but no profile, show loading while creating
-  if (currentUser && !currentProfile) {
-    return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Setting up your profile...</p>
-          <p className="text-xs text-gray-500 mt-2">If this takes too long, try refreshing the page</p>
-          <div className="mt-4 space-y-2">
-            <button 
-              onClick={() => window.location.reload()} 
-              className="block w-full px-4 py-2 bg-primary-600 text-white rounded hover:bg-primary-700 text-sm"
-            >
-              Refresh Page
-            </button>
-            <button 
-              onClick={() => {
-                console.log('Manual profile creation triggered');
-                setIsCreatingProfile(true);
-                createProfile(currentUser.displayName);
-                setTimeout(() => setIsCreatingProfile(false), 500);
-              }} 
-              className="block w-full px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
-            >
-              Create Profile Manually
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // TEMPORARY: Force profile creation if we're somehow in this state
-  if (currentUser && !currentProfile) {
-    console.log('ERROR: Reached dashboard without profile, forcing creation');
-    createProfile(currentUser.displayName);
-    return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
-          <p className="text-red-600">Profile creation failed, retrying...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!currentUser) {
-    return null; // This shouldn't happen if auth is working
-  }
-
-  // Safety check - if we somehow got here without a profile, force creation
-  if (!currentProfile) {
-    console.log('ERROR: No currentProfile in main render, forcing creation');
-    createProfile(currentUser.displayName);
-    return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600 mx-auto mb-4"></div>
-          <p className="text-red-600">Profile missing, creating...</p>
-        </div>
-      </div>
-    );
-  }
-
-  console.log('Dashboard rendering with:', {
-    currentUser: currentUser?.id,
-    currentProfile: currentProfile?.id,
-    profilesCount: profiles.length
-  });
-
-  // Force re-render when currentProfile changes
-  useEffect(() => {
-    console.log('currentProfile changed:', currentProfile?.id);
-  }, [currentProfile?.id]);
-
-  // Load events from cloud when profile is available
-  useEffect(() => {
-    if (currentProfile && !isLoadingEvents) {
-      console.log('📥 Dashboard: Loading events from cloud for profile:', currentProfile.id);
-      setIsLoadingEvents(true);
-      loadEventsFromCloud().finally(() => {
-        console.log('✅ Dashboard: Finished loading events from cloud');
-        setIsLoadingEvents(false);
+    // Top players chunk (as many items as we need; rendered as ticker segments)
+    playerStrings.forEach((p: any) => {
+      items.push({
+        id: p.id,
+        type: 'player',
+        payload: { ...p.payload, text: `${p.payload.text} ${p._status}` },
       });
-    }
-  }, [currentProfile?.id]);
+    });
+
+    // Live updates: recent bot messages (birdies/eagles/snowman etc) – short and punchy
+    const now = Date.now();
+    const updates = (event.chat || [])
+      .filter((m: any) => (m?.senderName || '').toLowerCase().includes('gimmies bot'))
+      .filter((m: any) => {
+        const t = new Date(m.createdAt).getTime();
+        return Number.isFinite(t) && now - t < 2 * 60 * 60 * 1000; // last 2h
+      })
+      .slice(-2)
+      .reverse();
+
+    updates.forEach((m: any, idx: number) => {
+      items.push({
+        id: `u-${idx}`,
+        type: 'update',
+        highlight: true,
+        payload: { text: m.text || 'Update' },
+      });
+    });
+
+    return items;
+  }, [tickerEvent?.id, tickerEvent?.lastModified, profiles]);
+
+  const tickerDurationSeconds = useMemo(() => {
+    // Club-friendly: 30–50s cycle.
+    const base = 30;
+    const extra = Math.min(20, Math.max(0, tickerItems.length - 6) * 1.5);
+    return Math.round(base + extra);
+  }, [tickerItems.length]);
+
+  const hasWalletAlerts =
+    (wallet?.pendingToCollect || 0) > 0 ||
+    (wallet?.pendingToPay || 0) > 0 ||
+    (pendingSettlements.toCollect?.length || 0) + (pendingSettlements.toPay?.length || 0) > 0;
+
+  if (!currentUser || !currentProfile) return null;
 
   return (
-    <div className="space-y-6">
-      {/* Welcome Header */}
-      <div className="bg-white/90 backdrop-blur rounded-xl shadow-md p-6 border border-primary-900/5">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold text-primary-800">Welcome back, {currentProfile.name}!</h1>
-            <p className="text-gray-600 mt-1">Ready for another round?</p>
-          </div>
-          <div className="text-right">
-            <div className="text-sm text-gray-500">Total Rounds</div>
-            <div className="text-2xl font-bold text-primary-600">{currentProfile.individualRounds?.length ?? 0}</div>
-            {profiles.filter(p => p.userId === currentUser.id).length > 1 && (
-              <button
-                onClick={() => {
-                  if (window.confirm('This will remove duplicate profiles. Continue?')) {
-                    cleanupDuplicateProfiles();
-                  }
-                }}
-                className="text-xs text-red-600 hover:text-red-700 mt-1 block"
-              >
-                Clean Duplicates
-              </button>
-            )}
+    <div className="space-y-5">
+      {/* ═══════════════════════════════════════════════════════════════════
+          HERO: Profile + Wallet
+      ═══════════════════════════════════════════════════════════════════ */}
+      <section className="relative bg-gradient-to-br from-white via-white to-slate-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 rounded-3xl shadow-lg shadow-slate-200/50 dark:shadow-black/20 border border-slate-200/80 dark:border-white/10 overflow-hidden">
+        {/* Subtle background pattern */}
+        <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]" style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
+        }} />
+        
+        <div className="relative p-4">
+          <div className="flex items-stretch gap-4">
+            {/* Profile side - BIGGER avatar */}
+            <div className="flex-1 min-w-0 flex items-center gap-4">
+              <div className="relative flex-shrink-0 group">
+                <button
+                  type="button"
+                  onClick={() => avatarInputRef.current?.click()}
+                  className="w-24 h-24 rounded-3xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-white/10 dark:to-white/5 border-3 border-white dark:border-white/20 overflow-hidden flex items-center justify-center shadow-xl shadow-slate-300/50 dark:shadow-black/40 hover:shadow-2xl hover:scale-[1.03] transition-all duration-200 ring-2 ring-primary-100 dark:ring-primary-900/30"
+                  aria-label="Change profile photo"
+                  title="Change profile photo"
+                >
+                  {currentProfile.avatar ? (
+                    <img src={currentProfile.avatar} alt={currentProfile.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-primary-700 dark:text-primary-200 font-black text-3xl">
+                      {currentProfile.name.charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                </button>
+                {!currentProfile.avatar && (
+                  <span className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-gradient-to-br from-accent to-orange-500 text-white flex items-center justify-center border-2 border-white dark:border-slate-900 shadow-lg group-hover:scale-110 transition-transform">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 5v14m7-7H5" />
+                    </svg>
+                  </span>
+                )}
+                <input
+                  ref={avatarInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    try {
+                      const avatar = await fileToAvatarDataUrl(file, { maxSize: 512, quality: 0.85 });
+                      updateProfile(currentProfile.id, { avatar });
+                    } finally {
+                      e.currentTarget.value = '';
+                    }
+                  }}
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-xl font-black text-gray-900 dark:text-white truncate tracking-tight">{currentProfile.name}</div>
+                <div className="text-sm text-gray-500 dark:text-slate-400 truncate mt-0.5">
+                  {currentProfile.preferences?.homeCourseName ||
+                  (currentProfile.preferences as any)?.homeCourse ||
+                  'Tap to set home course'}
+                </div>
+              </div>
+            </div>
+
+            {/* Wallet card - slightly smaller to balance */}
+            <Link
+              to="/wallet"
+              className="w-[38%] max-w-[160px] rounded-2xl bg-gradient-to-br from-primary-600 via-primary-700 to-primary-900 text-white p-3 shadow-lg shadow-primary-900/30 border border-white/10 relative hover:shadow-xl hover:scale-[1.02] transition-all duration-200"
+            >
+              {hasWalletAlerts && (
+                <span className="absolute top-2 right-2 w-3 h-3 rounded-full bg-red-500 ring-2 ring-white/50 animate-pulse" />
+              )}
+              <div className="text-[10px] uppercase tracking-[0.15em] text-white/60 font-bold">Wallet</div>
+              <div className="mt-1 flex items-end justify-between gap-2">
+                <div className="text-2xl font-black leading-none">
+                  {wallet ? `${wallet.seasonNet >= 0 ? '+' : ''}$${Math.abs(wallet.seasonNet).toFixed(0)}` : '—'}
+                </div>
+                <div className="text-[10px] text-white/60 leading-tight text-right font-medium">
+                  <div>To collect: ${wallet?.pendingToCollect?.toFixed(0) || '0'}</div>
+                  <div>To pay: ${wallet?.pendingToPay?.toFixed(0) || '0'}</div>
+                </div>
+              </div>
+              <div className="mt-2 text-[10px] text-white/50 font-semibold">Tap for details</div>
+            </Link>
           </div>
         </div>
-      </div>
+      </section>
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="relative">
-          <button
-            onClick={() => setShowCreateWizard(true)}
-            disabled={!currentProfile}
-            className={`w-full text-white p-4 rounded-xl shadow-md transition-shadow ${
-              currentProfile 
-                ? 'bg-gradient-to-r from-primary-500 to-primary-600 hover:shadow-lg' 
-                : 'bg-gray-400 cursor-not-allowed opacity-50'
-            }`}
-          >
-            <div className="text-lg font-semibold mb-1 text-center">New Event</div>
-            <div className="text-sm opacity-90 text-center">Create a new golf event</div>
-            {!currentProfile && (
-              <div className="text-xs opacity-75 mt-1 text-center">Profile required</div>
-            )}
-          </button>
-          {!currentProfile && (
-            <div className="mt-2 text-center">
-              <button
-                onClick={() => {
-                  console.log('Manual profile creation from dashboard, currentUser:', currentUser);
-                  if (currentUser) {
-                    createProfile(currentUser.displayName);
-                  }
-                }}
-                className="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700"
-              >
-                Create Profile Manually
-              </button>
-              <div className="text-xs text-gray-500 mt-1">
-                Debug: currentProfile = {currentProfile ? 'exists' : 'null'}, 
-                profiles count = {profiles.length}
+      {/* ═══════════════════════════════════════════════════════════════════
+          QUICK ACTIONS: 4 tiles with depth
+      ═══════════════════════════════════════════════════════════════════ */}
+      <section className="grid grid-cols-2 gap-3">
+        {/* Joined Events - Count + most recent */}
+        <Link
+          to="/events"
+          className="group bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-md shadow-slate-200/50 dark:shadow-black/20 border border-slate-200/80 dark:border-white/10 min-h-[100px] flex flex-col justify-between hover:shadow-lg hover:border-primary-200 dark:hover:border-primary-800/50 transition-all duration-200"
+        >
+          <div className="flex items-center justify-between">
+            <div className="text-[10px] font-bold tracking-[0.15em] text-gray-400 uppercase">Joined Events</div>
+            <div className="text-2xl font-black text-primary-600">{userEvents.length}</div>
+          </div>
+          {userEvents.length === 0 ? (
+            <div className="text-sm font-bold text-gray-500">None yet</div>
+          ) : (
+            <div className="min-w-0">
+              <div className="font-bold text-gray-900 dark:text-white truncate text-sm group-hover:text-primary-700 transition-colors">
+                {activeEvents[0]?.name || userEvents[0]?.name || 'Event'}
+              </div>
+              <div className="text-xs text-gray-500 truncate">
+                {activeEvents[0]?.course?.teeName || userEvents[0]?.course?.teeName || formatDateShort(activeEvents[0]?.date || userEvents[0]?.date)}
               </div>
             </div>
           )}
-        </div>
+        </Link>
 
-        <button
-          onClick={() => setShowJoinForm(true)}
-          className="bg-white/90 backdrop-blur text-primary-800 p-4 rounded-xl shadow-md hover:shadow-lg transition-shadow border border-primary-900/5"
-        >
-          <div className="flex items-center gap-2 justify-center">
-            <div className="text-lg font-semibold mb-1">Join Event</div>
-            {isGuest && <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">🔒</span>}
-          </div>
-          <div className="text-sm opacity-75 text-center">{isGuest ? 'Sign in to join events' : 'Enter a share code'}</div>
-        </button>
-
-        <button
-          onClick={() => navigate('/handicap/add-round')}
-          disabled={!currentProfile}
-          className={`w-full text-primary-800 p-4 rounded-xl shadow-md transition-shadow border border-primary-900/5 ${
-            currentProfile 
-              ? 'bg-white/90 backdrop-blur hover:shadow-lg' 
-              : 'bg-gray-200 cursor-not-allowed opacity-50'
-          }`}
-        >
-          <div className="text-lg font-semibold mb-1 text-center">Add New Round</div>
-          <div className="text-sm opacity-75 text-center">{currentProfile ? 'Track your handicap' : 'Profile required'}</div>
-        </button>
-
-        <div className="bg-white/90 backdrop-blur text-primary-800 p-4 rounded-xl shadow-md border border-primary-900/5">
-          <div className="text-lg font-semibold mb-1 text-center">Quick Stats</div>
-          <div className="text-sm opacity-75 text-center">
-            Avg Score: {currentProfile.stats.averageScore > 0 ? currentProfile.stats.averageScore.toFixed(1) : 'N/A'}
+        {/* Join / Create - Dual Action Tile */}
+        <div className="group bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-md shadow-slate-200/50 dark:shadow-black/20 border border-slate-200/80 dark:border-white/10 min-h-[100px] flex flex-col justify-between">
+          <div className="text-[10px] font-bold tracking-[0.15em] text-gray-400 uppercase">Join / Create</div>
+          <div className="flex flex-col gap-1.5">
+            <button
+              onClick={() => navigate('/join')}
+              className="w-full py-1.5 px-3 bg-gradient-to-r from-accent to-orange-500 hover:from-orange-500 hover:to-accent rounded-lg text-white text-xs font-bold transition-all duration-200 shadow-sm hover:shadow-md"
+            >
+              Join Game
+            </button>
+            <button
+              onClick={() => setShowCreateWizard(true)}
+              className="w-full py-1.5 px-3 bg-gradient-to-r from-accent to-orange-500 hover:from-orange-500 hover:to-accent rounded-lg text-white text-xs font-bold transition-all duration-200 shadow-sm hover:shadow-md"
+            >
+              Create Event
+            </button>
           </div>
         </div>
+
+        {/* Handicap */}
+        <div className="group bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-md shadow-slate-200/50 dark:shadow-black/20 border border-slate-200/80 dark:border-white/10 min-h-[100px] flex flex-col justify-between">
+          <div className="text-[10px] font-bold tracking-[0.15em] text-gray-400 uppercase">Handicap Index</div>
+          <div className="flex items-end justify-between">
+            <Link to="/handicap" className="text-3xl font-black text-gray-900 dark:text-white hover:text-primary-700 transition-colors">
+              {typeof currentProfile.handicapIndex === 'number' ? currentProfile.handicapIndex.toFixed(1) : '—'}
+            </Link>
+            <Link
+              to="/handicap/add-round"
+              className="px-2.5 py-1 bg-gradient-to-r from-accent to-orange-500 hover:from-orange-500 hover:to-accent rounded-lg text-white text-[10px] font-bold shadow-sm hover:shadow-md transition-all"
+            >
+              Add Score
+            </Link>
+          </div>
+        </div>
+
+        {/* Last Round - Static display */}
+        <Link
+          to="/handicap"
+          className="group bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-md shadow-slate-200/50 dark:shadow-black/20 border border-slate-200/80 dark:border-white/10 min-h-[100px] flex flex-col justify-between hover:shadow-lg hover:border-primary-200 dark:hover:border-primary-800/50 transition-all duration-200"
+        >
+          <div className="text-[10px] font-bold tracking-[0.15em] text-gray-400 uppercase">Last Round</div>
+          <div>
+            <div className="text-2xl font-black text-gray-900 dark:text-white group-hover:text-primary-700 transition-colors">
+              {lastRound ? ((lastRound as any).grossScore || (lastRound as any).totalScore || '—') : '—'}
+            </div>
+            <div className="text-xs text-gray-500 font-medium">
+              {lastRound ? formatDateShort((lastRound as any).date) : 'No rounds yet'}
+            </div>
+          </div>
+        </Link>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          GROUPS & EVENTS: Tabbed section
+      ═══════════════════════════════════════════════════════════════════ */}
+      <section className="bg-white dark:bg-slate-900 rounded-3xl shadow-lg shadow-slate-200/50 dark:shadow-black/20 border border-slate-200/80 dark:border-white/10 overflow-hidden">
+        {/* Tab Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-white/5 bg-gradient-to-r from-slate-50 to-white dark:from-slate-900 dark:to-slate-800">
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
+            <button
+              onClick={() => setSocialTab('groups')}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200 ${
+                socialTab === 'groups'
+                  ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm'
+                  : 'text-gray-500 dark:text-slate-400 hover:text-gray-700'
+              }`}
+            >
+              Groups
+            </button>
+            <button
+              onClick={() => setSocialTab('events')}
+              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200 flex items-center gap-1.5 ${
+                socialTab === 'events'
+                  ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm'
+                  : 'text-gray-500 dark:text-slate-400 hover:text-gray-700'
+              }`}
+            >
+              Events
+              {activeEvents.length > 0 && (
+                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] text-[10px] font-bold bg-accent text-white rounded-full px-1">
+                  {activeEvents.length}
+                </span>
+              )}
+            </button>
+          </div>
+          <Link
+            to="/events"
+            className="text-xs font-bold text-primary-600 hover:text-primary-700"
+          >
+            View All →
+          </Link>
+        </div>
+
+        {/* Tab Content */}
+        <div className="p-3 space-y-2">
+          {/* ═══ GROUPS TAB ═══ */}
+          {socialTab === 'groups' && (
+            <>
+              {allGroupsSorted.length === 0 ? (
+                <div className="rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 p-6 text-center">
+                  <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-100 to-purple-200 dark:from-purple-900/50 dark:to-purple-800/50 flex items-center justify-center mx-auto mb-4">
+                    <span className="text-2xl">👥</span>
+                  </div>
+                  <div className="font-bold text-gray-700 dark:text-slate-200 mb-1">No groups yet</div>
+                  <div className="text-sm text-gray-500 dark:text-slate-400 mb-4">Create a group to chat with your golf crew</div>
+                  <button
+                    onClick={() => setShowCreateGroupWizard(true)}
+                    className="px-4 py-2 bg-gradient-to-r from-accent to-orange-500 rounded-xl text-sm font-bold text-white hover:from-orange-500 hover:to-accent transition-all shadow-md"
+                  >
+                    Create Group
+                  </button>
+                </div>
+              ) : (
+                allGroupsSorted.map((e) => {
+                  const last = getEventLastMessage(e);
+                  return (
+                    <button
+                      key={e.id}
+                      onClick={() => navigate(`/event/${e.id}/chat`)}
+                      className="w-full text-left rounded-2xl bg-gradient-to-r from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 border border-slate-200/80 dark:border-white/5 p-4 relative overflow-hidden hover:shadow-md hover:border-purple-200 dark:hover:border-purple-800/50 transition-all duration-200 group"
+                    >
+                      {/* Purple accent for groups */}
+                      <span className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-purple-500 to-purple-700 rounded-l-2xl" />
+                      
+                      <div className="flex items-start justify-between gap-3 pl-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-purple-700 bg-purple-100 dark:bg-purple-900/30 dark:text-purple-300 px-1.5 py-0.5 rounded uppercase tracking-wider">Group</span>
+                            <span className="font-black text-gray-900 dark:text-white truncate group-hover:text-purple-700 transition-colors">
+                              {e.name || 'Untitled Group'}
+                            </span>
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-slate-400 mt-1">
+                            {e.golfers?.length || 0} members
+                          </div>
+                          {/* Last chat preview */}
+                          <div className="mt-2 text-xs text-gray-600 dark:text-slate-300 truncate">
+                            💬 {last ? clamp(`${last.senderName || 'Someone'}: ${last.text}`, 45) : 'No messages yet'}
+                          </div>
+                        </div>
+
+                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                          <span className="text-[10px] uppercase tracking-widest text-white font-bold bg-gradient-to-r from-purple-500 to-purple-700 px-3 py-1.5 rounded-full shadow-sm">
+                            Chat
+                          </span>
+                          {last && (
+                            <span className="text-[10px] text-gray-400 font-medium">{formatDateShort(last.createdAt)}</span>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </>
+          )}
+
+          {/* ═══ EVENTS TAB ═══ */}
+          {socialTab === 'events' && (
+            <>
+              {userEvents.length === 0 ? (
+                <div className="rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 p-6 text-center">
+                  <div className="w-14 h-14 rounded-full bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900/50 dark:to-green-800/50 flex items-center justify-center mx-auto mb-4">
+                    <span className="text-2xl">⛳</span>
+                  </div>
+                  <div className="font-bold text-gray-700 dark:text-slate-200 mb-1">No events yet</div>
+                  <div className="text-sm text-gray-500 dark:text-slate-400 mb-4">Join or create an event to start playing</div>
+                  <div className="flex gap-2 justify-center">
+                    <button
+                      onClick={() => setShowJoinModal(true)}
+                      className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-gray-700 dark:text-slate-200 hover:bg-slate-50 transition-colors"
+                    >
+                      Join Event
+                    </button>
+                    <button
+                      onClick={() => setShowCreateWizard(true)}
+                      className="px-4 py-2 bg-gradient-to-r from-accent to-orange-500 rounded-xl text-sm font-bold text-white hover:from-orange-500 hover:to-accent transition-all shadow-md"
+                    >
+                      Create Event
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {/* Active/Upcoming */}
+                  {activeEvents.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="text-[10px] font-bold tracking-[0.15em] text-gray-400 uppercase px-1">Active & Upcoming</div>
+                      {activeEvents.map((e) => {
+                        const last = getEventLastMessage(e);
+                        const isToday = new Date(e.date).toDateString() === new Date().toDateString();
+                        return (
+                          <button
+                            key={e.id}
+                            onClick={() => navigate(`/event/${e.id}`)}
+                            className="w-full text-left rounded-2xl bg-gradient-to-r from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 border border-slate-200/80 dark:border-white/5 p-4 relative overflow-hidden hover:shadow-md hover:border-green-200 dark:hover:border-green-800/50 transition-all duration-200 group"
+                          >
+                            {/* Green accent for events */}
+                            <span className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-green-500 to-green-700 rounded-l-2xl" />
+                            
+                            <div className="flex items-start justify-between gap-3 pl-2">
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${
+                                    isToday 
+                                      ? 'text-green-700 bg-green-100 dark:bg-green-900/30 dark:text-green-300' 
+                                      : 'text-blue-700 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300'
+                                  }`}>
+                                    {isToday ? '🔴 Live' : 'Event'}
+                                  </span>
+                                  <span className="font-black text-gray-900 dark:text-white truncate group-hover:text-green-700 transition-colors">
+                                    {e.name || 'Untitled Event'}
+                                  </span>
+                                </div>
+                                <div className="text-xs text-gray-500 dark:text-slate-400 mt-1 flex items-center gap-1.5">
+                                  <span>{formatDateShort(e.date)}</span>
+                                  {e.course?.teeName && (
+                                    <>
+                                      <span className="w-1 h-1 rounded-full bg-gray-300" />
+                                      <span>{e.course.teeName}</span>
+                                    </>
+                                  )}
+                                </div>
+                                {last && (
+                                  <div className="mt-2 text-xs text-gray-600 dark:text-slate-300 truncate">
+                                    💬 {clamp(`${last.senderName || 'Someone'}: ${last.text}`, 40)}
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                                <span className="text-xs font-bold text-gray-500">{e.golfers?.length || 0} players</span>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Completed */}
+                  {completedEvents.length > 0 && (
+                    <div className="space-y-2 mt-3">
+                      <div className="text-[10px] font-bold tracking-[0.15em] text-gray-400 uppercase px-1">Completed</div>
+                      {completedEvents.slice(0, 2).map((e) => (
+                        <button
+                          key={e.id}
+                          onClick={() => navigate(`/event/${e.id}`)}
+                          className="w-full text-left rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-white/5 p-3 relative overflow-hidden hover:shadow-sm transition-all duration-200 group opacity-70 hover:opacity-100"
+                        >
+                          <span className="absolute left-0 top-0 bottom-0 w-1 bg-slate-300 dark:bg-slate-600 rounded-l-2xl" />
+                          <div className="flex items-center justify-between gap-3 pl-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[10px] font-bold text-slate-500 bg-slate-200 dark:bg-slate-700 dark:text-slate-400 px-1.5 py-0.5 rounded uppercase tracking-wider">Done</span>
+                                <span className="font-bold text-gray-700 dark:text-slate-300 truncate text-sm">
+                                  {e.name || 'Untitled Event'}
+                                </span>
+                              </div>
+                            </div>
+                            <span className="text-xs text-gray-400">{formatDateShort(e.date)}</span>
+                          </div>
+                        </button>
+                      ))}
+                      {completedEvents.length > 2 && (
+                        <Link to="/events" className="block text-center text-xs font-bold text-primary-600 hover:text-primary-700 py-1">
+                          +{completedEvents.length - 2} more completed
+                        </Link>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </>
+          )}
+        </div>
+      </section>
+
+      {/* ═══════════════════════════════════════════════════════════════════
+          TICKER: Sticky above nav
+      ═══════════════════════════════════════════════════════════════════ */}
+      <div className="fixed left-4 right-4 bottom-[5.25rem] z-30">
+        <button
+          onClick={() => tickerEvent ? navigate(`/event/${tickerEvent.id}`) : navigate('/events')}
+          className="w-full gimmies-ticker rounded-xl bg-[#1561AE] border border-white/10 px-3 py-2.5 shadow-lg shadow-primary-900/25"
+          aria-label="Activity ticker"
+          style={{ ['--gimmies-ticker-duration' as any]: `${tickerDurationSeconds}s` }}
+        >
+          <div className="gimmies-ticker__inner text-[11px] font-black text-white">
+            <span className="gimmies-ticker__track">
+              {tickerEvent ? (
+                <>
+                  {(tickerItems.length ? [...tickerItems, ...tickerItems] : []).map((item, idx) => {
+                    const score = item.payload.score;
+                    const scoreText =
+                      typeof score === 'number'
+                        ? (score === 0 ? 'E' : `${score > 0 ? '+' : ''}${score}`)
+                        : '';
+
+                    const scoreClass =
+                      typeof score === 'number'
+                        ? (score < 0 ? 'text-red-500' : score === 0 ? 'text-white' : 'text-slate-200')
+                        : 'text-white';
+
+                    const isHighlight = !!item.highlight || item.type === 'leader' || item.type === 'update' || item.type === 'betting';
+                    const itemClass = isHighlight ? 'text-orange-300' : 'text-white';
+
+                    return (
+                      <span key={`${item.id}-${idx}`} className="inline-flex items-center">
+                        <span className={itemClass}>
+                          {item.payload.text}
+                          {scoreText ? (
+                            <>
+                              {' '}
+                              <span className={scoreClass}>{scoreText}</span>
+                            </>
+                          ) : null}
+                        </span>
+                        <span className="mx-2 text-white/40">•</span>
+                      </span>
+                    );
+                  })}
+                </>
+              ) : (
+                <>
+                  <span className="text-orange-400">GIMMIES</span> • Create or join an event to get started •{' '}
+                  <span className="text-orange-400">GIMMIES</span> • Create or join an event to get started •{' '}
+                </>
+              )}
+            </span>
+          </div>
+        </button>
       </div>
 
-      {/* Join Event Modal */}
-      {showJoinForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl p-6 w-full max-w-md">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-semibold">{isGuest ? '🔒 Sign In Required' : 'Join an Event'}</h2>
-              <button
-                onClick={() => setShowJoinForm(false)}
-                className="text-gray-400 hover:text-gray-600"
-                aria-label="Close"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-
-            {/* Guest Mode Upgrade Prompt */}
-            {isGuest ? (
-              <div className="space-y-4">
-                <div className="bg-gradient-to-r from-blue-50 to-green-50 border-2 border-blue-200 rounded-lg p-4">
-                  <div className="flex items-start gap-3 mb-4">
-                    <svg className="w-10 h-10 text-blue-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                    </svg>
-                    <div>
-                      <h3 className="font-bold text-gray-900 mb-2">Join Events from Friends!</h3>
-                      <p className="text-sm text-gray-700 mb-3">
-                        Joining events requires a cloud account to sync data across devices and collaborate with other players in real-time.
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="bg-white rounded-lg p-3 mb-4 border border-gray-200">
-                    <p className="font-semibold text-gray-800 text-sm mb-2">With a free account:</p>
-                    <ul className="space-y-1 text-xs text-gray-700">
-                      <li>✅ Join events via 6-digit codes</li>
-                      <li>✅ Share your events with friends</li>
-                      <li>✅ Real-time score updates</li>
-                      <li>✅ Event chat & collaboration</li>
-                      <li>✅ Access from any device</li>
-                    </ul>
-                  </div>
-                  
-                  <button
-                    onClick={() => window.location.href = '/'}
-                    className="w-full bg-gradient-to-r from-green-600 to-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:from-green-700 hover:to-blue-700 transition-all shadow-md"
-                  >
-                    Sign In or Create Free Account
-                  </button>
-                </div>
-                
-                <p className="text-xs text-gray-500 text-center">
-                  Your guest data will be safe - you can keep using the app locally anytime.
-                </p>
-              </div>
-            ) : (
-              // Authenticated user - show join form
-              <>
-                {joinMessage && (
-                  <div className={`mb-4 p-3 rounded ${
-                    joinMessage.includes('Successfully')
-                      ? 'bg-green-100 text-green-800'
-                      : 'bg-red-100 text-red-800'
-                  }`}>
-                    {joinMessage}
-                  </div>
-                )}
-
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-2">Share Code</label>
-                    <input
-                      type="text"
-                      value={joinCode}
-                      onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-                      placeholder="Enter 6-character code"
-                      className="w-full border rounded px-3 py-2 text-center text-lg font-mono uppercase"
-                      maxLength={6}
-                    />
-                  </div>
-
-                  <button
-                    onClick={handleJoinEvent}
-                    disabled={!joinCode.trim() || joinCode.length !== 6}
-                    className="w-full bg-primary-600 text-white py-2 px-4 rounded disabled:opacity-50 hover:bg-primary-700"
-                  >
-                    Join Event
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
       {/* Create Event Wizard */}
-      <CreateEventWizard 
-        isOpen={showCreateWizard} 
-        onClose={() => setShowCreateWizard(false)} 
-      />
-
+      <CreateEventWizard isOpen={showCreateWizard} onClose={() => setShowCreateWizard(false)} />
+      <CreateGroupWizard isOpen={showCreateGroupWizard} onClose={() => setShowCreateGroupWizard(false)} />
     </div>
   );
 };

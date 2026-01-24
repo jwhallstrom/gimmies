@@ -7,13 +7,27 @@ import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../amplify/data/resource';
 import type { Event, ChatMessage } from '../state/store';
 
-const client = generateClient<Schema>();
+let cachedClient: ReturnType<typeof generateClient<Schema>> | null = null;
+function getClient() {
+  if (import.meta.env.VITE_ENABLE_CLOUD_SYNC !== 'true') return null;
+  if (cachedClient) return cachedClient;
+  try {
+    cachedClient = generateClient<Schema>();
+    return cachedClient;
+  } catch (e) {
+    console.warn('❌ Amplify client unavailable (local/offline mode)', e);
+    return null;
+  }
+}
 
 /**
  * Save a chat message to cloud (as individual record)
  */
 export async function saveChatMessageToCloud(eventId: string, message: ChatMessage): Promise<boolean> {
   try {
+    const client = getClient();
+    if (!client) return false;
+
     console.log('💬 saveChatMessageToCloud: Saving message to event:', eventId, 'from:', message.senderName);
     
     const { data, errors } = await client.models.ChatMessage.create({
@@ -42,6 +56,9 @@ export async function saveChatMessageToCloud(eventId: string, message: ChatMessa
  */
 export async function loadChatMessagesFromCloud(eventId: string): Promise<ChatMessage[]> {
   try {
+    const client = getClient();
+    if (!client) return [];
+
     console.log('📥 loadChatMessagesFromCloud: Loading messages for event:', eventId);
     
     const { data: messages, errors } = await client.models.ChatMessage.list({
@@ -76,6 +93,9 @@ export async function loadChatMessagesFromCloud(eventId: string): Promise<ChatMe
  */
 export async function saveEventToCloud(event: Event, currentProfileId: string): Promise<string | null> {
   try {
+    const client = getClient();
+    if (!client) return null;
+
     console.log('☁️ saveEventToCloud: Starting save for event:', event.id);
     console.log('☁️ saveEventToCloud: Golfers to save:', event.golfers.length, event.golfers.map(g => g.profileId || g.customName));
 
@@ -89,7 +109,8 @@ export async function saveEventToCloud(event: Event, currentProfileId: string): 
       courseId: event.course?.courseId || null,
       teeName: event.course?.teeName || null,
       ownerProfileId: event.ownerProfileId || currentProfileId,
-      isPublic: true,
+      // "Public" means discoverable in Join Game lists. Private invite-only games can still have a shareCode.
+      isPublic: !!event.isPublic,
       isCompleted: event.isCompleted || false,
       shareCode,
       scorecardView: event.scorecardView || 'individual',
@@ -145,6 +166,9 @@ export async function saveEventToCloud(event: Event, currentProfileId: string): 
  */
 export async function loadEventById(eventId: string): Promise<Event | null> {
   try {
+    const client = getClient();
+    if (!client) return null;
+
     console.log('📥 loadEventById: Loading event from cloud by ID:', eventId);
 
     const { data: cloudEvent, errors } = await client.models.Event.get({ id: eventId });
@@ -212,13 +236,15 @@ export async function loadEventById(eventId: string): Promise<Event | null> {
  */
 export async function loadEventByShareCode(shareCode: string): Promise<Event | null> {
   try {
+    const client = getClient();
+    if (!client) return null;
+
     console.log('Loading event from cloud with code:', shareCode);
 
     // Query events by shareCode
     const { data: events, errors } = await client.models.Event.list({
       filter: {
         shareCode: { eq: shareCode },
-        isPublic: { eq: true },
       },
     });
 
@@ -271,6 +297,9 @@ export async function loadEventByShareCode(shareCode: string): Promise<Event | n
  */
 export async function loadUserEventsFromCloud(): Promise<Event[]> {
   try {
+    const client = getClient();
+    if (!client) return [];
+
     console.log('Loading user events from cloud...');
 
     const { data: events, errors } = await client.models.Event.list();
@@ -316,10 +345,67 @@ export async function loadUserEventsFromCloud(): Promise<Event[]> {
 }
 
 /**
+ * Load public (discoverable) events from cloud.
+ * These are meant for the "Join Game" browse experience.
+ */
+export async function loadPublicEventsFromCloud(): Promise<Event[]> {
+  try {
+    const client = getClient();
+    if (!client) return [];
+
+    const { data: events, errors } = await client.models.Event.list({
+      filter: { isPublic: { eq: true } },
+    });
+
+    if (errors) {
+      console.error('Failed to load public events from cloud:', errors);
+      return [];
+    }
+
+    const localEvents: Event[] = (events || [])
+      .filter((cloudEvent) => !cloudEvent.isCompleted)
+      .map((cloudEvent) => ({
+        id: cloudEvent.id,
+        name: cloudEvent.name,
+        date: cloudEvent.date,
+        course: {
+          courseId: cloudEvent.courseId || undefined,
+          teeName: cloudEvent.teeName || undefined,
+        },
+        ownerProfileId: cloudEvent.ownerProfileId,
+        isPublic: cloudEvent.isPublic || false,
+        isCompleted: cloudEvent.isCompleted || false,
+        shareCode: cloudEvent.shareCode || undefined,
+        scorecardView: (cloudEvent.scorecardView as any) || 'individual',
+
+        golfers: cloudEvent.golfersJson ? JSON.parse(cloudEvent.golfersJson as string) : [],
+        groups: cloudEvent.groupsJson ? JSON.parse(cloudEvent.groupsJson as string) : [],
+        scorecards: cloudEvent.scorecardsJson ? JSON.parse(cloudEvent.scorecardsJson as string) : [],
+        games: cloudEvent.gamesJson ? JSON.parse(cloudEvent.gamesJson as string) : {},
+        pinkyResults: cloudEvent.pinkyResultsJson ? JSON.parse(cloudEvent.pinkyResultsJson as string) : {},
+        greenieResults: cloudEvent.greenieResultsJson ? JSON.parse(cloudEvent.greenieResultsJson as string) : {},
+
+        createdAt: cloudEvent.createdAt,
+        lastModified: cloudEvent.lastModified || new Date().toISOString(),
+        completedAt: cloudEvent.completedAt || undefined,
+        chat: [], // loaded separately if/when user opens the event
+      }));
+
+    return localEvents;
+  } catch (error) {
+    console.error('Error loading public events from cloud:', error);
+    return [];
+  }
+}
+
+/**
  * Delete event from cloud
  */
 export async function deleteEventFromCloud(eventId: string): Promise<boolean> {
   try {
+    const client = getClient();
+    if (!client) return false;
+
     console.log('Deleting event from cloud:', eventId);
 
     const { errors } = await client.models.Event.delete({ id: eventId });

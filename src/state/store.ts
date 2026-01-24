@@ -20,6 +20,8 @@ import type {
   EventGameConfig, EventCourseSelection, ChatMessage, Toast,
   Event, CompletedRound, IndividualRound, HandicapHistory, CombinedRound,
   EventWalletSettings, WalletTransaction, Settlement, TipFund, ProfileWallet,
+  Tournament, TournamentRegistration, TournamentDivision, TournamentTeeTime,
+  TournamentRound, TournamentScorecard, TournamentStanding,
 } from './types';
 
 // Re-export all types for backward compatibility
@@ -30,6 +32,8 @@ export type {
   EventGameConfig, EventCourseSelection, ChatMessage, Toast,
   Event, CompletedRound, IndividualRound, HandicapHistory, CombinedRound,
   EventWalletSettings, WalletTransaction, Settlement, TipFund, ProfileWallet,
+  Tournament, TournamentRegistration, TournamentDivision, TournamentTeeTime,
+  TournamentRound, TournamentScorecard, TournamentStanding,
 };
 
 // Import slice creators
@@ -39,6 +43,7 @@ import { createGameSlice, type GameSliceActions } from './slices/gameSlice';
 import { createHandicapSlice, type HandicapSliceActions } from './slices/handicapSlice';
 import { createUISlice, initialUIState, type UISliceActions } from './slices/uiSlice';
 import { createWalletSlice, initialWalletState, type WalletSliceActions } from './slices/walletSlice';
+import { createTournamentSlice, initialTournamentState, type TournamentSliceActions } from './slices/tournamentSlice';
 
 // ============================================================================
 // Combined State Interface
@@ -64,6 +69,9 @@ interface State {
   settlements: Settlement[];
   transactions: WalletTransaction[];
   tipFunds: TipFund[];
+  
+  // Tournament slice state (prototype)
+  tournaments: Tournament[];
   
   // All actions from slices
   // User actions
@@ -135,6 +143,33 @@ interface State {
   getEventSettlements: WalletSliceActions['getEventSettlements'];
   getPendingSettlements: WalletSliceActions['getPendingSettlements'];
   getEventTipFund: WalletSliceActions['getEventTipFund'];
+  
+  // Tournament actions (prototype)
+  createTournament: TournamentSliceActions['createTournament'];
+  updateTournament: TournamentSliceActions['updateTournament'];
+  deleteTournament: TournamentSliceActions['deleteTournament'];
+  publishTournament: TournamentSliceActions['publishTournament'];
+  startTournament: TournamentSliceActions['startTournament'];
+  completeTournament: TournamentSliceActions['completeTournament'];
+  cancelTournament: TournamentSliceActions['cancelTournament'];
+  registerForTournament: TournamentSliceActions['registerForTournament'];
+  updateRegistration: TournamentSliceActions['updateRegistration'];
+  removeRegistration: TournamentSliceActions['removeRegistration'];
+  removeFromTournament: TournamentSliceActions['removeFromTournament'];
+  updateRegistrationPaymentStatus: TournamentSliceActions['updateRegistrationPaymentStatus'];
+  addDivision: TournamentSliceActions['addDivision'];
+  updateDivision: TournamentSliceActions['updateDivision'];
+  removeDivision: TournamentSliceActions['removeDivision'];
+  addTeeTime: TournamentSliceActions['addTeeTime'];
+  updateTeeTime: TournamentSliceActions['updateTeeTime'];
+  removeTeeTime: TournamentSliceActions['removeTeeTime'];
+  generatePairings: TournamentSliceActions['generatePairings'];
+  updateTournamentScore: TournamentSliceActions['updateTournamentScore'];
+  completeRound: TournamentSliceActions['completeRound'];
+  recalculateStandings: TournamentSliceActions['recalculateStandings'];
+  getTournament: TournamentSliceActions['getTournament'];
+  getMyTournaments: TournamentSliceActions['getMyTournaments'];
+  getPublicTournaments: TournamentSliceActions['getPublicTournaments'];
 }
 
 // ============================================================================
@@ -149,6 +184,7 @@ export const useStore = create<State>()(
       ...initialEventState,
       ...initialUIState,
       ...initialWalletState,
+      ...initialTournamentState,
       
       // Compose slice actions
       ...createUserSlice(set, get),
@@ -157,6 +193,7 @@ export const useStore = create<State>()(
       ...createHandicapSlice(set, get),
       ...createUISlice(set, get),
       ...createWalletSlice(set, get),
+      ...createTournamentSlice(set, get),
       
       // Override complex functions that need full store access
       loadEventsFromCloud: async () => {

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import useStore from '../state/store';
 import { IndividualRound, ScoreEntry } from '../types/handicap';
@@ -26,6 +26,16 @@ const AddScorePage: React.FC = () => {
   const { courses, searchCourses } = useCourses();
   const selectedCourse = useMemo(() => courses.find(c => c.courseId === formData.courseId), [courses, formData.courseId]);
   const selectedTee = selectedCourse?.tees.find(t => t.name === formData.teeName);
+
+  // Default to Home Course when starting a new round
+  useEffect(() => {
+    if (!currentProfile) return;
+    if (formData.courseId) return;
+    const homeCourseId = (currentProfile.preferences as any)?.homeCourseId;
+    if (homeCourseId) {
+      setFormData((prev) => ({ ...prev, courseId: homeCourseId }));
+    }
+  }, [currentProfile?.id, (currentProfile?.preferences as any)?.homeCourseId, formData.courseId]);
 
   // Simple client-side filter for course search. Limits results to 50 for performance.
   const filteredCourses = useMemo(() => {

@@ -1,7 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
-import { registerSW } from 'virtual:pwa-register';
 
 // Must run before any other Amplify usage
 import './amplify/configure';
@@ -9,28 +8,40 @@ import './amplify/configure';
 import App from './pages/App';
 import './styles.css';
 
-const updateSW = registerSW({
-  immediate: true,
-  onNeedRefresh() {
-    const event = new CustomEvent('pwa:need-refresh', {
-      detail: {
-        update: () => updateSW(true),
+// In dev, ensure SW doesn't cache stale bundles.
+if (import.meta.env.DEV && typeof window !== 'undefined' && 'serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((regs) => {
+    regs.forEach((r) => r.unregister());
+  });
+}
+
+// Only register the PWA service worker in production builds.
+if (import.meta.env.PROD && typeof window !== 'undefined') {
+  import('virtual:pwa-register').then(({ registerSW }) => {
+    const updateSW = registerSW({
+      immediate: true,
+      onNeedRefresh() {
+        const event = new CustomEvent('pwa:need-refresh', {
+          detail: {
+            update: () => updateSW(true),
+          },
+        });
+        window.dispatchEvent(event);
+      },
+      onOfflineReady() {
+        window.dispatchEvent(new CustomEvent('pwa:offline-ready'));
+      },
+      onRegisteredSW(_swUrl, registration) {
+        // Check for updates every 5 minutes
+        if (registration) {
+          setInterval(() => {
+            registration.update();
+          }, 5 * 60 * 1000);
+        }
       },
     });
-    window.dispatchEvent(event);
-  },
-  onOfflineReady() {
-    window.dispatchEvent(new CustomEvent('pwa:offline-ready'));
-  },
-  onRegisteredSW(swUrl, registration) {
-    // Check for updates every 5 minutes
-    if (registration) {
-      setInterval(() => {
-        registration.update();
-      }, 5 * 60 * 1000);
-    }
-  },
-});
+  });
+}
 
 if (typeof window !== 'undefined') {
   const mediaQuery =

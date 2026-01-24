@@ -14,7 +14,10 @@ export interface NassauSegmentResult {
 export interface NassauPayoutSummary {
   configId: string;
   groupId: string;
+  /** Total per-player buy-in across all segments. */
   feePerPlayer: number;
+  /** Per-segment fees per player. */
+  feesPerPlayer: { out: number; in: number; total: number };
   pot: number; // total pot for this nassau (players * fee)
   segments: NassauSegmentResult[];
   winningsByGolfer: Record<string, number>;
@@ -29,15 +32,23 @@ function segmentHoles(segment: 'front' | 'back' | 'total'): number[] {
 export function computeNassauForConfig(event: Event, config: NassauConfig, profiles: any[]): NassauPayoutSummary | null {
   const group = event.groups.find(g => g.id === config.groupId);
   if (!group || group.golferIds.length < 2) return null;
+  const prefFor = (gid: string): 'all' | 'skins' | 'none' => {
+    const eg = event.golfers.find((g: any) => (g.profileId || g.customName || g.displayName) === gid);
+    return (eg?.gamePreference as any) || 'all';
+  };
+  const eligible = (gid: string) => prefFor(gid) === 'all';
   // Allow restricting golfers for this Nassau (subset scenario)
+  const base = group.golferIds.filter(eligible);
   const players = (config.participantGolferIds && config.participantGolferIds.length > 1)
-    ? group.golferIds.filter(id => config.participantGolferIds!.includes(id))
-    : group.golferIds;
+    ? base.filter(id => config.participantGolferIds!.includes(id))
+    : base;
   if (players.length < 2) return null;
   const isTeam = !!(config.teams && config.teams.length >= 2);
 
   // Determine who is participating/paying.
-  // Fee semantics: `config.fee` is a per-user buy-in for the Nassau (not per-segment).
+  // Fee semantics:
+  // - If `config.fees` exists, those are per-player segment fees.
+  // - Otherwise treat legacy `config.fee` as a per-segment fee (i.e., 5 => 5/5/5).
   let payingPlayers = players;
   if (isTeam) {
     const teamGolferIds = new Set<string>();
@@ -46,13 +57,18 @@ export function computeNassauForConfig(event: Event, config: NassauConfig, profi
   }
 
   if (payingPlayers.length < 2) return null; // not enough paying participants
-  const pot = payingPlayers.length * config.fee;
-  const segmentPot = pot / 3; // equal split front/back/total
+  const feesPerPlayer = config.fees ?? { out: config.fee, in: config.fee, total: config.fee };
+  const pot =
+    payingPlayers.length * (feesPerPlayer.out + feesPerPlayer.in + feesPerPlayer.total);
   const winningsByGolfer: Record<string, number> = {};
   payingPlayers.forEach(p => (winningsByGolfer[p] = 0));
 
+  const segmentFee = (segment: 'front' | 'back' | 'total') =>
+    segment === 'front' ? feesPerPlayer.out : segment === 'back' ? feesPerPlayer.in : feesPerPlayer.total;
+
   const segments: NassauSegmentResult[] = (['front', 'back', 'total'] as const).map(segment => {
     const holes = segmentHoles(segment);
+    const segmentPot = payingPlayers.length * segmentFee(segment);
   const scores: Record<string, number> = {};
   const toPar: Record<string, number> = {};
     
@@ -169,7 +185,15 @@ export function computeNassauForConfig(event: Event, config: NassauConfig, profi
     return { segment, winners, scores, toPar, pot: segmentPot, mode: isTeam ? 'team' : 'individual' };
   });
 
-  return { configId: config.id, groupId: config.groupId, feePerPlayer: config.fee, pot, segments, winningsByGolfer };
+  return {
+    configId: config.id,
+    groupId: config.groupId,
+    feePerPlayer: feesPerPlayer.out + feesPerPlayer.in + feesPerPlayer.total,
+    feesPerPlayer,
+    pot,
+    segments,
+    winningsByGolfer,
+  };
 }
 
 export function computeAllNassau(event: Event, profiles: any[]): NassauPayoutSummary[] {

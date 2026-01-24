@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../../state/store';
 import { calculateEventPayouts } from '../../games/payouts';
@@ -6,10 +6,13 @@ import { netScore } from '../../games/handicap';
 import { courseMap } from '../../data/courses';
 import { useCourses } from '../../hooks/useCourses';
 import { EventSettlement } from '../wallet';
+import RoundRecapCard from '../RoundRecapCard';
+import { generateRoundRecap } from '../../utils/roundRecap';
 
 type Props = { eventId: string };
 
 const currency = (n: number) => '$' + n.toFixed(2);
+const signedCurrency = (n: number) => (n > 0 ? '+' : n < 0 ? '−' : '') + currency(Math.abs(n));
 
 const OverviewTab: React.FC<Props> = ({ eventId }) => {
   const { profiles, completeEvent, currentProfile, getEventSettlements } = useStore();
@@ -89,6 +92,12 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
     const group = event.groups.find((gr: any) => gr.id === cfg.groupId);
     if (!group) return;
     let players: string[] = group.golferIds.slice();
+    // Respect per-golfer game preference (Nassau = "all games" only)
+    players = players.filter((gid) => {
+      const eg = event.golfers.find((g: any) => (g.profileId || g.customName || g.displayName) === gid);
+      const pref: 'all' | 'skins' | 'none' = (eg?.gamePreference as any) || 'all';
+      return pref === 'all';
+    });
     if (cfg.participantGolferIds && cfg.participantGolferIds.length > 1) {
       players = players.filter(p => cfg.participantGolferIds!.includes(p));
     }
@@ -99,17 +108,37 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
       players = players.filter(p => assigned.has(p));
     }
     if (players.length < 2) return;
-    players.forEach(pid => { buyinByGolfer[pid] += cfg.fee; });
+    const fees = cfg.fees ?? { out: cfg.fee, in: cfg.fee, total: cfg.fee };
+    const perPlayer = (fees.out || 0) + (fees.in || 0) + (fees.total || 0);
+    players.forEach(pid => { buyinByGolfer[pid] += perPlayer; });
   });
   // Skins: every golfer pays each skins config fee
   const skinsConfigs: any[] = Array.isArray(event.games.skins) ? event.games.skins : (event.games.skins ? [event.games.skins] : []);
   skinsConfigs.forEach(sk => {
-    const skinParticipants = sk.participantGolferIds && sk.participantGolferIds.length > 1 ? sk.participantGolferIds : event.golfers.map((g:any)=> g.profileId || g.customName).filter((id: string) => id);
+    const eligible = (gid: string) => {
+      const eg = event.golfers.find((g: any) => (g.profileId || g.customName || g.displayName) === gid);
+      const pref: 'all' | 'skins' | 'none' = (eg?.gamePreference as any) || 'all';
+      return pref === 'all' || pref === 'skins';
+    };
+    const base = event.golfers
+      .map((g: any) => g.profileId || g.customName || g.displayName)
+      .filter((id: any) => !!id)
+      .filter((id: string) => eligible(id));
+    const skinParticipants = sk.participantGolferIds && sk.participantGolferIds.length > 1 ? sk.participantGolferIds.filter((id: string) => eligible(id)) : base;
     skinParticipants.forEach((gid: string) => { buyinByGolfer[gid] += sk.fee; });
   });
   // Pinky: NO buy-in - players only pay if they get pinkys (penalty game)
   // Greenie: NO buy-in - players only pay winners when they get greenies (performance game)
   const payoutByGolfer = payouts.totalByGolfer;
+  const netByGolfer: Record<string, number> = {};
+  Object.keys(payoutByGolfer).forEach((gid) => {
+    netByGolfer[gid] = (payoutByGolfer[gid] || 0) - (buyinByGolfer[gid] || 0);
+  });
+
+  const myGolferId = currentProfile?.id;
+  const myNet = myGolferId ? netByGolfer[myGolferId] ?? 0 : null;
+  const myBuyin = myGolferId ? buyinByGolfer[myGolferId] ?? 0 : null;
+
   return (
   <div className="space-y-6">
       {/* Complete Event Button or Completed Status */}
@@ -143,8 +172,8 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
                 >
                   Complete Event
                 </button>
-                {/* Debug helper button - remove in production */}
-                {incomplete && currentProfile && event.ownerProfileId === currentProfile.id && (
+                {/* Debug helper button - keep DEV only */}
+                {import.meta.env.DEV && incomplete && currentProfile && event.ownerProfileId === currentProfile.id && (
                   <button
                     onClick={() => {
                       const mode = window.prompt(
@@ -268,6 +297,14 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
         </div>
       )}
 
+      {/* Round Recap - Show when event has scores */}
+      {event.golfers.some((g: any) => g.scores?.length > 0) && (
+        <RoundRecapCard
+          recap={generateRoundRecap(event)}
+          compact={!event.isCompleted}
+        />
+      )}
+
       {/* Settlement Section - Show when event is completed or has any pending settlements */}
       {(event.isCompleted || getEventSettlements(eventId).length > 0) && (
         <div className="bg-white/90 backdrop-blur rounded-xl shadow-md border border-primary-900/5 overflow-hidden">
@@ -305,7 +342,22 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
       )}
       
       <section className="border border-slate-200 rounded-lg p-3 bg-white shadow-sm">
-        <h2 className="font-semibold mb-2 text-primary-900">Overview</h2>
+        <div className="flex items-start justify-between gap-3 mb-2">
+          <div>
+            <h2 className="font-semibold text-primary-900">Payouts</h2>
+            <div className="text-[11px] text-slate-600">Net = winnings minus buy-in</div>
+          </div>
+          {myNet != null && (
+            <div className="text-right">
+              <div className="text-[10px] font-bold tracking-[0.15em] text-slate-400 uppercase">You</div>
+              <div className={`text-sm font-extrabold ${myNet > 0 ? 'text-green-700' : myNet < 0 ? 'text-red-700' : 'text-slate-700'}`}>
+                {signedCurrency(myNet)}
+              </div>
+              <div className="text-[10px] text-slate-500">Buy-in {currency(myBuyin ?? 0)}</div>
+            </div>
+          )}
+        </div>
+
         {incomplete && (
           <div className="mb-3 text-[11px] bg-amber-100 border border-amber-300 text-amber-900 px-3 py-2 rounded">
             Scores incomplete – payouts are provisional until all holes are entered.
@@ -316,7 +368,7 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
             <tr className="bg-slate-50">
               <th className="border border-slate-200 px-2 py-1 text-left">Golfer</th>
               <th className="border border-slate-200 px-2 py-1 text-right">Buy-In</th>
-              <th className="border border-slate-200 px-2 py-1 text-right">Payout</th>
+              <th className="border border-slate-200 px-2 py-1 text-right">Net</th>
             </tr>
           </thead>
           <tbody>
@@ -329,12 +381,18 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
               if (!displayName || !golferId) return null;
               
               const buy = buyinByGolfer[golferId] || 0;
-              const pay = payoutByGolfer[golferId] || 0;
+              const net = netByGolfer[golferId] || 0;
               return (
                 <tr key={golferId} className="odd:bg-slate-50/40">
                   <td className="border border-slate-200 px-2 py-1">{displayName}</td>
                   <td className="border border-slate-200 px-2 py-1 text-right text-red-700">{currency(buy)}</td>
-                  <td className="border border-slate-200 px-2 py-1 text-right text-green-700">{currency(pay)}</td>
+                  <td
+                    className={`border border-slate-200 px-2 py-1 text-right font-extrabold ${
+                      net > 0 ? 'text-green-700' : net < 0 ? 'text-red-700' : 'text-slate-700'
+                    }`}
+                  >
+                    {signedCurrency(net)}
+                  </td>
                 </tr>
               );
             })}
@@ -342,99 +400,39 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
         </table>
       </section>
       {payouts.nassau.length > 0 && (
-        <section className="border border-slate-200 rounded-lg p-3 bg-white shadow-sm">
-          <h2 className="font-semibold mb-2 text-primary-900">Nassau</h2>
-          {payouts.nassau.map(n => {
+        <details className="border border-slate-200 rounded-lg p-3 bg-white shadow-sm">
+          <summary className="cursor-pointer select-none flex items-center justify-between">
+            <div>
+              <div className="font-semibold text-primary-900">Nassau</div>
+              <div className="text-[11px] text-slate-600">{payouts.nassau.length} game{payouts.nassau.length === 1 ? '' : 's'} · tap for details</div>
+            </div>
+            <span className="text-slate-400 text-sm">▾</span>
+          </summary>
+          <div className="mt-3">
+          {payouts.nassau.map((n, idx) => {
             const cfg = event.games.nassau.find((x: any) => x.id === n.configId);
             const teams = cfg?.teams || [];
             const isTeam = teams.length >= 2;
-            const bestCount = cfg?.teamBestCount && cfg.teamBestCount > 0 ? cfg.teamBestCount : 1;
             const teamMap: Record<string, { name: string; golferIds: string[] }> = Object.fromEntries(teams.map((t: any) => [t.id, { name: t.name, golferIds: t.golferIds }]));
 
-            // Participant restriction should match game computation logic.
-            const group = event.groups.find((gr: any) => gr.id === cfg?.groupId);
-            const basePlayers: string[] = group?.golferIds || [];
-            const participants: string[] = (cfg?.participantGolferIds && cfg.participantGolferIds.length > 1)
-              ? basePlayers.filter(id => cfg.participantGolferIds!.includes(id))
-              : basePlayers;
-
-            const holes = Array.from({ length: 18 }, (_, i) => i + 1);
-
-            const teamsForGrid = (cfg?.teams || [])
-              .map((t: any) => ({
-                id: t.id,
-                name: t.name,
-                memberIds: (t.golferIds || []).filter((gid: string) => participants.includes(gid))
-              }))
-              .filter((t: any) => t.memberIds.length > 0);
-
-            const computeTeamHoleUsage = (team: any, holeNumber: number) => {
-              const members = team.memberIds.map((gid: string) => {
-                const sc = event.scorecards.find((s: any) => s.golferId === gid);
-                const gross = sc?.scores.find((s: any) => s.hole === holeNumber)?.strokes ?? null;
-                const value = gross == null
-                  ? null
-                  : (cfg?.net ? (netScore(event, gid, holeNumber, gross, profiles) ?? gross) : gross);
-                return { gid, label: golfersById[gid] || gid, value };
-              });
-
-              const scored = members
-                .filter((m: any) => m.value != null)
-                .sort((a: any, b: any) => (a.value as number) - (b.value as number));
-
-              const used = scored.slice(0, Math.min(bestCount, scored.length));
-              const usedIds = new Set<string>(used.map((u: any) => u.gid));
-              const usedTotal = used.length ? used.reduce((sum: number, u: any) => sum + (u.value as number), 0) : null;
-
-              return { members, usedIds, usedTotal };
-            };
-
-            const title = isTeam ? 'Team Stroke Nassau' : 'Nassau';
+            const title = isTeam ? 'Team Nassau' : 'Nassau';
             return (
               <div key={n.configId} className="mb-4 border border-slate-200 rounded-lg p-3 bg-white shadow-sm">
-                <div className="text-[11px] text-primary-700 mb-2 font-medium flex flex-wrap gap-4">
-                  <span>Group {n.groupId}</span>
-                  <span>Pot {currency(n.pot)}</span>
-                  {cfg?.teamBestCount && teams.length > 0 && (
-                    <span className="text-amber-700">Team Best {cfg.teamBestCount}</span>
-                  )}
-                  {isTeam && (
-                    <span className="text-amber-700">{title}</span>
-                  )}
-                  {/* Display par for each segment */}
-                  {n.segments.map(seg => {
-                    const parForSegment = (() => {
-                      const holeNums = seg.segment === 'front'
-                        ? [1,2,3,4,5,6,7,8,9]
-                        : seg.segment === 'back'
-                          ? [10,11,12,13,14,15,16,17,18]
-                          : [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18];
-                      const parSum = courseHoles
-                        .filter(h => holeNums.includes(h.number))
-                        .reduce((sum, h) => sum + (h.par || 0), 0);
-                      return parSum > 0 ? parSum : null;
-                    })();
-                    
-                    // For team segments, show par adjusted for team best count
-                    const cfg = event.games.nassau.find((x: any) => x.id === n.configId);
-                    const isTeamSegment = cfg?.teams && cfg.teams.length >= 2;
-                    const teamBestCount = cfg?.teamBestCount || 1;
-                    const adjustedPar = isTeamSegment && parForSegment ? parForSegment * teamBestCount : parForSegment;
-                    
-                    return parForSegment ? (
-                      <span key={seg.segment} className="text-gray-600">
-                        {seg.segment === 'front' ? 'Front 9' : seg.segment === 'back' ? 'Back 9' : 'Total'} Par: {adjustedPar || parForSegment}
-                        {isTeamSegment && teamBestCount > 1 && ` (${teamBestCount} best)`}
-                      </span>
-                    ) : null;
-                  })}
+                <div className="flex items-center justify-between gap-3 mb-2">
+                  <div className="min-w-0">
+                    <div className="text-[10px] font-bold tracking-[0.15em] text-slate-400 uppercase">Nassau</div>
+                    <div className="font-extrabold text-slate-900 truncate">
+                      {title}{payouts.nassau.length > 1 ? ` #${idx + 1}` : ''}
+                    </div>
+                    <div className="text-[11px] text-slate-600">Pot {currency(n.pot)} · {cfg?.net ? 'Net' : 'Gross'}</div>
+                  </div>
                 </div>
-        <table className="text-[11px] border-collapse mb-2 w-full bg-white rounded border border-slate-200 overflow-hidden">
+
+                <table className="text-[11px] border-collapse mb-2 w-full bg-white rounded border border-slate-200 overflow-hidden">
                   <thead>
                     <tr className="bg-slate-50">
                       <th className="border border-slate-200 px-2 py-1 text-left">Segment</th>
-                      <th className="border border-slate-200 px-2 py-1 text-left">Scores (Strokes to Par)</th>
-                      <th className="border border-slate-200 px-2 py-1 text-left">Winners</th>
+                      <th className="border border-slate-200 px-2 py-1 text-left">Winner</th>
                       <th className="border border-slate-200 px-2 py-1 text-right">Share</th>
                     </tr>
                   </thead>
@@ -443,68 +441,38 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
                       const seg = n.segments.find(s => s.segment === segName) || { segment: segName, winners: [], pot: 0 } as any;
                       const winnerLabels = seg.winners.map((id: string) => {
                         if (golfersById[id]) return golfersById[id];
-                        if (teamMap[id]) return teamMap[id].name;
+                        const team = teamMap[id];
+                        if (team) return team.name || 'Team';
                         return id;
                       });
                       return (
                         <tr key={segName} className="odd:bg-slate-50/40">
                           <td className="border border-slate-200 px-2 py-1 capitalize align-top">{segName}</td>
-                          <td className="border border-slate-200 px-2 py-1 align-top">
-                            {seg.scores ? (
-                              <div className="flex flex-col gap-0.5">
-                                {Object.entries(seg.scores)
-                                  .filter(([,v])=>Number.isFinite(v))
-                                  .sort((a,b)=> (a[1] as number)-(b[1] as number))
-                                  .map(([id, val]: any) => {
-                                    const label = (golfersById[id]) ? golfersById[id] : (teamMap[id]?.name || id);
-                                    const toParVal = seg.toPar && seg.toPar[id];
-                                    const isTeam = !!teamMap[id];
-                                    
-                                    // For teams, show the score as strokes relative to par
-                                    // For individuals, show raw strokes with toPar indicator
-                                    const displayScore = isTeam ? 
-                                      (toParVal != null ? (toParVal > 0 ? `+${toParVal}` : toParVal === 0 ? 'E' : toParVal.toString()) : '') :
-                                      val.toString();
-                                    
-                                    const scoreColor = isTeam ?
-                                      (toParVal == null ? '' : toParVal > 0 ? 'text-red-600' : toParVal < 0 ? 'text-green-600' : 'text-gray-600') :
-                                      '';
-                                    
-                                    return (
-                                      <span key={id} className="flex justify-between gap-2 items-center">
-                                        <span className="truncate max-w-[90px]" title={label}>{label}</span>
-                                        <div className="flex items-center gap-1">
-                                          <span className={`font-mono ${scoreColor}`}>{displayScore}</span>
-                                          {!isTeam && toParVal != null && (
-                                            <span className={`text-xs font-semibold px-1 py-0.5 rounded ${toParVal > 0 ? 'text-red-600' : toParVal < 0 ? 'text-green-600' : 'text-gray-600'} bg-gray-100`}>
-                                              {toParVal > 0 ? `+${toParVal}` : toParVal === 0 ? 'E' : toParVal.toString()}
-                                            </span>
-                                          )}
-                                        </div>
-                                      </span>
-                                    );
-                                  })}
-                              </div>
-                            ) : '-'}
-                          </td>
                           <td className="border border-slate-200 px-2 py-1">
                             {winnerLabels.length ? (
                               <div className="flex flex-col gap-1">
                                 {seg.winners.map((id: string) => {
                                   if (golfersById[id]) return <span key={id}>{golfersById[id]}</span>;
                                   const team = teamMap[id];
-                                  if (team) return (
-                                    <span key={id} className="inline-block">
-                                      <span className="font-semibold mr-1">{team.name}</span>
-                                      <span className="text-[10px] text-primary-700">({team.golferIds.map(gid => golfersById[gid]).join(', ')})</span>
-                                    </span>
-                                  );
+                                  if (team) {
+                                    const roster = (team.golferIds || []).map((gid) => golfersById[gid]).filter(Boolean).join(', ');
+                                    return (
+                                      <span key={id} className="inline-flex items-center gap-2">
+                                        <span className="font-semibold">{team.name || 'Team'}</span>
+                                        {roster ? <span className="text-[10px] text-slate-500 truncate max-w-[180px]" title={roster}>{roster}</span> : null}
+                                      </span>
+                                    );
+                                  }
                                   return <span key={id}>{id}</span>;
                                 })}
                               </div>
-                            ) : '-'}
+                            ) : (
+                              <span className="text-slate-400">—</span>
+                            )}
                           </td>
-                          <td className="border border-slate-200 px-2 py-1 text-right">{currency(seg.pot / (seg.winners.length || 1))}</td>
+                          <td className="border border-slate-200 px-2 py-1 text-right font-semibold">
+                            {seg.winners.length ? currency(seg.pot / seg.winners.length) : '—'}
+                          </td>
                         </tr>
                       );
                     })}
@@ -515,86 +483,25 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
                     <span key={gid} className="bg-primary-100 text-primary-800 px-2 py-0.5 rounded">{golfersById[gid]} {currency(amt)}</span>
                   ))}
                 </div>
-
-                {/* Team Stroke Nassau: show a grid that highlights which scores were counted (best-N) */}
-                {isTeam && teamsForGrid.length >= 2 && (
-                  <details className="mt-3">
-                    <summary className="cursor-pointer text-[11px] font-medium text-primary-800 select-none">
-                      Show score usage grid (counted scores highlighted)
-                    </summary>
-                    <div className="mt-2 text-[10px] text-gray-600">
-                      Shows {cfg?.net ? 'net' : 'gross'} scores by hole. Highlighted cells are the {bestCount} lowest score(s) used for each team on that hole.
-                    </div>
-                    <div className="mt-2 overflow-x-auto">
-                      <table className="text-[10px] border-collapse w-full bg-white rounded border border-slate-200 overflow-hidden">
-                        <thead>
-                          <tr className="bg-slate-50">
-                            <th className="border border-slate-200 px-1 py-0.5 text-center" rowSpan={2}>Hole</th>
-                            <th className="border border-slate-200 px-1 py-0.5 text-center" rowSpan={2}>Par</th>
-                            {teamsForGrid.map((t: any) => (
-                              <th key={t.id} className="border border-slate-200 px-1 py-0.5 text-center" colSpan={t.memberIds.length + 1}>
-                                {t.name}
-                              </th>
-                            ))}
-                          </tr>
-                          <tr className="bg-slate-50">
-                            {teamsForGrid.map((t: any) => (
-                              <React.Fragment key={t.id}>
-                                {t.memberIds.map((gid: string) => (
-                                  <th key={gid} className="border border-slate-200 px-1 py-0.5 text-center whitespace-nowrap">
-                                    {golfersById[gid] || gid}
-                                  </th>
-                                ))}
-                                <th className="border border-slate-200 px-1 py-0.5 text-center whitespace-nowrap">Used</th>
-                              </React.Fragment>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {holes.map(holeNumber => (
-                            <tr key={holeNumber} className="odd:bg-slate-50/40">
-                              <td className="border border-slate-200 px-1 py-0.5 text-center font-mono">{holeNumber}</td>
-                              <td className="border border-slate-200 px-1 py-0.5 text-center">{getHolePar(holeNumber)}</td>
-                              {teamsForGrid.map((team: any) => {
-                                const usage = computeTeamHoleUsage(team, holeNumber);
-                                return (
-                                  <React.Fragment key={team.id}>
-                                    {usage.members.map((m: any) => {
-                                      const used = usage.usedIds.has(m.gid);
-                                      const hasScore = m.value != null;
-                                      return (
-                                        <td
-                                          key={m.gid}
-                                          className={`border border-slate-200 px-1 py-0.5 text-center font-mono ${
-                                            !hasScore ? 'text-gray-400' : used ? 'bg-primary-100 text-primary-900 font-semibold' : ''
-                                          }`}
-                                          title={m.label}
-                                        >
-                                          {hasScore ? m.value : '—'}
-                                        </td>
-                                      );
-                                    })}
-                                    <td className="border border-slate-200 px-1 py-0.5 text-center font-mono font-semibold">
-                                      {usage.usedTotal != null ? usage.usedTotal : '—'}
-                                    </td>
-                                  </React.Fragment>
-                                );
-                              })}
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </details>
-                )}
               </div>
             );
           })}
-        </section>
+          </div>
+        </details>
       )}
-    {skinsArray.length>0 && skinsArray.map((sk, idx) => sk && (
-        <section key={sk.configId} className="border border-slate-200 rounded-lg p-3 bg-white shadow-sm">
-      <h2 className="font-semibold mb-2 text-primary-900">Skins {skinsArray.length>1 && (<span className="text-[11px] font-normal ml-1">#{idx+1} {(() => { const cfg = (Array.isArray(event.games.skins)?event.games.skins:[event.games.skins]).find((c: any)=> c && c.id===sk.configId); return cfg?.net ? 'Net' : 'Gross'; })()}</span>)}</h2>
+
+      {skinsArray.length>0 && skinsArray.map((sk, idx) => sk && (
+        <details key={sk.configId} className="border border-slate-200 rounded-lg p-3 bg-white shadow-sm">
+          <summary className="cursor-pointer select-none flex items-center justify-between">
+            <div>
+              <div className="font-semibold text-primary-900">
+                Skins {skinsArray.length>1 && (<span className="text-[11px] font-normal ml-1">#{idx+1} {(() => { const cfg = (Array.isArray(event.games.skins)?event.games.skins:[event.games.skins]).find((c: any)=> c && c.id===sk.configId); return cfg?.net ? 'Net' : 'Gross'; })()}</span>)}
+              </div>
+              <div className="text-[11px] text-slate-600">Pot {currency(sk.totalPot)} · tap for details</div>
+            </div>
+            <span className="text-slate-400 text-sm">▾</span>
+          </summary>
+          <div className="mt-3">
           {(() => {
             const cfg = (Array.isArray(event.games.skins) ? event.games.skins : [event.games.skins]).find((c: any) => c && c.id === sk.configId);
             return (
@@ -603,47 +510,102 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
               </div>
             );
           })()}
-          <div className="text-[11px] text-primary-700 mb-2 font-medium">Pot {currency(sk.totalPot)}</div>
-          <div className="mb-3">
-            <table className="text-[10px] border-collapse w-full bg-white mb-3 rounded border border-slate-200 overflow-hidden">
-              <thead>
-                <tr className="bg-slate-50">
-                  <th className="border border-slate-200 px-1 py-0.5">Hole</th>
-                  <th className="border border-slate-200 px-1 py-0.5">Winner</th>
-                  <th className="border border-slate-200 px-1 py-0.5">Score</th>
-                  <th className="border border-slate-200 px-1 py-0.5">Skin Value</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sk.holeResults.map((hr: any) => (
-                  <tr key={hr.hole} className="odd:bg-slate-50/40">
-                    <td className="border border-slate-200 px-1 py-0.5 text-center">{hr.hole}</td>
-                    <td className="border border-slate-200 px-1 py-0.5">
-                      {Array.isArray(hr.winners) && hr.winners.length > 1
-                        ? `Tie${hr.carryIntoNext ? ' (carry)' : ''}: ${hr.winners.map((gid: string) => golfersById[gid]).join(', ')}`
-                        : golfersById[hr.winners?.[0]]}
-                    </td>
-                    <td className="border border-slate-200 px-1 py-0.5 text-center">{hr.winningScore ?? '—'}</td>
-                    <td className="border border-slate-200 px-1 py-0.5 text-right">{currency(hr.potValue)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          {(() => {
+            const skinsWonByGolfer: Record<string, number> = {};
+            (sk.holeResults || []).forEach((hr: any) => {
+              const winners = Array.isArray(hr.winners) ? hr.winners : [];
+              if (winners.length === 1) {
+                const gid = winners[0];
+                skinsWonByGolfer[gid] = (skinsWonByGolfer[gid] || 0) + 1;
+              }
+            });
+
+            const rows = Object.entries(sk.winningsByGolfer || {})
+              .map(([gid, amt]) => ({
+                gid,
+                name: golfersById[gid] || gid,
+                winnings: Number(amt) || 0,
+                skinsWon: skinsWonByGolfer[gid] || 0,
+              }))
+              // Only show golfers who actually won at least one skin.
+              // (Keeps the summary focused; losers are already visible in overall payouts table.)
+              .filter((r) => r.gid && r.name && r.skinsWon > 0)
+              .sort((a, b) => b.winnings - a.winnings);
+
+            return (
+              <>
+                <table className="text-[11px] border-collapse w-full bg-white mb-2 rounded border border-slate-200 overflow-hidden">
+                  <thead>
+                    <tr className="bg-slate-50">
+                      <th className="border border-slate-200 px-2 py-1 text-left">Player</th>
+                      <th className="border border-slate-200 px-2 py-1 text-center">Skins</th>
+                      <th className="border border-slate-200 px-2 py-1 text-right">Winnings</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rows.map((r) => (
+                      <tr key={r.gid} className="odd:bg-slate-50/40">
+                        <td className="border border-slate-200 px-2 py-1">{r.name}</td>
+                        <td className="border border-slate-200 px-2 py-1 text-center font-mono">{r.skinsWon}</td>
+                        <td className="border border-slate-200 px-2 py-1 text-right font-extrabold text-amber-700">
+                          {r.winnings > 0 ? currency(r.winnings) : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-[11px] font-medium text-slate-700 select-none">
+                    Show hole-by-hole
+                  </summary>
+                  <div className="mt-2 overflow-x-auto">
+                    <table className="text-[10px] border-collapse w-full bg-white mb-3 rounded border border-slate-200 overflow-hidden">
+                      <thead>
+                        <tr className="bg-slate-50">
+                          <th className="border border-slate-200 px-1 py-0.5">Hole</th>
+                          <th className="border border-slate-200 px-1 py-0.5">Winner</th>
+                          <th className="border border-slate-200 px-1 py-0.5">Score</th>
+                          <th className="border border-slate-200 px-1 py-0.5">Skin Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sk.holeResults.map((hr: any) => (
+                          <tr key={hr.hole} className="odd:bg-slate-50/40">
+                            <td className="border border-slate-200 px-1 py-0.5 text-center">{hr.hole}</td>
+                            <td className="border border-slate-200 px-1 py-0.5">
+                              {Array.isArray(hr.winners) && hr.winners.length > 1
+                                ? `Tie${hr.carryIntoNext ? ' (carry)' : ''}: ${hr.winners.map((gid: string) => golfersById[gid]).join(', ')}`
+                                : golfersById[hr.winners?.[0]]}
+                            </td>
+                            <td className="border border-slate-200 px-1 py-0.5 text-center">{hr.winningScore ?? '—'}</td>
+                            <td className="border border-slate-200 px-1 py-0.5 text-right">{currency(hr.potValue)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
+              </>
+            );
+          })()}
           </div>
-          <div className="flex flex-wrap gap-2 text-[11px] mb-1">
-            {Object.entries(sk.winningsByGolfer).filter(([,v])=> (v as number) > 0).map(([gid, amt]: any) => (
-              <span key={gid} className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">{golfersById[gid]} {currency(amt as number)}</span>
-            ))}
-          </div>
-        </section>
+        </details>
       ))}
       
       {/* Pinky Results */}
       {payouts.pinky.length > 0 && payouts.pinky.map((pinky, idx) => (
-        <section key={pinky.configId} className="border border-slate-200 rounded-lg p-3 bg-white shadow-sm">
-          <h2 className="font-semibold mb-2 text-primary-900">
-            Pinky {payouts.pinky.length > 1 && <span className="text-[11px] font-normal ml-1">#{idx + 1}</span>}
-          </h2>
+        <details key={pinky.configId} className="border border-slate-200 rounded-lg p-3 bg-white shadow-sm">
+          <summary className="cursor-pointer select-none flex items-center justify-between">
+            <div>
+              <div className="font-semibold text-primary-900">
+                Pinky {payouts.pinky.length > 1 && <span className="text-[11px] font-normal ml-1">#{idx + 1}</span>}
+              </div>
+              <div className="text-[11px] text-slate-600">Fee {currency(pinky.feePerPinky)} · tap for details</div>
+            </div>
+            <span className="text-slate-400 text-sm">▾</span>
+          </summary>
+          <div className="mt-3">
           <div className="text-[11px] text-red-700 mb-2 font-medium">Fee per Pinky: {currency(pinky.feePerPinky)}</div>
           
           {pinky.results.length > 0 ? (
@@ -693,15 +655,23 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
               ))
             }
           </div>
-        </section>
+          </div>
+        </details>
       ))}
       
       {/* Greenie Results */}
       {payouts.greenie.length > 0 && payouts.greenie.map((greenie, idx) => (
-        <section key={greenie.configId} className="border border-slate-200 rounded-lg p-3 bg-white shadow-sm">
-          <h2 className="font-semibold mb-2 text-primary-900">
-            Greenie {payouts.greenie.length > 1 && <span className="text-[11px] font-normal ml-1">#{idx + 1}</span>}
-          </h2>
+        <details key={greenie.configId} className="border border-slate-200 rounded-lg p-3 bg-white shadow-sm">
+          <summary className="cursor-pointer select-none flex items-center justify-between">
+            <div>
+              <div className="font-semibold text-primary-900">
+                Greenie {payouts.greenie.length > 1 && <span className="text-[11px] font-normal ml-1">#{idx + 1}</span>}
+              </div>
+              <div className="text-[11px] text-slate-600">Fee {currency(greenie.feePerGreenie)} · tap for details</div>
+            </div>
+            <span className="text-slate-400 text-sm">▾</span>
+          </summary>
+          <div className="mt-3">
           <div className="text-[11px] text-green-700 mb-2 font-medium">Fee per Greenie: {currency(greenie.feePerGreenie)}</div>
           
           {greenie.results.length > 0 ? (
@@ -751,7 +721,8 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
               ))
             }
           </div>
-        </section>
+          </div>
+        </details>
       ))}
     </div>
   );

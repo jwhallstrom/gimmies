@@ -131,6 +131,7 @@ export const createEventSlice = (
     
     const newEvent: Event = {
       id,
+      hubType: (initialData as any)?.hubType || 'event',
       name: initialData?.name || '',
       date: initialData?.date || new Date().toISOString().slice(0, 10),
       course: initialData?.course || {},
@@ -257,8 +258,8 @@ export const createEventSlice = (
         const profile = isProfileId ? state.profiles.find((p: GolferProfile) => p.id === golferId) : null;
         
         const eventGolfer: EventGolfer = isProfileId 
-          ? { profileId: golferId, displayName: profile?.name || 'Unknown', handicapSnapshot: profile?.handicapIndex ?? null, teeName: teeName || undefined, handicapOverride: handicapOverride ?? null }
-          : { customName: golferId, displayName: golferId, handicapSnapshot: null, teeName: teeName || undefined, handicapOverride: handicapOverride ?? null };
+          ? { profileId: golferId, displayName: profile?.name || 'Unknown', handicapSnapshot: profile?.handicapIndex ?? null, teeName: teeName || undefined, handicapOverride: handicapOverride ?? null, gamePreference: 'all' }
+          : { customName: golferId, displayName: golferId, handicapSnapshot: null, teeName: teeName || undefined, handicapOverride: handicapOverride ?? null, gamePreference: 'all' };
         
         const tee = getTee(e.course.courseId, e.course.teeName);
         const holes = tee?.holes?.length ? tee.holes : Array.from({ length: 18 }).map((_, i) => ({ number: i + 1 }));
@@ -390,9 +391,10 @@ export const createEventSlice = (
   },
   
   canEditScore: (eventId: string, golferId: string) => {
-    const event = get().events.find((e: Event) => e.id === eventId);
+    const event = get().events.find((e: Event) => e.id === eventId) || get().completedEvents.find((e: Event) => e.id === eventId);
     const currentProfile = get().currentProfile;
     if (!event || !currentProfile) return false;
+    if (event.isCompleted) return false;
     if (event.ownerProfileId === currentProfile.id) return true;
     if (golferId === currentProfile.id) return true;
     if (event.scorecardView === 'team') {
@@ -421,7 +423,9 @@ export const createEventSlice = (
         const shareCode = await saveEventToCloud(event, currentProfile.id);
         if (shareCode) {
           set((state: any) => ({
-            events: state.events.map((e: Event) => e.id === eventId ? { ...e, shareCode, isPublic: true, lastModified: new Date().toISOString() } : e)
+            // Generating a code should not force the game to be discoverable ("public").
+            // Public/discoverable is controlled separately via event.isPublic.
+            events: state.events.map((e: Event) => e.id === eventId ? { ...e, shareCode, lastModified: new Date().toISOString() } : e)
           }));
           return shareCode;
         }
@@ -432,7 +436,7 @@ export const createEventSlice = (
 
     const shareCode = nanoid(6).toUpperCase();
     set((state: any) => ({
-      events: state.events.map((e: Event) => e.id === eventId ? { ...e, shareCode, isPublic: true, lastModified: new Date().toISOString() } : e)
+      events: state.events.map((e: Event) => e.id === eventId ? { ...e, shareCode, lastModified: new Date().toISOString() } : e)
     }));
     return shareCode;
   },
@@ -473,7 +477,8 @@ export const createEventSlice = (
       }
     }
 
-    const event = get().events.find((e: Event) => e.shareCode === shareCode && e.isPublic);
+    // Local-only fallback: allow joining invite-only games (not necessarily public/discoverable)
+    const event = get().events.find((e: Event) => e.shareCode === shareCode);
     if (!event) {
       return { success: false, error: 'Event not found or share code is invalid.' };
     }

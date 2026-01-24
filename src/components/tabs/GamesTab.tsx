@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import useStore from '../../state/store';
 // Skins preview (holes won) moved to OverviewTab.
 import { nanoid } from 'nanoid/non-secure';
+import { useNavigate } from 'react-router-dom';
 
 type Props = { eventId: string };
 
@@ -33,6 +34,7 @@ const GAME_TYPES = [
 ];
 
 const GamesTab: React.FC<Props> = ({ eventId }) => {
+  const navigate = useNavigate();
   const event = useStore((s: any) => 
     s.events.find((e: any) => e.id === eventId) || 
     s.completedEvents.find((e: any) => e.id === eventId)
@@ -43,6 +45,10 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
   
   const [showAddGame, setShowAddGame] = useState(false);
   const [expandedDescription, setExpandedDescription] = useState<string | null>(null);
+  const [nassauSetupId, setNassauSetupId] = useState<string | null>(null);
+  const [skinsSetupId, setSkinsSetupId] = useState<string | null>(null);
+  const [pinkySetupId, setPinkySetupId] = useState<string | null>(null);
+  const [greenieSetupId, setGreenieSetupId] = useState<string | null>(null);
 
   if (!event) return null;
   
@@ -69,6 +75,18 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
   
   // Get all golfers with their data
   const allGolfers = event.golfers.map(getGolferData).filter(Boolean);
+  const gameEligibleIds = (game: 'nassau' | 'skins' | 'pinky' | 'greenie') => {
+    const ids = (event.golfers || [])
+      .map((g: any) => g.profileId || g.customName || g.displayName)
+      .filter((id: any) => !!id) as string[];
+    return ids.filter((gid) => {
+      const eg = (event.golfers || []).find((x: any) => (x.profileId || x.customName || x.displayName) === gid);
+      const pref: 'all' | 'skins' | 'none' = (eg?.gamePreference as any) || 'all';
+      if (pref === 'none') return false;
+      if (pref === 'skins') return game === 'skins';
+      return true; // all
+    });
+  };
   const addNassau = (net: boolean) => {
     // Use the default group (first group) for the Nassau game
     const defaultGroupId = event.groups.length > 0 ? event.groups[0].id : null;
@@ -76,14 +94,31 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
       alert('Please create an event with golfers first before adding games.');
       return;
     }
-    updateEvent(eventId, { games: { ...event.games, nassau: [...event.games.nassau, { id: nanoid(6), groupId: defaultGroupId, fee: 5, net }] } });
+    const id = nanoid(6);
+    updateEvent(eventId, {
+      games: {
+        ...event.games,
+        nassau: [
+          ...event.games.nassau,
+          { id, groupId: defaultGroupId, fee: 5, fees: { out: 5, in: 5, total: 5 }, net, participantGolferIds: gameEligibleIds('nassau') },
+        ],
+      },
+    });
+    setNassauSetupId(id);
   };
   const removeNassau = (id: string) => {
     useStore.getState().removeNassau(eventId, id);
   };
   const skinsArray: any[] = Array.isArray(event.games.skins) ? event.games.skins : (event.games.skins ? [event.games.skins] : []);
   const addSkins = (net: boolean) => {
-    updateEvent(eventId, { games: { ...event.games, skins: [...skinsArray, { id: nanoid(6), fee: 10, net, carryovers: false }] } });
+    const id = nanoid(6);
+    updateEvent(eventId, {
+      games: {
+        ...event.games,
+        skins: [...skinsArray, { id, fee: 10, net, carryovers: false, participantGolferIds: gameEligibleIds('skins') }],
+      },
+    });
+    setSkinsSetupId(id);
   };
   const removeSkins = (id: string) => {
     useStore.getState().removeSkins(eventId, id);
@@ -92,14 +127,16 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
   // Pinky game management
   const pinkyArray: any[] = Array.isArray(event.games.pinky) ? event.games.pinky : [];
   const addPinky = () => {
+    const id = nanoid(6);
     updateEvent(eventId, { 
       games: { 
         nassau: event.games.nassau || [],
         skins: event.games.skins || [],
-        pinky: [...pinkyArray, { id: nanoid(6), fee: 1 }],
+        pinky: [...pinkyArray, { id, fee: 1, participantGolferIds: gameEligibleIds('pinky') }],
         greenie: event.games.greenie || []
       } 
     });
+    setPinkySetupId(id);
   };
   const removePinky = (id: string) => {
     useStore.getState().removePinky(eventId, id);
@@ -116,14 +153,16 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
   // Greenie game management
   const greenieArray: any[] = Array.isArray(event.games.greenie) ? event.games.greenie : [];
   const addGreenie = () => {
+    const id = nanoid(6);
     updateEvent(eventId, { 
       games: { 
         nassau: event.games.nassau || [],
         skins: event.games.skins || [],
         pinky: event.games.pinky || [],
-        greenie: [...greenieArray, { id: nanoid(6), fee: 1 }]
+        greenie: [...greenieArray, { id, fee: 1, participantGolferIds: gameEligibleIds('greenie') }]
       } 
     });
+    setGreenieSetupId(id);
   };
   const removeGreenie = (id: string) => {
     useStore.getState().removeGreenie(eventId, id);
@@ -278,41 +317,19 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                         </button>
                       </div>
                       <div className="flex gap-2">
-                        {type.hasNetOption ? (
-                          <>
-                            <button
-                              onClick={() => {
-                                if (type.id === 'nassau') addNassau(false);
-                                if (type.id === 'skins') addSkins(false);
-                                setShowAddGame(false);
-                              }}
-                              className="text-xs px-2 py-1 rounded bg-white border border-gray-300 text-gray-700 hover:border-primary-500 hover:text-primary-600"
-                            >
-                              Add Gross
-                            </button>
-                            <button
-                              onClick={() => {
-                                if (type.id === 'nassau') addNassau(true);
-                                if (type.id === 'skins') addSkins(true);
-                                setShowAddGame(false);
-                              }}
-                              className="text-xs px-2 py-1 rounded bg-white border border-gray-300 text-gray-700 hover:border-primary-500 hover:text-primary-600"
-                            >
-                              Add Net
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            onClick={() => {
-                              if (type.id === 'pinky') addPinky();
-                              if (type.id === 'greenie') addGreenie();
-                              setShowAddGame(false);
-                            }}
-                            className="text-xs px-3 py-1 rounded bg-primary-600 text-white hover:bg-primary-700"
-                          >
-                            Add
-                          </button>
-                        )}
+                        <button
+                          onClick={() => {
+                            const defaultNet = Boolean(currentProfile?.preferences?.defaultNetScoring);
+                            if (type.id === 'nassau') addNassau(defaultNet);
+                            if (type.id === 'skins') addSkins(defaultNet);
+                            if (type.id === 'pinky') addPinky();
+                            if (type.id === 'greenie') addGreenie();
+                            setShowAddGame(false);
+                          }}
+                          className="text-xs px-3 py-1 rounded bg-primary-600 text-white hover:bg-primary-700"
+                        >
+                          Add
+                        </button>
                       </div>
                     </div>
                     {expandedDescription === type.id && (
@@ -344,220 +361,254 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
             Nassau
           </h2>
           <div className="grid gap-3 max-w-lg">
-          {event.games.nassau.map((n: any, i: number) => {
-            const updateCfg = (patch: any) => updateEvent(eventId, { games: { ...event.games, nassau: event.games.nassau.map((x: any) => x.id === n.id ? { ...x, ...patch } : x) } });
-            const participantIds = n.participantGolferIds && n.participantGolferIds.length > 1 ? n.participantGolferIds : allGolfers.map((gg:any)=>gg.id);
-            const activeGolfers = allGolfers.filter((g:any)=> participantIds.includes(g.id));
-            const inactiveGolfers = allGolfers.filter((g:any)=> !participantIds.includes(g.id));
-            const setList = (listIds: string[]) => {
-              const normalized = listIds.length === allGolfers.length ? undefined : listIds;
-              updateCfg({ participantGolferIds: normalized });
-            };
-            const removeActive = (gid: string) => {
-              let list = participantIds.filter((id: string) => id !== gid);
-                if (list.length < 2) list = allGolfers.map((gg:any)=>gg.id); // enforce minimum
-              setList(list);
-            };
-            const addInactive = (gid: string) => {
-              let list = [...participantIds, gid];
-              setList(list);
-            };
-            return (
-              <div key={n.id} className="border rounded p-3 bg-white shadow-sm text-[11px] flex flex-col gap-2">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold">Nassau #{i+1}</span>
-                    <span className="text-[10px] px-1 rounded bg-primary-100 text-primary-700">{n.net ? 'Net' : 'Gross'}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <label className="flex items-center gap-1">Fee
-                      <input className="border rounded px-1 py-0.5 w-20" type="number" value={n.fee} onChange={e => updateCfg({ fee: Number(e.target.value) })} disabled={event.isCompleted || !isOwner} />
-                    </label>
-                    <label className="flex items-center gap-1">Net
-                      <input type="checkbox" checked={n.net} onChange={e => updateCfg({ net: e.target.checked })} disabled={event.isCompleted || !isOwner} />
-                    </label>
-                    {(() => {
-                      const teamsArr = (n.teams || []).filter((t:any)=> t.golferIds && t.golferIds.length>0);
-                      const minTeamSize = teamsArr.length>0 ? Math.min(...teamsArr.map((t:any)=> t.golferIds.length)) : 0;
-                      const current = n.teamBestCount || undefined;
-                      const maxSelectable = minTeamSize; // can't exceed smallest team
-                      const options = Array.from({length: maxSelectable}, (_,i)=> i+1);
-                      const effectiveValue = current && current <= maxSelectable ? String(current) : '';
-                      const hasTeams = teamsArr.length > 0;
-                      
-                      // Only show Team Best dropdown if teams exist
-                      if (!hasTeams) return null;
-                      
-                      return (
-                        <label className="flex items-center gap-1" title={maxSelectable===0? 'Add players to teams to enable Team Best': 'Number of best scores per team used per segment'}>
-                          Team Best
-                          <select
-                            className="border rounded px-1 py-0.5 disabled:opacity-50"
-                            value={effectiveValue}
-                            disabled={maxSelectable===0 || event.isCompleted}
-                            onChange={e => updateCfg({ teamBestCount: e.target.value ? Number(e.target.value) : undefined })}
-                          >
-                            <option value="">—</option>
-                            {options.map(v=> <option key={v} value={v}>{v}</option>)}
-                          </select>
-                        </label>
-                      );
-                    })()}
-                    <button type="button" onClick={() => removeNassau(n.id)} className="text-[10px] px-2 py-1 rounded border border-red-200 bg-red-50 text-red-600 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted || !isOwner}>Remove</button>
-                  </div>
-                </div>
-                
-                {/* Participants Section */}
-                <div className="border-t pt-2 mt-2">
-                  <h4 className="font-semibold text-[10px] tracking-wide mb-2">Participants ({activeGolfers.length})</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[9px] font-semibold tracking-wide text-primary-700">Playing</span>
-                        {activeGolfers.length !== allGolfers.length && (
-                          <button className="text-[9px] underline disabled:opacity-50 disabled:cursor-not-allowed" onClick={()=> setList(allGolfers.map((gg:any)=>gg.id))} disabled={event.isCompleted || !isOwner}>All</button>
+            {event.games.nassau.map((n: any, i: number) => {
+              const updateCfg = (patch: any) =>
+                updateEvent(eventId, {
+                  games: {
+                    ...event.games,
+                    nassau: event.games.nassau.map((x: any) => (x.id === n.id ? { ...x, ...patch } : x)),
+                  },
+                });
+
+              const fees = n.fees ?? { out: n.fee, in: n.fee, total: n.fee };
+              const hasTeams = Boolean((n.teams || []).filter((t: any) => (t.golferIds || []).length > 0).length >= 2);
+
+              return (
+                <button
+                  key={n.id}
+                  type="button"
+                  onClick={() => setNassauSetupId(n.id)}
+                  className="text-left border rounded-xl p-4 bg-white shadow-sm hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div className="font-extrabold text-gray-900">Nassau #{i + 1}</div>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary-100 text-primary-700 font-bold">
+                          {n.net ? 'Net' : 'Gross'}
+                        </span>
+                        {hasTeams ? (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-bold">
+                            Teams
+                          </span>
+                        ) : (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold">
+                            Individual
+                          </span>
                         )}
                       </div>
-                      <div className="flex flex-wrap gap-1">
-                        {activeGolfers.map((g:any)=>(
-                          <button key={g.id} type="button" title="Tap to remove" onClick={()=> removeActive(g.id)} className="text-[9px] px-1.5 py-0.5 rounded border bg-primary-600 text-white border-primary-600 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted || !isOwner}>
-                            {g.name}
-                          </button>
-                        ))}
-                        {activeGolfers.length===0 && <span className="text-[9px] text-gray-500">None</span>}
+                      <div className="mt-1 text-xs text-slate-600">
+                        Out <span className="font-bold text-slate-800">${fees.out}</span> · In{' '}
+                        <span className="font-bold text-slate-800">${fees.in}</span> · Total{' '}
+                        <span className="font-bold text-slate-800">${fees.total}</span>
+                      </div>
+                      <div className="mt-1 text-[11px] text-slate-500">
+                        Tap to edit · Pick teams when you’re ready
                       </div>
                     </div>
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[9px] font-semibold tracking-wide text-gray-700">Not Playing</span>
-                        {inactiveGolfers.length>0 && (
-                          <button className="text-[9px] underline disabled:opacity-50 disabled:cursor-not-allowed" onClick={()=> setList(allGolfers.map((gg:any)=>gg.id))} disabled={event.isCompleted || !isOwner}>Add All</button>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {inactiveGolfers.map((g:any)=>(
-                          <button key={g.id} type="button" title="Tap to add" onClick={()=> addInactive(g.id)} className="text-[9px] px-1.5 py-0.5 rounded border bg-white text-primary-700 border-primary-300 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted || !isOwner}>
-                            {g.name}
-                          </button>
-                        ))}
-                        {inactiveGolfers.length===0 && <span className="text-[9px] text-gray-500">None</span>}
-                      </div>
-                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        removeNassau(n.id);
+                      }}
+                      className="text-[11px] px-2 py-1 rounded-lg border border-red-200 bg-red-50 text-red-700 font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={event.isCompleted || !isOwner}
+                      title="Remove Nassau"
+                    >
+                      Remove
+                    </button>
                   </div>
-                  <div className="text-[9px] text-gray-500 mt-2">Tap a name to move between lists. Minimum 2 participants enforced.</div>
-                </div>
-                
-                <div className="flex flex-col gap-2 mt-1">
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="font-semibold text-[10px] tracking-wide">Team Options</span>
-                      {(() => {
-                        const hasTeams = (n.teams || []).filter((t:any)=> t.golferIds && t.golferIds.length>0).length > 0;
-                        if (hasTeams) {
-                          return <span className="text-[9px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded">Team Stroke Nassau</span>;
-                        } else {
-                          return <span className="text-[9px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded">Individual Nassau</span>;
-                        }
-                      })()}
-                    </div>
-                    {(() => {
-                      const hasTeams = (n.teams || []).filter((t:any)=> t.golferIds && t.golferIds.length>0).length > 0;
-                      const canAddTeams = activeGolfers.length >= 4;
-                      
-                      if (!hasTeams && !canAddTeams) {
-                        return (
-                          <div className="text-[10px] text-gray-600 bg-gray-50 px-3 py-2 rounded border border-gray-200 mb-2">
-                            ℹ️ Individual Nassau - lowest total score wins each segment (front 9, back 9, total 18). Need 4+ golfers to create teams.
-                          </div>
-                        );
-                      }
-                      
-                      if (!hasTeams && canAddTeams) {
-                        return (
-                          <div className="text-[10px] text-blue-700 bg-blue-50 px-3 py-2 rounded border border-blue-200 mb-2">
-                            ℹ️ Individual Nassau mode. Add teams below for team play (optional).
-                          </div>
-                        );
-                      }
-                      
-                      return null;
-                    })()}
-                    <div className="grid grid-cols-2 xs:grid-cols-3 sm:flex sm:flex-wrap gap-2">
-                      {(() => {
-                        const canAddTeams = activeGolfers.length >= 4;
-                        return (
-                          <button 
-                            type="button" 
-                            className="text-[10px] px-2 py-1 border border-primary-300 rounded bg-primary-50 text-primary-700 disabled:opacity-50 disabled:cursor-not-allowed" 
-                            onClick={() => {
-                              const teams = n.teams || [];
-                              updateCfg({ teams: [...teams, { id: 'T' + (teams.length + 1), name: 'Team ' + (teams.length + 1), golferIds: [] }] });
-                            }} 
-                            disabled={event.isCompleted || !isOwner || !canAddTeams}
-                            title={!canAddTeams ? 'Need 4+ golfers to create teams' : 'Add a new team'}
-                          >
-                            Add Team{!canAddTeams ? ' (4+ golfers)' : ''}
-                          </button>
-                        );
-                      })()}
-                      <button type="button" className="text-[10px] px-2 py-1 border border-primary-300 rounded bg-white text-primary-700 disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => randomizeTeams(n, activeGolfers)} disabled={event.isCompleted || !isOwner}>Randomize</button>
-                      <button type="button" className="text-[10px] px-2 py-1 border border-primary-300 rounded bg-white text-primary-700 disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => autoBalanceTeams(n, activeGolfers)} disabled={event.isCompleted || !isOwner}>Auto-Balance</button>
-                      <button type="button" className="text-[10px] px-2 py-1 border border-primary-600 rounded bg-primary-600 text-white disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => setBulkAssignState({ nassauId: n.id, selected: new Set(), mode: 'assign' })} disabled={event.isCompleted || !isOwner}>Assign</button>
-                    </div>
+
+                  <div className="mt-3 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        navigate(`/event/${eventId}/games/nassau/${n.id}/teams`);
+                      }}
+                      className="text-xs font-extrabold px-3 py-2 rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={event.isCompleted || !isOwner}
+                    >
+                      Pick teams
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        updateCfg({ net: !n.net });
+                      }}
+                      className="text-xs font-bold px-3 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={event.isCompleted || !isOwner}
+                      title="Toggle net/gross"
+                    >
+                      {n.net ? 'Switch to Gross' : 'Switch to Net'}
+                    </button>
                   </div>
-                  <div className="flex items-center justify-between">
-                    <span className="font-semibold text-[10px] tracking-wide">Teams</span>
-                  </div>
-                  <div className="grid grid-cols-1 gap-2">
-                    {(n.teams || []).map((t: any, ti: number) => (
-                      <div key={t.id} className="border rounded p-2 bg-white/70 flex flex-col gap-1">
-                        <div className="flex items-center gap-2">
-                          <input className="border rounded px-1 py-0.5 flex-1 disabled:opacity-50" aria-label="Team Name" value={t.name} onChange={e => {
-                            const teams = (n.teams || []).map((x: any) => x.id === t.id ? { ...x, name: e.target.value } : x);
-                            updateCfg({ teams });
-                          }} disabled={event.isCompleted || !isOwner} />
-                          <button type="button" className="text-[10px] text-red-600 border border-red-200 rounded px-1 py-0.5 bg-red-50 disabled:opacity-50 disabled:cursor-not-allowed" onClick={() => {
-                            const teams = (n.teams || []).filter((x: any) => x.id !== t.id);
-                            updateCfg({ teams });
-                          }} disabled={event.isCompleted || !isOwner}>Remove</button>
-                        </div>
-                        <div className="flex flex-wrap gap-1">
-                          {(() => {
-                            const allTeams = (n.teams || []);
-                            const assignedElsewhere = new Set<string>();
-                            allTeams.forEach((tm: any) => {
-                              if (tm.id === t.id) return;
-                              tm.golferIds.forEach((gid: string) => assignedElsewhere.add(gid));
-                            });
-                            return activeGolfers
-                              .filter((gg: any) => t.golferIds.includes(gg.id) || !assignedElsewhere.has(gg.id))
-                              .map((gg: any) => {
-                                const active = t.golferIds.includes(gg.id);
-                                return (
-                                  <button
-                                    type="button"
-                                    key={gg.id}
-                                    onClick={() => {
-                                      const teams = (n.teams || []).map((x: any) => x.id === t.id ? { ...x, golferIds: active ? x.golferIds.filter((id: string) => id !== gg.id) : [...x.golferIds, gg.id] } : x);
-                                      updateCfg({ teams });
-                                    }}
-                                    className={`text-[10px] px-2 py-0.5 rounded border ${active ? 'bg-primary-600 text-white border-primary-600' : 'bg-white border-primary-300 text-primary-700'} disabled:opacity-50 disabled:cursor-not-allowed`}
-                                    disabled={event.isCompleted || !isOwner}
-                                  >{gg.name}</button>
-                                );
-                              });
-                          })()}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                </button>
+              );
+            })}
           </div>
         </section>
       )}
+
+      {/* Nassau Setup Modal (simple) */}
+      {nassauSetupId && (() => {
+        const n = event.games.nassau.find((x: any) => x.id === nassauSetupId);
+        if (!n) return null;
+        const fees = n.fees ?? { out: n.fee, in: n.fee, total: n.fee };
+        const updateCfg = (patch: any) =>
+          updateEvent(eventId, {
+            games: { ...event.games, nassau: event.games.nassau.map((x: any) => (x.id === n.id ? { ...x, ...patch } : x)) },
+          });
+        const setFees = (next: { out: number; in: number; total: number }) => updateCfg({ fees: next });
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">Nassau setup</div>
+                  <div className="font-extrabold text-gray-900">Set wagers</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setNassauSetupId(null)}
+                  className="p-2 rounded-full hover:bg-slate-100"
+                  aria-label="Close"
+                  title="Close"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="p-4 space-y-4">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="text-xs font-bold text-slate-700 mb-2">Gross vs Net</div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => updateCfg({ net: false })}
+                      className={`flex-1 px-3 py-2 rounded-lg text-xs font-extrabold border ${
+                        !n.net ? 'bg-white border-primary-500 text-primary-800' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                      disabled={event.isCompleted || !isOwner}
+                    >
+                      Gross
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateCfg({ net: true })}
+                      className={`flex-1 px-3 py-2 rounded-lg text-xs font-extrabold border ${
+                        n.net ? 'bg-white border-primary-500 text-primary-800' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                      disabled={event.isCompleted || !isOwner}
+                    >
+                      Net
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="text-xs font-bold text-slate-700 mb-2">Wagers (per player)</div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <label className="text-xs font-semibold text-slate-600">
+                      Out
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.25"
+                        className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2 text-sm"
+                        value={fees.out}
+                        onFocus={(e) => e.currentTarget.select()}
+                        onChange={(e) => setFees({ ...fees, out: Number(e.target.value) })}
+                        disabled={event.isCompleted || !isOwner}
+                      />
+                    </label>
+                    <label className="text-xs font-semibold text-slate-600">
+                      In
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.25"
+                        className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2 text-sm"
+                        value={fees.in}
+                        onFocus={(e) => e.currentTarget.select()}
+                        onChange={(e) => setFees({ ...fees, in: Number(e.target.value) })}
+                        disabled={event.isCompleted || !isOwner}
+                      />
+                    </label>
+                    <label className="text-xs font-semibold text-slate-600">
+                      Total
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.25"
+                        className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2 text-sm"
+                        value={fees.total}
+                        onFocus={(e) => e.currentTarget.select()}
+                        onChange={(e) => setFees({ ...fees, total: Number(e.target.value) })}
+                        disabled={event.isCompleted || !isOwner}
+                      />
+                    </label>
+                  </div>
+                  <div className="mt-2 flex gap-2 flex-wrap">
+                    {[
+                      { label: '5/5/5', fees: { out: 5, in: 5, total: 5 } },
+                      { label: '5/5/10', fees: { out: 5, in: 5, total: 10 } },
+                      { label: '10/10/10', fees: { out: 10, in: 10, total: 10 } },
+                    ].map((p) => (
+                      <button
+                        key={p.label}
+                        type="button"
+                        onClick={() => setFees(p.fees)}
+                        className="text-xs font-bold px-3 py-1.5 rounded-full border border-slate-200 bg-white hover:bg-slate-50"
+                        disabled={event.isCompleted || !isOwner}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="text-xs text-slate-600">
+                    Next: pick teams when your full group is ready. You can come back anytime.
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setNassauSetupId(null);
+                      navigate(`/event/${eventId}/games/nassau/${n.id}/teams`);
+                    }}
+                    className="mt-3 w-full bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg font-extrabold"
+                    disabled={event.isCompleted || !isOwner}
+                  >
+                    Pick teams
+                  </button>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={() => setNassauSetupId(null)}
+                  className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-200 bg-white hover:bg-slate-50"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {skinsArray.length > 0 && (
         <section>
@@ -567,89 +618,48 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
           </h2>
           <div className="grid gap-3 max-w-lg">
           {skinsArray.map((sk:any, i:number) => {
-            const updateCfg = (patch: any) => updateEvent(eventId, { games: { ...event.games, skins: skinsArray.map((s:any)=> s.id===sk.id? { ...s, ...patch } : s) } });
-            const participantIds = sk.participantGolferIds && sk.participantGolferIds.length > 1 ? sk.participantGolferIds : allGolfers.map((gg:any)=>gg.id);
-            const activeGolfers = allGolfers.filter((g:any)=> participantIds.includes(g.id));
-            const inactiveGolfers = allGolfers.filter((g:any)=> !participantIds.includes(g.id));
-            const setList = (listIds: string[]) => {
-              const normalized = listIds.length === allGolfers.length ? undefined : listIds;
-              updateCfg({ participantGolferIds: normalized });
-            };
-            const removeActive = (gid: string) => {
-              let list = participantIds.filter((id: string) => id !== gid);
-                if (list.length < 2) list = allGolfers.map((gg:any)=>gg.id);
-              setList(list);
-            };
-            const addInactive = (gid: string) => {
-              let list = [...participantIds, gid];
-              setList(list);
-            };
+            const participantIds =
+              sk.participantGolferIds && sk.participantGolferIds.length > 1 ? sk.participantGolferIds : allGolfers.map((gg: any) => gg.id);
             return (
-            <div key={sk.id} className="border rounded p-3 bg-white shadow-sm text-[11px] flex flex-col gap-2">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-semibold">Skins #{i+1}</span>
-                  <span className="text-[10px] px-1 rounded bg-primary-100 text-primary-700">{sk.net ? 'Net' : 'Gross'}</span>
-                  <span className="text-[10px] px-1 rounded bg-slate-100 text-slate-700">{sk.carryovers ? 'Carryovers On' : 'No Carryovers'}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <label className="flex items-center gap-1">Fee
-                    <input className="border rounded px-1 py-0.5 w-20" type="number" value={sk.fee} onChange={e => updateCfg({ fee: Number(e.target.value) })} disabled={event.isCompleted || !isOwner} />
-                  </label>
-                  <button type="button" onClick={()=> removeSkins(sk.id)} className="text-[10px] px-2 py-1 rounded border border-red-200 bg-red-50 text-red-600 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted || !isOwner}>Remove</button>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 flex-wrap">
-                <label className="flex items-center gap-2 text-[10px]">
-                  <input
-                    type="checkbox"
-                    checked={!!sk.carryovers}
-                    onChange={e => updateCfg({ carryovers: e.target.checked })}
-                    disabled={event.isCompleted || !isOwner}
-                  />
-                  Carryovers (ties carry)
-                </label>
-              </div>
-              
-              <div className="border-t pt-2 mt-2">
-                  <h4 className="font-semibold text-[10px] tracking-wide mb-2">Participants ({activeGolfers.length})</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[9px] font-semibold tracking-wide text-primary-700">Playing</span>
-                        {activeGolfers.length !== allGolfers.length && (
-                          <button className="text-[9px] underline disabled:opacity-50 disabled:cursor-not-allowed" onClick={()=> setList(allGolfers.map((gg:any)=>gg.id))} disabled={event.isCompleted || !isOwner}>All</button>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {activeGolfers.map((g:any)=>(
-                          <button key={g.id} type="button" title="Tap to remove" onClick={()=> removeActive(g.id)} className="text-[9px] px-1.5 py-0.5 rounded border bg-primary-600 text-white border-primary-600 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted || !isOwner}>
-                            {g.name}
-                          </button>
-                        ))}
-                        {activeGolfers.length===0 && <span className="text-[9px] text-gray-500">None</span>}
-                      </div>
+              <button
+                key={sk.id}
+                type="button"
+                onClick={() => setSkinsSetupId(sk.id)}
+                className="text-left border rounded-xl p-4 bg-white shadow-sm hover:shadow-md transition-shadow"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <div className="font-extrabold text-gray-900">Skins #{i + 1}</div>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary-100 text-primary-700 font-bold">
+                        {sk.net ? 'Net' : 'Gross'}
+                      </span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold">
+                        {sk.carryovers ? 'Carryovers' : 'No carry'}
+                      </span>
                     </div>
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-[9px] font-semibold tracking-wide text-gray-700">Not Playing</span>
-                        {inactiveGolfers.length>0 && (
-                          <button className="text-[9px] underline disabled:opacity-50 disabled:cursor-not-allowed" onClick={()=> setList(allGolfers.map((gg:any)=>gg.id))} disabled={event.isCompleted || !isOwner}>Add All</button>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {inactiveGolfers.map((g:any)=>(
-                          <button key={g.id} type="button" title="Tap to add" onClick={()=> addInactive(g.id)} className="text-[9px] px-1.5 py-0.5 rounded border bg-white text-primary-700 border-primary-300 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted || !isOwner}>
-                            {g.name}
-                          </button>
-                        ))}
-                        {inactiveGolfers.length===0 && <span className="text-[9px] text-gray-500">None</span>}
-                      </div>
+                    <div className="mt-1 text-xs text-slate-600">
+                      <span className="font-bold text-slate-800">${sk.fee}</span> per player ·{' '}
+                      <span className="font-bold text-slate-800">{participantIds.length}</span> playing
                     </div>
+                    <div className="mt-1 text-[11px] text-slate-500">Tap to edit</div>
                   </div>
-              </div>
-            </div>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      removeSkins(sk.id);
+                    }}
+                    className="text-[11px] px-2 py-1 rounded-lg border border-red-200 bg-red-50 text-red-700 font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={event.isCompleted || !isOwner}
+                    title="Remove Skins"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </button>
             );
           })}
           </div>
@@ -663,126 +673,54 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
             Pinky
           </h2>
           <div className="grid gap-3 max-w-lg">
-          {pinkyArray.map((pinky: any, i: number) => {
-            const pinkyResults = (event.pinkyResults && event.pinkyResults[pinky.id]) || [];
-            const participantIds = pinky.participantGolferIds && pinky.participantGolferIds.length > 1 ? pinky.participantGolferIds : allGolfers.map((g: any) => g.id);
-            const activeGolfers = allGolfers.filter((g: any) => participantIds.includes(g.id));
-            const inactiveGolfers = allGolfers.filter((g:any)=> !participantIds.includes(g.id));
-            
-            const updateCfg = (patch: any) => updateEvent(eventId, { games: { ...event.games, pinky: pinkyArray.map((p: any) => p.id === pinky.id ? { ...p, ...patch } : p) } });
-            const setList = (listIds: string[]) => {
-              const normalized = listIds.length === allGolfers.length ? undefined : listIds;
-              updateCfg({ participantGolferIds: normalized });
-            };
-            const removeActive = (gid: string) => {
-              let list = participantIds.filter((id: string) => id !== gid);
-                if (list.length < 2) list = allGolfers.map((gg:any)=>gg.id);
-              setList(list);
-            };
-            const addInactive = (gid: string) => {
-              let list = [...participantIds, gid];
-              setList(list);
-            };
-            
-            return (
-              <div key={pinky.id} className="border rounded p-3 bg-white shadow-sm text-[11px] flex flex-col gap-3">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold">Pinky #{i + 1}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <label className="flex items-center gap-1">Fee per Pinky
-                      <input 
-                        className="border rounded px-1 py-0.5 w-20" 
-                        type="number" 
-                        min="0.25"
-                        step="0.25"
-                        value={pinky.fee} 
-                        onChange={e => updateCfg({ fee: Number(e.target.value) })} 
-                        disabled={event.isCompleted || !isOwner} 
-                      />
-                    </label>
-                    <button 
-                      type="button" 
-                      onClick={() => removePinky(pinky.id)} 
-                      className="text-[10px] px-2 py-1 rounded border border-red-200 bg-red-50 text-red-600 disabled:opacity-50 disabled:cursor-not-allowed" 
-                      disabled={event.isCompleted || !isOwner}
-                    >Remove</button>
-                  </div>
-                </div>
-                
-                <div className="border-t pt-2">
-                  <div className="text-[10px] font-semibold mb-2 text-gray-700">Player Pinky Counts:</div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {activeGolfers.map((golfer: any) => {
-                      const result = pinkyResults.find((r: any) => r.golferId === golfer.id);
-                      const count = result?.count || 0;
-                      
-                      return (
-                        <div key={golfer.id} className="flex items-center gap-2">
-                          <label className="flex-1 truncate text-[10px]" title={golfer.name}>
-                            {golfer.name}:
-                          </label>
-                          <input
-                            type="number"
-                            min="0"
-                            className="border rounded px-1 py-0.5 w-14 text-center text-[10px]"
-                            value={count}
-                            onChange={e => setPinkyCount(pinky.id, golfer.id, Number(e.target.value))}
-                            disabled={!isOwner}
-                            placeholder="0"
-                            aria-label={`Pinky count for ${golfer.name}`}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Participants Management */}
-                <div className="border-t pt-2 mt-1">
-                   <details className="group">
-                      <summary className="text-[9px] text-gray-500 cursor-pointer hover:text-gray-700 select-none list-none flex items-center gap-1">
-                         <span className="group-open:rotate-90 transition-transform">▶</span> Manage Participants
-                      </summary>
-                      <div className="mt-2 pl-2">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="text-[9px] font-semibold tracking-wide text-primary-700">Playing</span>
-                              </div>
-                              <div className="flex flex-wrap gap-1">
-                                {activeGolfers.map((g:any)=>(
-                                  <button key={g.id} type="button" title="Tap to remove" onClick={()=> removeActive(g.id)} className="text-[9px] px-1.5 py-0.5 rounded border bg-primary-600 text-white border-primary-600 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted || !isOwner}>
-                                    {g.name}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="text-[9px] font-semibold tracking-wide text-gray-700">Not Playing</span>
-                              </div>
-                              <div className="flex flex-wrap gap-1">
-                                {inactiveGolfers.map((g:any)=>(
-                                  <button key={g.id} type="button" title="Tap to add" onClick={()=> addInactive(g.id)} className="text-[9px] px-1.5 py-0.5 rounded border bg-white text-primary-700 border-primary-300 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted || !isOwner}>
-                                    {g.name}
-                                  </button>
-                                ))}
-                                {inactiveGolfers.length===0 && <span className="text-[9px] text-gray-500">None</span>}
-                              </div>
-                            </div>
-                          </div>
+            {pinkyArray.map((pinky: any, i: number) => {
+              const participantIds =
+                pinky.participantGolferIds && pinky.participantGolferIds.length > 1 ? pinky.participantGolferIds : allGolfers.map((g: any) => g.id);
+              const results = (event.pinkyResults && event.pinkyResults[pinky.id]) || [];
+              const entered = results.filter((r: any) => r.count > 0).length;
+              return (
+                <button
+                  key={pinky.id}
+                  type="button"
+                  onClick={() => setPinkySetupId(pinky.id)}
+                  className="text-left border rounded-xl p-4 bg-white shadow-sm hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div className="font-extrabold text-gray-900">Pinky #{i + 1}</div>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold">
+                          ${pinky.fee} / pinky
+                        </span>
                       </div>
-                   </details>
-                </div>
-              </div>
-            );
-          })}
+                      <div className="mt-1 text-xs text-slate-600">
+                        <span className="font-bold text-slate-800">{participantIds.length}</span> playing ·{' '}
+                        <span className="font-bold text-slate-800">{entered}</span> with counts
+                      </div>
+                      <div className="mt-1 text-[11px] text-slate-500">Tap to enter counts</div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        removePinky(pinky.id);
+                      }}
+                      className="text-[11px] px-2 py-1 rounded-lg border border-red-200 bg-red-50 text-red-700 font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={event.isCompleted || !isOwner}
+                      title="Remove Pinky"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </section>
       )}
-      
+
       {greenieArray.length > 0 && (
         <section>
           <h2 className="font-semibold mb-2 flex items-center gap-2">
@@ -790,126 +728,519 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
             Greenie
           </h2>
           <div className="grid gap-3 max-w-lg">
-          {greenieArray.map((greenie: any, i: number) => {
-            const greenieResults = (event.greenieResults && event.greenieResults[greenie.id]) || [];
-            const participantIds = greenie.participantGolferIds && greenie.participantGolferIds.length > 1 ? greenie.participantGolferIds : allGolfers.map((g: any) => g.id);
-            const activeGolfers = allGolfers.filter((g: any) => participantIds.includes(g.id));
-            const inactiveGolfers = allGolfers.filter((g:any)=> !participantIds.includes(g.id));
-            
-            const updateCfg = (patch: any) => updateEvent(eventId, { games: { ...event.games, greenie: greenieArray.map((g: any) => g.id === greenie.id ? { ...g, ...patch } : g) } });
-            const setList = (listIds: string[]) => {
-              const normalized = listIds.length === allGolfers.length ? undefined : listIds;
-              updateCfg({ participantGolferIds: normalized });
-            };
-            const removeActive = (gid: string) => {
-              let list = participantIds.filter((id: string) => id !== gid);
-                if (list.length < 2) list = allGolfers.map((gg:any)=>gg.id);
-              setList(list);
-            };
-            const addInactive = (gid: string) => {
-              let list = [...participantIds, gid];
-              setList(list);
-            };
-            
-            return (
-              <div key={greenie.id} className="border rounded p-3 bg-white shadow-sm text-[11px] flex flex-col gap-3">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-semibold">Greenie #{i + 1}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <label className="flex items-center gap-1">Fee per Greenie
-                      <input 
-                        className="border rounded px-1 py-0.5 w-20" 
-                        type="number" 
-                        min="0.25"
-                        step="0.25"
-                        value={greenie.fee} 
-                        onChange={e => updateCfg({ fee: Number(e.target.value) })} 
-                        disabled={event.isCompleted || !isOwner} 
-                      />
-                    </label>
-                    <button 
-                      type="button" 
-                      onClick={() => removeGreenie(greenie.id)} 
-                      className="text-[10px] px-2 py-1 rounded border border-red-200 bg-red-50 text-red-600 disabled:opacity-50 disabled:cursor-not-allowed" 
-                      disabled={event.isCompleted || !isOwner}
-                    >Remove</button>
-                  </div>
-                </div>
-                
-                <div className="border-t pt-2">
-                  <div className="text-[10px] font-semibold mb-2 text-gray-700">Player Greenie Counts:</div>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {activeGolfers.map((golfer: any) => {
-                      const result = greenieResults.find((r: any) => r.golferId === golfer.id);
-                      const count = result?.count || 0;
-                      
-                      return (
-                        <div key={golfer.id} className="flex items-center gap-2">
-                          <label className="flex-1 truncate text-[10px]" title={golfer.name}>
-                            {golfer.name}:
-                          </label>
-                          <input
-                            type="number"
-                            min="0"
-                            max="4"
-                            className="border rounded px-1 py-0.5 w-14 text-center text-[10px]"
-                            value={count}
-                            onChange={e => setGreenieCount(greenie.id, golfer.id, Number(e.target.value))}
-                            disabled={!isOwner}
-                            placeholder="0"
-                            aria-label={`Greenie count for ${golfer.name}`}
-                          />
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Participants Management */}
-                <div className="border-t pt-2 mt-1">
-                   <details className="group">
-                      <summary className="text-[9px] text-gray-500 cursor-pointer hover:text-gray-700 select-none list-none flex items-center gap-1">
-                         <span className="group-open:rotate-90 transition-transform">▶</span> Manage Participants
-                      </summary>
-                      <div className="mt-2 pl-2">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            <div>
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="text-[9px] font-semibold tracking-wide text-primary-700">Playing</span>
-                              </div>
-                              <div className="flex flex-wrap gap-1">
-                                {activeGolfers.map((g:any)=>(
-                                  <button key={g.id} type="button" title="Tap to remove" onClick={()=> removeActive(g.id)} className="text-[9px] px-1.5 py-0.5 rounded border bg-primary-600 text-white border-primary-600 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted || !isOwner}>
-                                    {g.name}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                            <div>
-                              <div className="flex items-center justify-between mb-1">
-                                <span className="text-[9px] font-semibold tracking-wide text-gray-700">Not Playing</span>
-                              </div>
-                              <div className="flex flex-wrap gap-1">
-                                {inactiveGolfers.map((g:any)=>(
-                                  <button key={g.id} type="button" title="Tap to add" onClick={()=> addInactive(g.id)} className="text-[9px] px-1.5 py-0.5 rounded border bg-white text-primary-700 border-primary-300 disabled:opacity-50 disabled:cursor-not-allowed" disabled={event.isCompleted || !isOwner}>
-                                    {g.name}
-                                  </button>
-                                ))}
-                                {inactiveGolfers.length===0 && <span className="text-[9px] text-gray-500">None</span>}
-                              </div>
-                            </div>
-                          </div>
+            {greenieArray.map((greenie: any, i: number) => {
+              const participantIds =
+                greenie.participantGolferIds && greenie.participantGolferIds.length > 1 ? greenie.participantGolferIds : allGolfers.map((g: any) => g.id);
+              const results = (event.greenieResults && event.greenieResults[greenie.id]) || [];
+              const entered = results.filter((r: any) => r.count > 0).length;
+              return (
+                <button
+                  key={greenie.id}
+                  type="button"
+                  onClick={() => setGreenieSetupId(greenie.id)}
+                  className="text-left border rounded-xl p-4 bg-white shadow-sm hover:shadow-md transition-shadow"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <div className="font-extrabold text-gray-900">Greenie #{i + 1}</div>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold">
+                          ${greenie.fee} / greenie
+                        </span>
                       </div>
-                   </details>
-                </div>
-              </div>
-            );
-          })}
+                      <div className="mt-1 text-xs text-slate-600">
+                        <span className="font-bold text-slate-800">{participantIds.length}</span> playing ·{' '}
+                        <span className="font-bold text-slate-800">{entered}</span> with counts
+                      </div>
+                      <div className="mt-1 text-[11px] text-slate-500">Tap to enter counts</div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        removeGreenie(greenie.id);
+                      }}
+                      className="text-[11px] px-2 py-1 rounded-lg border border-red-200 bg-red-50 text-red-700 font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={event.isCompleted || !isOwner}
+                      title="Remove Greenie"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </section>
       )}
+
+      {/* Skins Setup Modal */}
+      {skinsSetupId && (() => {
+        const sk = skinsArray.find((x: any) => x.id === skinsSetupId);
+        if (!sk) return null;
+        const updateCfg = (patch: any) =>
+          updateEvent(eventId, { games: { ...event.games, skins: skinsArray.map((s: any) => (s.id === sk.id ? { ...s, ...patch } : s)) } });
+
+        const participantIds =
+          sk.participantGolferIds && sk.participantGolferIds.length > 1 ? sk.participantGolferIds : allGolfers.map((g: any) => g.id);
+        const activeGolfers = allGolfers.filter((g: any) => participantIds.includes(g.id));
+        const inactiveGolfers = allGolfers.filter((g: any) => !participantIds.includes(g.id));
+        const setList = (listIds: string[]) => {
+          const normalized = listIds.length === allGolfers.length ? undefined : listIds;
+          updateCfg({ participantGolferIds: normalized });
+        };
+        const toggleGolfer = (gid: string) => {
+          if (participantIds.includes(gid)) {
+            let next = participantIds.filter((id: string) => id !== gid);
+            if (next.length < 2) next = allGolfers.map((g: any) => g.id);
+            setList(next);
+          } else {
+            setList([...participantIds, gid]);
+          }
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">Skins setup</div>
+                  <div className="font-extrabold text-gray-900">Quick settings</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSkinsSetupId(null)}
+                  className="p-2 rounded-full hover:bg-slate-100"
+                  aria-label="Close"
+                  title="Close"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="p-4 space-y-4">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="text-xs font-bold text-slate-700 mb-2">Gross vs Net</div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => updateCfg({ net: false })}
+                      className={`flex-1 px-3 py-2 rounded-lg text-xs font-extrabold border ${
+                        !sk.net ? 'bg-white border-primary-500 text-primary-800' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                      disabled={event.isCompleted || !isOwner}
+                    >
+                      Gross
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => updateCfg({ net: true })}
+                      className={`flex-1 px-3 py-2 rounded-lg text-xs font-extrabold border ${
+                        sk.net ? 'bg-white border-primary-500 text-primary-800' : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                      }`}
+                      disabled={event.isCompleted || !isOwner}
+                    >
+                      Net
+                    </button>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="text-xs font-bold text-slate-700 mb-2">Wager</div>
+                  <label className="text-xs text-slate-600">Fee per player</label>
+                  <div className="mt-1">
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      value={sk.fee}
+                      onFocus={(e) => e.currentTarget.select()}
+                      onChange={(e) => updateCfg({ fee: Number(e.target.value) })}
+                      disabled={event.isCompleted || !isOwner}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold"
+                    />
+                  </div>
+                  <label className="mt-3 flex items-center gap-2 text-xs text-slate-700">
+                    <input
+                      type="checkbox"
+                      checked={!!sk.carryovers}
+                      onChange={(e) => updateCfg({ carryovers: e.target.checked })}
+                      disabled={event.isCompleted || !isOwner}
+                    />
+                    Carryovers (ties carry)
+                  </label>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-xs font-bold text-slate-700">Players</div>
+                      <div className="text-[11px] text-slate-500">Tap names to include/exclude</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setList(allGolfers.map((g: any) => g.id))}
+                      className="text-[11px] font-extrabold px-3 py-1.5 rounded-full border border-slate-200 bg-slate-50 hover:bg-slate-100 disabled:opacity-50"
+                      disabled={event.isCompleted || !isOwner || activeGolfers.length === allGolfers.length}
+                    >
+                      All
+                    </button>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {activeGolfers.map((g: any) => (
+                      <button
+                        key={g.id}
+                        type="button"
+                        onClick={() => toggleGolfer(g.id)}
+                        disabled={event.isCompleted || !isOwner}
+                        className="text-xs font-extrabold px-3 py-1.5 rounded-full bg-primary-600 text-white border border-primary-600 disabled:opacity-50"
+                      >
+                        {g.name}
+                      </button>
+                    ))}
+                    {inactiveGolfers.map((g: any) => (
+                      <button
+                        key={g.id}
+                        type="button"
+                        onClick={() => toggleGolfer(g.id)}
+                        disabled={event.isCompleted || !isOwner}
+                        className="text-xs font-bold px-3 py-1.5 rounded-full bg-white text-primary-700 border border-primary-300 disabled:opacity-50"
+                      >
+                        {g.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={() => setSkinsSetupId(null)}
+                  className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-200 bg-white hover:bg-slate-50"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Pinky Setup/Entry Modal */}
+      {pinkySetupId && (() => {
+        const cfg = pinkyArray.find((x: any) => x.id === pinkySetupId);
+        if (!cfg) return null;
+        const updateCfg = (patch: any) =>
+          updateEvent(eventId, { games: { ...event.games, pinky: pinkyArray.map((p: any) => (p.id === cfg.id ? { ...p, ...patch } : p)) } });
+
+        const participantIds =
+          cfg.participantGolferIds && cfg.participantGolferIds.length > 1 ? cfg.participantGolferIds : allGolfers.map((g: any) => g.id);
+        const activeGolfers = allGolfers.filter((g: any) => participantIds.includes(g.id));
+        const inactiveGolfers = allGolfers.filter((g: any) => !participantIds.includes(g.id));
+        const setList = (listIds: string[]) => {
+          const normalized = listIds.length === allGolfers.length ? undefined : listIds;
+          updateCfg({ participantGolferIds: normalized });
+        };
+        const toggleGolfer = (gid: string) => {
+          if (participantIds.includes(gid)) {
+            let next = participantIds.filter((id: string) => id !== gid);
+            if (next.length < 2) next = allGolfers.map((g: any) => g.id);
+            setList(next);
+          } else {
+            setList([...participantIds, gid]);
+          }
+        };
+
+        const results = (event.pinkyResults && event.pinkyResults[cfg.id]) || [];
+        const getCount = (gid: string) => results.find((r: any) => r.golferId === gid)?.count || 0;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">Pinky</div>
+                  <div className="font-extrabold text-gray-900">Enter counts</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPinkySetupId(null)}
+                  className="p-2 rounded-full hover:bg-slate-100"
+                  aria-label="Close"
+                  title="Close"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="p-4 space-y-4">
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <label className="text-xs text-slate-600">Fee per pinky</label>
+                  <div className="mt-1">
+                    <input
+                      type="number"
+                      min="0.25"
+                      step="0.25"
+                      value={cfg.fee}
+                      onFocus={(e) => e.currentTarget.select()}
+                      onChange={(e) => updateCfg({ fee: Number(e.target.value) })}
+                      disabled={event.isCompleted || !isOwner}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="text-xs font-bold text-slate-700 mb-2">Counts</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {activeGolfers.map((g: any) => (
+                      <label key={g.id} className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2">
+                        <span className="text-xs font-bold text-slate-800 truncate" title={g.name}>
+                          {g.name}
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          value={getCount(g.id)}
+                          onFocus={(e) => e.currentTarget.select()}
+                          onChange={(e) => setPinkyCount(cfg.id, g.id, Number(e.target.value))}
+                          disabled={event.isCompleted || !isOwner}
+                          className="w-16 border border-slate-300 rounded-lg px-2 py-1.5 text-center text-sm font-bold"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <details className="rounded-xl border border-slate-200 bg-white p-3">
+                  <summary className="cursor-pointer text-xs font-bold text-slate-700 select-none">Players</summary>
+                  <div className="mt-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-[11px] text-slate-500">Tap to include/exclude</div>
+                      <button
+                        type="button"
+                        onClick={() => setList(allGolfers.map((g: any) => g.id))}
+                        className="text-[11px] font-extrabold px-3 py-1.5 rounded-full border border-slate-200 bg-slate-50 hover:bg-slate-100 disabled:opacity-50"
+                        disabled={event.isCompleted || !isOwner || activeGolfers.length === allGolfers.length}
+                      >
+                        All
+                      </button>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {activeGolfers.map((g: any) => (
+                        <button
+                          key={g.id}
+                          type="button"
+                          onClick={() => toggleGolfer(g.id)}
+                          disabled={event.isCompleted || !isOwner}
+                          className="text-xs font-extrabold px-3 py-1.5 rounded-full bg-primary-600 text-white border border-primary-600 disabled:opacity-50"
+                        >
+                          {g.name}
+                        </button>
+                      ))}
+                      {inactiveGolfers.map((g: any) => (
+                        <button
+                          key={g.id}
+                          type="button"
+                          onClick={() => toggleGolfer(g.id)}
+                          disabled={event.isCompleted || !isOwner}
+                          className="text-xs font-bold px-3 py-1.5 rounded-full bg-white text-primary-700 border border-primary-300 disabled:opacity-50"
+                        >
+                          {g.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </details>
+              </div>
+
+              <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => {
+                    removePinky(cfg.id);
+                    setPinkySetupId(null);
+                  }}
+                  className="px-3 py-2 rounded-lg text-xs font-extrabold border border-red-200 bg-red-50 text-red-700 disabled:opacity-50"
+                  disabled={event.isCompleted || !isOwner}
+                >
+                  Remove
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPinkySetupId(null)}
+                  className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-200 bg-white hover:bg-slate-50"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Greenie Setup/Entry Modal */}
+      {greenieSetupId && (() => {
+        const cfg = greenieArray.find((x: any) => x.id === greenieSetupId);
+        if (!cfg) return null;
+        const updateCfg = (patch: any) =>
+          updateEvent(eventId, { games: { ...event.games, greenie: greenieArray.map((g: any) => (g.id === cfg.id ? { ...g, ...patch } : g)) } });
+
+        const participantIds =
+          cfg.participantGolferIds && cfg.participantGolferIds.length > 1 ? cfg.participantGolferIds : allGolfers.map((g: any) => g.id);
+        const activeGolfers = allGolfers.filter((g: any) => participantIds.includes(g.id));
+        const inactiveGolfers = allGolfers.filter((g: any) => !participantIds.includes(g.id));
+        const setList = (listIds: string[]) => {
+          const normalized = listIds.length === allGolfers.length ? undefined : listIds;
+          updateCfg({ participantGolferIds: normalized });
+        };
+        const toggleGolfer = (gid: string) => {
+          if (participantIds.includes(gid)) {
+            let next = participantIds.filter((id: string) => id !== gid);
+            if (next.length < 2) next = allGolfers.map((g: any) => g.id);
+            setList(next);
+          } else {
+            setList([...participantIds, gid]);
+          }
+        };
+
+        const results = (event.greenieResults && event.greenieResults[cfg.id]) || [];
+        const getCount = (gid: string) => results.find((r: any) => r.golferId === gid)?.count || 0;
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">Greenie</div>
+                  <div className="font-extrabold text-gray-900">Enter counts</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setGreenieSetupId(null)}
+                  className="p-2 rounded-full hover:bg-slate-100"
+                  aria-label="Close"
+                  title="Close"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="p-4 space-y-4">
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <label className="text-xs text-slate-600">Fee per greenie</label>
+                  <div className="mt-1">
+                    <input
+                      type="number"
+                      min="0.25"
+                      step="0.25"
+                      value={cfg.fee}
+                      onFocus={(e) => e.currentTarget.select()}
+                      onChange={(e) => updateCfg({ fee: Number(e.target.value) })}
+                      disabled={event.isCompleted || !isOwner}
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold"
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-3">
+                  <div className="text-xs font-bold text-slate-700 mb-2">Counts</div>
+                  <div className="grid grid-cols-2 gap-2">
+                    {activeGolfers.map((g: any) => (
+                      <label key={g.id} className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2">
+                        <span className="text-xs font-bold text-slate-800 truncate" title={g.name}>
+                          {g.name}
+                        </span>
+                        <input
+                          type="number"
+                          min="0"
+                          max="4"
+                          value={getCount(g.id)}
+                          onFocus={(e) => e.currentTarget.select()}
+                          onChange={(e) => setGreenieCount(cfg.id, g.id, Number(e.target.value))}
+                          disabled={event.isCompleted || !isOwner}
+                          className="w-16 border border-slate-300 rounded-lg px-2 py-1.5 text-center text-sm font-bold"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <details className="rounded-xl border border-slate-200 bg-white p-3">
+                  <summary className="cursor-pointer text-xs font-bold text-slate-700 select-none">Players</summary>
+                  <div className="mt-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-[11px] text-slate-500">Tap to include/exclude</div>
+                      <button
+                        type="button"
+                        onClick={() => setList(allGolfers.map((g: any) => g.id))}
+                        className="text-[11px] font-extrabold px-3 py-1.5 rounded-full border border-slate-200 bg-slate-50 hover:bg-slate-100 disabled:opacity-50"
+                        disabled={event.isCompleted || !isOwner || activeGolfers.length === allGolfers.length}
+                      >
+                        All
+                      </button>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {activeGolfers.map((g: any) => (
+                        <button
+                          key={g.id}
+                          type="button"
+                          onClick={() => toggleGolfer(g.id)}
+                          disabled={event.isCompleted || !isOwner}
+                          className="text-xs font-extrabold px-3 py-1.5 rounded-full bg-primary-600 text-white border border-primary-600 disabled:opacity-50"
+                        >
+                          {g.name}
+                        </button>
+                      ))}
+                      {inactiveGolfers.map((g: any) => (
+                        <button
+                          key={g.id}
+                          type="button"
+                          onClick={() => toggleGolfer(g.id)}
+                          disabled={event.isCompleted || !isOwner}
+                          className="text-xs font-bold px-3 py-1.5 rounded-full bg-white text-primary-700 border border-primary-300 disabled:opacity-50"
+                        >
+                          {g.name}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </details>
+              </div>
+
+              <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => {
+                    removeGreenie(cfg.id);
+                    setGreenieSetupId(null);
+                  }}
+                  className="px-3 py-2 rounded-lg text-xs font-extrabold border border-red-200 bg-red-50 text-red-700 disabled:opacity-50"
+                  disabled={event.isCompleted || !isOwner}
+                >
+                  Remove
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setGreenieSetupId(null)}
+                  className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-200 bg-white hover:bg-slate-50"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       
       {bulkAssignState && (() => {
         const nassau = event.games.nassau.find((nn: any) => nn.id === bulkAssignState.nassauId);

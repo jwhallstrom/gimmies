@@ -175,3 +175,171 @@ body, html {
 .sticky-header-top {
   top: 0;
 }
+
+/* ==========================================================================
+   Gimmies “ticker” (ESPN-style marquee)
+   ========================================================================== */
+
+@keyframes gimmies-marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.gimmies-ticker {
+  overflow: hidden;
+}
+
+.gimmies-ticker__inner {
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.gimmies-ticker__track {
+  display: inline-block;
+  padding-left: 100%;
+  animation-name: gimmies-marquee;
+  animation-duration: var(--gimmies-ticker-duration, 38s);
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
+/* Orange accent inside ticker */
+.gimmies-ticker strong {
+  color: #f97316; /* gimmies orange */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gimmies-ticker__track {
+    animation: none;
+    padding-left: 0;
+  }
+}
+
+/* ==========================================================================
+   Gimmies Card Depth System
+   ========================================================================== */
+
+/* Elevated card - subtle lift */
+.gimmies-card {
+  background: white;
+  border-radius: 1rem;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 
+    0 1px 3px rgba(0, 0, 0, 0.04),
+    0 4px 12px rgba(0, 0, 0, 0.03);
+  transition: box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.gimmies-card:hover {
+  box-shadow: 
+    0 4px 12px rgba(0, 0, 0, 0.06),
+    0 8px 24px rgba(0, 0, 0, 0.04);
+}
+
+/* Primary action card */
+.gimmies-card-primary {
+  background: linear-gradient(135deg, var(--tw-gradient-from, #2563eb) 0%, var(--tw-gradient-to, #1d4ed8) 100%);
+  box-shadow: 
+    0 4px 12px rgba(37, 99, 235, 0.25),
+    0 8px 24px rgba(37, 99, 235, 0.15);
+}
+
+.gimmies-card-primary:hover {
+  box-shadow: 
+    0 6px 16px rgba(37, 99, 235, 0.3),
+    0 12px 32px rgba(37, 99, 235, 0.2);
+}
+
+/* Hero card - more prominent */
+.gimmies-hero {
+  background: linear-gradient(180deg, white 0%, #fafbfc 100%);
+  border-radius: 1.5rem;
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 
+    0 2px 8px rgba(0, 0, 0, 0.04),
+    0 8px 24px rgba(0, 0, 0, 0.06);
+}
+
+/* Subtle inner glow for inputs */
+.gimmies-input-glow:focus {
+  box-shadow: 
+    0 0 0 3px rgba(37, 99, 235, 0.1),
+    inset 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+/* Smooth animations */
+@keyframes gimmies-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.gimmies-animate-in {
+  animation: gimmies-fade-in 0.3s ease-out forwards;
+}
+
+/* Staggered children animation */
+.gimmies-stagger > * {
+  animation: gimmies-fade-in 0.3s ease-out forwards;
+  opacity: 0;
+}
+
+.gimmies-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.gimmies-stagger > *:nth-child(2) { animation-delay: 50ms; }
+.gimmies-stagger > *:nth-child(3) { animation-delay: 100ms; }
+.gimmies-stagger > *:nth-child(4) { animation-delay: 150ms; }
+.gimmies-stagger > *:nth-child(5) { animation-delay: 200ms; }
+.gimmies-stagger > *:nth-child(6) { animation-delay: 250ms; }
+
+/* Dark mode card styles */
+@media (prefers-color-scheme: dark) {
+  .gimmies-card {
+    background: rgb(15 23 42);
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 
+      0 1px 3px rgba(0, 0, 0, 0.2),
+      0 4px 12px rgba(0, 0, 0, 0.15);
+  }
+  
+  .gimmies-hero {
+    background: linear-gradient(180deg, rgb(15 23 42) 0%, rgb(30 41 59) 100%);
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: 
+      0 2px 8px rgba(0, 0, 0, 0.3),
+      0 8px 24px rgba(0, 0, 0, 0.4);
+  }
+}
+
+/* ============================================================================
+   Tournament Registration Modal Animations
+   ============================================================================ */
+
+@keyframes slide-up {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s ease-out forwards;
+}
+
+@keyframes slide-down {
+  from {
+    transform: translateY(0);
+    opacity: 1;
+  }
+  to {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+.animate-slide-down {
+  animation: slide-down 0.25s ease-in forwards;
+}

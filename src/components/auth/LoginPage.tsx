@@ -1,5 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { signIn, signInWithRedirect, signUp, confirmSignUp, resetPassword, confirmResetPassword, signOut } from 'aws-amplify/auth';
+
+// Check if Amplify is properly configured
+const checkAmplifyConfigured = async (): Promise<boolean> => {
+  try {
+    const { Amplify } = await import('aws-amplify');
+    const config = (Amplify as any).getConfig?.();
+    return !!(config?.Auth?.Cognito?.userPoolId);
+  } catch {
+    return false;
+  }
+};
 
 interface LoginPageProps {
   onSuccess?: () => void;
@@ -16,6 +27,12 @@ export function LoginPage({ onSuccess, onGuestMode }: LoginPageProps) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
+  const [amplifyConfigured, setAmplifyConfigured] = useState<boolean | null>(null);
+
+  // Check Amplify configuration on mount
+  useEffect(() => {
+    checkAmplifyConfigured().then(setAmplifyConfigured);
+  }, []);
 
   const handleSocialSignIn = async (provider: 'Google' | 'Facebook' | 'Apple') => {
     try {
@@ -32,6 +49,13 @@ export function LoginPage({ onSuccess, onGuestMode }: LoginPageProps) {
     e.preventDefault();
     setError('');
     setLoading(true);
+
+    // Check if Amplify is configured first
+    if (amplifyConfigured === false) {
+      setError('Cloud auth is not available. Please use Guest Mode to continue.');
+      setLoading(false);
+      return;
+    }
 
     try {
       const { isSignedIn } = await signIn({
@@ -52,7 +76,7 @@ export function LoginPage({ onSuccess, onGuestMode }: LoginPageProps) {
         setMessage('✅ Already signed in!');
         setTimeout(() => onSuccess?.(), 500);
       } else {
-        setError(err.message || 'Failed to sign in');
+        setError(err.message || 'Failed to sign in. Try Guest Mode if cloud auth is not set up.');
       }
     } finally {
       setLoading(false);
@@ -63,6 +87,13 @@ export function LoginPage({ onSuccess, onGuestMode }: LoginPageProps) {
     e.preventDefault();
     setError('');
     setLoading(true);
+
+    // Check if Amplify is configured first
+    if (amplifyConfigured === false) {
+      setError('Cloud auth is not available. Please use Guest Mode to continue.');
+      setLoading(false);
+      return;
+    }
 
     try {
       await signUp({
@@ -78,7 +109,7 @@ export function LoginPage({ onSuccess, onGuestMode }: LoginPageProps) {
       setMessage('✅ Account created! Check your email for verification code.');
       setMode('confirm');
     } catch (err: any) {
-      setError(err.message || 'Failed to sign up');
+      setError(err.message || 'Failed to sign up. Try Guest Mode if cloud auth is not set up.');
     } finally {
       setLoading(false);
     }
@@ -195,6 +226,13 @@ export function LoginPage({ onSuccess, onGuestMode }: LoginPageProps) {
 
         {/* Main Card - Semi-transparent with backdrop blur */}
         <div className="bg-white/75 backdrop-blur-sm rounded-xl shadow-2xl p-8">
+          {/* Local Mode Notice */}
+          {amplifyConfigured === false && (
+            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
+              <strong>🏠 Local Mode:</strong> Cloud auth is not configured. Use <strong>Guest Mode</strong> below to continue, or set up AWS Amplify for cloud features.
+            </div>
+          )}
+
           {/* Error Message */}
           {error && (
             <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
@@ -504,17 +542,17 @@ export function LoginPage({ onSuccess, onGuestMode }: LoginPageProps) {
           )}
         </div>
 
-        {/* Guest Mode (Optional) */}
+        {/* Guest Mode - More Prominent */}
         <div className="mt-6 text-center relative z-10">
           <button
             onClick={() => onGuestMode?.()}
-            className="text-sm text-gray-700 hover:text-gray-900 flex items-center justify-center gap-2 mx-auto bg-white/60 backdrop-blur-sm px-4 py-2 rounded-lg hover:bg-white/80 transition-colors"
+            className="w-full max-w-xs mx-auto text-base font-semibold text-white bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 flex items-center justify-center gap-2 px-6 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all"
           >
-            <span>👤</span>
-            <span>Continue as guest (local-only mode)</span>
+            <span>🚀</span>
+            <span>Quick Start (Guest Mode)</span>
           </button>
-          <p className="text-xs text-gray-600 mt-2 bg-white/40 backdrop-blur-sm px-3 py-1 rounded inline-block">
-            Your data stays on this device only
+          <p className="text-xs text-gray-600 mt-2 bg-white/60 backdrop-blur-sm px-3 py-1 rounded inline-block">
+            No account needed • Your data stays on this device
           </p>
         </div>
       </div>

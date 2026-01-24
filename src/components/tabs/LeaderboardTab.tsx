@@ -2,15 +2,19 @@ import React, { useState } from 'react';
 import useStore from '../../state/store';
 import { useCourse } from '../../hooks/useCourse';
 
-type Props = { eventId: string };
+type Props = {
+  eventId: string;
+  onEnterScores?: (golferId: string) => void;
+};
 
-const LeaderboardTab: React.FC<Props> = ({ eventId }) => {
-  const { profiles } = useStore();
+const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
+  const { profiles, currentProfile, canEditScore } = useStore() as any;
   const event = useStore((s: any) => 
     s.events.find((e: any) => e.id === eventId) || 
     s.completedEvents.find((e: any) => e.id === eventId)
   );
   const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null);
+  const [teamModal, setTeamModal] = useState<null | { id: string; name: string; golferIds: string[] }>(null);
 
   if (!event) return null;
 
@@ -22,6 +26,26 @@ const LeaderboardTab: React.FC<Props> = ({ eventId }) => {
   const togglePlayerExpanded = (playerId: string) => {
     setExpandedPlayer(expandedPlayer === playerId ? null : playerId);
   };
+
+  const resolveGolferName = (golferId: string) => {
+    const eventGolfer = (event.golfers || []).find(
+      (g: any) => g.profileId === golferId || g.customName === golferId
+    );
+    const profile = eventGolfer?.profileId ? profiles.find((p: any) => p.id === eventGolfer.profileId) : null;
+    return profile ? profile.name : (eventGolfer?.displayName || eventGolfer?.customName || golferId || 'Unknown');
+  };
+
+  const nassauTeams: Array<{ id: string; name: string; golferIds: string[] }> = (event.games?.nassau || [])
+    .flatMap((n: any) => (n?.teams || []) as any[])
+    .filter((t: any) => t && Array.isArray(t.golferIds));
+
+  const teamByGolferId = new Map<string, { id: string; name: string; golferIds: string[] }>();
+  for (const t of nassauTeams) {
+    for (const gid of t.golferIds || []) {
+      // First match wins (keeps UI simple if multiple Nassau configs exist)
+      if (!teamByGolferId.has(gid)) teamByGolferId.set(gid, t);
+    }
+  }
 
   const getPlayerScorecard = (playerId: string) => {
     const scorecard = event.scorecards.find((sc: any) => 
@@ -124,7 +148,7 @@ const LeaderboardTab: React.FC<Props> = ({ eventId }) => {
 
   // Calculate scores for each golfer
   const leaderboardData = event.golfers.map((eventGolfer: any) => {
-    const profile = eventGolfer.profileId ? profiles.find(p => p.id === eventGolfer.profileId) : null;
+    const profile = eventGolfer.profileId ? profiles.find((p: any) => p.id === eventGolfer.profileId) : null;
     // ✅ Use displayName snapshot if profile not found locally
     const displayName = profile ? profile.name : (eventGolfer.displayName || eventGolfer.customName || 'Unknown');
     const golferId = eventGolfer.profileId || eventGolfer.customName;
@@ -255,7 +279,9 @@ const LeaderboardTab: React.FC<Props> = ({ eventId }) => {
         <div className="bg-gradient-to-r from-primary-600 to-primary-700 text-white px-4 py-3">
           <h2 className="text-lg font-semibold">Leaderboard</h2>
           <p className="text-sm opacity-90">{event.name} - {selectedCourse?.name || 'Course'} (Par {totalPar ?? '—'})</p>
-          <p className="text-xs opacity-75 mt-1">Click on any player to view their scorecard</p>
+          <p className="text-xs opacity-75 mt-1">
+            Tap a <span className="font-bold underline underline-offset-2">player name</span> to enter scores. Tap a <span className="font-bold underline underline-offset-2">team</span> to open the roster.
+          </p>
           {coursesLoading && event.course.courseId && !teeWithHoles?.holes?.length && (
             <p className="text-xs opacity-75 mt-1">Loading course pars…</p>
           )}
@@ -267,6 +293,7 @@ const LeaderboardTab: React.FC<Props> = ({ eventId }) => {
               <tr>
                 <th className="px-2 sm:px-4 py-3 text-left font-semibold text-slate-700">Pos</th>
                 <th className="px-2 sm:px-4 py-3 text-left font-semibold text-slate-700">Player</th>
+                <th className="px-2 sm:px-4 py-3 text-left font-semibold text-slate-700">Team</th>
                 <th className="px-2 sm:px-4 py-3 text-center font-semibold text-slate-700">To Par</th>
                 <th className="px-2 sm:px-4 py-3 text-center font-semibold text-slate-700">Out</th>
                 <th className="px-2 sm:px-4 py-3 text-center font-semibold text-slate-700">In</th>
@@ -298,9 +325,48 @@ const LeaderboardTab: React.FC<Props> = ({ eventId }) => {
                     </td>
                     <td className="px-2 sm:px-4 py-3 font-medium text-slate-900">
                       <div className="flex items-center gap-2">
-                        <span className="truncate max-w-[120px] sm:max-w-none">{player.name}</span>
+                        {typeof onEnterScores === 'function' ? (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              if (!event.isCompleted && canEditScore?.(eventId, player.id)) {
+                                onEnterScores(player.id);
+                              }
+                            }}
+                            disabled={event.isCompleted || !canEditScore?.(eventId, player.id)}
+                            className="truncate max-w-[120px] sm:max-w-none text-left font-extrabold text-primary-700 hover:text-primary-900 hover:underline underline-offset-2 disabled:text-slate-400 disabled:no-underline disabled:cursor-not-allowed"
+                            title={event.isCompleted ? 'Read-only' : (canEditScore?.(eventId, player.id) ? 'Enter scores' : 'You cannot edit this golfer')}
+                          >
+                            {player.name}
+                          </button>
+                        ) : (
+                          <span className="truncate max-w-[120px] sm:max-w-none">{player.name}</span>
+                        )}
                         {player.emoji && <span className="text-lg">{player.emoji}</span>}
                       </div>
+                    </td>
+                    <td className="px-2 sm:px-4 py-3">
+                      {(() => {
+                        const team = teamByGolferId.get(String(player.id));
+                        if (!team) return <span className="text-slate-400">—</span>;
+                        return (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setTeamModal(team);
+                            }}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-extrabold bg-primary-50 text-primary-800 border border-primary-200 hover:bg-primary-100"
+                            title="View team roster"
+                          >
+                            <span className="w-2 h-2 rounded-full bg-primary-600" aria-hidden="true" />
+                            <span className="truncate max-w-[90px]">{team.name || 'Team'}</span>
+                          </button>
+                        );
+                      })()}
                     </td>
                     <td className={`px-2 sm:px-4 py-3 text-center font-mono font-bold text-lg ${getToParColor(player.toPar)}`}>
                       {formatToPar(player.toPar)}
@@ -325,8 +391,32 @@ const LeaderboardTab: React.FC<Props> = ({ eventId }) => {
                   </tr>
                   {expandedPlayer === player.id && (
                     <tr>
-                      <td colSpan={6} className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+                      <td colSpan={7} className="px-4 py-3 bg-slate-50 border-b border-slate-200">
                         <div className="space-y-3">
+                          {/* Primary CTA: enter/edit scores (when allowed) */}
+                          {typeof onEnterScores === 'function' && (
+                            <div className="flex items-center justify-between gap-2">
+                              <div className="text-[11px] text-slate-600">
+                                {event.isCompleted
+                                  ? 'Event completed (read-only)'
+                                  : (canEditScore?.(eventId, player.id) ? 'You can edit this player’s scores.' : 'You can only edit your own (or your team).')}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  onEnterScores(player.id);
+                                }}
+                                disabled={event.isCompleted || !canEditScore?.(eventId, player.id)}
+                                className="px-3 py-2 rounded-lg text-xs font-extrabold bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title={event.isCompleted ? 'Read-only' : 'Enter scores'}
+                              >
+                                Enter score
+                              </button>
+                            </div>
+                          )}
+
                           {/* Front 9 */}
                           <div>
                             <div className="text-xs font-semibold text-slate-500 mb-1">Front Nine</div>
@@ -463,6 +553,54 @@ const LeaderboardTab: React.FC<Props> = ({ eventId }) => {
           </div>
         )}
       </div>
+
+      {/* Team roster modal */}
+      {teamModal && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4" onClick={() => setTeamModal(null)}>
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="px-4 py-3 border-b border-slate-200 bg-slate-50">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">Team</div>
+                  <div className="font-extrabold text-slate-900">{teamModal.name || 'Team'}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setTeamModal(null)}
+                  className="w-9 h-9 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-black"
+                  aria-label="Close"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+            <div className="p-4 space-y-2">
+              {(teamModal.golferIds || []).map((gid) => {
+                const name = resolveGolferName(gid);
+                const canEnter = typeof onEnterScores === 'function' && !event.isCompleted && canEditScore?.(eventId, gid);
+                return (
+                  <button
+                    key={gid}
+                    type="button"
+                    onClick={() => {
+                      if (canEnter && onEnterScores) onEnterScores(gid);
+                    }}
+                    disabled={!canEnter}
+                    className="w-full flex items-center justify-between gap-2 px-3 py-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                    title={event.isCompleted ? 'Read-only' : (canEnter ? 'Enter scores' : 'You cannot edit this golfer')}
+                  >
+                    <div className="min-w-0">
+                      <div className="font-extrabold text-slate-900 truncate">{name}</div>
+                      {!canEnter && <div className="text-[10px] text-slate-500">Read-only</div>}
+                    </div>
+                    <div className="text-xs font-extrabold text-primary-700">Enter →</div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

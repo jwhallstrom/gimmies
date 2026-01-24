@@ -6,7 +6,18 @@
 import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../amplify/data/resource';
 
-const client = generateClient<Schema>();
+let cachedClient: ReturnType<typeof generateClient<Schema>> | null = null;
+function getClient() {
+  if (import.meta.env.VITE_ENABLE_CLOUD_SYNC !== 'true') return null;
+  if (cachedClient) return cachedClient;
+  try {
+    cachedClient = generateClient<Schema>();
+    return cachedClient;
+  } catch (e) {
+    console.warn('❌ Amplify client unavailable (local/offline mode)', e);
+    return null;
+  }
+}
 
 export interface SyncableProfile {
   id: string;
@@ -30,6 +41,9 @@ export interface SyncableProfile {
     defaultNetScoring: boolean;
     autoAdvanceScores: boolean;
     showHandicapStrokes: boolean;
+    homeCourseId?: string;
+    homeCourseName?: string;
+    homeCourse?: string; // legacy
   };
   createdAt: string;
   lastActive: string;
@@ -40,6 +54,9 @@ export interface SyncableProfile {
  */
 export async function fetchCloudProfile(userId: string): Promise<SyncableProfile | null> {
   try {
+    const client = getClient();
+    if (!client) return null;
+
     console.log('Fetching cloud profile for user:', userId);
     
     const { data: profiles, errors } = await client.models.Profile.list({
@@ -97,6 +114,9 @@ export async function fetchCloudProfile(userId: string): Promise<SyncableProfile
  */
 export async function saveCloudProfile(profile: SyncableProfile): Promise<boolean> {
   try {
+    const client = getClient();
+    if (!client) return false;
+
     console.log('Saving profile to cloud:', profile);
 
     // Check if profile exists
@@ -176,6 +196,9 @@ export async function saveCloudProfile(profile: SyncableProfile): Promise<boolea
  */
 export async function deleteCloudProfile(userId: string): Promise<boolean> {
   try {
+    const client = getClient();
+    if (!client) return false;
+
     console.log('Deleting cloud profile for user:', userId);
 
     const { data: existingProfiles } = await client.models.Profile.list({
@@ -209,6 +232,9 @@ export async function deleteCloudProfile(userId: string): Promise<boolean> {
  */
 export async function deleteProfileFromCloud(profileId: string): Promise<boolean> {
   try {
+    const client = getClient();
+    if (!client) return false;
+
     console.log('🗑️ Deleting cloud profile:', profileId);
 
     const { errors } = await client.models.Profile.delete({

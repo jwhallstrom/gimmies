@@ -29,7 +29,7 @@ const Toast: React.FC<ToastProps> = ({ message, type, duration = 4000, onClose }
       case 'achievement':
         return 'bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200 text-amber-900 shadow-lg';
       case 'success':
-        return 'bg-gradient-to-r from-green-50 to-emerald-50 border-green-200 text-green-900 shadow-lg';
+        return 'bg-gradient-to-r from-primary-50 to-white border-primary-200 text-primary-900 shadow-lg';
       case 'error':
         return 'bg-gradient-to-r from-red-50 to-red-50 border-red-200 text-red-900 shadow-lg';
       default:

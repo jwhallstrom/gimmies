@@ -1,5 +1,5 @@
 import React, { useEffect, useState, Suspense, lazy } from 'react';
-import { Routes, Route, Link, useLocation } from 'react-router-dom';
+import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { LoginPage } from '../components/auth/LoginPage';
 import { ProfileCompletion } from '../components/auth/ProfileCompletion';
 import Dashboard from './Dashboard'; // Keep eager - it's the landing page
@@ -19,11 +19,83 @@ const JoinEventPage = lazy(() => import('./JoinEventPage'));
 const WalletPage = lazy(() => import('./WalletPage'));
 const AuthDemoPage = lazy(() => import('./AuthDemoPage').then(m => ({ default: m.AuthDemoPage })));
 
+// Tournament pages (prototype feature)
+const TournamentsPage = lazy(() => import('./TournamentsPage'));
+const TournamentPage = lazy(() => import('./TournamentPage'));
+
 const App: React.FC = () => {
-  const { currentUser, currentProfile, events, switchUser, createUser } = useStore();
+  const { currentUser, currentProfile, events, switchUser, createUser, joinEventByCode, addToast } = useStore();
   const location = useLocation();
+  const navigate = useNavigate();
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [amplifyUser, setAmplifyUser] = useState<any>(null);
+  const [pendingJoinHandled, setPendingJoinHandled] = useState(false);
+
+  // If someone opens a join link before their profile is set up, we store the code in sessionStorage.
+  // Once a profile exists, auto-join and navigate them straight into the event.
+  useEffect(() => {
+    if (!currentProfile || pendingJoinHandled) return;
+    let code: string | null = null;
+    try {
+      code = sessionStorage.getItem('gimmies.pendingJoinCode.v1');
+    } catch {
+      code = null;
+    }
+    if (!code) return;
+    setPendingJoinHandled(true);
+    (async () => {
+      try {
+        const result = await joinEventByCode(String(code).toUpperCase());
+        try {
+          sessionStorage.removeItem('gimmies.pendingJoinCode.v1');
+        } catch {
+          // ignore
+        }
+        if (result?.success && result?.eventId) {
+          addToast?.('Joined event!', 'success', 2500);
+          navigate(`/event/${result.eventId}`);
+        } else {
+          addToast?.(result?.error || 'Could not join event', 'error', 3500);
+        }
+      } catch {
+        addToast?.('Could not join event', 'error', 3500);
+      }
+    })();
+  }, [currentProfile?.id, pendingJoinHandled, joinEventByCode, addToast, navigate]);
+
+  // Theme (Light/Dark/Auto) driven by profile preference.
+  useEffect(() => {
+    const theme = currentProfile?.preferences?.theme || 'auto';
+    const root = document.documentElement;
+    const apply = (mode: 'light' | 'dark') => {
+      if (mode === 'dark') root.classList.add('dark');
+      else root.classList.remove('dark');
+    };
+
+    if (theme === 'dark') {
+      apply('dark');
+      return;
+    }
+
+    if (theme === 'light') {
+      apply('light');
+      return;
+    }
+
+    // auto
+    const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
+    const handle = () => apply(mq?.matches ? 'dark' : 'light');
+    handle();
+
+    // Support older Safari
+    try {
+      mq?.addEventListener?.('change', handle);
+      return () => mq?.removeEventListener?.('change', handle);
+    } catch {
+      mq?.addListener?.(handle);
+      return () => mq?.removeListener?.(handle);
+    }
+  }, [currentProfile?.preferences?.theme]);
 
   // Check Amplify authentication state on mount
   useEffect(() => {
@@ -144,9 +216,9 @@ const App: React.FC = () => {
 
   if (isCheckingAuth) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-blue-50 to-green-100">
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 via-white to-primary-100">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading...</p>
         </div>
       </div>
@@ -184,8 +256,8 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col bg-gradient-to-b from-primary-900 via-primary-800 to-primary-900 text-gray-900">
-      <header className="bg-primary-900/80 backdrop-blur text-white px-4 py-3 pt-safe flex items-center justify-between shadow-md sticky top-0 z-40">
+    <div className="min-h-screen flex flex-col bg-gradient-to-b from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 text-gray-900 dark:text-slate-100">
+      <header className="bg-primary-900/85 backdrop-blur text-white px-4 py-3 pt-safe flex items-center justify-between shadow-md sticky top-0 z-40 border-b border-white/10">
         <Link to="/">
           <img src="/gimmies-logo.png" alt="Gimmies" className="h-12 w-auto" />
         </Link>
@@ -204,14 +276,19 @@ const App: React.FC = () => {
                 <Route path="/analytics" element={<AnalyticsPage />} />
                 <Route path="/wallet/*" element={<WalletPage />} />
                 <Route path="/event/:id/*" element={<EventPage />} />
+                <Route path="/join" element={<JoinEventPage />} />
                 <Route path="/join/:code" element={<JoinEventPage />} />
                 <Route path="/auth-demo" element={<AuthDemoPage />} />
+                
+                {/* Tournament routes (prototype feature) */}
+                <Route path="/tournaments" element={<TournamentsPage />} />
+                <Route path="/tournament/:id/*" element={<TournamentPage />} />
               </Routes>
             </Suspense>
           </div>
         </div>
       </main>
-      <footer className="bottom-nav fixed bottom-0 inset-x-0 bg-white/90 backdrop-blur border-t border-primary-900/20 flex items-center justify-between z-40">
+      <footer className="bottom-nav fixed bottom-0 inset-x-0 bg-white/90 dark:bg-slate-900/70 backdrop-blur border-t border-primary-900/20 dark:border-white/10 flex items-center justify-between z-40">
         <Link
           to="/"
           className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../state/store';
 import { CourseSearch } from './CourseSearch';
@@ -8,18 +8,24 @@ import { useCourses } from '../hooks/useCourses';
 interface Props {
   isOpen: boolean;
   onClose: () => void;
+  onCreated?: (eventId: string) => void;
+  /** If provided, this event was created from a group hub. */
+  parentGroupId?: string;
 }
 
-type WizardStep = 'details' | 'course' | 'tee' | 'review';
+type WizardStep = 'details' | 'course';
 
-export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose }) => {
+export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated, parentGroupId }) => {
   const navigate = useNavigate();
-  const { createEvent, updateEvent, setEventCourse, setEventTee } = useStore();
+  const { createEvent, updateEvent, setEventCourse, setEventTee, setGroupTeeTime, addChatMessage, generateShareCode, currentProfile } =
+    useStore();
+  const updateProfile = useStore((s) => s.updateProfile);
   const { courses } = useCourses();
   
   const [step, setStep] = useState<WizardStep>('details');
   const [eventName, setEventName] = useState('');
   const [eventDate, setEventDate] = useState(new Date().toISOString().slice(0, 10));
+  const [teeTime, setTeeTime] = useState('');
   const [selectedCourseId, setSelectedCourseId] = useState<string>('');
   const [selectedCourseName, setSelectedCourseName] = useState<string>('');
   const [selectedTeeName, setSelectedTeeName] = useState<string>('');
@@ -31,32 +37,73 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose }) => {
       setStep('details');
       setEventName(generateFunnyEventName());
       setEventDate(new Date().toISOString().slice(0, 10));
-      setSelectedCourseId('');
+      setTeeTime('');
+      const homeCourseId = (currentProfile?.preferences as any)?.homeCourseId || '';
+      setSelectedCourseId(homeCourseId);
       setSelectedCourseName('');
       setSelectedTeeName('');
       setIsCreating(false);
     }
   }, [isOpen]);
 
+  // Ensure home course is always a favorite (persisted).
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!currentProfile) return;
+    const homeCourseId = currentProfile.preferences?.homeCourseId;
+    if (!homeCourseId) return;
+    const existing = currentProfile.preferences?.favoriteCourseIds || [];
+    if (existing.includes(homeCourseId)) return;
+    updateProfile(currentProfile.id, {
+      preferences: { ...currentProfile.preferences, favoriteCourseIds: [homeCourseId, ...existing] },
+    });
+  }, [isOpen, currentProfile?.id]);
+
+  const favoriteCourseIds = currentProfile?.preferences?.favoriteCourseIds || [];
+  const favoriteCourses = useMemo(() => {
+    const ids = new Set(favoriteCourseIds);
+    const home = currentProfile?.preferences?.homeCourseId;
+    if (home) ids.add(home);
+    const list = courses.filter((c) => ids.has(c.courseId));
+    // Home course first, then name.
+    return list.sort((a, b) => {
+      if (home && a.courseId === home) return -1;
+      if (home && b.courseId === home) return 1;
+      return (a.name || '').localeCompare(b.name || '');
+    });
+  }, [courses, favoriteCourseIds, currentProfile?.preferences?.homeCourseId]);
+
+  const toggleFavoriteCourse = (courseId: string) => {
+    if (!currentProfile) return;
+    const current = currentProfile.preferences?.favoriteCourseIds || [];
+    const next = current.includes(courseId) ? current.filter((id) => id !== courseId) : [courseId, ...current];
+    updateProfile(currentProfile.id, { preferences: { ...currentProfile.preferences, favoriteCourseIds: next } });
+  };
+
+  // Hydrate course name when we have an id (home course default) and courses are loaded.
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!selectedCourseId) return;
+    if (selectedCourseName) return;
+    const c = courses.find((x) => x.courseId === selectedCourseId);
+    if (c) setSelectedCourseName(c.name);
+  }, [isOpen, selectedCourseId, selectedCourseName, courses]);
+
   if (!isOpen) return null;
 
   const handleNext = () => {
     if (step === 'details') setStep('course');
-    else if (step === 'course') setStep('tee');
-    else if (step === 'tee') setStep('review');
   };
 
   const handleBack = () => {
     if (step === 'course') setStep('details');
-    else if (step === 'tee') setStep('course');
-    else if (step === 'review') setStep('tee');
   };
 
   const handleCreate = async () => {
     setIsCreating(true);
     try {
       // 1. Create the base event
-      const eventId = createEvent();
+      const eventId = createEvent(parentGroupId ? ({ parentGroupId } as any) : undefined);
       if (!eventId) throw new Error('Failed to create event');
 
       // 2. Update basic details
@@ -66,18 +113,36 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose }) => {
       });
 
       // 3. Set Course
-      if (selectedCourseId) {
-        await setEventCourse(eventId, selectedCourseId);
-        
-        // 4. Set Tee (if selected)
-        if (selectedTeeName) {
-          await setEventTee(eventId, selectedTeeName);
-        }
+      if (selectedCourseId) await setEventCourse(eventId, selectedCourseId);
+      if (selectedTeeName) await setEventTee(eventId, selectedTeeName);
+
+      // 4. Tee time (optional, stored on the default play group)
+      if (teeTime) {
+        const created = useStore.getState().events.find((e: any) => e.id === eventId);
+        const groupId = created?.groups?.[0]?.id;
+        if (groupId) setGroupTeeTime(eventId, groupId, teeTime);
       }
 
       // 5. Navigate
       onClose();
-      navigate(`/event/${eventId}`);
+
+      // If created from a group hub, announce + ensure join code exists.
+      if (parentGroupId && currentProfile) {
+        const shareCode = await generateShareCode(eventId);
+        const when = eventDate
+          ? new Date(eventDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+          : '';
+        const tee = selectedTeeName ? ` (${selectedTeeName})` : '';
+        const code = shareCode ? ` Join code: ${shareCode}` : '';
+        await addChatMessage(parentGroupId, `🏌️ ${currentProfile.name} created an event: ${eventName} • ${when}${tee}.${code}`);
+      }
+
+      if (typeof onCreated === 'function') {
+        onCreated(eventId);
+      } else {
+        // Default: land directly in the newly created event's chat hub.
+        navigate(`/event/${eventId}/chat?occurrenceId=${encodeURIComponent(eventId)}`);
+      }
     } catch (error) {
       console.error('Error creating event:', error);
       setIsCreating(false);
@@ -86,6 +151,8 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose }) => {
 
   const selectedCourse = courses.find(c => c.courseId === selectedCourseId);
   const tees = selectedCourse?.tees || [];
+
+  const canCreate = Boolean(eventName.trim() && eventDate && selectedCourseId && selectedTeeName);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
@@ -103,10 +170,8 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose }) => {
 
         {/* Progress Bar */}
         <div className="flex gap-1 p-2 bg-gray-50">
-          <div className={`h-1 flex-1 rounded-full ${step === 'details' || step === 'course' || step === 'tee' || step === 'review' ? 'bg-primary-500' : 'bg-gray-200'}`} />
-          <div className={`h-1 flex-1 rounded-full ${step === 'course' || step === 'tee' || step === 'review' ? 'bg-primary-500' : 'bg-gray-200'}`} />
-          <div className={`h-1 flex-1 rounded-full ${step === 'tee' || step === 'review' ? 'bg-primary-500' : 'bg-gray-200'}`} />
-          <div className={`h-1 flex-1 rounded-full ${step === 'review' ? 'bg-primary-500' : 'bg-gray-200'}`} />
+          <div className={`h-1 flex-1 rounded-full ${step === 'details' || step === 'course' ? 'bg-primary-500' : 'bg-gray-200'}`} />
+          <div className={`h-1 flex-1 rounded-full ${step === 'course' ? 'bg-primary-500' : 'bg-gray-200'}`} />
         </div>
 
         {/* Content */}
@@ -159,22 +224,116 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose }) => {
                   </button>
                 </div>
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Tee Time <span className="text-xs text-gray-500 font-normal">(optional)</span>
+                </label>
+                <input
+                  type="time"
+                  aria-label="Tee Time"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  value={teeTime}
+                  onChange={(e) => setTeeTime(e.target.value)}
+                />
+                <div className="text-xs text-gray-500 mt-1">You can change this later from the event hub.</div>
+              </div>
             </div>
           )}
 
           {step === 'course' && (
             <div className="space-y-4 min-h-[400px] pb-20">
-              <h3 className="text-xl font-semibold text-gray-800">Select Course</h3>
-              <p className="text-sm text-gray-600">Where are you playing?</p>
+              <h3 className="text-xl font-semibold text-gray-800">Course & Tee</h3>
+              <p className="text-sm text-gray-600">Pick the course and tees your group will play.</p>
               
+              {favoriteCourses.length > 0 && (
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-[10px] font-bold tracking-[0.15em] text-gray-400 uppercase">Favorites</div>
+                    <div className="text-xs text-gray-500">Tap to select</div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {favoriteCourses.map((c) => {
+                      const isSelected = c.courseId === selectedCourseId;
+                      const isFavorite = favoriteCourseIds.includes(c.courseId) || c.courseId === currentProfile?.preferences?.homeCourseId;
+                      return (
+                        <button
+                          key={c.courseId}
+                          type="button"
+                          onClick={() => {
+                            setSelectedCourseId(c.courseId);
+                            setSelectedCourseName(c.name);
+                            // Try to auto-select preferred tee if it exists on this course.
+                            const preferred = currentProfile?.preferredTee;
+                            const courseTees = courses.find((x) => x.courseId === c.courseId)?.tees || [];
+                            const maybe = preferred && courseTees.some((t: any) => t.name === preferred) ? preferred : '';
+                            setSelectedTeeName(maybe);
+                          }}
+                          className={`group flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-all ${
+                            isSelected ? 'bg-primary-50 border-primary-500 ring-1 ring-primary-500' : 'bg-white border-slate-200 hover:bg-slate-50'
+                          }`}
+                          title={c.name}
+                        >
+                          <span className="font-semibold text-sm text-gray-900 truncate max-w-[180px]">{c.name}</span>
+                          {c.courseId === currentProfile?.preferences?.homeCourseId && (
+                            <span className="text-[10px] font-bold text-primary-700 bg-primary-100 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                              Home
+                            </span>
+                          )}
+                          {/* Only allow un-favoriting if it's not the home course */}
+                          {c.courseId !== currentProfile?.preferences?.homeCourseId && (
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                toggleFavoriteCourse(c.courseId);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  toggleFavoriteCourse(c.courseId);
+                                }
+                              }}
+                              className={`text-xs font-bold px-2 py-1 rounded-lg border ${
+                                isFavorite ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                              }`}
+                              title={isFavorite ? 'Remove favorite' : 'Add favorite'}
+                            >
+                              ★
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
               <CourseSearch
                 selectedCourseId={selectedCourseId}
                 onSelect={(id, name) => {
                   setSelectedCourseId(id);
                   setSelectedCourseName(name);
-                  setSelectedTeeName(''); // Reset tee when course changes
+                  // Try to auto-select preferred tee if it exists on this course.
+                  const preferred = currentProfile?.preferredTee;
+                  const courseTees = courses.find((x) => x.courseId === id)?.tees || [];
+                  const maybe = preferred && courseTees.some((t: any) => t.name === preferred) ? preferred : '';
+                  setSelectedTeeName(maybe);
                 }}
               />
+
+              {selectedCourseId && selectedCourseId !== currentProfile?.preferences?.homeCourseId && (
+                <button
+                  type="button"
+                  onClick={() => toggleFavoriteCourse(selectedCourseId)}
+                  className="inline-flex items-center gap-2 text-xs font-bold px-3 py-2 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 w-fit"
+                >
+                  ★ {favoriteCourseIds.includes(selectedCourseId) ? 'Remove from favorites' : 'Add to favorites'}
+                </button>
+              )}
               
               {selectedCourseId && (
                 <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center gap-2 text-green-800">
@@ -184,22 +343,20 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose }) => {
                   <span className="font-medium">{selectedCourseName} selected</span>
                 </div>
               )}
-            </div>
-          )}
 
-          {step === 'tee' && (
-            <div className="space-y-4">
-              <h3 className="text-xl font-semibold text-gray-800">Select Tee</h3>
-              <p className="text-sm text-gray-600">Which tees will the group play?</p>
-              
-              {!selectedCourseId ? (
-                <div className="text-red-500 bg-red-50 p-3 rounded-lg">Please select a course first.</div>
-              ) : (
-                <div className="grid grid-cols-1 gap-2">
-                  {tees.length > 0 ? (
-                    tees.map((tee: any) => (
+              {/* Tee selection (inline, right after course) */}
+              <div className="space-y-2">
+                <div className="text-sm font-medium text-gray-700">Tee</div>
+                {!selectedCourseId ? (
+                  <div className="text-xs text-gray-500">Select a course to see available tees.</div>
+                ) : tees.length === 0 ? (
+                  <div className="text-xs text-gray-500">No tee data found for this course.</div>
+                ) : (
+                  <div className="grid grid-cols-1 gap-2">
+                    {tees.map((tee: any) => (
                       <button
                         key={tee.name}
+                        type="button"
                         onClick={() => setSelectedTeeName(tee.name)}
                         className={`p-3 rounded-lg border text-left transition-all ${
                           selectedTeeName === tee.name
@@ -214,39 +371,9 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose }) => {
                           <span>Par: {tee.par}</span>
                         </div>
                       </button>
-                    ))
-                  ) : (
-                    <div className="text-gray-500 italic">No tee information available for this course.</div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {step === 'review' && (
-            <div className="space-y-4">
-              <h3 className="text-xl font-semibold text-gray-800">Ready to Play?</h3>
-              
-              <div className="bg-gray-50 rounded-lg p-4 space-y-3 border border-gray-200">
-                <div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Event</div>
-                  <div className="font-medium text-lg text-primary-900">{eventName || 'Untitled Event'}</div>
-                </div>
-                
-                <div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Date</div>
-                  <div className="font-medium text-gray-900">{new Date(eventDate).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div>
-                </div>
-                
-                <div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Course</div>
-                  <div className="font-medium text-gray-900">{selectedCourseName || 'No course selected'}</div>
-                </div>
-                
-                <div>
-                  <div className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Tees</div>
-                  <div className="font-medium text-gray-900">{selectedTeeName || 'No tee selected'}</div>
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -266,7 +393,7 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose }) => {
             <div></div> // Spacer
           )}
 
-          {step !== 'review' ? (
+          {step === 'details' ? (
             <button
               onClick={handleNext}
               disabled={step === 'details' && !eventName}
@@ -281,7 +408,7 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose }) => {
           ) : (
             <button
               onClick={handleCreate}
-              disabled={isCreating}
+              disabled={isCreating || !canCreate}
               className="px-6 py-2 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 shadow-lg shadow-green-200 flex items-center gap-2"
             >
               {isCreating ? (

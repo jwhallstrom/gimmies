@@ -1,38 +1,21 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import useStore from '../../state/store';
+import { useWalletAdapter } from '../../adapters';
 import SettlementCard from './SettlementCard';
 
 const WalletSummary: React.FC = () => {
-  const { 
-    currentProfile, 
+  const {
+    currentProfile,
     profiles,
-    getProfileWallet, 
-    getPendingSettlements, 
-    transactions,
+    wallet,
+    pendingSettlements,
+    myTransactions,
     markSettlementPaid,
     forgiveSettlement,
     addToast,
-  } = useStore();
+  } = useWalletAdapter();
 
   const [activeTab, setActiveTab] = useState<'pending' | 'history'>('pending');
-
-  const wallet = useMemo(() => {
-    if (!currentProfile) return null;
-    return getProfileWallet(currentProfile.id);
-  }, [currentProfile, getProfileWallet]);
-
-  const pendingSettlements = useMemo(() => {
-    if (!currentProfile) return { toCollect: [], toPay: [] };
-    return getPendingSettlements(currentProfile.id);
-  }, [currentProfile, getPendingSettlements]);
-
-  const myTransactions = useMemo(() => {
-    if (!currentProfile) return [];
-    return transactions
-      .filter(t => t.profileId === currentProfile.id)
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [transactions, currentProfile]);
 
   const formatCurrency = (amount: number, showSign = false) => {
     const formatted = new Intl.NumberFormat('en-US', {

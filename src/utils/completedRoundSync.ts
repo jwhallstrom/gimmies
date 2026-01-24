@@ -7,13 +7,27 @@ import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../amplify/data/resource';
 import type { CompletedRound } from '../state/store';
 
-const client = generateClient<Schema>();
+let cachedClient: ReturnType<typeof generateClient<Schema>> | null = null;
+function getClient() {
+  if (import.meta.env.VITE_ENABLE_CLOUD_SYNC !== 'true') return null;
+  if (cachedClient) return cachedClient;
+  try {
+    cachedClient = generateClient<Schema>();
+    return cachedClient;
+  } catch (e) {
+    console.warn('❌ Amplify client unavailable (local/offline mode)', e);
+    return null;
+  }
+}
 
 /**
  * Save a completed round to cloud (DynamoDB)
  */
 export async function saveCompletedRoundToCloud(round: CompletedRound): Promise<boolean> {
   try {
+    const client = getClient();
+    if (!client) return false;
+
     console.log('☁️ Saving completed round to cloud:', round.id);
 
     const cloudData = {
@@ -56,6 +70,9 @@ export async function saveCompletedRoundToCloud(round: CompletedRound): Promise<
  */
 export async function loadCompletedRoundsFromCloud(golferId: string): Promise<CompletedRound[]> {
   try {
+    const client = getClient();
+    if (!client) return [];
+
     console.log('📥 Loading completed rounds from cloud for golfer:', golferId);
 
     const { data: cloudRounds, errors } = await client.models.CompletedRound.list({
@@ -114,6 +131,9 @@ export async function loadCompletedRoundsFromCloud(golferId: string): Promise<Co
  */
 export async function deleteCompletedRoundFromCloud(roundId: string): Promise<boolean> {
   try {
+    const client = getClient();
+    if (!client) return false;
+
     console.log('🗑️ Deleting completed round from cloud:', roundId);
 
     const { errors } = await client.models.CompletedRound.delete({

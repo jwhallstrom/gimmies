@@ -9,7 +9,18 @@ import type { Schema } from '../../amplify/data/resource';
 import { getCourseById, upsertCoursesCache } from '../data/cloudCourses';
 import type { CourseData } from './useCourses';
 
-const client = generateClient<Schema>();
+let cachedClient: ReturnType<typeof generateClient<Schema>> | null = null;
+function getClient() {
+  if (import.meta.env.VITE_ENABLE_CLOUD_SYNC !== 'true') return null;
+  if (cachedClient) return cachedClient;
+  try {
+    cachedClient = generateClient<Schema>();
+    return cachedClient;
+  } catch (e) {
+    console.warn('❌ Amplify client unavailable (local/offline mode)', e);
+    return null;
+  }
+}
 
 export function useCourse(courseId?: string | null) {
   const cached = useMemo(() => getCourseById(courseId), [courseId]);
@@ -38,6 +49,16 @@ export function useCourse(courseId?: string | null) {
 
       try {
         setLoading(true);
+
+        const client = getClient();
+        if (!client) {
+          // If cloud is off (or not configured), course data should come from cache (populated by useCourses local fallback).
+          const local = getCourseById(courseId);
+          setCourse(local as any);
+          setError(local ? null : 'Course not found');
+          return;
+        }
+
         const result: any = await client.models.Course.list({
           authMode: 'apiKey',
           limit: 1,

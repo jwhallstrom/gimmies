@@ -24,6 +24,14 @@ export interface CloudCourse {
   courseId: string; // stable token used by events
   name: string;
   location: string;
+  /**
+   * Optional coordinates (not always present).
+   * If populated, we can power "nearby courses/games" using geolocation.
+   */
+  latitude?: number;
+  longitude?: number;
+  lat?: number;
+  lng?: number;
   tees: CloudTee[];
 }
 

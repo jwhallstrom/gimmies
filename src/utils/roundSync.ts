@@ -7,13 +7,27 @@ import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../amplify/data/resource';
 import type { IndividualRound } from '../types/handicap';
 
-const client = generateClient<Schema>();
+let cachedClient: ReturnType<typeof generateClient<Schema>> | null = null;
+function getClient() {
+  if (import.meta.env.VITE_ENABLE_CLOUD_SYNC !== 'true') return null;
+  if (cachedClient) return cachedClient;
+  try {
+    cachedClient = generateClient<Schema>();
+    return cachedClient;
+  } catch (e) {
+    console.warn('❌ Amplify client unavailable (local/offline mode)', e);
+    return null;
+  }
+}
 
 /**
  * Save an individual round to cloud (DynamoDB)
  */
 export async function saveIndividualRoundToCloud(round: IndividualRound): Promise<boolean> {
   try {
+    const client = getClient();
+    if (!client) return false;
+
     console.log('Saving individual round to cloud:', round.id);
 
     const cloudData = {
@@ -54,6 +68,9 @@ export async function saveIndividualRoundToCloud(round: IndividualRound): Promis
  */
 export async function loadIndividualRoundsFromCloud(profileId: string): Promise<IndividualRound[]> {
   try {
+    const client = getClient();
+    if (!client) return [];
+
     console.log('Loading individual rounds from cloud for profile:', profileId);
 
     const { data: cloudRounds, errors } = await client.models.IndividualRound.list({
@@ -103,6 +120,9 @@ export async function loadIndividualRoundsFromCloud(profileId: string): Promise<
  */
 export async function deleteIndividualRoundFromCloud(roundId: string): Promise<boolean> {
   try {
+    const client = getClient();
+    if (!client) return false;
+
     console.log('Deleting individual round from cloud:', roundId);
 
     const { errors } = await client.models.IndividualRound.delete({

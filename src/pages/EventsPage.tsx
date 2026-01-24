@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import useStore from '../state/store';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { getCourseById } from '../data/cloudCourses';
 import { CreateEventWizard } from '../components/CreateEventWizard';
 
 const EventsPage: React.FC = () => {
   const { events, completedEvents, currentProfile, profiles, deleteEvent, loadEventsFromCloud } = useStore();
   const navigate = useNavigate();
+  const location = useLocation();
   const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
   const [previousCompletedCount, setPreviousCompletedCount] = useState(0);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
@@ -23,6 +24,13 @@ const EventsPage: React.FC = () => {
       });
     }
   }, [currentProfile?.id]);
+
+  // Support deep-linking into event creation (e.g. from Chat hub): /events?create=true&returnTo=chat
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const shouldCreate = params.get('create') === 'true';
+    if (shouldCreate) setIsWizardOpen(true);
+  }, [location.search]);
 
   // Auto-switch to history tab when a new event is completed
   useEffect(() => {
@@ -42,13 +50,14 @@ const EventsPage: React.FC = () => {
   const userEvents = events.filter(event =>
     currentProfile && 
     event.golfers.some(golfer => golfer.profileId === currentProfile.id) &&
+    event.hubType !== 'group' &&
     !event.isCompleted && // Exclude events marked as completed
     !completedEventIds.has(event.id) // Also exclude if event ID exists in completedEvents
   );
 
   // Filter completed events to only show those the current user participated in
   const userCompletedEvents = completedEvents.filter(event =>
-    currentProfile && event.golfers.some(golfer => golfer.profileId === currentProfile.id)
+    currentProfile && event.golfers.some(golfer => golfer.profileId === currentProfile.id) && event.hubType !== 'group'
   );
 
   if (!currentProfile) {
@@ -68,11 +77,31 @@ const EventsPage: React.FC = () => {
         </svg>
       </button>
 
-      <CreateEventWizard isOpen={isWizardOpen} onClose={() => setIsWizardOpen(false)} />
+      <CreateEventWizard
+        isOpen={isWizardOpen}
+        onClose={() => setIsWizardOpen(false)}
+        parentGroupId={new URLSearchParams(location.search).get('groupId') || undefined}
+        onCreated={(eventId) => {
+          const params = new URLSearchParams(location.search);
+          const returnTo = params.get('returnTo');
+          const groupId = params.get('groupId');
+          if (returnTo === 'group' && groupId) {
+            navigate(`/event/${groupId}/chat`);
+            return;
+          }
+          if (returnTo === 'chat') {
+            navigate(`/event/${eventId}/chat?occurrenceId=${encodeURIComponent(eventId)}`);
+            return;
+          }
+          navigate(`/event/${eventId}`);
+        }}
+      />
 
       <div className="bg-white/90 backdrop-blur rounded-xl shadow-md p-6 border border-primary-900/5">
-        <h1 className="text-2xl font-bold text-primary-800">My Events</h1>
-        <p className="text-gray-600 mt-1">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-primary-800">My Events</h1>
+            <p className="text-gray-600 mt-1">
           {userEvents.length > 0 && userCompletedEvents.length > 0 
             ? `${userEvents.length} active, ${userCompletedEvents.length} completed`
             : userEvents.length > 0 
@@ -81,7 +110,17 @@ const EventsPage: React.FC = () => {
                 ? `${userCompletedEvents.length} completed event${userCompletedEvents.length !== 1 ? 's' : ''}`
                 : 'Events you\'re participating in'
           }
-        </p>
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/join')}
+            className="px-4 py-2 rounded-xl bg-gradient-to-r from-accent to-orange-500 hover:from-orange-500 hover:to-accent text-white font-extrabold shadow-md"
+            title="Join an event with a code"
+          >
+            Join Event
+          </button>
+        </div>
         
         {/* Tab Navigation */}
         <div className="flex gap-1 mt-4 bg-gray-100 rounded-lg p-1">

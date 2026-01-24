@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import useStore from '../state/store';
+import { fileToAvatarDataUrl } from '../utils/avatarImage';
+import { CourseSearch } from './CourseSearch';
 
 const ProfileManager: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   const { currentProfile, profiles, currentUser, updateProfile, setCurrentProfile } = useStore();
@@ -8,6 +10,8 @@ const ProfileManager: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   const [editEmail, setEditEmail] = useState('');
   const [editProfileName, setEditProfileName] = useState('');
   const [editHandicapIndex, setEditHandicapIndex] = useState('');
+  const [editHomeCourseId, setEditHomeCourseId] = useState('');
+  const [editHomeCourseName, setEditHomeCourseName] = useState('');
 
   // Filter profiles to only show current user's profiles
   const userProfiles = profiles.filter(p => p.userId === currentUser?.id);
@@ -20,6 +24,8 @@ const ProfileManager: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
       setEditLastName(currentProfile.lastName || '');
       setEditEmail(currentProfile.email || '');
       setEditHandicapIndex(currentProfile.handicapIndex?.toString() || '');
+      setEditHomeCourseId((currentProfile.preferences as any)?.homeCourseId || '');
+      setEditHomeCourseName((currentProfile.preferences as any)?.homeCourseName || '');
     }
   }, [currentProfile]);
 
@@ -38,7 +44,12 @@ const ProfileManager: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
         firstName: editFirstName.trim() || undefined,
         lastName: editLastName.trim() || undefined,
         email: editEmail.trim() || undefined,
-        handicapIndex: editHandicapIndex ? parseFloat(editHandicapIndex) : undefined
+        handicapIndex: editHandicapIndex ? parseFloat(editHandicapIndex) : undefined,
+        preferences: {
+          ...currentProfile.preferences,
+          homeCourseId: editHomeCourseId || undefined,
+          homeCourseName: editHomeCourseName || undefined,
+        }
       });
       
       // Save to cloud
@@ -67,12 +78,15 @@ const ProfileManager: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
   const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file && currentProfile) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const imageData = e.target?.result as string;
-        updateProfile(currentProfile.id, { avatar: imageData });
-      };
-      reader.readAsDataURL(file);
+      (async () => {
+        try {
+          const avatar = await fileToAvatarDataUrl(file, { maxSize: 512, quality: 0.85 });
+          updateProfile(currentProfile.id, { avatar });
+        } finally {
+          // Allow selecting the same file twice
+          event.currentTarget.value = '';
+        }
+      })();
     }
   };
 
@@ -90,19 +104,23 @@ const ProfileManager: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
       {/* Profile Avatar and Basic Info */}
       <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
         <div className="relative">
-          <div className="w-16 h-16 bg-primary-600 rounded-full flex items-center justify-center text-white font-semibold text-lg overflow-hidden">
-            {currentProfile?.avatar ? (
-              <img src={currentProfile.avatar} alt={currentProfile.name} className="w-full h-full object-cover" />
-            ) : (
-              currentProfile?.name.charAt(0).toUpperCase()
-            )}
-          </div>
-          <label className="absolute -bottom-1 -right-1 bg-primary-600 text-white rounded-full p-1 cursor-pointer hover:bg-primary-700">
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
+          <label className="block cursor-pointer" title="Change profile photo">
+            <div className="w-16 h-16 bg-primary-600 rounded-full flex items-center justify-center text-white font-semibold text-lg overflow-hidden">
+              {currentProfile?.avatar ? (
+                <img src={currentProfile.avatar} alt={currentProfile.name} className="w-full h-full object-cover" />
+              ) : (
+                currentProfile?.name.charAt(0).toUpperCase()
+              )}
+            </div>
             <input type="file" accept="image/*" onChange={handleImageUpload} className="hidden" />
           </label>
+          {!currentProfile?.avatar && (
+            <label className="absolute -bottom-1 -right-1 bg-primary-600 text-white rounded-full p-1 cursor-pointer hover:bg-primary-700">
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+            </label>
+          )}
         </div>
         <div className="flex-1">
           <h3 className="font-semibold text-lg text-gray-900">{currentProfile?.name}</h3>
@@ -175,6 +193,31 @@ const ProfileManager: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
               className="w-full border border-gray-300 rounded px-3 py-2 text-sm text-gray-900 focus:ring-2 focus:ring-primary-500 focus:border-transparent"
               placeholder="your@email.com"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1 text-gray-700">Home Course</label>
+            <CourseSearch
+              selectedCourseId={editHomeCourseId}
+              onSelect={(courseId, courseName) => {
+                setEditHomeCourseId(courseId);
+                setEditHomeCourseName(courseName);
+
+                // Update immediately so it reflects across the app right away.
+                if (currentProfile) {
+                  updateProfile(currentProfile.id, {
+                    preferences: {
+                      ...currentProfile.preferences,
+                      homeCourseId: courseId,
+                      homeCourseName: courseName,
+                    },
+                  });
+                }
+              }}
+            />
+            <div className="text-xs text-gray-500 mt-1">
+              Used as your default when creating events and adding handicap rounds.
+            </div>
           </div>
         </div>
       </div>
