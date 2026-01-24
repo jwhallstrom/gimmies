@@ -649,7 +649,7 @@ const Dashboard: React.FC = () => {
       {/* ═══════════════════════════════════════════════════════════════════
           TICKER: Sticky above nav
       ═══════════════════════════════════════════════════════════════════ */}
-      <div className="fixed left-4 right-4 bottom-[5.25rem] z-30">
+      <div className="gimmies-ticker-above-nav">
         <button
           onClick={() => tickerEvent ? navigate(`/event/${tickerEvent.id}`) : navigate('/events')}
           className="w-full gimmies-ticker rounded-xl bg-[#1561AE] border border-white/10 px-3 py-2.5 shadow-lg shadow-primary-900/25"
