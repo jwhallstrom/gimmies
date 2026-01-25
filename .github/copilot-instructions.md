@@ -18,10 +18,20 @@ These instructions apply to GitHub Copilot Chat/Agents working in this repositor
 ## Deployment awareness (Amplify)
 - AWS Amplify Hosting is wired to auto-build/deploy from `master`.
 - Treat merges into `master` as production-impacting.
+- Default workflow: implement on a feature branch, validate locally, then ask for explicit approval before merging to `master`.
 - Avoid changing deployment config files unless explicitly requested:
   - `amplify.yml`
   - `amplify_outputs.json`
   - `amplify/` backend files
+
+## Local validation before deploy (REQUIRED)
+- Before any deploy-impacting change (i.e., anything that would end up on `master`), the agent MUST offer a local verification pass first.
+- Preferred verification path for UI/UX changes:
+  - Run **Build (prod)** (`npm run build`)
+  - Run **Preview (prod build)** (`npx vite preview --host`)
+  - Wait for the repo owner to confirm the change looks good in preview.
+- Only after confirmation should the agent proceed to merge/PR into `master`.
+- This enables batching multiple related fixes into larger chunks with one deploy, instead of shipping every small tweak to production.
 
 ## Dev/build tasks (VS Code)
 - Prefer existing VS Code tasks over starting duplicate processes:
