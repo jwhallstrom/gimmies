@@ -18,6 +18,7 @@ const EventPage = lazy(() => import('./EventPage'));
 const JoinEventPage = lazy(() => import('./JoinEventPage'));
 const WalletPage = lazy(() => import('./WalletPage'));
 const AuthDemoPage = lazy(() => import('./AuthDemoPage').then(m => ({ default: m.AuthDemoPage })));
+const EditProfilePage = lazy(() => import('./EditProfilePage'));
 
 // Tournament pages (prototype feature)
 const TournamentsPage = lazy(() => import('./TournamentsPage'));
@@ -270,6 +271,7 @@ const App: React.FC = () => {
               <Routes>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/events" element={<EventsPage />} />
+                <Route path="/profile" element={<EditProfilePage />} />
                 <Route path="/handicap" element={<HandicapPage />} />
                 <Route path="/handicap/add-round" element={<AddScorePage />} />
                 <Route path="/handicap/round/:roundId" element={<RoundDetailPage />} />
