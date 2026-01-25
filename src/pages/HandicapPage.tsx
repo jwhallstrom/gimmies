@@ -20,7 +20,7 @@ const HandicapPage: React.FC = () => {
   if (!currentProfile) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-600">Please create a profile to track your handicap.</p>
+        <p className="text-gray-600 dark:text-slate-300">Please create a profile to track your handicap.</p>
       </div>
     );
   }
@@ -52,11 +52,11 @@ const HandicapPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header with Handicap Index */}
-      <div className="bg-white/90 backdrop-blur rounded-xl shadow-md p-6 border border-primary-900/5">
+      <div className="bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 backdrop-blur rounded-xl shadow-md p-6 border border-primary-900/5 dark:border-slate-800">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-primary-800">Handicap Tracker</h1>
-            <p className="text-gray-600 mt-1">Track your individual rounds and handicap progression</p>
+            <h1 className="text-2xl font-bold text-primary-800 dark:text-primary-200">Handicap Tracker</h1>
+            <p className="text-gray-600 dark:text-slate-300 mt-1">Track your individual rounds and handicap progression</p>
           </div>
           <div className="text-center">
             <div className="text-3xl font-bold text-primary-600">
@@ -65,32 +65,32 @@ const HandicapPage: React.FC = () => {
                 : '--'
               }
             </div>
-            <div className="text-sm text-gray-500">Current Index</div>
+            <div className="text-sm text-gray-500 dark:text-slate-400">Current Index</div>
           </div>
         </div>
       </div>
 
       {/* Quick Stats */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div className="bg-white/90 backdrop-blur rounded-lg shadow-md p-4 border border-primary-900/5">
+        <div className="bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 backdrop-blur rounded-lg shadow-md p-4 border border-primary-900/5 dark:border-slate-800">
           <div className="text-xl font-bold text-primary-600">{rounds.length}</div>
-          <div className="text-sm text-gray-600">Total Rounds</div>
+          <div className="text-sm text-gray-600 dark:text-slate-300">Total Rounds</div>
         </div>
-        <div className="bg-white/90 backdrop-blur rounded-lg shadow-md p-4 border border-primary-900/5">
+        <div className="bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 backdrop-blur rounded-lg shadow-md p-4 border border-primary-900/5 dark:border-slate-800">
           <div className="text-xl font-bold text-primary-600">{individualRounds.length}</div>
-          <div className="text-sm text-gray-600">Individual Rounds</div>
+          <div className="text-sm text-gray-600 dark:text-slate-300">Individual Rounds</div>
         </div>
-        <div className="bg-white/90 backdrop-blur rounded-lg shadow-md p-4 border border-primary-900/5">
+        <div className="bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 backdrop-blur rounded-lg shadow-md p-4 border border-primary-900/5 dark:border-slate-800">
           <div className="text-xl font-bold text-primary-600">
             {currentProfile.stats.averageScore > 0 ? currentProfile.stats.averageScore.toFixed(1) : '--'}
           </div>
-          <div className="text-sm text-gray-600">Average Score</div>
+          <div className="text-sm text-gray-600 dark:text-slate-300">Average Score</div>
         </div>
-        <div className="bg-white/90 backdrop-blur rounded-lg shadow-md p-4 border border-primary-900/5">
+        <div className="bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 backdrop-blur rounded-lg shadow-md p-4 border border-primary-900/5 dark:border-slate-800">
           <div className="text-xl font-bold text-primary-600">
             {currentProfile.stats.bestScore > 0 ? currentProfile.stats.bestScore : '--'}
           </div>
-          <div className="text-sm text-gray-600">Best Score</div>
+          <div className="text-sm text-gray-600 dark:text-slate-300">Best Score</div>
         </div>
       </div>
 
@@ -108,15 +108,15 @@ const HandicapPage: React.FC = () => {
       </div>
 
       {/* Recent Rounds */}
-      <div className="bg-white/90 backdrop-blur rounded-xl shadow-md border border-primary-900/5">
-        <div className="p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">Recent Rounds</h2>
+      <div className="bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 backdrop-blur rounded-xl shadow-md border border-primary-900/5 dark:border-slate-800">
+        <div className="p-6 border-b border-gray-200 dark:border-slate-800">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">Recent Rounds</h2>
         </div>
         
-        <div className="divide-y divide-gray-200">
+        <div className="divide-y divide-gray-200 dark:divide-slate-800">
           {rounds.length === 0 ? (
-            <div className="p-8 text-center text-gray-500">
-              <svg className="w-12 h-12 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="p-8 text-center text-gray-500 dark:text-slate-400">
+              <svg className="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
               </svg>
               <p>No rounds recorded yet.</p>
@@ -124,7 +124,7 @@ const HandicapPage: React.FC = () => {
             </div>
           ) : (
             rounds.slice(0, 10).map((round) => (
-              <div key={round.id} className="p-4 hover:bg-gray-50 transition-colors">
+              <div key={round.id} className="p-4 hover:bg-gray-50 dark:hover:bg-slate-800/60 transition-colors">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3">
@@ -145,11 +145,11 @@ const HandicapPage: React.FC = () => {
                       </div>
                       <div className="min-w-0 flex-1">
                         <Link to={`/handicap/round/${round.id}`} className="hover:text-primary-700">
-                          <p className="text-sm font-medium text-gray-900 truncate">
+                          <p className="text-sm font-medium text-gray-900 dark:text-slate-100 truncate">
                             {round.courseName}
                           </p>
                         </Link>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-gray-500 dark:text-slate-400">
                           {formatDate(round.date)} • {round.teeName}
                           {round.eventName && ` • ${round.eventName}`}
                         </p>
@@ -171,7 +171,7 @@ const HandicapPage: React.FC = () => {
                       }`}>
                         {round.grossScore}
                       </div>
-                      <div className="text-xs text-gray-500 mt-1">
+                      <div className="text-xs text-gray-500 dark:text-slate-400 mt-1">
                         {(() => {
                           const complete = round.scores.every(s => typeof s.strokes === 'number');
                           if (!complete) return <>Adj: --</>;
@@ -186,11 +186,11 @@ const HandicapPage: React.FC = () => {
                           return <>Adj: {adjustedGross}</>;
                         })()}
                       </div>
-                      <div className="text-xs text-gray-500 mt-1">
+                      <div className="text-xs text-gray-500 dark:text-slate-400 mt-1">
                         Diff: {typeof round.scoreDifferential === 'number' ? round.scoreDifferential.toFixed(1) : '--'}
                       </div>
                     </div>
-                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 text-gray-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </Link>

@@ -290,11 +290,13 @@ const App: React.FC = () => {
           </div>
         </div>
       </main>
-      <footer className="bottom-nav fixed bottom-0 inset-x-0 bg-white/90 dark:bg-slate-900/70 backdrop-blur border-t border-primary-900/20 dark:border-white/10 flex items-center justify-between z-40">
+      <footer className="bottom-nav fixed bottom-0 inset-x-0 bg-white/90 dark:bg-slate-900/85 backdrop-blur border-t border-primary-900/20 dark:border-white/15 shadow-[0_-1px_20px_rgba(0,0,0,0.06)] dark:shadow-[0_-1px_24px_rgba(0,0,0,0.45)] flex items-center justify-between z-40">
         <Link
           to="/"
           className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg transition-colors ${
-            location.pathname === '/' ? 'text-primary-600' : 'text-primary-800 hover:text-primary-600'
+            location.pathname === '/'
+              ? 'text-primary-600 dark:text-primary-300'
+              : 'text-primary-800 dark:text-slate-200 hover:text-primary-600 dark:hover:text-primary-200'
           }`}
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -306,7 +308,9 @@ const App: React.FC = () => {
         <Link
           to="/events"
           className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg transition-colors relative ${
-            location.pathname === '/events' ? 'text-primary-600' : 'text-primary-800 hover:text-primary-600'
+            location.pathname === '/events'
+              ? 'text-primary-600 dark:text-primary-300'
+              : 'text-primary-800 dark:text-slate-200 hover:text-primary-600 dark:hover:text-primary-200'
           }`}
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -323,7 +327,9 @@ const App: React.FC = () => {
         <Link
           to="/handicap"
           className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg transition-colors ${
-            location.pathname === '/handicap' ? 'text-primary-600' : 'text-primary-800 hover:text-primary-600'
+            location.pathname === '/handicap'
+              ? 'text-primary-600 dark:text-primary-300'
+              : 'text-primary-800 dark:text-slate-200 hover:text-primary-600 dark:hover:text-primary-200'
           }`}
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -336,7 +342,9 @@ const App: React.FC = () => {
         <Link
           to="/wallet"
           className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg transition-colors ${
-            location.pathname.startsWith('/wallet') ? 'text-primary-600' : 'text-primary-800 hover:text-primary-600'
+            location.pathname.startsWith('/wallet')
+              ? 'text-primary-600 dark:text-primary-300'
+              : 'text-primary-800 dark:text-slate-200 hover:text-primary-600 dark:hover:text-primary-200'
           }`}
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -348,7 +356,9 @@ const App: React.FC = () => {
         <Link
           to="/analytics"
           className={`flex flex-col items-center gap-0.5 px-2 py-1.5 rounded-lg transition-colors ${
-            location.pathname === '/analytics' ? 'text-primary-600' : 'text-primary-800 hover:text-primary-600'
+            location.pathname === '/analytics'
+              ? 'text-primary-600 dark:text-primary-300'
+              : 'text-primary-800 dark:text-slate-200 hover:text-primary-600 dark:hover:text-primary-200'
           }`}
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

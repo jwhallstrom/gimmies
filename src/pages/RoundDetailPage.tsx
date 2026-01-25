@@ -49,8 +49,8 @@ const RoundDetailPage: React.FC = () => {
     if (diff <= -3) return 'bg-fuchsia-600 text-white font-semibold'; // Albatross or better
     if (diff === -2) return 'bg-amber-500 text-black font-semibold'; // Eagle
     if (diff === -1) return 'bg-green-500 text-white font-semibold'; // Birdie
-    if (diff === 0) return 'bg-neutral-50'; // Par
-    if (diff === 1) return 'bg-orange-200'; // Bogey
+    if (diff === 0) return 'bg-neutral-50 text-slate-900'; // Par
+    if (diff === 1) return 'bg-orange-200 text-slate-900'; // Bogey
     if (diff === 2) return 'bg-red-300 text-red-900 font-semibold'; // Double bogey
     return 'bg-red-600 text-white font-semibold'; // Triple or worse
   };
@@ -126,13 +126,13 @@ const RoundDetailPage: React.FC = () => {
           </svg>
         </Link>
         <div className="flex-1">
-          <h1 className="text-2xl font-bold text-white">{round.courseName}</h1>
-          <p className="text-gray-800 font-medium">{formatDate(round.date)} • <span className="text-primary-700 font-semibold">{round.teeName}</span></p>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-slate-100">{round.courseName}</h1>
+          <p className="text-gray-800 dark:text-slate-300 font-medium">{formatDate(round.date)} • <span className="text-primary-700 dark:text-primary-200 font-semibold">{round.teeName}</span></p>
         </div>
         {round.type === 'individual' && (
           <button
             onClick={() => setShowDeleteConfirm(true)}
-            className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+            className="p-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-lg transition-colors"
             title="Delete round"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -143,7 +143,7 @@ const RoundDetailPage: React.FC = () => {
       </div>
 
       {/* Round Summary */}
-      <div className="bg-white/90 backdrop-blur rounded-xl shadow-md border border-primary-900/5 p-6">
+      <div className="bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 backdrop-blur rounded-xl shadow-md border border-primary-900/5 dark:border-slate-800 p-6">
         <div className="flex items-center gap-3 mb-4">
           {round.type === 'event' && round.eventId ? (
             <Link
@@ -158,66 +158,66 @@ const RoundDetailPage: React.FC = () => {
             </div>
           )}
           {round.eventName && round.eventId && (
-            <Link to={`/event/${round.eventId}`} className="text-sm text-gray-600 hover:text-primary-600 hover:underline">
+            <Link to={`/event/${round.eventId}`} className="text-sm text-gray-600 dark:text-slate-300 hover:text-primary-600 hover:underline">
               {round.eventName}
             </Link>
           )}
           {round.eventName && !round.eventId && (
-            <span className="text-sm text-gray-600">• {round.eventName}</span>
+            <span className="text-sm text-gray-600 dark:text-slate-300">• {round.eventName}</span>
           )}
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="text-center p-4 bg-gray-50 rounded-lg">
+          <div className="text-center p-4 bg-gray-50 dark:bg-slate-800 rounded-lg">
             <div className="text-3xl font-bold text-primary-600">{round.grossScore}</div>
-            <div className="text-sm text-gray-600">Gross Score</div>
+            <div className="text-sm text-gray-600 dark:text-slate-300">Gross Score</div>
           </div>
-          <div className="text-center p-4 bg-gray-50 rounded-lg">
+          <div className="text-center p-4 bg-gray-50 dark:bg-slate-800 rounded-lg">
             <div className={`text-3xl font-bold ${toPar === 0 ? 'text-green-600' : toPar < 0 ? 'text-blue-600' : 'text-red-600'}`}>
               {toPar > 0 ? `+${toPar}` : toPar}
             </div>
-            <div className="text-sm text-gray-600">vs Par</div>
+            <div className="text-sm text-gray-600 dark:text-slate-300">vs Par</div>
           </div>
-          <div className="text-center p-4 bg-gray-50 rounded-lg">
+          <div className="text-center p-4 bg-gray-50 dark:bg-slate-800 rounded-lg">
             {round.type === 'individual' ? (
               <>
                 <div className="text-3xl font-bold text-primary-600">{adjustedGross ?? '--'}</div>
-                <div className="text-sm text-gray-600">Adjusted Gross (WHS)</div>
+                <div className="text-sm text-gray-600 dark:text-slate-300">Adjusted Gross (WHS)</div>
               </>
             ) : (
               <>
                 <div className="text-3xl font-bold text-primary-600">{round.netScore}</div>
-                <div className="text-sm text-gray-600">Net Score</div>
+                <div className="text-sm text-gray-600 dark:text-slate-300">Net Score</div>
               </>
             )}
           </div>
-          <div className="text-center p-4 bg-gray-50 rounded-lg">
+          <div className="text-center p-4 bg-gray-50 dark:bg-slate-800 rounded-lg">
             <div className="text-3xl font-bold text-primary-600">
               {round.scoreDifferential ? round.scoreDifferential.toFixed(1) : '--'}
             </div>
-            <div className="text-sm text-gray-600">Differential</div>
+            <div className="text-sm text-gray-600 dark:text-slate-300">Differential</div>
           </div>
         </div>
 
         {/* Course Details */}
         {teeInfo && (
-          <div className="mt-6 pt-6 border-t border-gray-200">
-            <h3 className="font-semibold text-gray-900 mb-3">Course Details</h3>
+          <div className="mt-6 pt-6 border-t border-gray-200 dark:border-slate-800">
+            <h3 className="font-semibold text-gray-900 dark:text-slate-100 mb-3">Course Details</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
               <div>
-                <span className="text-gray-600">Yardage:</span>
+                <span className="text-gray-600 dark:text-slate-400">Yardage:</span>
                 <span className="ml-2 font-medium">{teeInfo.yardage}y</span>
               </div>
               <div>
-                <span className="text-gray-600">Par:</span>
+                <span className="text-gray-600 dark:text-slate-400">Par:</span>
                 <span className="ml-2 font-medium">{teeInfo.par}</span>
               </div>
               <div>
-                <span className="text-gray-600">Course Rating:</span>
+                <span className="text-gray-600 dark:text-slate-400">Course Rating:</span>
                 <span className="ml-2 font-medium">{teeInfo.courseRating}</span>
               </div>
               <div>
-                <span className="text-gray-600">Slope Rating:</span>
+                <span className="text-gray-600 dark:text-slate-400">Slope Rating:</span>
                 <span className="ml-2 font-medium">{teeInfo.slopeRating}</span>
               </div>
             </div>
@@ -226,39 +226,39 @@ const RoundDetailPage: React.FC = () => {
       </div>
 
       {/* Hole Stats */}
-      <div className="bg-white/90 backdrop-blur rounded-xl shadow-md border border-primary-900/5 p-6">
-        <h3 className="font-semibold text-gray-900 mb-4">Performance Summary</h3>
+      <div className="bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 backdrop-blur rounded-xl shadow-md border border-primary-900/5 dark:border-slate-800 p-6">
+        <h3 className="font-semibold text-gray-900 dark:text-slate-100 mb-4">Performance Summary</h3>
         <div className="grid grid-cols-3 md:grid-cols-5 gap-4 text-center">
           <div className="p-3 bg-green-50 rounded-lg">
             <div className="text-2xl font-bold text-green-600">{holeStats.birdiesOrBetter}</div>
-            <div className="text-xs text-gray-600">Birdies+</div>
+            <div className="text-xs text-gray-600 dark:text-slate-600">Birdies+</div>
           </div>
           <div className="p-3 bg-blue-50 rounded-lg">
             <div className="text-2xl font-bold text-blue-600">{holeStats.pars}</div>
-            <div className="text-xs text-gray-600">Pars</div>
+            <div className="text-xs text-gray-600 dark:text-slate-600">Pars</div>
           </div>
           <div className="p-3 bg-orange-50 rounded-lg">
             <div className="text-2xl font-bold text-orange-600">{holeStats.bogeys}</div>
-            <div className="text-xs text-gray-600">Bogeys</div>
+            <div className="text-xs text-gray-600 dark:text-slate-600">Bogeys</div>
           </div>
           <div className="p-3 bg-red-50 rounded-lg">
             <div className="text-2xl font-bold text-red-600">{holeStats.doubleBogeys}</div>
-            <div className="text-xs text-gray-600">Doubles</div>
+            <div className="text-xs text-gray-600 dark:text-slate-600">Doubles</div>
           </div>
           <div className="p-3 bg-red-100 rounded-lg">
             <div className="text-2xl font-bold text-red-700">{holeStats.triplesOrWorse}</div>
-            <div className="text-xs text-gray-600">Triples+</div>
+            <div className="text-xs text-gray-600 dark:text-slate-600">Triples+</div>
           </div>
         </div>
       </div>
 
       {/* Scorecard */}
-      <div className="bg-white/90 backdrop-blur rounded-xl shadow-md border border-primary-900/5 p-6">
-        <h3 className="font-semibold text-gray-900 mb-4">Scorecard</h3>
+      <div className="bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 backdrop-blur rounded-xl shadow-md border border-primary-900/5 dark:border-slate-800 p-6">
+        <h3 className="font-semibold text-gray-900 dark:text-slate-100 mb-4">Scorecard</h3>
         
         {/* Front 9 */}
         <div className="mb-6">
-          <div className="text-sm font-semibold text-gray-700 mb-2">Front Nine</div>
+          <div className="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">Front Nine</div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -272,34 +272,34 @@ const RoundDetailPage: React.FC = () => {
               </thead>
               <tbody>
                 <tr className="border-t">
-                  <td className="py-2 px-2 font-medium">Par</td>
+                  <td className="py-2 px-2 font-medium text-slate-700 dark:text-slate-300">Par</td>
                   {front9.map((score, i) => (
-                    <td key={i} className="text-center py-2 px-2 bg-gray-100">{score.par}</td>
+                    <td key={i} className="text-center py-2 px-2 bg-gray-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200">{score.par}</td>
                   ))}
-                  <td className="text-center py-2 px-2 bg-gray-200 font-semibold">{front9Par}</td>
+                  <td className="text-center py-2 px-2 bg-gray-200 dark:bg-slate-700 font-semibold text-slate-700 dark:text-slate-200">{front9Par}</td>
                 </tr>
                 <tr className="border-t">
-                  <td className="py-2 px-2 font-medium">Score</td>
+                  <td className="py-2 px-2 font-medium text-slate-700 dark:text-slate-300">Score</td>
                   {front9.map((score, i) => (
                     <td key={i} className="text-center py-2 px-2">
                       <div className={`inline-flex items-center justify-center w-7 h-7 rounded text-xs font-medium ${
-                        score.strokes ? getScoreBadgeColor(score.strokes, score.par) : 'bg-gray-100'
+                        score.strokes ? getScoreBadgeColor(score.strokes, score.par) : 'bg-gray-100 text-slate-900'
                       }`}>
                         {score.strokes || '-'}
                       </div>
                     </td>
                   ))}
-                  <td className="text-center py-2 px-2 bg-gray-100 font-semibold">{front9Score}</td>
+                  <td className="text-center py-2 px-2 bg-gray-100 dark:bg-slate-800 font-semibold text-slate-700 dark:text-slate-200">{front9Score}</td>
                 </tr>
                 {round.type === 'individual' && (
                   <tr className="border-t">
-                    <td className="py-2 px-2 font-medium text-primary-700">Adj</td>
+                    <td className="py-2 px-2 font-medium text-primary-700 dark:text-primary-200">Adj</td>
                     {front9.map((score, i) => (
-                      <td key={i} className="text-center py-2 px-2 text-primary-700">
+                      <td key={i} className="text-center py-2 px-2 text-primary-700 dark:text-primary-200">
                         {getAdjustedStrokes(score) ?? '-'}
                       </td>
                     ))}
-                    <td className="text-center py-2 px-2 bg-primary-50 font-semibold text-primary-700">
+                    <td className="text-center py-2 px-2 bg-primary-50 dark:bg-primary-900/20 font-semibold text-primary-700 dark:text-primary-200">
                       {front9Adjusted ?? '--'}
                     </td>
                   </tr>
@@ -311,11 +311,11 @@ const RoundDetailPage: React.FC = () => {
 
         {/* Back 9 */}
         <div>
-          <div className="text-sm font-semibold text-gray-700 mb-2">Back Nine</div>
+          <div className="text-sm font-semibold text-gray-700 dark:text-slate-300 mb-2">Back Nine</div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-xs text-gray-600">
+                <tr className="text-xs text-gray-600 dark:text-slate-400">
                   <th className="text-left py-1 px-2">Hole</th>
                   {back9.map((_, i) => (
                     <th key={i + 10} className="text-center py-1 px-2 min-w-[30px]">{i + 10}</th>
@@ -326,39 +326,39 @@ const RoundDetailPage: React.FC = () => {
               </thead>
               <tbody>
                 <tr className="border-t">
-                  <td className="py-2 px-2 font-medium">Par</td>
+                  <td className="py-2 px-2 font-medium text-slate-700 dark:text-slate-300">Par</td>
                   {back9.map((score, i) => (
-                    <td key={i} className="text-center py-2 px-2 bg-gray-100">{score.par}</td>
+                    <td key={i} className="text-center py-2 px-2 bg-gray-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200">{score.par}</td>
                   ))}
-                  <td className="text-center py-2 px-2 bg-gray-200 font-semibold">{back9Par}</td>
-                  <td className="text-center py-2 px-2 bg-gray-300 font-semibold">{totalPar}</td>
+                  <td className="text-center py-2 px-2 bg-gray-200 dark:bg-slate-700 font-semibold text-slate-700 dark:text-slate-200">{back9Par}</td>
+                  <td className="text-center py-2 px-2 bg-gray-300 dark:bg-slate-700 font-semibold text-slate-700 dark:text-slate-200">{totalPar}</td>
                 </tr>
                 <tr className="border-t">
-                  <td className="py-2 px-2 font-medium">Score</td>
+                  <td className="py-2 px-2 font-medium text-slate-700 dark:text-slate-300">Score</td>
                   {back9.map((score, i) => (
                     <td key={i} className="text-center py-2 px-2">
                       <div className={`inline-flex items-center justify-center w-7 h-7 rounded text-xs font-medium ${
-                        score.strokes ? getScoreBadgeColor(score.strokes, score.par) : 'bg-gray-100'
+                        score.strokes ? getScoreBadgeColor(score.strokes, score.par) : 'bg-gray-100 text-slate-900'
                       }`}>
                         {score.strokes || '-'}
                       </div>
                     </td>
                   ))}
-                  <td className="text-center py-2 px-2 bg-gray-100 font-semibold">{back9Score}</td>
-                  <td className="text-center py-2 px-2 bg-gray-200 font-semibold">{round.grossScore}</td>
+                  <td className="text-center py-2 px-2 bg-gray-100 dark:bg-slate-800 font-semibold text-slate-700 dark:text-slate-200">{back9Score}</td>
+                  <td className="text-center py-2 px-2 bg-gray-200 dark:bg-slate-700 font-semibold text-slate-700 dark:text-slate-200">{round.grossScore}</td>
                 </tr>
                 {round.type === 'individual' && (
                   <tr className="border-t">
-                    <td className="py-2 px-2 font-medium text-primary-700">Adj</td>
+                    <td className="py-2 px-2 font-medium text-primary-700 dark:text-primary-200">Adj</td>
                     {back9.map((score, i) => (
-                      <td key={i} className="text-center py-2 px-2 text-primary-700">
+                      <td key={i} className="text-center py-2 px-2 text-primary-700 dark:text-primary-200">
                         {getAdjustedStrokes(score) ?? '-'}
                       </td>
                     ))}
-                    <td className="text-center py-2 px-2 bg-primary-50 font-semibold text-primary-700">
+                    <td className="text-center py-2 px-2 bg-primary-50 dark:bg-primary-900/20 font-semibold text-primary-700 dark:text-primary-200">
                       {back9Adjusted ?? '--'}
                     </td>
-                    <td className="text-center py-2 px-2 bg-primary-100 font-semibold text-primary-700">
+                    <td className="text-center py-2 px-2 bg-primary-100 dark:bg-primary-900/30 font-semibold text-primary-700 dark:text-primary-200">
                       {adjustedGross ?? '--'}
                     </td>
                   </tr>
@@ -372,15 +372,15 @@ const RoundDetailPage: React.FC = () => {
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg p-6 max-w-sm w-full">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Round</h3>
-            <p className="text-gray-600 mb-4">
+          <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-lg p-6 max-w-sm w-full border border-gray-200 dark:border-slate-800">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-100 mb-2">Delete Round</h3>
+            <p className="text-gray-600 dark:text-slate-300 mb-4">
               Are you sure you want to delete this round? This action cannot be undone and will recalculate your handicap index.
             </p>
             <div className="flex gap-3 justify-end">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                className="px-4 py-2 text-gray-600 dark:text-slate-300 hover:text-gray-800 dark:hover:text-white transition-colors"
               >
                 Cancel
               </button>
