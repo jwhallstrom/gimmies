@@ -46,34 +46,36 @@ export function CourseSearch({ selectedCourseId, onSelect, disabled }: CourseSea
     <div ref={dropdownRef} className="relative">
       {/* Display / Search Input */}
       <div
-        className={`w-full border rounded px-2 py-1 text-sm flex items-center justify-between cursor-pointer ${
-          disabled ? 'bg-gray-100 cursor-not-allowed' : 'bg-white border-gray-400'
+        className={`w-full border rounded px-2 py-1 text-sm flex items-center justify-between cursor-pointer text-slate-900 dark:text-slate-100 ${
+          disabled
+            ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed border-gray-300 dark:border-slate-700'
+            : 'bg-white dark:bg-slate-950 border-gray-400 dark:border-slate-700'
         }`}
         onClick={() => !disabled && setIsOpen(!isOpen)}
       >
         {loading ? (
-          <span className="text-gray-400">Loading courses...</span>
+          <span className="text-gray-400 dark:text-slate-400">Loading courses...</span>
         ) : selectedCourse ? (
           <div className="flex-1 truncate">
             <div className="font-medium">{selectedCourse.name}</div>
-            <div className="text-xs text-gray-500">{selectedCourse.location}</div>
+            <div className="text-xs text-gray-500 dark:text-slate-400">{selectedCourse.location}</div>
           </div>
         ) : (
-          <span className="text-gray-400">Search for a course...</span>
+          <span className="text-gray-400 dark:text-slate-400">Search for a course...</span>
         )}
-        <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 text-gray-400 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </div>
 
       {/* Dropdown */}
       {isOpen && !disabled && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-96 overflow-hidden flex flex-col">
+        <div className="absolute z-50 w-full mt-1 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-lg shadow-lg max-h-96 overflow-hidden flex flex-col">
           {/* Search Input */}
-          <div className="p-2 border-b">
+          <div className="p-2 border-b border-gray-200 dark:border-slate-700">
             <input
               type="text"
-              className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 rounded text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
               placeholder="Search courses by name or location..."
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
@@ -84,7 +86,7 @@ export function CourseSearch({ selectedCourseId, onSelect, disabled }: CourseSea
           {/* Results */}
           <div className="overflow-y-auto flex-1">
             {displayCourses.length === 0 ? (
-              <div className="p-4 text-center text-gray-500 text-sm">
+              <div className="p-4 text-center text-gray-500 dark:text-slate-400 text-sm">
                 {searchQuery ? 'No courses found' : 'Start typing to search'}
               </div>
             ) : (
@@ -92,18 +94,18 @@ export function CourseSearch({ selectedCourseId, onSelect, disabled }: CourseSea
                 {displayCourses.map((course: CourseData) => (
                   <div
                     key={course.id}
-                    className="px-3 py-2 hover:bg-primary-50 cursor-pointer border-b last:border-b-0"
+                    className="px-3 py-2 hover:bg-primary-50 dark:hover:bg-primary-900/20 cursor-pointer border-b border-gray-100 dark:border-slate-800 last:border-b-0"
                     onClick={() => handleSelect(course.courseId, course.name)}
                   >
-                    <div className="font-medium text-sm">{course.name}</div>
-                    <div className="text-xs text-gray-500">{course.location}</div>
-                    <div className="text-xs text-gray-400 mt-1">
+                    <div className="font-medium text-sm text-slate-900 dark:text-slate-100">{course.name}</div>
+                    <div className="text-xs text-gray-500 dark:text-slate-400">{course.location}</div>
+                    <div className="text-xs text-gray-400 dark:text-slate-500 mt-1">
                       {course.tees.length} tee{course.tees.length !== 1 ? 's' : ''} available
                     </div>
                   </div>
                 ))}
                 {filteredCourses.length > 50 && (
-                  <div className="p-2 text-center text-xs text-gray-500 bg-gray-50">
+                  <div className="p-2 text-center text-xs text-gray-500 dark:text-slate-400 bg-gray-50 dark:bg-slate-800">
                     Showing first 50 of {filteredCourses.length} results. Refine your search for more.
                   </div>
                 )}
