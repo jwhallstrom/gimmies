@@ -66,13 +66,16 @@ export function computeNassauForConfig(event: Event, config: NassauConfig, profi
   const segmentFee = (segment: 'front' | 'back' | 'total') =>
     segment === 'front' ? feesPerPlayer.out : segment === 'back' ? feesPerPlayer.in : feesPerPlayer.total;
 
+  // Check if this is a 2-team match play game
+  const is2TeamMatch = isTeam && config.teams?.length === 2 && config.scoringType === 'match';
+
   const segments: NassauSegmentResult[] = (['front', 'back', 'total'] as const).map(segment => {
     const holes = segmentHoles(segment);
     const segmentPot = payingPlayers.length * segmentFee(segment);
   const scores: Record<string, number> = {};
   const toPar: Record<string, number> = {};
     
-    console.log(`🏌️ Nassau ${segment} calculation:`, { holes, isTeam });
+    console.log(`🏌️ Nassau ${segment} calculation:`, { holes, isTeam, is2TeamMatch });
     
     if (!isTeam) {
   players.forEach(pid => {
@@ -93,7 +96,65 @@ export function computeNassauForConfig(event: Event, config: NassauConfig, profi
         // We'll require caller already has correct par values via scorecards; using scorecards would be simpler.
       }
       // derive par per hole via first golfer scorecard metadata (par not stored there), so skip; we can't compute without course map here.
+    } else if (is2TeamMatch) {
+      // 2-Team Match Play: Count holes won by each team
+      const team1 = config.teams![0];
+      const team2 = config.teams![1];
+      const bestCount = config.teamBestCount && config.teamBestCount > 0 ? config.teamBestCount : 1;
+      
+      let team1Wins = 0;
+      let team2Wins = 0;
+      let allComplete = true;
+      
+      console.log(`  Match Play mode: ${team1.name} vs ${team2.name}, bestCount=${bestCount}`);
+      
+      for (const h of holes) {
+        const getTeamBestScore = (team: NassauTeam): number | null => {
+          const memberScores: number[] = [];
+          const teamMembers = team.golferIds.filter(gid => players.includes(gid));
+          
+          teamMembers.forEach(pid => {
+            const sc = event.scorecards.find(s => s.golferId === pid);
+            const gross = sc?.scores.find(s => s.hole === h)?.strokes ?? null;
+            const value = gross == null ? null : (config.net ? (netScore(event, pid, h, gross, profiles) ?? gross) : gross);
+            if (value != null) memberScores.push(value);
+          });
+          
+          if (memberScores.length === 0) return null;
+          memberScores.sort((a, b) => a - b);
+          const used = memberScores.slice(0, Math.min(bestCount, memberScores.length));
+          return used.reduce((a, b) => a + b, 0);
+        };
+        
+        const score1 = getTeamBestScore(team1);
+        const score2 = getTeamBestScore(team2);
+        
+        if (score1 === null || score2 === null) {
+          allComplete = false;
+          break;
+        }
+        
+        if (score1 < score2) {
+          team1Wins++;
+          console.log(`    Hole ${h}: ${team1.name} wins (${score1} vs ${score2})`);
+        } else if (score2 < score1) {
+          team2Wins++;
+          console.log(`    Hole ${h}: ${team2.name} wins (${score2} vs ${score1})`);
+        } else {
+          console.log(`    Hole ${h}: Tie (${score1} vs ${score2})`);
+        }
+      }
+      
+      // In match play, the score is holes won (higher is better, so we negate for sorting)
+      // We store negative holes won so lowest "score" wins (consistent with stroke play logic)
+      scores[team1.id] = allComplete ? -team1Wins : Number.POSITIVE_INFINITY;
+      scores[team2.id] = allComplete ? -team2Wins : Number.POSITIVE_INFINITY;
+      toPar[team1.id] = team1Wins; // Store actual holes won in toPar for display
+      toPar[team2.id] = team2Wins;
+      
+      console.log(`  Match Play results: ${team1.name}=${team1Wins} holes, ${team2.name}=${team2Wins} holes`);
     } else {
+      // Standard team stroke play
       const bestCount = config.teamBestCount && config.teamBestCount > 0 ? config.teamBestCount : 1;
       console.log(`  Team mode: bestCount=${bestCount}, teams=${config.teams?.length || 0}`);
       

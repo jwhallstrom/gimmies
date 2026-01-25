@@ -135,6 +135,13 @@ export interface NassauConfig {
   participantGolferIds?: string[];
   /** If true, golfers can join a team themselves (UI enforcement TBD). */
   allowGolferTeamSelect?: boolean;
+  /** 
+   * Scoring type for 2-team Nassau games:
+   * - 'stroke': Total strokes (default) - lower total wins
+   * - 'match': Match play - count holes won (hole-by-hole competition)
+   * Only applicable when teams.length === 2
+   */
+  scoringType?: 'stroke' | 'match';
 }
 
 export interface SkinsConfig { 

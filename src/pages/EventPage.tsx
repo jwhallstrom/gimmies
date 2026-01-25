@@ -23,11 +23,15 @@ import EventNotifications from '../components/EventNotifications';
 import NassauTeamsPage from './NassauTeamsPage';
 import { getCourseById } from '../data/cloudCourses';
 
+const formatDateShort = (iso: string) =>
+  new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
 const EventPage: React.FC = () => {
   const { id } = useParams();
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [showEventsDropdown, setShowEventsDropdown] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   
@@ -38,7 +42,7 @@ const EventPage: React.FC = () => {
     s.events.find(e => e.id === id) || 
     s.completedEvents.find(e => e.id === id)
   );
-  const { deleteEvent, currentProfile } = useStore();
+  const { deleteEvent, currentProfile, joinEventByCode, generateShareCode, addToast } = useStore();
   
   if (!event) {
     return (
@@ -60,6 +64,31 @@ const EventPage: React.FC = () => {
   const isGroupHub = event.hubType === 'group';
   const isOwner = Boolean(currentProfile && event.ownerProfileId === currentProfile.id);
   const courseName = event.course.courseId ? getCourseById(event.course.courseId)?.name : null;
+  
+  // Get child events for this group
+  const childEvents = useStore((s) => {
+    if (!isGroupHub) return [];
+    return (s.events || [])
+      .filter((e: any) => e.hubType !== 'group' && e.parentGroupId === id && !e.isCompleted)
+      .sort((a: any, b: any) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
+  });
+  
+  // Separate into events user has joined vs not joined
+  const { joinedEvents, unjoinedEvents } = useMemo(() => {
+    const joined: typeof childEvents = [];
+    const unjoined: typeof childEvents = [];
+    
+    childEvents.forEach((e: any) => {
+      const isInEvent = currentProfile && e.golfers?.some((g: any) => g.profileId === currentProfile.id);
+      if (isInEvent) {
+        joined.push(e);
+      } else {
+        unjoined.push(e);
+      }
+    });
+    
+    return { joinedEvents: joined, unjoinedEvents: unjoined };
+  }, [childEvents, currentProfile?.id]);
   
   // Calculate event stats for header
   const stats = useMemo(() => {
@@ -124,7 +153,144 @@ const EventPage: React.FC = () => {
           </button>
           
           <div className="flex items-center gap-1">
-            {/* Share Button */}
+            {/* Events Pill - Groups only */}
+            {isGroupHub && (
+              <div className="relative">
+                <button
+                  onClick={() => setShowEventsDropdown(!showEventsDropdown)}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
+                    childEvents.length > 0 
+                      ? 'bg-orange-500 text-white hover:bg-orange-600' 
+                      : 'bg-white/10 text-white hover:bg-white/20'
+                  }`}
+                >
+                  <span>🎯</span>
+                  <span>Events</span>
+                  {childEvents.length > 0 && (
+                    <span className="bg-white text-orange-600 px-1.5 py-0.5 rounded-full text-[10px] font-bold min-w-[18px] text-center">
+                      {childEvents.length}
+                    </span>
+                  )}
+                  <svg className={`w-3.5 h-3.5 transition-transform ${showEventsDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                
+                {showEventsDropdown && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowEventsDropdown(false)} />
+                    <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-xl shadow-xl border border-gray-200 py-2 z-50 max-h-80 overflow-y-auto">
+                      {childEvents.length === 0 ? (
+                        <div className="px-4 py-3 text-center">
+                          <div className="text-2xl mb-2">📅</div>
+                          <div className="text-sm font-semibold text-gray-700">No events yet</div>
+                          <p className="text-xs text-gray-500 mt-1">Create an event for this group</p>
+                          <button
+                            onClick={() => {
+                              setShowEventsDropdown(false);
+                              navigate(`/events?create=true&returnTo=group&groupId=${encodeURIComponent(id!)}`);
+                            }}
+                            className="mt-3 w-full bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg text-xs font-bold"
+                          >
+                            + Create Event
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          {/* Joined events */}
+                          {joinedEvents.length > 0 && (
+                            <div className="px-3 py-1">
+                              <div className="text-[10px] font-bold text-green-600 uppercase tracking-wider mb-1">Your Events</div>
+                              {joinedEvents.map((evt: any) => (
+                                <button
+                                  key={evt.id}
+                                  onClick={() => {
+                                    setShowEventsDropdown(false);
+                                    navigate(`/event/${evt.id}`);
+                                  }}
+                                  className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg hover:bg-green-50 transition-colors text-left mb-1"
+                                >
+                                  <div className="min-w-0">
+                                    <div className="font-semibold text-gray-900 text-sm truncate">{evt.name || 'Event'}</div>
+                                    <div className="text-[10px] text-gray-500">
+                                      {evt.date ? formatDateShort(evt.date) : ''} • {evt.golfers?.length || 0} players
+                                    </div>
+                                  </div>
+                                  <span className="text-[9px] font-bold text-green-600 bg-green-100 px-2 py-0.5 rounded-full flex-shrink-0">
+                                    JOINED
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          
+                          {/* Unjoined events */}
+                          {unjoinedEvents.length > 0 && (
+                            <div className={`px-3 py-1 ${joinedEvents.length > 0 ? 'border-t border-gray-100' : ''}`}>
+                              <div className="text-[10px] font-bold text-primary-600 uppercase tracking-wider mb-1 mt-1">Available to Join</div>
+                              {unjoinedEvents.map((evt: any) => (
+                                <div key={evt.id} className="mb-2 last:mb-0">
+                                  <div className="px-3 py-2 rounded-lg bg-gray-50">
+                                    <div className="font-semibold text-gray-900 text-sm">{evt.name || 'Event'}</div>
+                                    <div className="text-[10px] text-gray-500 mb-2">
+                                      {evt.date ? formatDateShort(evt.date) : ''}{evt.course?.teeName ? ` • ${evt.course.teeName}` : ''}
+                                    </div>
+                                    <div className="flex gap-2">
+                                      <button
+                                        onClick={async () => {
+                                          try {
+                                            const code = evt.shareCode || (await generateShareCode(evt.id));
+                                            if (!code) throw new Error('Missing join code');
+                                            const result = await joinEventByCode(code);
+                                            if (!result.success) throw new Error(result.error || 'Failed to join');
+                                            addToast('Joined event', 'success');
+                                            setShowEventsDropdown(false);
+                                            navigate(`/event/${evt.id}`);
+                                          } catch (e: any) {
+                                            addToast(e?.message || 'Could not join event', 'error');
+                                          }
+                                        }}
+                                        className="flex-1 bg-primary-600 text-white hover:bg-primary-700 px-3 py-1.5 rounded-lg text-xs font-bold"
+                                      >
+                                        Join
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          setShowEventsDropdown(false);
+                                          navigate(`/event/${evt.id}`);
+                                        }}
+                                        className="px-3 py-1.5 bg-white border border-gray-200 hover:bg-gray-50 rounded-lg text-xs font-bold text-gray-700"
+                                      >
+                                        View
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                          
+                          {/* Create new event button */}
+                          <div className="px-3 pt-2 border-t border-gray-100">
+                            <button
+                              onClick={() => {
+                                setShowEventsDropdown(false);
+                                navigate(`/events?create=true&returnTo=group&groupId=${encodeURIComponent(id!)}`);
+                              }}
+                              className="w-full bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg text-xs font-bold transition-colors"
+                            >
+                              + New Event
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+            
+            {/* Share Button - Events only */}
             {!isGroupHub && (
               <button
                 onClick={() => setIsShareModalOpen(true)}

@@ -94,21 +94,32 @@ export const createHandicapSlice = (
 
   getProfileRounds: (profileId: string): CombinedRound[] => {
     const profile = get().profiles.find((p: GolferProfile) => p.id === profileId);
+    const completedEvents = get().completedEvents || [];
     const rounds: CombinedRound[] = [];
 
     // Add individual rounds (includes converted event rounds)
     if (profile?.individualRounds) {
       profile.individualRounds.forEach((round: IndividualRound) => {
         const course = getCourseById(round.courseId);
+        
+        // If this round came from an event, get the event name
+        let eventName: string | undefined;
+        if (round.eventId) {
+          const sourceEvent = completedEvents.find((e: any) => e.id === round.eventId);
+          eventName = sourceEvent?.name;
+        }
+        
         rounds.push({
           id: round.id,
-          type: 'individual',
+          type: round.eventId ? 'event' : 'individual',
           date: round.date,
           courseName: course?.name || 'Unknown Course',
           teeName: round.teeName,
           grossScore: round.grossScore,
           netScore: round.netScore,
           scoreDifferential: round.scoreDifferential,
+          eventName,
+          eventId: round.eventId,
           scores: round.scores,
           completedRoundId: round.completedRoundId
         });

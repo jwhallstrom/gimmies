@@ -124,27 +124,31 @@ const HandicapPage: React.FC = () => {
             </div>
           ) : (
             rounds.slice(0, 10).map((round) => (
-              <Link
-                key={round.id}
-                to={`/handicap/round/${round.id}`}
-                className="block p-4 hover:bg-gray-50 transition-colors"
-              >
+              <div key={round.id} className="p-4 hover:bg-gray-50 transition-colors">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center gap-3">
                       <div className="flex-shrink-0">
-                        <div className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          round.type === 'event' 
-                            ? 'bg-blue-100 text-blue-800' 
-                            : 'bg-green-100 text-green-800'
-                        }`}>
-                          {round.type === 'event' ? 'Event' : 'Individual'}
-                        </div>
+                        {round.type === 'event' && round.eventId ? (
+                          <Link
+                            to={`/event/${round.eventId}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors"
+                          >
+                            Event →
+                          </Link>
+                        ) : (
+                          <div className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                            Individual
+                          </div>
+                        )}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {round.courseName}
-                        </p>
+                        <Link to={`/handicap/round/${round.id}`} className="hover:text-primary-700">
+                          <p className="text-sm font-medium text-gray-900 truncate">
+                            {round.courseName}
+                          </p>
+                        </Link>
                         <p className="text-xs text-gray-500">
                           {formatDate(round.date)} • {round.teeName}
                           {round.eventName && ` • ${round.eventName}`}
@@ -157,7 +161,10 @@ const HandicapPage: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-4 flex-shrink-0">
+                  <Link 
+                    to={`/handicap/round/${round.id}`}
+                    className="flex items-center gap-4 flex-shrink-0 hover:text-primary-700"
+                  >
                     <div className="text-right">
                       <div className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
                         getScoreBadgeColor(round.grossScore)
@@ -186,9 +193,9 @@ const HandicapPage: React.FC = () => {
                     <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
-                  </div>
+                  </Link>
                 </div>
-              </Link>
+              </div>
             ))
           )}
         </div>

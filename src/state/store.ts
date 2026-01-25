@@ -464,9 +464,9 @@ export const useStore = create<State>()(
           completedEvents: [...get().completedEvents, completedEvent]
         });
         
-        // Create IndividualRounds for handicap + cloud
+        // Create IndividualRounds for handicap (ALWAYS when valid course data exists)
         const newIndividualRounds: IndividualRound[] = [];
-        if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true' && event.course.courseId) {
+        if (event.course.courseId) {
           newCompletedRounds.forEach(completedRound => {
             const eventGolfer = event.golfers.find(g => g.profileId === completedRound.golferId);
             if (!eventGolfer?.profileId) return;
@@ -474,6 +474,7 @@ export const useStore = create<State>()(
             const course = getCourseById(event.course.courseId!);
             const tee = course?.tees.find(t => t.name === completedRound.teeName);
             
+            // Require at least 14 holes for handicap tracking (WHS rule)
             if (tee && completedRound.holesPlayed >= 14) {
               const currentHandicap = completedRound.handicapIndex || 0;
               const cr = (tee.courseRating ?? 72) as number;
@@ -509,9 +510,12 @@ export const useStore = create<State>()(
 
               newIndividualRounds.push(individualRound);
               
-              import('../utils/roundSync').then(({ saveIndividualRoundToCloud }) => {
-                saveIndividualRoundToCloud(individualRound).catch(console.error);
-              });
+              // Sync to cloud if enabled (separate from local handicap tracking)
+              if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+                import('../utils/roundSync').then(({ saveIndividualRoundToCloud }) => {
+                  saveIndividualRoundToCloud(individualRound).catch(console.error);
+                });
+              }
             }
           });
         }

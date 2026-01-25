@@ -92,7 +92,10 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
 
   const handleRemoveGolfer = (golferId: string, name: string) => {
     if (event.isCompleted) return;
-    if (window.confirm(`Remove ${name} from this event?`)) {
+    const confirmMsg = isGroupHub 
+      ? `Remove ${name} from this group?` 
+      : `Remove ${name} from this event?`;
+    if (window.confirm(confirmMsg)) {
       removeGolferFromEvent(eventId, golferId);
     }
   };
@@ -110,8 +113,8 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
 
   return (
     <div className="space-y-4">
-      {/* Completed Banner */}
-      {event.isCompleted && (
+      {/* Completed Banner - Events only */}
+      {!isGroupHub && event.isCompleted && (
         <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
           <div className="text-2xl">✓</div>
           <div>
@@ -124,16 +127,18 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-bold text-gray-900">Golfers</h2>
-          <p className="text-sm text-gray-500">{golferData.length} player{golferData.length !== 1 ? 's' : ''} in this event</p>
+          <h2 className="text-lg font-bold text-gray-900">{isGroupHub ? 'Members' : 'Golfers'}</h2>
+          <p className="text-sm text-gray-500">
+            {golferData.length} {isGroupHub ? 'member' : 'player'}{golferData.length !== 1 ? 's' : ''} in this {isGroupHub ? 'group' : 'event'}
+          </p>
         </div>
         
         {!event.isCompleted && (
           <button
             onClick={() => setShowAddModal(true)}
-            disabled={!courseSelected || !teeSelected}
+            disabled={!isGroupHub && (!courseSelected || !teeSelected)}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all ${
-              courseSelected && teeSelected
+              isGroupHub || (courseSelected && teeSelected)
                 ? 'bg-primary-600 text-white hover:bg-primary-700 shadow-md shadow-primary-200'
                 : 'bg-gray-200 text-gray-500 cursor-not-allowed'
             }`}
@@ -141,13 +146,13 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
             </svg>
-            Add Golfer
+            {isGroupHub ? 'Add Member' : 'Add Golfer'}
           </button>
         )}
       </div>
 
-      {/* Setup Prompt */}
-      {(!courseSelected || !teeSelected) && !event.isCompleted && (
+      {/* Setup Prompt - Events only */}
+      {!isGroupHub && (!courseSelected || !teeSelected) && !event.isCompleted && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
           <div className="flex items-start gap-3">
             <div className="text-2xl">⚠️</div>
@@ -163,12 +168,16 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
         </div>
       )}
 
-      {/* Golfer List */}
+      {/* Golfer/Member List */}
       {golferData.length === 0 ? (
         <div className="bg-gray-50 rounded-xl p-8 text-center">
           <div className="text-4xl mb-3">👥</div>
-          <div className="font-semibold text-gray-700 mb-1">No golfers yet</div>
-          <p className="text-sm text-gray-500">Add golfers to start the event</p>
+          <div className="font-semibold text-gray-700 mb-1">
+            {isGroupHub ? 'No members yet' : 'No golfers yet'}
+          </div>
+          <p className="text-sm text-gray-500">
+            {isGroupHub ? 'Add members to your group' : 'Add golfers to start the event'}
+          </p>
         </div>
       ) : (
         <div className="space-y-2">
@@ -201,7 +210,7 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
                     <span className="font-semibold text-gray-900 truncate">{golfer.name}</span>
                     {golfer.isOwnerProfile && (
                       <span className="px-1.5 py-0.5 bg-primary-100 text-primary-700 text-[10px] font-bold rounded">
-                        HOST
+                        {isGroupHub ? 'ADMIN' : 'HOST'}
                       </span>
                     )}
                     {golfer.isCurrentUser && !golfer.isOwnerProfile && (
@@ -210,18 +219,21 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
                       </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-3 text-sm text-gray-500 mt-0.5">
-                    {golfer.handicap != null && (
-                      <span>HCP: {typeof golfer.handicap === 'number' ? golfer.handicap.toFixed(1) : golfer.handicap}</span>
-                    )}
-                    {golfer.teeName && (
-                      <span className="text-xs px-2 py-0.5 bg-gray-100 rounded">{golfer.teeName}</span>
-                    )}
-                  </div>
+                  {/* Show handicap/tee only for events */}
+                  {!isGroupHub && (
+                    <div className="flex items-center gap-3 text-sm text-gray-500 mt-0.5">
+                      {golfer.handicap != null && (
+                        <span>HCP: {typeof golfer.handicap === 'number' ? golfer.handicap.toFixed(1) : golfer.handicap}</span>
+                      )}
+                      {golfer.teeName && (
+                        <span className="text-xs px-2 py-0.5 bg-gray-100 rounded">{golfer.teeName}</span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 
-                {/* Game Preference */}
-                {!event.isCompleted && (
+                {/* Game Preference - Events only */}
+                {!isGroupHub && !event.isCompleted && (
                   <div className="relative">
                     {editingGolferId === golfer.id ? (
                       <div className="flex gap-1">
@@ -267,8 +279,8 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
         </div>
       )}
 
-      {/* Preference Legend */}
-      {golferData.length > 0 && !event.isCompleted && (
+      {/* Preference Legend - Events only */}
+      {!isGroupHub && golferData.length > 0 && !event.isCompleted && (
         <div className="bg-gray-50 rounded-xl p-3 border border-gray-200">
           <div className="text-xs font-semibold text-gray-600 mb-2">Game Preferences</div>
           <div className="flex flex-wrap gap-2">
@@ -288,13 +300,15 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
         </div>
       )}
 
-      {/* Add Golfer Modal */}
+      {/* Add Golfer/Member Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-xl shadow-2xl max-h-[85vh] overflow-y-auto animate-slide-up">
             {/* Modal Header */}
             <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-gray-900">Add Golfer</h3>
+              <h3 className="text-lg font-bold text-gray-900">
+                {isGroupHub ? 'Add Member' : 'Add Golfer'}
+              </h3>
               <button
                 onClick={() => setShowAddModal(false)}
                 className="p-2 -mr-2 text-gray-400 hover:text-gray-600 rounded-lg"
@@ -310,7 +324,7 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
               {/* Name */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Golfer Name *
+                  {isGroupHub ? 'Member Name *' : 'Golfer Name *'}
                 </label>
                 <input
                   type="text"
@@ -320,10 +334,15 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
                   className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                   autoFocus
                 />
+                {isGroupHub && (
+                  <p className="text-xs text-gray-500 mt-2">
+                    Add friends to your group so they can join events and chat.
+                  </p>
+                )}
               </div>
               
-              {/* Tee Selection */}
-              {teesForCourse.length > 0 && (
+              {/* Tee Selection - Events only */}
+              {!isGroupHub && teesForCourse.length > 0 && (
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
                     Tee (optional override)
@@ -333,7 +352,7 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
                     onChange={e => setCustomTeeName(e.target.value)}
                     className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                   >
-                    <option value="">Use event default ({event.course.teeName})</option>
+                    <option value="">Use event default ({event.course?.teeName})</option>
                     {teesForCourse.map((tee: any) => (
                       <option key={tee.name} value={tee.name}>{tee.name}</option>
                     ))}
@@ -341,43 +360,47 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
                 </div>
               )}
               
-              {/* Handicap */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Handicap Index (optional)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={customHandicap}
-                  onChange={e => setCustomHandicap(e.target.value)}
-                  placeholder="e.g., 15.2"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                />
-              </div>
-              
-              {/* Game Preference */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  Game Participation
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {(['all', 'skins', 'none'] as const).map(pref => (
-                    <button
-                      key={pref}
-                      type="button"
-                      onClick={() => setGuestGamePreference(pref)}
-                      className={`py-3 rounded-xl text-sm font-medium border-2 transition-all ${
-                        guestGamePreference === pref
-                          ? 'border-primary-600 bg-primary-50 text-primary-700'
-                          : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                      }`}
-                    >
-                      {pref === 'all' ? '🎯 All' : pref === 'skins' ? '💰 Skins' : '📊 None'}
-                    </button>
-                  ))}
+              {/* Handicap - Events only */}
+              {!isGroupHub && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Handicap Index (optional)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={customHandicap}
+                    onChange={e => setCustomHandicap(e.target.value)}
+                    placeholder="e.g., 15.2"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  />
                 </div>
-              </div>
+              )}
+              
+              {/* Game Preference - Events only */}
+              {!isGroupHub && (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-2">
+                    Game Participation
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {(['all', 'skins', 'none'] as const).map(pref => (
+                      <button
+                        key={pref}
+                        type="button"
+                        onClick={() => setGuestGamePreference(pref)}
+                        className={`py-3 rounded-xl text-sm font-medium border-2 transition-all ${
+                          guestGamePreference === pref
+                            ? 'border-primary-600 bg-primary-50 text-primary-700'
+                            : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                        }`}
+                      >
+                        {pref === 'all' ? '🎯 All' : pref === 'skins' ? '💰 Skins' : '📊 None'}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             
             {/* Modal Footer */}
@@ -391,7 +414,7 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
                     : 'bg-gray-200 text-gray-500 cursor-not-allowed'
                 }`}
               >
-                Add Golfer
+                {isGroupHub ? 'Add Member' : 'Add Golfer'}
               </button>
             </div>
           </div>

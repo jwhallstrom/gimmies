@@ -1,5 +1,6 @@
 // World Handicap System (WHS) Utilities backed by cloud course data
 import { getCourseById, getTee } from '../data/cloudCourses';
+import { courseMap } from '../data/courses';
 import { IndividualRound, WHSCalculation, ScoreEntry } from '../types/handicap';
 
 /**
@@ -42,8 +43,18 @@ export function applyESCAdjustment(strokes: number, par: number, handicapStrokes
  * Uses stroke index (1 = hardest hole gets first stroke)
  */
 export function distributeHandicapStrokes(courseHandicap: number, courseId: string, teeName?: string): Record<number, number> {
-  const tee = getTee(courseId, teeName);
-  const holes = tee?.holes;
+  // Try cloud course data first
+  let tee = getTee(courseId, teeName);
+  let holes = tee?.holes;
+  
+  // Fallback to local course data if cloud data not available
+  if (!holes || holes.length === 0) {
+    const localCourse = courseMap[courseId];
+    if (localCourse?.holes) {
+      holes = localCourse.holes;
+    }
+  }
+  
   if (!holes || holes.length === 0) return {};
 
   const distribution: Record<number, number> = {};

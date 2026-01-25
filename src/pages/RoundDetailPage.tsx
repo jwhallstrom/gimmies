@@ -145,14 +145,24 @@ const RoundDetailPage: React.FC = () => {
       {/* Round Summary */}
       <div className="bg-white/90 backdrop-blur rounded-xl shadow-md border border-primary-900/5 p-6">
         <div className="flex items-center gap-3 mb-4">
-          <div className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-            round.type === 'event' 
-              ? 'bg-blue-100 text-blue-800' 
-              : 'bg-green-100 text-green-800'
-          }`}>
-            {round.type === 'event' ? 'Event Round' : 'Individual Round'}
-          </div>
-          {round.eventName && (
+          {round.type === 'event' && round.eventId ? (
+            <Link
+              to={`/event/${round.eventId}`}
+              className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-blue-100 text-blue-800 hover:bg-blue-200 transition-colors"
+            >
+              Event Round →
+            </Link>
+          ) : (
+            <div className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">
+              Individual Round
+            </div>
+          )}
+          {round.eventName && round.eventId && (
+            <Link to={`/event/${round.eventId}`} className="text-sm text-gray-600 hover:text-primary-600 hover:underline">
+              {round.eventName}
+            </Link>
+          )}
+          {round.eventName && !round.eventId && (
             <span className="text-sm text-gray-600">• {round.eventName}</span>
           )}
         </div>
