@@ -218,12 +218,13 @@ const WalletSummary: React.FC = () => {
             <div className="space-y-3">
               {myTransactions.length > 0 ? (
                 myTransactions.map(tx => (
-                  <div
+                  <Link
                     key={tx.id}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                    to={`/event/${tx.eventId}`}
+                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors group"
                   >
                     <div>
-                      <p className="font-medium text-gray-800">{tx.eventName}</p>
+                      <p className="font-medium text-gray-800 group-hover:text-primary-700">{tx.eventName}</p>
                       <p className="text-xs text-gray-500">
                         {new Date(tx.date).toLocaleDateString('en-US', {
                           month: 'short',
@@ -232,17 +233,22 @@ const WalletSummary: React.FC = () => {
                         })}
                       </p>
                     </div>
-                    <div className="text-right">
-                      <p className={`font-bold ${
-                        tx.netAmount >= 0 ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {formatCurrency(tx.netAmount, true)}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        Entry: {formatCurrency(tx.entry)}
-                      </p>
+                    <div className="flex items-center gap-3">
+                      <div className="text-right">
+                        <p className={`font-bold ${
+                          tx.netAmount >= 0 ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          {formatCurrency(tx.netAmount, true)}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          Entry: {formatCurrency(tx.entry)}
+                        </p>
+                      </div>
+                      <svg className="w-4 h-4 text-gray-400 group-hover:text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
                     </div>
-                  </div>
+                  </Link>
                 ))
               ) : (
                 <div className="text-center py-8">

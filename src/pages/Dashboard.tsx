@@ -1,4 +1,15 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+/**
+ * Dashboard - Redesigned with Tournament-quality UX
+ * 
+ * Key improvements:
+ * - Cleaner visual hierarchy
+ * - Focused action areas
+ * - Better card layouts
+ * - Mobile-first with large tap targets
+ * - Less clutter, more focus
+ */
+
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthMode } from '../hooks/useAuthMode';
 import { CreateEventWizard } from '../components/CreateEventWizard';
@@ -6,85 +17,83 @@ import { CreateGroupWizard } from '../components/CreateGroupWizard';
 import { useEventsAdapter, useWalletAdapter } from '../adapters';
 import type { Event } from '../state/types';
 import useStore from '../state/store';
-import { fileToAvatarDataUrl } from '../utils/avatarImage';
 import { getHole } from '../data/cloudCourses';
 
-type SocialTab = 'groups' | 'events';
+type Tab = 'events' | 'groups';
 
 const formatDateShort = (iso: string) =>
   new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
 const clamp = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 
-const getEventLastMessage = (e: Event) => (e.chat && e.chat.length ? e.chat[e.chat.length - 1] : null);
+type TickerItem = {
+  id: string;
+  type: 'leader' | 'player' | 'update' | 'info' | 'betting';
+  highlight?: boolean;
+  payload: {
+    text: string;
+    score?: number | null;
+    thru?: number | null;
+    isFinal?: boolean;
+  };
+};
 
 const Dashboard: React.FC = () => {
   const {
     events,
     userEvents,
     currentProfile,
-    currentUser,
-    joinEventByCode,
     loadEventsFromCloud,
     profiles,
   } = useEventsAdapter();
-  const { wallet, pendingSettlements } = useWalletAdapter();
+  const { wallet } = useWalletAdapter();
   const { isGuest } = useAuthMode();
-
   const navigate = useNavigate();
-  const updateProfile = useStore((s) => s.updateProfile);
-  const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   const [showCreateWizard, setShowCreateWizard] = useState(false);
   const [showCreateGroupWizard, setShowCreateGroupWizard] = useState(false);
-  const [showJoinModal, setShowJoinModal] = useState(false);
-  const [socialTab, setSocialTab] = useState<SocialTab>('groups');
+  const [tab, setTab] = useState<Tab>('events');
 
-  // Keep cloud events fresh when landing on the dashboard.
+  // Load events on mount
   useEffect(() => {
     if (!currentProfile) return;
     loadEventsFromCloud().catch(() => {});
   }, [currentProfile?.id]);
 
-  const lastRound = useMemo(() => {
-    const rounds = currentProfile?.individualRounds || [];
-    const sorted = [...rounds].sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    return sorted[0] || null;
-  }, [currentProfile?.id, currentProfile?.individualRounds]);
-
-  // Separate groups (ongoing/permanent feel) from events (game sessions)
-  // For now, treat completed events as "archived" and active/upcoming as both
-  const { activeEvents, completedEvents } = useMemo(() => {
+  // Separate active events from groups
+  const { activeEvents, completedEvents, groups } = useMemo(() => {
     const active: Event[] = [];
     const completed: Event[] = [];
+    const groupList: Event[] = [];
     
     userEvents.forEach(e => {
-      if (e.hubType === 'group') return; // groups are not playable events
-      if (e.isCompleted) {
+      if (e.hubType === 'group') {
+        groupList.push(e);
+      } else if (e.isCompleted) {
         completed.push(e);
       } else {
         active.push(e);
       }
     });
     
-    // Sort by most recent activity
+    // Sort by recent activity
     active.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
     completed.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
+    groupList.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
     
-    return { activeEvents: active, completedEvents: completed };
+    return { activeEvents: active, completedEvents: completed, groups: groupList };
   }, [userEvents]);
 
-  // For the "groups" view - all events sorted by chat activity
-  const allGroupsSorted = useMemo(() => {
-    return [...userEvents]
-      .filter((e) => e.hubType === 'group')
-      .sort((a, b) => {
-      const aLastChat = a.chat?.length ? new Date(a.chat[a.chat.length - 1].createdAt).getTime() : 0;
-      const bLastChat = b.chat?.length ? new Date(b.chat[b.chat.length - 1].createdAt).getTime() : 0;
-      return bLastChat - aLastChat;
-    });
-  }, [userEvents]);
+  // Quick stats
+  const stats = useMemo(() => {
+    const handicap = currentProfile?.handicapIndex;
+    const lastRound = (currentProfile?.individualRounds || [])[0];
+    const netBalance = (wallet?.lifetimeNet ?? 0);
+    
+    return { handicap, lastRound, netBalance };
+  }, [currentProfile, wallet]);
 
+  // Ticker event (most recent active or completed event)
   const tickerEvent = useMemo(() => {
     const candidates = [...activeEvents];
     if (candidates.length) return candidates[0];
@@ -92,18 +101,7 @@ const Dashboard: React.FC = () => {
     return done.length ? done[0] : null;
   }, [activeEvents, completedEvents]);
 
-  type TickerItem = {
-    id: string;
-    type: 'leader' | 'player' | 'update' | 'info' | 'betting';
-    highlight?: boolean;
-    payload: {
-      text: string;
-      score?: number | null; // to-par
-      thru?: number | null;
-      isFinal?: boolean;
-    };
-  };
-
+  // Generate ticker items from event data
   const tickerItems = useMemo<TickerItem[]>(() => {
     if (!tickerEvent) return [];
 
@@ -148,7 +146,7 @@ const Dashboard: React.FC = () => {
       return a.name.localeCompare(b.name);
     });
 
-    // Rank w/ ties ("T3").
+    // Rank w/ ties
     const playerStrings = rows.slice(0, 10).map((r: any, idx: number) => {
       const betterCount = rows.slice(0, idx).filter((p: any) => typeof p.toPar === 'number' && typeof r.toPar === 'number' && p.toPar < r.toPar).length;
       const rank = betterCount + 1;
@@ -165,7 +163,6 @@ const Dashboard: React.FC = () => {
           thru: r.thru,
           isFinal: !!r.isFinal,
         },
-        // stash status in text tail (rendered separately)
         _status: `${statusLabel}${onHoleLabel}`,
       };
     });
@@ -177,7 +174,7 @@ const Dashboard: React.FC = () => {
 
     const items: TickerItem[] = [];
 
-    // Tournament/Event name FIRST (biggest context cue)
+    // Event name first
     items.push({
       id: 'event-name',
       type: 'info',
@@ -206,7 +203,7 @@ const Dashboard: React.FC = () => {
       }
     }
 
-    // Top players chunk (as many items as we need; rendered as ticker segments)
+    // Top players
     playerStrings.forEach((p: any) => {
       items.push({
         id: p.id,
@@ -215,13 +212,13 @@ const Dashboard: React.FC = () => {
       });
     });
 
-    // Live updates: recent bot messages (birdies/eagles/snowman etc) – short and punchy
+    // Live updates from bot messages
     const now = Date.now();
     const updates = (event.chat || [])
       .filter((m: any) => (m?.senderName || '').toLowerCase().includes('gimmies bot'))
       .filter((m: any) => {
         const t = new Date(m.createdAt).getTime();
-        return Number.isFinite(t) && now - t < 2 * 60 * 60 * 1000; // last 2h
+        return Number.isFinite(t) && now - t < 2 * 60 * 60 * 1000;
       })
       .slice(-2)
       .reverse();
@@ -239,416 +236,202 @@ const Dashboard: React.FC = () => {
   }, [tickerEvent?.id, tickerEvent?.lastModified, profiles]);
 
   const tickerDurationSeconds = useMemo(() => {
-    // Club-friendly: 30–50s cycle.
     const base = 30;
     const extra = Math.min(20, Math.max(0, tickerItems.length - 6) * 1.5);
     return Math.round(base + extra);
   }, [tickerItems.length]);
 
-  const hasWalletAlerts =
-    (wallet?.pendingToCollect || 0) > 0 ||
-    (wallet?.pendingToPay || 0) > 0 ||
-    (pendingSettlements.toCollect?.length || 0) + (pendingSettlements.toPay?.length || 0) > 0;
+  // Home course from profile
+  const homeCourse = currentProfile?.preferences?.homeCourseName ||
+    (currentProfile?.preferences as any)?.homeCourse ||
+    null;
 
-  if (!currentUser || !currentProfile) return null;
+  if (!currentProfile) {
+    return (
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-5xl mb-4">⛳</div>
+          <div className="text-lg font-semibold text-gray-700">Loading...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-5">
-      {/* ═══════════════════════════════════════════════════════════════════
-          HERO: Profile + Wallet
-      ═══════════════════════════════════════════════════════════════════ */}
-      <section className="relative bg-gradient-to-br from-white via-white to-slate-50 dark:from-slate-900 dark:via-slate-900 dark:to-slate-800 rounded-3xl shadow-lg shadow-slate-200/50 dark:shadow-black/20 border border-slate-200/80 dark:border-white/10 overflow-hidden">
-        {/* Subtle background pattern */}
-        <div className="absolute inset-0 opacity-[0.03] dark:opacity-[0.05]" style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23000000' fill-opacity='1'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`
-        }} />
-        
-        <div className="relative p-4">
-          <div className="flex items-stretch gap-4">
-            {/* Profile side - BIGGER avatar */}
-            <div className="flex-1 min-w-0 flex items-center gap-4">
-              <div className="relative flex-shrink-0 group">
-                <button
-                  type="button"
-                  onClick={() => avatarInputRef.current?.click()}
-                  className="w-24 h-24 rounded-3xl bg-gradient-to-br from-slate-100 to-slate-200 dark:from-white/10 dark:to-white/5 border-3 border-white dark:border-white/20 overflow-hidden flex items-center justify-center shadow-xl shadow-slate-300/50 dark:shadow-black/40 hover:shadow-2xl hover:scale-[1.03] transition-all duration-200 ring-2 ring-primary-100 dark:ring-primary-900/30"
-                  aria-label="Change profile photo"
-                  title="Change profile photo"
-                >
-                  {currentProfile.avatar ? (
-                    <img src={currentProfile.avatar} alt={currentProfile.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <span className="text-primary-700 dark:text-primary-200 font-black text-3xl">
-                      {currentProfile.name.charAt(0).toUpperCase()}
-                    </span>
-                  )}
-                </button>
-                {!currentProfile.avatar && (
-                  <span className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-gradient-to-br from-accent to-orange-500 text-white flex items-center justify-center border-2 border-white dark:border-slate-900 shadow-lg group-hover:scale-110 transition-transform">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 5v14m7-7H5" />
-                    </svg>
-                  </span>
+    <div className="space-y-5 pb-32">
+      {/* Header */}
+      <header className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 -mx-4 -mt-6 px-4 pt-8 pb-6 shadow-lg">
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-3">
+            {/* Avatar */}
+            <Link to="/profile" className="block">
+              <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center text-xl font-bold text-white border-2 border-white/30">
+                {currentProfile.avatar ? (
+                  <img src={currentProfile.avatar} alt="" className="w-full h-full rounded-full object-cover" />
+                ) : (
+                  currentProfile.name?.charAt(0)?.toUpperCase() || '?'
                 )}
-                <input
-                  ref={avatarInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={async (e) => {
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    try {
-                      const avatar = await fileToAvatarDataUrl(file, { maxSize: 512, quality: 0.85 });
-                      updateProfile(currentProfile.id, { avatar });
-                    } finally {
-                      e.currentTarget.value = '';
-                    }
-                  }}
-                />
               </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-xl font-black text-gray-900 dark:text-white truncate tracking-tight">{currentProfile.name}</div>
-                <div className="text-sm text-gray-500 dark:text-slate-400 truncate mt-0.5">
-                  {currentProfile.preferences?.homeCourseName ||
-                  (currentProfile.preferences as any)?.homeCourse ||
-                  'Tap to set home course'}
-                </div>
-              </div>
-            </div>
-
-            {/* Wallet card - slightly smaller to balance */}
-            <Link
-              to="/wallet"
-              className="w-[38%] max-w-[160px] rounded-2xl bg-gradient-to-br from-primary-600 via-primary-700 to-primary-900 text-white p-3 shadow-lg shadow-primary-900/30 border border-white/10 relative hover:shadow-xl hover:scale-[1.02] transition-all duration-200"
-            >
-              {hasWalletAlerts && (
-                <span className="absolute top-2 right-2 w-3 h-3 rounded-full bg-red-500 ring-2 ring-white/50 animate-pulse" />
-              )}
-              <div className="text-[10px] uppercase tracking-[0.15em] text-white/60 font-bold">Wallet</div>
-              <div className="mt-1 flex items-end justify-between gap-2">
-                <div className="text-2xl font-black leading-none">
-                  {wallet ? `${wallet.seasonNet >= 0 ? '+' : ''}$${Math.abs(wallet.seasonNet).toFixed(0)}` : '—'}
-                </div>
-                <div className="text-[10px] text-white/60 leading-tight text-right font-medium">
-                  <div>To collect: ${wallet?.pendingToCollect?.toFixed(0) || '0'}</div>
-                  <div>To pay: ${wallet?.pendingToPay?.toFixed(0) || '0'}</div>
-                </div>
-              </div>
-              <div className="mt-2 text-[10px] text-white/50 font-semibold">Tap for details</div>
             </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* ═══════════════════════════════════════════════════════════════════
-          QUICK ACTIONS: 4 tiles with depth
-      ═══════════════════════════════════════════════════════════════════ */}
-      <section className="grid grid-cols-2 gap-3">
-        {/* Joined Events - Count + most recent */}
-        <Link
-          to="/events"
-          className="group bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-md shadow-slate-200/50 dark:shadow-black/20 border border-slate-200/80 dark:border-white/10 min-h-[100px] flex flex-col justify-between hover:shadow-lg hover:border-primary-200 dark:hover:border-primary-800/50 transition-all duration-200"
-        >
-          <div className="flex items-center justify-between">
-            <div className="text-[10px] font-bold tracking-[0.15em] text-gray-400 uppercase">Joined Events</div>
-            <div className="text-2xl font-black text-primary-600">{userEvents.length}</div>
-          </div>
-          {userEvents.length === 0 ? (
-            <div className="text-sm font-bold text-gray-500">None yet</div>
-          ) : (
-            <div className="min-w-0">
-              <div className="font-bold text-gray-900 dark:text-white truncate text-sm group-hover:text-primary-700 transition-colors">
-                {activeEvents[0]?.name || userEvents[0]?.name || 'Event'}
-              </div>
-              <div className="text-xs text-gray-500 truncate">
-                {activeEvents[0]?.course?.teeName || userEvents[0]?.course?.teeName || formatDateShort(activeEvents[0]?.date || userEvents[0]?.date)}
-              </div>
-            </div>
-          )}
-        </Link>
-
-        {/* Join / Create - Dual Action Tile */}
-        <div className="group bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-md shadow-slate-200/50 dark:shadow-black/20 border border-slate-200/80 dark:border-white/10 min-h-[100px] flex flex-col justify-between">
-          <div className="text-[10px] font-bold tracking-[0.15em] text-gray-400 uppercase">Join / Create</div>
-          <div className="flex flex-col gap-1.5">
-            <button
-              onClick={() => navigate('/join')}
-              className="w-full py-1.5 px-3 bg-gradient-to-r from-accent to-orange-500 hover:from-orange-500 hover:to-accent rounded-lg text-white text-xs font-bold transition-all duration-200 shadow-sm hover:shadow-md"
-            >
-              Join Game
-            </button>
-            <button
-              onClick={() => setShowCreateWizard(true)}
-              className="w-full py-1.5 px-3 bg-gradient-to-r from-accent to-orange-500 hover:from-orange-500 hover:to-accent rounded-lg text-white text-xs font-bold transition-all duration-200 shadow-sm hover:shadow-md"
-            >
-              Create Event
-            </button>
-          </div>
-        </div>
-
-        {/* Handicap */}
-        <div className="group bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-md shadow-slate-200/50 dark:shadow-black/20 border border-slate-200/80 dark:border-white/10 min-h-[100px] flex flex-col justify-between">
-          <div className="text-[10px] font-bold tracking-[0.15em] text-gray-400 uppercase">Handicap Index</div>
-          <div className="flex items-end justify-between">
-            <Link to="/handicap" className="text-3xl font-black text-gray-900 dark:text-white hover:text-primary-700 transition-colors">
-              {typeof currentProfile.handicapIndex === 'number' ? currentProfile.handicapIndex.toFixed(1) : '—'}
-            </Link>
-            <Link
-              to="/handicap/add-round"
-              className="px-2.5 py-1 bg-gradient-to-r from-accent to-orange-500 hover:from-orange-500 hover:to-accent rounded-lg text-white text-[10px] font-bold shadow-sm hover:shadow-md transition-all"
-            >
-              Add Score
-            </Link>
-          </div>
-        </div>
-
-        {/* Last Round - Static display */}
-        <Link
-          to="/handicap"
-          className="group bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-md shadow-slate-200/50 dark:shadow-black/20 border border-slate-200/80 dark:border-white/10 min-h-[100px] flex flex-col justify-between hover:shadow-lg hover:border-primary-200 dark:hover:border-primary-800/50 transition-all duration-200"
-        >
-          <div className="text-[10px] font-bold tracking-[0.15em] text-gray-400 uppercase">Last Round</div>
-          <div>
-            <div className="text-2xl font-black text-gray-900 dark:text-white group-hover:text-primary-700 transition-colors">
-              {lastRound ? ((lastRound as any).grossScore || (lastRound as any).totalScore || '—') : '—'}
-            </div>
-            <div className="text-xs text-gray-500 font-medium">
-              {lastRound ? formatDateShort((lastRound as any).date) : 'No rounds yet'}
+            <div>
+              <h1 className="text-xl font-bold text-white">
+                {currentProfile.name || 'Golfer'}
+              </h1>
+              <p className="text-primary-200 text-sm">
+                {homeCourse ? `⛳ ${homeCourse}` : 'Tap profile to set home course'}
+              </p>
             </div>
           </div>
-        </Link>
-      </section>
-
-      {/* ═══════════════════════════════════════════════════════════════════
-          GROUPS & EVENTS: Tabbed section
-      ═══════════════════════════════════════════════════════════════════ */}
-      <section className="bg-white dark:bg-slate-900 rounded-3xl shadow-lg shadow-slate-200/50 dark:shadow-black/20 border border-slate-200/80 dark:border-white/10 overflow-hidden">
-        {/* Tab Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 dark:border-white/5 bg-gradient-to-r from-slate-50 to-white dark:from-slate-900 dark:to-slate-800">
-          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 rounded-xl p-1">
-            <button
-              onClick={() => setSocialTab('groups')}
-              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200 ${
-                socialTab === 'groups'
-                  ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm'
-                  : 'text-gray-500 dark:text-slate-400 hover:text-gray-700'
-              }`}
-            >
-              Groups
-            </button>
-            <button
-              onClick={() => setSocialTab('events')}
-              className={`px-4 py-2 rounded-lg text-sm font-bold transition-all duration-200 flex items-center gap-1.5 ${
-                socialTab === 'events'
-                  ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm'
-                  : 'text-gray-500 dark:text-slate-400 hover:text-gray-700'
-              }`}
-            >
-              Events
-              {activeEvents.length > 0 && (
-                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] text-[10px] font-bold bg-accent text-white rounded-full px-1">
-                  {activeEvents.length}
-                </span>
-              )}
-            </button>
-          </div>
+          
+          {/* Settings */}
           <Link
-            to="/events"
-            className="text-xs font-bold text-primary-600 hover:text-primary-700"
+            to="/profile"
+            className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
           >
-            View All →
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
           </Link>
         </div>
 
-        {/* Tab Content */}
-        <div className="p-3 space-y-2">
-          {/* ═══ GROUPS TAB ═══ */}
-          {socialTab === 'groups' && (
+        {/* Quick Stats - Only Handicap and Wallet */}
+        <div className="grid grid-cols-2 gap-3">
+          <Link to="/handicap" className="bg-white/10 hover:bg-white/15 rounded-xl p-3 text-center transition-colors">
+            <div className="text-2xl font-bold text-white">
+              {stats.handicap != null ? stats.handicap.toFixed(1) : '—'}
+            </div>
+            <div className="text-[10px] text-primary-200 font-medium uppercase tracking-wide">Handicap</div>
+          </Link>
+          <Link to="/wallet" className="bg-white/10 hover:bg-white/15 rounded-xl p-3 text-center transition-colors">
+            <div className="text-2xl font-bold text-white">
+              ${(stats.netBalance / 100).toFixed(0)}
+            </div>
+            <div className="text-[10px] text-primary-200 font-medium uppercase tracking-wide">Wallet</div>
+          </Link>
+        </div>
+      </header>
+
+      {/* Quick Actions - Compact Buttons */}
+      <section className="flex gap-3">
+        <button
+          onClick={() => setShowCreateWizard(true)}
+          className="flex-1 bg-gradient-to-r from-primary-600 to-primary-700 rounded-xl py-3 px-4 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
+        >
+          <span>⛳</span>
+          <span>Create Event</span>
+        </button>
+        
+        <button
+          onClick={() => navigate('/join')}
+          className="flex-1 bg-white rounded-xl py-3 px-4 border border-gray-200 font-bold text-sm text-gray-900 shadow-sm hover:shadow-md hover:border-primary-300 transition-all flex items-center justify-center gap-2"
+        >
+          <span>🎫</span>
+          <span>Join Event</span>
+        </button>
+      </section>
+
+      {/* Events & Groups */}
+      <section className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
+        {/* Tabs */}
+        <div className="flex border-b border-gray-100">
+          <button
+            onClick={() => setTab('events')}
+            className={`flex-1 py-3.5 text-sm font-semibold transition-colors relative ${
+              tab === 'events' ? 'text-primary-700' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Events
+            {activeEvents.length > 0 && (
+              <span className="ml-1.5 px-1.5 py-0.5 text-[10px] font-bold bg-primary-100 text-primary-700 rounded-full">
+                {activeEvents.length}
+              </span>
+            )}
+            {tab === 'events' && (
+              <span className="absolute bottom-0 left-4 right-4 h-0.5 bg-primary-600 rounded-full" />
+            )}
+          </button>
+          <button
+            onClick={() => setTab('groups')}
+            className={`flex-1 py-3.5 text-sm font-semibold transition-colors relative ${
+              tab === 'groups' ? 'text-primary-700' : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            Groups
+            {groups.length > 0 && (
+              <span className="ml-1.5 px-1.5 py-0.5 text-[10px] font-bold bg-gray-100 text-gray-600 rounded-full">
+                {groups.length}
+              </span>
+            )}
+            {tab === 'groups' && (
+              <span className="absolute bottom-0 left-4 right-4 h-0.5 bg-primary-600 rounded-full" />
+            )}
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-3">
+          {tab === 'events' && (
             <>
-              {allGroupsSorted.length === 0 ? (
-                <div className="rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 p-6 text-center">
-                  <div className="w-14 h-14 rounded-full bg-gradient-to-br from-purple-100 to-purple-200 dark:from-purple-900/50 dark:to-purple-800/50 flex items-center justify-center mx-auto mb-4">
-                    <span className="text-2xl">👥</span>
-                  </div>
-                  <div className="font-bold text-gray-700 dark:text-slate-200 mb-1">No groups yet</div>
-                  <div className="text-sm text-gray-500 dark:text-slate-400 mb-4">Create a group to chat with your golf crew</div>
+              {activeEvents.length === 0 ? (
+                <div className="py-8 text-center">
+                  <div className="text-4xl mb-3">⛳</div>
+                  <div className="font-semibold text-gray-700 mb-1">No active events</div>
+                  <p className="text-sm text-gray-500 mb-4">Create or join an event to get started</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {activeEvents.slice(0, 5).map(event => (
+                    <EventCard key={event.id} event={event} profiles={profiles} />
+                  ))}
+                  
+                  {activeEvents.length > 5 && (
+                    <Link 
+                      to="/events" 
+                      className="block text-center py-2 text-sm font-medium text-primary-600 hover:text-primary-700"
+                    >
+                      View all {activeEvents.length} events →
+                    </Link>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+
+          {tab === 'groups' && (
+            <>
+              {groups.length === 0 ? (
+                <div className="py-8 text-center">
+                  <div className="text-4xl mb-3">👥</div>
+                  <div className="font-semibold text-gray-700 mb-1">No groups yet</div>
+                  <p className="text-sm text-gray-500 mb-4">Create a group to chat with your golf crew</p>
                   <button
                     onClick={() => setShowCreateGroupWizard(true)}
-                    className="px-4 py-2 bg-gradient-to-r from-accent to-orange-500 rounded-xl text-sm font-bold text-white hover:from-orange-500 hover:to-accent transition-all shadow-md"
+                    className="px-5 py-2.5 bg-primary-600 text-white rounded-xl font-semibold text-sm hover:bg-primary-700 transition-colors"
                   >
                     Create Group
                   </button>
                 </div>
               ) : (
-                allGroupsSorted.map((e) => {
-                  const last = getEventLastMessage(e);
-                  return (
-                    <button
-                      key={e.id}
-                      onClick={() => navigate(`/event/${e.id}/chat`)}
-                      className="w-full text-left rounded-2xl bg-gradient-to-r from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 border border-slate-200/80 dark:border-white/5 p-4 relative overflow-hidden hover:shadow-md hover:border-purple-200 dark:hover:border-purple-800/50 transition-all duration-200 group"
-                    >
-                      {/* Purple accent for groups */}
-                      <span className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-purple-500 to-purple-700 rounded-l-2xl" />
-                      
-                      <div className="flex items-start justify-between gap-3 pl-2">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-purple-700 bg-purple-100 dark:bg-purple-900/30 dark:text-purple-300 px-1.5 py-0.5 rounded uppercase tracking-wider">Group</span>
-                            <span className="font-black text-gray-900 dark:text-white truncate group-hover:text-purple-700 transition-colors">
-                              {e.name || 'Untitled Group'}
-                            </span>
-                          </div>
-                          <div className="text-xs text-gray-500 dark:text-slate-400 mt-1">
-                            {e.golfers?.length || 0} members
-                          </div>
-                          {/* Last chat preview */}
-                          <div className="mt-2 text-xs text-gray-600 dark:text-slate-300 truncate">
-                            💬 {last ? clamp(`${last.senderName || 'Someone'}: ${last.text}`, 45) : 'No messages yet'}
-                          </div>
-                        </div>
-
-                        <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                          <span className="text-[10px] uppercase tracking-widest text-white font-bold bg-gradient-to-r from-purple-500 to-purple-700 px-3 py-1.5 rounded-full shadow-sm">
-                            Chat
-                          </span>
-                          {last && (
-                            <span className="text-[10px] text-gray-400 font-medium">{formatDateShort(last.createdAt)}</span>
-                          )}
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })
-              )}
-            </>
-          )}
-
-          {/* ═══ EVENTS TAB ═══ */}
-          {socialTab === 'events' && (
-            <>
-              {userEvents.length === 0 ? (
-                <div className="rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 p-6 text-center">
-                  <div className="w-14 h-14 rounded-full bg-gradient-to-br from-green-100 to-green-200 dark:from-green-900/50 dark:to-green-800/50 flex items-center justify-center mx-auto mb-4">
-                    <span className="text-2xl">⛳</span>
-                  </div>
-                  <div className="font-bold text-gray-700 dark:text-slate-200 mb-1">No events yet</div>
-                  <div className="text-sm text-gray-500 dark:text-slate-400 mb-4">Join or create an event to start playing</div>
-                  <div className="flex gap-2 justify-center">
-                    <button
-                      onClick={() => setShowJoinModal(true)}
-                      className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-sm font-bold text-gray-700 dark:text-slate-200 hover:bg-slate-50 transition-colors"
-                    >
-                      Join Event
-                    </button>
-                    <button
-                      onClick={() => setShowCreateWizard(true)}
-                      className="px-4 py-2 bg-gradient-to-r from-accent to-orange-500 rounded-xl text-sm font-bold text-white hover:from-orange-500 hover:to-accent transition-all shadow-md"
-                    >
-                      Create Event
-                    </button>
-                  </div>
+                <div className="space-y-2">
+                  {groups.map(group => (
+                    <GroupCard key={group.id} group={group} />
+                  ))}
+                  
+                  <button
+                    onClick={() => setShowCreateGroupWizard(true)}
+                    className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm font-medium text-gray-500 hover:border-primary-300 hover:text-primary-600 transition-colors"
+                  >
+                    + Create New Group
+                  </button>
                 </div>
-              ) : (
-                <>
-                  {/* Active/Upcoming */}
-                  {activeEvents.length > 0 && (
-                    <div className="space-y-2">
-                      <div className="text-[10px] font-bold tracking-[0.15em] text-gray-400 uppercase px-1">Active & Upcoming</div>
-                      {activeEvents.map((e) => {
-                        const last = getEventLastMessage(e);
-                        const isToday = new Date(e.date).toDateString() === new Date().toDateString();
-                        return (
-                          <button
-                            key={e.id}
-                            onClick={() => navigate(`/event/${e.id}`)}
-                            className="w-full text-left rounded-2xl bg-gradient-to-r from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 border border-slate-200/80 dark:border-white/5 p-4 relative overflow-hidden hover:shadow-md hover:border-green-200 dark:hover:border-green-800/50 transition-all duration-200 group"
-                          >
-                            {/* Green accent for events */}
-                            <span className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-green-500 to-green-700 rounded-l-2xl" />
-                            
-                            <div className="flex items-start justify-between gap-3 pl-2">
-                              <div className="min-w-0 flex-1">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wider ${
-                                    isToday 
-                                      ? 'text-green-700 bg-green-100 dark:bg-green-900/30 dark:text-green-300' 
-                                      : 'text-blue-700 bg-blue-100 dark:bg-blue-900/30 dark:text-blue-300'
-                                  }`}>
-                                    {isToday ? '🔴 Live' : 'Event'}
-                                  </span>
-                                  <span className="font-black text-gray-900 dark:text-white truncate group-hover:text-green-700 transition-colors">
-                                    {e.name || 'Untitled Event'}
-                                  </span>
-                                </div>
-                                <div className="text-xs text-gray-500 dark:text-slate-400 mt-1 flex items-center gap-1.5">
-                                  <span>{formatDateShort(e.date)}</span>
-                                  {e.course?.teeName && (
-                                    <>
-                                      <span className="w-1 h-1 rounded-full bg-gray-300" />
-                                      <span>{e.course.teeName}</span>
-                                    </>
-                                  )}
-                                </div>
-                                {last && (
-                                  <div className="mt-2 text-xs text-gray-600 dark:text-slate-300 truncate">
-                                    💬 {clamp(`${last.senderName || 'Someone'}: ${last.text}`, 40)}
-                                  </div>
-                                )}
-                              </div>
-
-                              <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                                <span className="text-xs font-bold text-gray-500">{e.golfers?.length || 0} players</span>
-                              </div>
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {/* Completed */}
-                  {completedEvents.length > 0 && (
-                    <div className="space-y-2 mt-3">
-                      <div className="text-[10px] font-bold tracking-[0.15em] text-gray-400 uppercase px-1">Completed</div>
-                      {completedEvents.slice(0, 2).map((e) => (
-                        <button
-                          key={e.id}
-                          onClick={() => navigate(`/event/${e.id}`)}
-                          className="w-full text-left rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-white/5 p-3 relative overflow-hidden hover:shadow-sm transition-all duration-200 group opacity-70 hover:opacity-100"
-                        >
-                          <span className="absolute left-0 top-0 bottom-0 w-1 bg-slate-300 dark:bg-slate-600 rounded-l-2xl" />
-                          <div className="flex items-center justify-between gap-3 pl-2">
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="text-[10px] font-bold text-slate-500 bg-slate-200 dark:bg-slate-700 dark:text-slate-400 px-1.5 py-0.5 rounded uppercase tracking-wider">Done</span>
-                                <span className="font-bold text-gray-700 dark:text-slate-300 truncate text-sm">
-                                  {e.name || 'Untitled Event'}
-                                </span>
-                              </div>
-                            </div>
-                            <span className="text-xs text-gray-400">{formatDateShort(e.date)}</span>
-                          </div>
-                        </button>
-                      ))}
-                      {completedEvents.length > 2 && (
-                        <Link to="/events" className="block text-center text-xs font-bold text-primary-600 hover:text-primary-700 py-1">
-                          +{completedEvents.length - 2} more completed
-                        </Link>
-                      )}
-                    </div>
-                  )}
-                </>
               )}
             </>
           )}
         </div>
       </section>
 
-      {/* ═══════════════════════════════════════════════════════════════════
-          TICKER: Sticky above nav
-      ═══════════════════════════════════════════════════════════════════ */}
+      {/* Score Ticker - Fixed at bottom */}
       <div className="gimmies-ticker-above-nav">
         <button
           onClick={() => tickerEvent ? navigate(`/event/${tickerEvent.id}`) : navigate('/events')}
@@ -702,10 +485,95 @@ const Dashboard: React.FC = () => {
         </button>
       </div>
 
-      {/* Create Event Wizard */}
-      <CreateEventWizard isOpen={showCreateWizard} onClose={() => setShowCreateWizard(false)} />
-      <CreateGroupWizard isOpen={showCreateGroupWizard} onClose={() => setShowCreateGroupWizard(false)} />
+      {/* Modals */}
+      <CreateEventWizard
+        isOpen={showCreateWizard}
+        onClose={() => setShowCreateWizard(false)}
+        onCreated={(eventId) => {
+          setShowCreateWizard(false);
+          navigate(`/event/${eventId}`);
+        }}
+      />
+
+      <CreateGroupWizard
+        isOpen={showCreateGroupWizard}
+        onClose={() => setShowCreateGroupWizard(false)}
+        onCreated={(groupId) => {
+          setShowCreateGroupWizard(false);
+          navigate(`/event/${groupId}/chat`);
+        }}
+      />
     </div>
+  );
+};
+
+// Event Card Component
+const EventCard: React.FC<{ event: Event; profiles: any[] }> = ({ event, profiles }) => {
+  const navigate = useNavigate();
+  
+  const golferCount = event.golfers.length;
+  const scoringCount = event.scorecards.filter(sc => sc.scores.length > 0).length;
+  
+  return (
+    <button
+      onClick={() => navigate(`/event/${event.id}`)}
+      className="w-full text-left bg-gray-50 hover:bg-primary-50 rounded-xl p-4 border border-gray-200 hover:border-primary-300 transition-all group"
+    >
+      <div className="flex items-center justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="font-semibold text-gray-900 group-hover:text-primary-700 truncate transition-colors">
+            {event.name || 'Untitled Event'}
+          </div>
+          <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
+            <span>{formatDateShort(event.date)}</span>
+            <span>•</span>
+            <span>{golferCount} golfer{golferCount !== 1 ? 's' : ''}</span>
+            {scoringCount > 0 && (
+              <>
+                <span>•</span>
+                <span className="text-green-600">{scoringCount} scoring</span>
+              </>
+            )}
+          </div>
+        </div>
+        <svg className="w-5 h-5 text-gray-400 group-hover:text-primary-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+      </div>
+    </button>
+  );
+};
+
+// Group Card Component
+const GroupCard: React.FC<{ group: Event }> = ({ group }) => {
+  const navigate = useNavigate();
+  
+  const lastMessage = group.chat?.length ? group.chat[group.chat.length - 1] : null;
+  
+  return (
+    <button
+      onClick={() => navigate(`/event/${group.id}/chat`)}
+      className="w-full text-left bg-purple-50 hover:bg-purple-100 rounded-xl p-4 border border-purple-200 hover:border-purple-300 transition-all group"
+    >
+      <div className="flex items-center justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="font-semibold text-gray-900 group-hover:text-purple-700 truncate transition-colors">
+            {group.name || 'Untitled Group'}
+          </div>
+          <div className="text-sm text-gray-500 mt-1 truncate">
+            {lastMessage ? `${lastMessage.senderName}: ${lastMessage.text}` : `${group.golfers.length} members`}
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="px-2 py-1 text-[10px] font-bold bg-purple-200 text-purple-700 rounded-full">
+            CHAT
+          </span>
+          <svg className="w-5 h-5 text-gray-400 group-hover:text-purple-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </div>
+    </button>
   );
 };
 

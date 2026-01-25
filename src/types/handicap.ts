@@ -63,6 +63,7 @@ export interface CombinedRound {
   netScore: number;
   scoreDifferential?: number;
   eventName?: string; // for event rounds
+  eventId?: string; // for event rounds - link to source event
   scores: ScoreEntry[];
   completedRoundId?: string; // Optional - links to CompletedRound if created from event
 }

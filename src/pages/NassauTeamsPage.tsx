@@ -197,6 +197,96 @@ const NassauTeamsPage: React.FC<Props> = ({ eventId }) => {
           </div>
         </div>
 
+        {/* Scores Count - How many scores count per hole */}
+        {(() => {
+          // Find the largest team size to determine max best count options
+          const maxTeamSize = Math.max(...teams.map(t => t.golferIds?.length || 0), 1);
+          const currentBestCount = nassau.teamBestCount || 1;
+          // Options: 1 up to the max team size (at least show 1-4 for flexibility)
+          const options = Array.from({ length: Math.max(maxTeamSize, 4) }, (_, i) => i + 1);
+          
+          return (
+            <div className="mt-4 pt-4 border-t border-slate-100">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-xs font-bold text-slate-700">Scores Count</div>
+                  <div className="text-[11px] text-slate-500">How many scores count per hole, per team.</div>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  {options.map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => updateCfg({ teamBestCount: n })}
+                      disabled={!isOwner || event.isCompleted}
+                      className={`px-3 py-2 rounded-lg text-xs font-extrabold border ${
+                        currentBestCount === n 
+                          ? 'bg-primary-600 text-white border-primary-700' 
+                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                      } disabled:opacity-50`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-2 text-[11px] text-slate-500">
+                {currentBestCount === 1 
+                  ? '🏌️ Best ball: Only the best score from each team counts per hole.'
+                  : `🏌️ Best ${currentBestCount}: The ${currentBestCount} lowest scores from each team are added per hole.`}
+                {maxTeamSize > 0 && maxTeamSize < currentBestCount && (
+                  <span className="text-amber-600 font-medium ml-1">
+                    (Teams need at least {currentBestCount} players)
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Scoring Type Toggle - Only show for 2-team games */}
+        {teamCount === 2 && (
+          <div className="mt-4 pt-4 border-t border-slate-100">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-xs font-bold text-slate-700">Scoring Type</div>
+                <div className="text-[11px] text-slate-500">How to determine winners for each segment.</div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => updateCfg({ scoringType: 'stroke' })}
+                  disabled={!isOwner || event.isCompleted}
+                  className={`px-3 py-2 rounded-lg text-xs font-extrabold border ${
+                    (!nassau.scoringType || nassau.scoringType === 'stroke') 
+                      ? 'bg-primary-600 text-white border-primary-700' 
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                  } disabled:opacity-50`}
+                >
+                  Stroke
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateCfg({ scoringType: 'match' })}
+                  disabled={!isOwner || event.isCompleted}
+                  className={`px-3 py-2 rounded-lg text-xs font-extrabold border ${
+                    nassau.scoringType === 'match' 
+                      ? 'bg-primary-600 text-white border-primary-700' 
+                      : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                  } disabled:opacity-50`}
+                >
+                  Match
+                </button>
+              </div>
+            </div>
+            <div className="mt-2 text-[11px] text-slate-500">
+              {(!nassau.scoringType || nassau.scoringType === 'stroke') 
+                ? '📊 Stroke: Team with the lowest total strokes wins each segment.'
+                : '🏆 Match: Teams compete hole-by-hole. Most holes won takes the segment.'}
+            </div>
+          </div>
+        )}
+
         <div className="mt-3 flex flex-wrap gap-2">
           <details className="w-full">
             <summary className="cursor-pointer select-none text-xs font-extrabold text-primary-800">

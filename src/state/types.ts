@@ -135,6 +135,13 @@ export interface NassauConfig {
   participantGolferIds?: string[];
   /** If true, golfers can join a team themselves (UI enforcement TBD). */
   allowGolferTeamSelect?: boolean;
+  /** 
+   * Scoring type for 2-team Nassau games:
+   * - 'stroke': Total strokes (default) - lower total wins
+   * - 'match': Match play - count holes won (hole-by-hole competition)
+   * Only applicable when teams.length === 2
+   */
+  scoringType?: 'stroke' | 'match';
 }
 
 export interface SkinsConfig { 
@@ -228,6 +235,14 @@ export interface Event {
   shareCode?: string;
   isCompleted?: boolean; // Mark event as completed (read-only)
   completedAt?: string; // When the event was completed
+  
+  /**
+   * Event lifecycle status:
+   * - 'setup': Admin configuring games, picking teams (users can still enter scores)
+   * - 'started': Games locked, event officially in progress
+   * - 'completed': Final, all payouts approved (legacy: isCompleted = true)
+   */
+  status?: 'setup' | 'started' | 'completed';
   
   // Wallet settings for this event
   walletSettings?: EventWalletSettings;

@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import useStore from '../state/store';
 import CircularChart from '../components/CircularChart';
 
@@ -220,9 +221,14 @@ const AnalyticsPage: React.FC = () => {
             {allRounds.slice(0, 5).map((round) => {
               const totalPar = round.scores?.reduce((sum, score) => sum + score.par, 0) || 72;
               const toPar = round.grossScore - totalPar;
+              const linkTo = round.eventId ? `/event/${round.eventId}` : `/handicap/round/${round.id}`;
               
               return (
-                <div key={round.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                <Link 
+                  key={round.id} 
+                  to={linkTo}
+                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors group"
+                >
                   <div className="flex-1">
                     <div className="flex items-center gap-3">
                       <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
@@ -233,7 +239,7 @@ const AnalyticsPage: React.FC = () => {
                         {round.type === 'event' ? 'Event' : 'Individual'}
                       </div>
                       <div>
-                        <p className="font-medium text-gray-900">{round.courseName}</p>
+                        <p className="font-medium text-gray-900 group-hover:text-primary-700">{round.courseName}</p>
                         <p className="text-sm text-gray-600">
                           {new Date(round.date).toLocaleDateString()} • {round.teeName}
                           {round.eventName && ` • ${round.eventName}`}
@@ -241,13 +247,18 @@ const AnalyticsPage: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-xl font-bold text-primary-600">{round.grossScore}</div>
-                    <div className={`text-sm font-medium ${toPar < 0 ? 'text-green-600' : toPar > 0 ? 'text-red-600' : 'text-gray-600'}`}>
-                      {toPar > 0 ? '+' : ''}{toPar}
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <div className="text-xl font-bold text-primary-600">{round.grossScore}</div>
+                      <div className={`text-sm font-medium ${toPar < 0 ? 'text-green-600' : toPar > 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                        {toPar > 0 ? '+' : ''}{toPar}
+                      </div>
                     </div>
+                    <svg className="w-4 h-4 text-gray-400 group-hover:text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
                   </div>
-                </div>
+                </Link>
               );
             })}
           </div>
@@ -266,20 +277,29 @@ const AnalyticsPage: React.FC = () => {
           <h3 className="text-lg font-semibold text-primary-800 mb-4">Event Results & Winnings</h3>
           <div className="space-y-4">
             {myCompletedRounds.map((round) => (
-              <div key={round.id} className="border border-gray-200 rounded-lg p-4">
+              <Link 
+                key={round.id} 
+                to={`/event/${round.eventId}`}
+                className="block border border-gray-200 rounded-lg p-4 hover:border-primary-300 hover:bg-primary-50/30 transition-colors group"
+              >
                 <div className="flex justify-between items-start mb-2">
                   <div>
-                    <h4 className="font-semibold text-primary-800">{round.eventName}</h4>
+                    <h4 className="font-semibold text-primary-800 group-hover:text-primary-600">{round.eventName}</h4>
                     <p className="text-sm text-gray-600">
                       {new Date(round.datePlayed).toLocaleDateString()} • {round.courseName}
                       {round.teeName && ` • ${round.teeName}`}
                     </p>
                   </div>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold text-primary-600">{round.finalScore}</div>
-                    <div className={`text-sm font-medium ${round.scoreToPar < 0 ? 'text-green-600' : round.scoreToPar > 0 ? 'text-red-600' : 'text-gray-600'}`}>
-                      {round.scoreToPar > 0 ? '+' : ''}{round.scoreToPar}
+                  <div className="flex items-center gap-3">
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-primary-600">{round.finalScore}</div>
+                      <div className={`text-sm font-medium ${round.scoreToPar < 0 ? 'text-green-600' : round.scoreToPar > 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                        {round.scoreToPar > 0 ? '+' : ''}{round.scoreToPar}
+                      </div>
                     </div>
+                    <svg className="w-5 h-5 text-gray-400 group-hover:text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
                   </div>
                 </div>
                 
@@ -329,7 +349,7 @@ const AnalyticsPage: React.FC = () => {
                     </div>
                   </div>
                 )}
-              </div>
+              </Link>
             ))}
           </div>
         </div>
