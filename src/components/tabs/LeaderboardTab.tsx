@@ -386,7 +386,11 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
                       )}
                     </td>
                     <td className="px-2 sm:px-4 py-3 text-center text-slate-600 font-medium">
-                      {player.holesPlayed}
+                      {player.holesPlayed >= 18 ? (
+                        <span className="text-green-600 font-bold">F</span>
+                      ) : (
+                        player.holesPlayed || '-'
+                      )}
                     </td>
                   </tr>
                   {expandedPlayer === player.id && (

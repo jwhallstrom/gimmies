@@ -6,13 +6,14 @@ import { generateFunnyEventName } from '../utils/nameGenerator';
 interface Props {
   isOpen: boolean;
   onClose: () => void;
+  onCreated?: (groupId: string) => void;
 }
 
 /**
  * Minimal group creator.
  * Groups are chat hubs (not playable rounds).
  */
-export const CreateGroupWizard: React.FC<Props> = ({ isOpen, onClose }) => {
+export const CreateGroupWizard: React.FC<Props> = ({ isOpen, onClose, onCreated }) => {
   const navigate = useNavigate();
   const createEvent = useStore((s) => s.createEvent);
   const updateEvent = useStore((s) => s.updateEvent);
@@ -36,7 +37,11 @@ export const CreateGroupWizard: React.FC<Props> = ({ isOpen, onClose }) => {
       if (!id) throw new Error('Failed to create group');
       await updateEvent(id, { name: name.trim() } as any);
       onClose();
-      navigate(`/event/${id}/chat`);
+      if (onCreated) {
+        onCreated(id);
+      } else {
+        navigate(`/event/${id}/chat`);
+      }
     } catch (e) {
       console.error(e);
       setIsCreating(false);

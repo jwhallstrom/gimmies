@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import type { Settlement } from '../../state/types';
 
 interface SettlementCardProps {
@@ -72,9 +73,12 @@ const SettlementCard: React.FC<SettlementCardProps> = ({
               <p className="font-medium text-gray-900">
                 {isOwedToMe ? settlement.fromName : settlement.toName}
               </p>
-              <p className="text-xs text-gray-500">
-                {settlement.eventName}
-              </p>
+              <Link 
+                to={`/event/${settlement.eventId}`}
+                className="text-xs text-gray-500 hover:text-primary-600 hover:underline"
+              >
+                {settlement.eventName} →
+              </Link>
             </div>
           </div>
           {getStatusBadge()}
