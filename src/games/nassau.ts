@@ -32,11 +32,15 @@ function segmentHoles(segment: 'front' | 'back' | 'total'): number[] {
 export function computeNassauForConfig(event: Event, config: NassauConfig, profiles: any[]): NassauPayoutSummary | null {
   const group = event.groups.find(g => g.id === config.groupId);
   if (!group || group.golferIds.length < 2) return null;
-  const prefFor = (gid: string): 'all' | 'skins' | 'none' => {
+  const prefFor = (gid: string): 'all' | 'nassau' | 'skins' | 'none' => {
     const eg = event.golfers.find((g: any) => (g.profileId || g.customName || g.displayName) === gid);
     return (eg?.gamePreference as any) || 'all';
   };
-  const eligible = (gid: string) => prefFor(gid) === 'all';
+  // Nassau is for "All games" or "Nassau only" participants.
+  const eligible = (gid: string) => {
+    const pref = prefFor(gid);
+    return pref === 'all' || pref === 'nassau';
+  };
   // Allow restricting golfers for this Nassau (subset scenario)
   const base = group.golferIds.filter(eligible);
   const players = (config.participantGolferIds && config.participantGolferIds.length > 1)

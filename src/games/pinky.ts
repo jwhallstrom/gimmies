@@ -19,7 +19,7 @@ export interface PinkySummary {
  */
 export function computePinky(event: Event, config: PinkyConfig, pinkyResults: PinkyResult[]): PinkySummary | null {
   // Get all participants
-  const prefFor = (gid: string): 'all' | 'skins' | 'none' => {
+  const prefFor = (gid: string): 'all' | 'nassau' | 'skins' | 'none' => {
     const eg = event.golfers.find((g: any) => (g.profileId || g.customName || g.displayName) === gid);
     return (eg?.gamePreference as any) || 'all';
   };

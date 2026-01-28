@@ -127,7 +127,8 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
       let players = (group.golferIds || []).slice();
       players = players.filter((gid: string) => {
         const eg = event.golfers.find((g: any) => (g.profileId || g.customName || g.displayName) === gid);
-        return (eg?.gamePreference as any) === 'all' || !(eg?.gamePreference);
+        const pref = (eg?.gamePreference as any) || 'all';
+        return pref === 'all' || pref === 'nassau';
       });
       if (n.participantGolferIds?.length > 1) {
         players = players.filter((p: string) => n.participantGolferIds.includes(p));

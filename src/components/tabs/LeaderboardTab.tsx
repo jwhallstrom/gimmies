@@ -18,11 +18,6 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
 
   if (!event) return null;
 
-  // Debug logging
-  console.log('🏆 LeaderboardTab: Event golfers:', event.golfers);
-  console.log('🏆 LeaderboardTab: Available profiles:', profiles);
-  console.log('🏆 LeaderboardTab: Event scorecards:', event.scorecards);
-
   const togglePlayerExpanded = (playerId: string) => {
     setExpandedPlayer(expandedPlayer === playerId ? null : playerId);
   };
@@ -274,30 +269,19 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
   };
 
   return (
-    <div className="space-y-4">
+    <div>
       <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
-        <div className="bg-gradient-to-r from-primary-600 to-primary-700 text-white px-4 py-3">
-          <h2 className="text-lg font-semibold">Leaderboard</h2>
-          <p className="text-sm opacity-90">{event.name} - {selectedCourse?.name || 'Course'} (Par {totalPar ?? '—'})</p>
-          <p className="text-xs opacity-75 mt-1">
-            Tap a <span className="font-bold underline underline-offset-2">player name</span> to enter scores. Tap a <span className="font-bold underline underline-offset-2">team</span> to open the roster.
-          </p>
-          {coursesLoading && event.course.courseId && !teeWithHoles?.holes?.length && (
-            <p className="text-xs opacity-75 mt-1">Loading course pars…</p>
-          )}
-        </div>
-
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="px-2 sm:px-4 py-3 text-left font-semibold text-slate-700">Pos</th>
-                <th className="px-2 sm:px-4 py-3 text-left font-semibold text-slate-700">Player</th>
-                <th className="px-2 sm:px-4 py-3 text-left font-semibold text-slate-700">Team</th>
-                <th className="px-2 sm:px-4 py-3 text-center font-semibold text-slate-700">To Par</th>
-                <th className="px-2 sm:px-4 py-3 text-center font-semibold text-slate-700">Out</th>
-                <th className="px-2 sm:px-4 py-3 text-center font-semibold text-slate-700">In</th>
-                <th className="px-2 sm:px-4 py-3 text-center font-semibold text-slate-700">Thru</th>
+                <th className="px-2 sm:px-4 py-2 text-left font-semibold text-slate-700">Pos</th>
+                <th className="px-2 sm:px-4 py-2 text-left font-semibold text-slate-700">Player</th>
+                <th className="px-2 sm:px-4 py-2 text-left font-semibold text-slate-700">Team</th>
+                <th className="px-2 sm:px-4 py-2 text-center font-semibold text-slate-700">To Par</th>
+                <th className="px-2 sm:px-4 py-2 text-center font-semibold text-slate-700">Out</th>
+                <th className="px-2 sm:px-4 py-2 text-center font-semibold text-slate-700">In</th>
+                <th className="px-2 sm:px-4 py-2 text-center font-semibold text-slate-700">Thru</th>
               </tr>
             </thead>
             <tbody>

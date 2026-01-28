@@ -43,8 +43,8 @@ const NassauTeamsPage: React.FC<Props> = ({ eventId }) => {
       .filter((id: any) => !!id)
       .filter((gid: string) => {
         const eg = (event.golfers || []).find((x: any) => (x.profileId || x.customName || x.displayName) === gid);
-        const pref: 'all' | 'skins' | 'none' = (eg?.gamePreference as any) || 'all';
-        return pref === 'all'; // Nassau is "all games" only
+        const pref: 'all' | 'nassau' | 'skins' | 'none' = (eg?.gamePreference as any) || 'all';
+        return pref === 'all' || pref === 'nassau'; // Nassau is "all games" or "nassau only"
       })
   );
 

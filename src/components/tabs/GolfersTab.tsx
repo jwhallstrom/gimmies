@@ -30,7 +30,7 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
   const [golferName, setGolferName] = useState('');
   const [customTeeName, setCustomTeeName] = useState('');
   const [customHandicap, setCustomHandicap] = useState('');
-  const [guestGamePreference, setGuestGamePreference] = useState<'all' | 'skins' | 'none'>('all');
+  const [guestGamePreference, setGuestGamePreference] = useState<'all' | 'nassau' | 'skins' | 'none'>('all');
   const [editingGolferId, setEditingGolferId] = useState<string | null>(null);
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
 
@@ -103,7 +103,7 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
     }
   };
 
-  const handleUpdatePreference = (golferId: string, preference: 'all' | 'skins' | 'none') => {
+  const handleUpdatePreference = (golferId: string, preference: 'all' | 'nassau' | 'skins' | 'none') => {
     updateEventGolfer(eventId, golferId, { gamePreference: preference } as any);
     setEditingGolferId(null);
   };
@@ -201,6 +201,7 @@ Code: ${event.shareCode}`,
 
   const preferenceLabels = {
     all: { label: 'All Games', color: 'bg-green-100 text-green-700 border-green-200' },
+    nassau: { label: 'Nassau Only', color: 'bg-amber-100 text-amber-800 border-amber-200' },
     skins: { label: 'Skins Only', color: 'bg-blue-100 text-blue-700 border-blue-200' },
     none: { label: 'No Games', color: 'bg-gray-100 text-gray-600 border-gray-200' },
   };
@@ -331,7 +332,7 @@ Code: ${event.shareCode}`,
                   <div className="relative">
                     {editingGolferId === golfer.id ? (
                       <div className="flex gap-1">
-                        {(['all', 'skins', 'none'] as const).map(pref => (
+                        {(['all', 'nassau', 'skins', 'none'] as const).map(pref => (
                           <button
                             key={pref}
                             onClick={() => handleUpdatePreference(golfer.id, pref)}
@@ -339,7 +340,7 @@ Code: ${event.shareCode}`,
                               preferenceLabels[pref].color
                             }`}
                           >
-                            {pref === 'all' ? '🎯' : pref === 'skins' ? '💰' : '📊'}
+                            {pref === 'all' ? '🎯' : pref === 'nassau' ? '🏆' : pref === 'skins' ? '💰' : '📊'}
                           </button>
                         ))}
                       </div>
@@ -381,6 +382,10 @@ Code: ${event.shareCode}`,
             <div className="flex items-center gap-1.5 text-xs text-gray-600">
               <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded font-medium">All Games</span>
               <span>Nassau, Skins, etc.</span>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs text-gray-600">
+              <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded font-medium">Nassau Only</span>
+              <span>Just Nassau</span>
             </div>
             <div className="flex items-center gap-1.5 text-xs text-gray-600">
               <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded font-medium">Skins Only</span>
@@ -616,8 +621,8 @@ Code: ${event.shareCode}`,
                       <label className="block text-sm font-semibold text-gray-700 mb-2">
                         Game Participation
                       </label>
-                      <div className="grid grid-cols-3 gap-2">
-                        {(['all', 'skins', 'none'] as const).map(pref => (
+                      <div className="grid grid-cols-4 gap-2">
+                        {(['all', 'nassau', 'skins', 'none'] as const).map(pref => (
                           <button
                             key={pref}
                             type="button"
@@ -628,7 +633,7 @@ Code: ${event.shareCode}`,
                                 : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
                             }`}
                           >
-                            {pref === 'all' ? '🎯 All' : pref === 'skins' ? '💰 Skins' : '📊 None'}
+                            {pref === 'all' ? '🎯 All' : pref === 'nassau' ? '🏆 Nassau' : pref === 'skins' ? '💰 Skins' : '📊 None'}
                           </button>
                         ))}
                       </div>
