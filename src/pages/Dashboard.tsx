@@ -14,6 +14,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuthMode } from '../hooks/useAuthMode';
 import { CreateEventWizard } from '../components/CreateEventWizard';
 import { CreateGroupWizard } from '../components/CreateGroupWizard';
+import { DiscoverGroupsModal } from '../components/DiscoverGroupsModal';
 import { useEventsAdapter, useWalletAdapter } from '../adapters';
 import type { Event } from '../state/types';
 import useStore from '../state/store';
@@ -38,6 +39,8 @@ type TickerItem = {
   };
 };
 
+const ONBOARDING_DISMISSED_KEY = 'gimmies_onboarding_dismissed';
+
 const Dashboard: React.FC = () => {
   const {
     events,
@@ -52,7 +55,28 @@ const Dashboard: React.FC = () => {
 
   const [showCreateWizard, setShowCreateWizard] = useState(false);
   const [showCreateGroupWizard, setShowCreateGroupWizard] = useState(false);
+  const [showDiscoverGroups, setShowDiscoverGroups] = useState(false);
   const [tab, setTab] = useState<Tab>('events');
+  
+  // Onboarding state - check localStorage
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    try {
+      return localStorage.getItem(ONBOARDING_DISMISSED_KEY) !== 'true';
+    } catch {
+      return true;
+    }
+  });
+
+  const dismissOnboarding = (permanent: boolean) => {
+    setShowOnboarding(false);
+    if (permanent) {
+      try {
+        localStorage.setItem(ONBOARDING_DISMISSED_KEY, 'true');
+      } catch {
+        // localStorage not available
+      }
+    }
+  };
 
   // Load events on mount
   useEffect(() => {
@@ -312,6 +336,112 @@ const Dashboard: React.FC = () => {
         </div>
       </header>
 
+      {/* Getting Started - Onboarding Card */}
+      {showOnboarding && (
+        <section className="bg-gradient-to-br from-emerald-50 via-white to-amber-50 rounded-2xl border border-emerald-200 shadow-sm overflow-hidden">
+          {/* Header with dismiss */}
+          <div className="flex items-center justify-between px-4 pt-4 pb-2">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">👋</span>
+              <h2 className="font-bold text-gray-900">Welcome to Gimmies!</h2>
+            </div>
+            <button
+              onClick={() => dismissOnboarding(false)}
+              className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              aria-label="Dismiss"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          
+          <p className="px-4 text-sm text-gray-600 mb-4">
+            Your golf crew's command center. Here's how to get the most out of it:
+          </p>
+
+          {/* Feature highlights */}
+          <div className="px-4 space-y-3 pb-2">
+            {/* Groups */}
+            <div 
+              className="flex items-start gap-3 p-3 bg-purple-50 rounded-xl border border-purple-100 cursor-pointer hover:bg-purple-100 transition-colors"
+              onClick={() => { setTab('groups'); dismissOnboarding(false); }}
+            >
+              <div className="w-10 h-10 rounded-full bg-purple-200 flex items-center justify-center flex-shrink-0">
+                <span className="text-xl">👥</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-gray-900">Create a Group</div>
+                <p className="text-xs text-gray-600 mt-0.5">
+                  Your golf crew's home base. Chat, share photos, and schedule tee times together.
+                </p>
+              </div>
+              <span className="text-purple-400 self-center">→</span>
+            </div>
+
+            {/* Events */}
+            <div 
+              className="flex items-start gap-3 p-3 bg-primary-50 rounded-xl border border-primary-100 cursor-pointer hover:bg-primary-100 transition-colors"
+              onClick={() => { setShowCreateWizard(true); dismissOnboarding(false); }}
+            >
+              <div className="w-10 h-10 rounded-full bg-primary-200 flex items-center justify-center flex-shrink-0">
+                <span className="text-xl">⛳</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-gray-900">Create an Event</div>
+                <p className="text-xs text-gray-600 mt-0.5">
+                  Score a round, run Nassau/skins, track bets, and see the live leaderboard.
+                </p>
+              </div>
+              <span className="text-primary-400 self-center">→</span>
+            </div>
+
+            {/* Handicap */}
+            <div 
+              className="flex items-start gap-3 p-3 bg-amber-50 rounded-xl border border-amber-100 cursor-pointer hover:bg-amber-100 transition-colors"
+              onClick={() => { navigate('/handicap'); }}
+            >
+              <div className="w-10 h-10 rounded-full bg-amber-200 flex items-center justify-center flex-shrink-0">
+                <span className="text-xl">📊</span>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="font-semibold text-gray-900">Track Your Handicap</div>
+                <p className="text-xs text-gray-600 mt-0.5">
+                  Add rounds manually or score through events. We calculate your index automatically.
+                </p>
+              </div>
+              <span className="text-amber-500 self-center">→</span>
+            </div>
+          </div>
+
+          {/* Quick start CTA */}
+          <div className="px-4 py-4 bg-white/50 border-t border-gray-100 mt-2">
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                onClick={() => { setShowCreateGroupWizard(true); dismissOnboarding(false); }}
+                className="flex-1 py-3 bg-purple-600 text-white rounded-xl font-bold text-sm hover:bg-purple-700 transition-colors flex items-center justify-center gap-2"
+              >
+                <span>👥</span> Start a Group
+              </button>
+              <button
+                onClick={() => { navigate('/join'); dismissOnboarding(false); }}
+                className="flex-1 py-3 bg-white border border-gray-300 text-gray-700 rounded-xl font-semibold text-sm hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+              >
+                <span>🎫</span> Join with Code
+              </button>
+            </div>
+            
+            {/* Don't show again */}
+            <button
+              onClick={() => dismissOnboarding(true)}
+              className="w-full mt-3 text-xs text-gray-400 hover:text-gray-600 transition-colors py-1"
+            >
+              Don't show this again
+            </button>
+          </div>
+        </section>
+      )}
+
       {/* Quick Actions - Compact Buttons */}
       <section className="flex gap-3">
         <button
@@ -404,13 +534,21 @@ const Dashboard: React.FC = () => {
                 <div className="py-8 text-center">
                   <div className="text-4xl mb-3">👥</div>
                   <div className="font-semibold text-gray-700 mb-1">No groups yet</div>
-                  <p className="text-sm text-gray-500 mb-4">Create a group to chat with your golf crew</p>
-                  <button
-                    onClick={() => setShowCreateGroupWizard(true)}
-                    className="px-5 py-2.5 bg-primary-600 text-white rounded-xl font-semibold text-sm hover:bg-primary-700 transition-colors"
-                  >
-                    Create Group
-                  </button>
+                  <p className="text-sm text-gray-500 mb-4">Create a group or find one to join</p>
+                  <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                    <button
+                      onClick={() => setShowCreateGroupWizard(true)}
+                      className="px-5 py-2.5 bg-purple-600 text-white rounded-xl font-semibold text-sm hover:bg-purple-700 transition-colors"
+                    >
+                      Create Group
+                    </button>
+                    <button
+                      onClick={() => setShowDiscoverGroups(true)}
+                      className="px-5 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-xl font-semibold text-sm hover:bg-gray-50 transition-colors"
+                    >
+                      🔍 Find Groups
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -418,12 +556,20 @@ const Dashboard: React.FC = () => {
                     <GroupCard key={group.id} group={group} />
                   ))}
                   
-                  <button
-                    onClick={() => setShowCreateGroupWizard(true)}
-                    className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm font-medium text-gray-500 hover:border-primary-300 hover:text-primary-600 transition-colors"
-                  >
-                    + Create New Group
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowCreateGroupWizard(true)}
+                      className="flex-1 py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm font-medium text-gray-500 hover:border-purple-300 hover:text-purple-600 transition-colors"
+                    >
+                      + Create Group
+                    </button>
+                    <button
+                      onClick={() => setShowDiscoverGroups(true)}
+                      className="py-3 px-4 border border-gray-300 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+                    >
+                      🔍 Find
+                    </button>
+                  </div>
                 </div>
               )}
             </>
@@ -502,6 +648,11 @@ const Dashboard: React.FC = () => {
           setShowCreateGroupWizard(false);
           navigate(`/event/${groupId}/chat`);
         }}
+      />
+
+      <DiscoverGroupsModal
+        isOpen={showDiscoverGroups}
+        onClose={() => setShowDiscoverGroups(false)}
       />
     </div>
   );
