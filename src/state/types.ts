@@ -432,7 +432,269 @@ export interface ProfileWallet {
 }
 
 // ============================================================================
-// Tournament Types (Prototype Feature)
+// Organization/Club Types (Business Accounts)
+// ============================================================================
+
+export type ClubType = 'golf_course' | 'country_club' | 'municipal' | 'resort' | 'driving_range' | 'golf_league' | 'other';
+export type ClubMemberRole = 'owner' | 'admin' | 'manager' | 'staff' | 'pro';
+export type ClubVerificationStatus = 'pending' | 'verified' | 'rejected';
+export type StripeConnectStatus = 'not_started' | 'pending' | 'active' | 'restricted' | 'disabled';
+
+/**
+ * Organization/Club - Business account for golf courses, clubs, leagues
+ * Enables: tournament hosting, entry fee collection, prize payouts
+ */
+export interface Club {
+  id: string;
+  
+  // Basic Info
+  name: string;
+  type: ClubType;
+  description?: string;
+  logo?: string; // base64 or URL
+  coverImage?: string;
+  
+  // Contact & Location
+  address?: {
+    street: string;
+    city: string;
+    state: string;
+    zip: string;
+    country: string;
+  };
+  phone?: string;
+  email: string;
+  website?: string;
+  
+  // Linked Course (if applicable)
+  linkedCourseId?: string;
+  linkedCourseName?: string;
+  
+  // Verification
+  verificationStatus: ClubVerificationStatus;
+  verifiedAt?: string;
+  verificationNotes?: string;
+  
+  // Stripe Connect Integration
+  stripe: {
+    connectStatus: StripeConnectStatus;
+    accountId?: string; // Stripe Connect account ID
+    onboardingComplete: boolean;
+    chargesEnabled: boolean;
+    payoutsEnabled: boolean;
+    detailsSubmitted: boolean;
+    defaultCurrency: string; // 'usd'
+    // Platform fee settings
+    platformFeePercent: number; // e.g., 2.5 for 2.5%
+  };
+  
+  // Settings
+  settings: {
+    allowPublicTournaments: boolean;
+    defaultEntryFeeEnabled: boolean;
+    defaultTipFundEnabled: boolean;
+    autoApproveRegistrations: boolean;
+    requireHandicapVerification: boolean;
+    maxPlayersPerTournament: number;
+    // Branding
+    primaryColor?: string;
+    secondaryColor?: string;
+  };
+  
+  // Stats
+  stats: {
+    totalTournaments: number;
+    totalPlayers: number;
+    totalRevenue: number; // in cents
+    activeTournaments: number;
+  };
+  
+  // Ownership
+  ownerProfileId: string; // Primary owner's profile
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Club Member - Staff/admin within an organization
+ */
+export interface ClubMember {
+  id: string;
+  clubId: string;
+  profileId: string;
+  profileName: string;
+  profileAvatar?: string;
+  role: ClubMemberRole;
+  permissions: ClubPermissions;
+  invitedBy?: string;
+  invitedAt: string;
+  acceptedAt?: string;
+  status: 'invited' | 'active' | 'suspended' | 'removed';
+}
+
+/**
+ * Granular permissions for club staff
+ */
+export interface ClubPermissions {
+  canCreateTournaments: boolean;
+  canEditTournaments: boolean;
+  canDeleteTournaments: boolean;
+  canManageRegistrations: boolean;
+  canProcessPayments: boolean;
+  canViewFinancials: boolean;
+  canManageStaff: boolean;
+  canEditClubSettings: boolean;
+  canSendAnnouncements: boolean;
+}
+
+/**
+ * Club Invite - For inviting staff to join a club
+ */
+export interface ClubInvite {
+  id: string;
+  clubId: string;
+  clubName: string;
+  email: string;
+  role: ClubMemberRole;
+  permissions: ClubPermissions;
+  invitedBy: string;
+  inviteCode: string;
+  expiresAt: string;
+  acceptedAt?: string;
+  status: 'pending' | 'accepted' | 'expired' | 'revoked';
+  createdAt: string;
+}
+
+/**
+ * Tournament Entry Payment - Track payments for tournament registrations
+ */
+export interface TournamentPayment {
+  id: string;
+  tournamentId: string;
+  registrationId: string;
+  profileId?: string;
+  
+  // Payment details
+  amountCents: number;
+  platformFeeCents: number;
+  clubReceivesCents: number;
+  currency: string;
+  
+  // Stripe
+  stripePaymentIntentId?: string;
+  stripeChargeId?: string;
+  
+  // Status
+  status: 'pending' | 'processing' | 'succeeded' | 'failed' | 'refunded' | 'partially_refunded';
+  failureReason?: string;
+  
+  // Refund info
+  refundedAmountCents?: number;
+  refundedAt?: string;
+  refundReason?: string;
+  
+  createdAt: string;
+  updatedAt: string;
+}
+
+/**
+ * Tournament Payout - Prize money distribution
+ */
+export interface TournamentPayout {
+  id: string;
+  tournamentId: string;
+  clubId: string;
+  
+  // Recipient
+  registrationId: string;
+  profileId?: string;
+  recipientName: string;
+  
+  // Amount
+  grossAmountCents: number; // Before any fees
+  netAmountCents: number;   // After platform fee
+  
+  // Category
+  payoutType: 'prize' | 'skins' | 'greenie' | 'closest_to_pin' | 'other';
+  position?: number; // 1st, 2nd, 3rd, etc.
+  divisionId?: string;
+  description: string;
+  
+  // Distribution method
+  method: 'stripe_transfer' | 'check' | 'cash' | 'credit_to_account';
+  stripeTransferId?: string;
+  
+  // Status
+  status: 'pending' | 'processing' | 'completed' | 'failed';
+  completedAt?: string;
+  failureReason?: string;
+  
+  createdAt: string;
+}
+
+/**
+ * Default permissions by role
+ */
+export const DEFAULT_CLUB_PERMISSIONS: Record<ClubMemberRole, ClubPermissions> = {
+  owner: {
+    canCreateTournaments: true,
+    canEditTournaments: true,
+    canDeleteTournaments: true,
+    canManageRegistrations: true,
+    canProcessPayments: true,
+    canViewFinancials: true,
+    canManageStaff: true,
+    canEditClubSettings: true,
+    canSendAnnouncements: true,
+  },
+  admin: {
+    canCreateTournaments: true,
+    canEditTournaments: true,
+    canDeleteTournaments: true,
+    canManageRegistrations: true,
+    canProcessPayments: true,
+    canViewFinancials: true,
+    canManageStaff: true,
+    canEditClubSettings: true,
+    canSendAnnouncements: true,
+  },
+  manager: {
+    canCreateTournaments: true,
+    canEditTournaments: true,
+    canDeleteTournaments: false,
+    canManageRegistrations: true,
+    canProcessPayments: false,
+    canViewFinancials: true,
+    canManageStaff: false,
+    canEditClubSettings: false,
+    canSendAnnouncements: true,
+  },
+  staff: {
+    canCreateTournaments: false,
+    canEditTournaments: true,
+    canDeleteTournaments: false,
+    canManageRegistrations: true,
+    canProcessPayments: false,
+    canViewFinancials: false,
+    canManageStaff: false,
+    canEditClubSettings: false,
+    canSendAnnouncements: false,
+  },
+  pro: {
+    canCreateTournaments: true,
+    canEditTournaments: true,
+    canDeleteTournaments: false,
+    canManageRegistrations: true,
+    canProcessPayments: false,
+    canViewFinancials: false,
+    canManageStaff: false,
+    canEditClubSettings: false,
+    canSendAnnouncements: true,
+  },
+};
+
+// ============================================================================
+// Tournament Types (Extended for Club Integration)
 // ============================================================================
 
 export type TournamentFormat = 'stroke' | 'stableford' | 'scramble' | 'best_ball' | 'match_play' | 'skins';
@@ -501,7 +763,13 @@ export interface TournamentStanding {
 export interface Tournament {
   id: string;
   name: string;
-  organizerId: string;          // ownerProfileId
+  organizerId: string;          // ownerProfileId (individual) or clubId (business)
+  
+  // Club Integration (for business-hosted tournaments)
+  clubId?: string;              // If hosted by a club
+  clubName?: string;            // Snapshot of club name
+  isClubHosted: boolean;        // true if managed by a club account
+  
   courseId?: string;
   courseName?: string;
   dates: string[];              // ISO date strings for multi-day events
@@ -509,8 +777,33 @@ export interface Tournament {
   format: TournamentFormat;
   visibility: TournamentVisibility;
   passcode?: string;            // For invite_only
+  
+  // Entry Fee & Payments
   entryFeeCents: number;        // Entry fee in cents
+  entryFeeEnabled: boolean;     // Whether payment is required
+  earlyBirdFeeCents?: number;   // Discounted early registration
+  earlyBirdDeadline?: string;   // ISO date for early bird cutoff
+  
+  // Prize Pool
+  prizePool: {
+    totalCents: number;         // Total prize pool
+    distribution: {
+      position: number;
+      percentOrFixed: 'percent' | 'fixed';
+      value: number;            // Percentage (0-100) or cents
+      divisionId?: string;      // Division-specific prize
+    }[];
+    sidePots: {
+      name: string;             // e.g., "Skins", "Closest to Pin"
+      amountCents: number;
+    }[];
+  };
+  
+  // Registration
   maxPlayers: number;
+  waitlistEnabled: boolean;
+  registrationDeadline?: string;
+  
   status: TournamentStatus;
   divisions: TournamentDivision[];
   teeTimes: TournamentTeeTime[];
@@ -521,6 +814,15 @@ export interface Tournament {
   bettingGames?: EventGameConfig; // Reuse existing game config
   description?: string;
   rules?: string;
+  
+  // Contact info for participants
+  contactEmail?: string;
+  contactPhone?: string;
+  
+  // Branding
+  bannerImage?: string;
+  sponsorLogos?: string[];
+  
   createdAt: string;
   updatedAt: string;
 }

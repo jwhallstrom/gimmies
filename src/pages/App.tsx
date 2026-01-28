@@ -24,6 +24,9 @@ const EditProfilePage = lazy(() => import('./EditProfilePage'));
 const TournamentsPage = lazy(() => import('./TournamentsPage'));
 const TournamentPage = lazy(() => import('./TournamentPage'));
 
+// Club Dashboard (business accounts)
+const ClubDashboard = lazy(() => import('./ClubDashboard'));
+
 const App: React.FC = () => {
   const { currentUser, currentProfile, events, switchUser, createUser, joinEventByCode, addToast } = useStore();
   const location = useLocation();
@@ -285,6 +288,10 @@ const App: React.FC = () => {
                 {/* Tournament routes (prototype feature) */}
                 <Route path="/tournaments" element={<TournamentsPage />} />
                 <Route path="/tournament/:id/*" element={<TournamentPage />} />
+                
+                {/* Club Dashboard (business accounts) */}
+                <Route path="/club" element={<ClubDashboard />} />
+                <Route path="/club/*" element={<ClubDashboard />} />
               </Routes>
             </Suspense>
           </div>

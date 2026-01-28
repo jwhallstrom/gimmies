@@ -490,6 +490,21 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
                 </div>
                 <span className="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded font-bold">BETA</span>
               </button>
+              
+              {/* Club Dashboard */}
+              <button
+                onClick={() => { onClose(); navigate('/club'); }}
+                className="w-full px-4 py-3.5 flex items-center justify-between hover:bg-gray-50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">🏌️</span>
+                  <div className="text-left">
+                    <div className="text-sm font-medium text-gray-900">Club Dashboard</div>
+                    <div className="text-xs text-gray-500">For courses & organizations</div>
+                  </div>
+                </div>
+                <span className="text-[10px] bg-purple-100 text-purple-700 px-2 py-0.5 rounded font-bold">NEW</span>
+              </button>
 
               {/* Sign Out */}
               <button
