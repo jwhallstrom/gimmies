@@ -15,21 +15,24 @@ import useStore from '../../state/store';
 import { useCourse } from '../../hooks/useCourse';
 
 type Props = { eventId: string };
+type AddModalTab = 'invite' | 'manual';
 
 const GolfersTab: React.FC<Props> = ({ eventId }) => {
   const event = useStore((s: any) =>
     s.events.find((e: any) => e.id === eventId) ||
     s.completedEvents.find((e: any) => e.id === eventId)
   );
-  const { currentProfile, profiles, addGolferToEvent, updateEventGolfer, removeGolferFromEvent } = useStore();
+  const { currentProfile, profiles, addGolferToEvent, updateEventGolfer, removeGolferFromEvent, generateShareCode, addToast } = useStore();
   const { course: selectedCourse } = useCourse(event?.course?.courseId);
 
   const [showAddModal, setShowAddModal] = useState(false);
+  const [addModalTab, setAddModalTab] = useState<AddModalTab>('invite');
   const [golferName, setGolferName] = useState('');
   const [customTeeName, setCustomTeeName] = useState('');
   const [customHandicap, setCustomHandicap] = useState('');
   const [guestGamePreference, setGuestGamePreference] = useState<'all' | 'skins' | 'none'>('all');
   const [editingGolferId, setEditingGolferId] = useState<string | null>(null);
+  const [isGeneratingCode, setIsGeneratingCode] = useState(false);
 
   if (!event) return null;
 
@@ -103,6 +106,97 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
   const handleUpdatePreference = (golferId: string, preference: 'all' | 'skins' | 'none') => {
     updateEventGolfer(eventId, golferId, { gamePreference: preference } as any);
     setEditingGolferId(null);
+  };
+
+  // Generate share URL for invites
+  const shareUrl = event.shareCode ? `${window.location.origin}/join/${event.shareCode}` : '';
+  
+  const handleGenerateCode = async () => {
+    setIsGeneratingCode(true);
+    try {
+      await generateShareCode(eventId);
+      addToast('Invite link created!', 'success');
+    } catch (e) {
+      addToast('Could not create invite link', 'error');
+    } finally {
+      setIsGeneratingCode(false);
+    }
+  };
+
+  // Craft compelling invite messages
+  const getInviteMessage = () => {
+    const groupName = event.name || 'our golf group';
+    const senderName = currentProfile?.name || 'A friend';
+    
+    if (isGroupHub) {
+      return {
+        title: `Join ${groupName} on Gimmies Golf`,
+        text: `Hey! ${senderName} invited you to join "${groupName}" on Gimmies Golf 🏌️
+
+Gimmies is a free app to:
+⛳ Track scores & handicap
+💰 Manage Nassau, skins & side bets
+👥 Chat with your golf crew
+📊 See live leaderboards
+
+Join here: ${shareUrl}
+
+Or use code: ${event.shareCode}`,
+        shortText: `${senderName} invited you to "${groupName}" on Gimmies Golf! Join: ${shareUrl}`
+      };
+    } else {
+      return {
+        title: `Join ${event.name || 'my golf event'}`,
+        text: `Hey! Join me for golf - "${event.name}"
+
+Track scores, run games, and see the leaderboard live.
+
+Join: ${shareUrl}
+Code: ${event.shareCode}`,
+        shortText: `Join my golf event "${event.name}": ${shareUrl}`
+      };
+    }
+  };
+
+  const handleTextInvite = async () => {
+    if (!event.shareCode) {
+      await handleGenerateCode();
+    }
+    const msg = getInviteMessage();
+    const smsUrl = `sms:?body=${encodeURIComponent(msg.text)}`;
+    window.open(smsUrl, '_self');
+  };
+
+  const handleShareInvite = async () => {
+    if (!event.shareCode) {
+      await handleGenerateCode();
+    }
+    const msg = getInviteMessage();
+    
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: msg.title,
+          text: msg.shortText,
+          url: shareUrl,
+        });
+      } catch (e) {
+        // User cancelled or error
+      }
+    } else {
+      navigator.clipboard.writeText(msg.text);
+      addToast('Invite copied to clipboard!', 'success');
+    }
+  };
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(shareUrl);
+    addToast('Link copied!', 'success');
+  };
+
+  const handleCopyCode = () => {
+    navigator.clipboard.writeText(event.shareCode || '');
+    addToast('Code copied!', 'success');
   };
 
   const preferenceLabels = {
@@ -302,120 +396,261 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
 
       {/* Add Golfer/Member Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-xl shadow-2xl max-h-[85vh] overflow-y-auto animate-slide-up">
+        <div 
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm"
+          onClick={() => setShowAddModal(false)}
+        >
+          <div 
+            className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col animate-slide-up"
+            onClick={e => e.stopPropagation()}
+          >
             {/* Modal Header */}
-            <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-4 flex items-center justify-between">
-              <h3 className="text-lg font-bold text-gray-900">
-                {isGroupHub ? 'Add Member' : 'Add Golfer'}
-              </h3>
+            <div className={`px-4 py-4 flex items-center justify-between flex-shrink-0 ${
+              isGroupHub ? 'bg-purple-600' : 'bg-primary-700'
+            }`}>
+              <div className="flex items-center gap-2">
+                <span className="text-xl">{isGroupHub ? '👥' : '⛳'}</span>
+                <h3 className="text-lg font-bold text-white">
+                  {isGroupHub ? 'Add Member' : 'Add Golfer'}
+                </h3>
+              </div>
               <button
                 onClick={() => setShowAddModal(false)}
-                className="p-2 -mr-2 text-gray-400 hover:text-gray-600 rounded-lg"
+                className="p-1 text-white/80 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
               >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
             </div>
+
+            {/* Tabs - Groups get invite/manual, Events just manual */}
+            {isGroupHub && (
+              <div className="flex border-b border-gray-200 flex-shrink-0">
+                <button
+                  onClick={() => setAddModalTab('invite')}
+                  className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${
+                    addModalTab === 'invite' ? 'text-purple-700' : 'text-gray-500'
+                  }`}
+                >
+                  📲 Send Invite
+                  {addModalTab === 'invite' && (
+                    <span className="absolute bottom-0 left-4 right-4 h-0.5 bg-purple-600 rounded-full" />
+                  )}
+                </button>
+                <button
+                  onClick={() => setAddModalTab('manual')}
+                  className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${
+                    addModalTab === 'manual' ? 'text-purple-700' : 'text-gray-500'
+                  }`}
+                >
+                  ✏️ Add by Name
+                  {addModalTab === 'manual' && (
+                    <span className="absolute bottom-0 left-4 right-4 h-0.5 bg-purple-600 rounded-full" />
+                  )}
+                </button>
+              </div>
+            )}
             
             {/* Modal Content */}
-            <div className="p-4 space-y-4">
-              {/* Name */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  {isGroupHub ? 'Member Name *' : 'Golfer Name *'}
-                </label>
-                <input
-                  type="text"
-                  value={golferName}
-                  onChange={e => setGolferName(e.target.value)}
-                  placeholder="Enter name"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                  autoFocus
-                />
-                {isGroupHub && (
-                  <p className="text-xs text-gray-500 mt-2">
-                    Add friends to your group so they can join events and chat.
-                  </p>
-                )}
-              </div>
-              
-              {/* Tee Selection - Events only */}
-              {!isGroupHub && teesForCourse.length > 0 && (
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Tee (optional override)
-                  </label>
-                  <select
-                    value={customTeeName}
-                    onChange={e => setCustomTeeName(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                  >
-                    <option value="">Use event default ({event.course?.teeName})</option>
-                    {teesForCourse.map((tee: any) => (
-                      <option key={tee.name} value={tee.name}>{tee.name}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              
-              {/* Handicap - Events only */}
-              {!isGroupHub && (
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Handicap Index (optional)
-                  </label>
-                  <input
-                    type="number"
-                    step="0.1"
-                    value={customHandicap}
-                    onChange={e => setCustomHandicap(e.target.value)}
-                    placeholder="e.g., 15.2"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-                  />
-                </div>
-              )}
-              
-              {/* Game Preference - Events only */}
-              {!isGroupHub && (
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">
-                    Game Participation
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(['all', 'skins', 'none'] as const).map(pref => (
-                      <button
-                        key={pref}
-                        type="button"
-                        onClick={() => setGuestGamePreference(pref)}
-                        className={`py-3 rounded-xl text-sm font-medium border-2 transition-all ${
-                          guestGamePreference === pref
-                            ? 'border-primary-600 bg-primary-50 text-primary-700'
-                            : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
-                        }`}
-                      >
-                        {pref === 'all' ? '🎯 All' : pref === 'skins' ? '💰 Skins' : '📊 None'}
-                      </button>
-                    ))}
+            <div className="flex-1 overflow-y-auto">
+              {/* INVITE TAB - Groups only */}
+              {isGroupHub && addModalTab === 'invite' && (
+                <div className="p-5 space-y-5">
+                  {/* Hero section */}
+                  <div className="text-center py-2">
+                    <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <span className="text-3xl">📲</span>
+                    </div>
+                    <h4 className="font-bold text-gray-900 mb-1">Invite friends to join</h4>
+                    <p className="text-sm text-gray-500">
+                      Send a link - they'll get the app and join your group
+                    </p>
+                  </div>
+
+                  {/* Share Buttons */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={handleTextInvite}
+                      disabled={isGeneratingCode}
+                      className="flex flex-col items-center gap-2 p-4 bg-green-50 hover:bg-green-100 rounded-xl border border-green-200 transition-colors disabled:opacity-60"
+                    >
+                      <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center">
+                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                      </div>
+                      <span className="text-sm font-bold text-green-700">Text Message</span>
+                      <span className="text-[10px] text-green-600">Best for individuals</span>
+                    </button>
+                    
+                    <button
+                      onClick={handleShareInvite}
+                      disabled={isGeneratingCode}
+                      className="flex flex-col items-center gap-2 p-4 bg-purple-50 hover:bg-purple-100 rounded-xl border border-purple-200 transition-colors disabled:opacity-60"
+                    >
+                      <div className="w-12 h-12 bg-purple-500 rounded-full flex items-center justify-center">
+                        <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                        </svg>
+                      </div>
+                      <span className="text-sm font-bold text-purple-700">Share Link</span>
+                      <span className="text-[10px] text-purple-600">Any app or group chat</span>
+                    </button>
+                  </div>
+
+                  {/* Or divider */}
+                  {event.shareCode && (
+                    <>
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 h-px bg-gray-200" />
+                        <span className="text-xs text-gray-400 font-medium">OR SHARE MANUALLY</span>
+                        <div className="flex-1 h-px bg-gray-200" />
+                      </div>
+
+                      {/* Code & Link */}
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Join Code</label>
+                          <button
+                            onClick={handleCopyCode}
+                            className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-center hover:bg-gray-100 transition-colors group"
+                          >
+                            <span className="text-2xl font-mono font-black tracking-[0.15em] text-gray-800 group-hover:text-purple-600">
+                              {event.shareCode}
+                            </span>
+                            <span className="block text-[10px] text-gray-400 mt-1">Tap to copy</span>
+                          </button>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Link</label>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={shareUrl}
+                              readOnly
+                              className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-600 font-mono truncate"
+                            />
+                            <button
+                              onClick={handleCopyLink}
+                              className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-semibold transition-colors"
+                            >
+                              Copy
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
+
+                  {/* What they'll see */}
+                  <div className="bg-gradient-to-br from-purple-50 to-white border border-purple-100 rounded-xl p-4">
+                    <div className="text-xs font-semibold text-purple-700 uppercase tracking-wider mb-2">What they'll receive</div>
+                    <div className="text-sm text-gray-600 space-y-1">
+                      <p>📱 A link to download Gimmies (free)</p>
+                      <p>🔗 Auto-join your group "{event.name}"</p>
+                      <p>💬 Access to group chat & events</p>
+                    </div>
                   </div>
                 </div>
               )}
-            </div>
-            
-            {/* Modal Footer */}
-            <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4">
-              <button
-                onClick={handleAddGolfer}
-                disabled={!golferName.trim()}
-                className={`w-full py-3.5 rounded-xl font-bold text-base transition-all ${
-                  golferName.trim()
-                    ? 'bg-primary-600 text-white hover:bg-primary-700 shadow-lg shadow-primary-200'
-                    : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                }`}
-              >
-                {isGroupHub ? 'Add Member' : 'Add Golfer'}
-              </button>
+
+              {/* MANUAL TAB - or default for events */}
+              {(!isGroupHub || addModalTab === 'manual') && (
+                <div className="p-4 space-y-4">
+                  {/* Name */}
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">
+                      {isGroupHub ? 'Member Name *' : 'Golfer Name *'}
+                    </label>
+                    <input
+                      type="text"
+                      value={golferName}
+                      onChange={e => setGolferName(e.target.value)}
+                      placeholder="Enter name"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      autoFocus={!isGroupHub || addModalTab === 'manual'}
+                    />
+                  </div>
+                  
+                  {/* Tee Selection - Events only */}
+                  {!isGroupHub && teesForCourse.length > 0 && (
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Tee (optional override)
+                      </label>
+                      <select
+                        value={customTeeName}
+                        onChange={e => setCustomTeeName(e.target.value)}
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      >
+                        <option value="">Use event default ({event.course?.teeName})</option>
+                        {teesForCourse.map((tee: any) => (
+                          <option key={tee.name} value={tee.name}>{tee.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  
+                  {/* Handicap - Events only */}
+                  {!isGroupHub && (
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Handicap Index (optional)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={customHandicap}
+                        onChange={e => setCustomHandicap(e.target.value)}
+                        placeholder="e.g., 15.2"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      />
+                    </div>
+                  )}
+                  
+                  {/* Game Preference - Events only */}
+                  {!isGroupHub && (
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 mb-2">
+                        Game Participation
+                      </label>
+                      <div className="grid grid-cols-3 gap-2">
+                        {(['all', 'skins', 'none'] as const).map(pref => (
+                          <button
+                            key={pref}
+                            type="button"
+                            onClick={() => setGuestGamePreference(pref)}
+                            className={`py-3 rounded-xl text-sm font-medium border-2 transition-all ${
+                              guestGamePreference === pref
+                                ? 'border-primary-600 bg-primary-50 text-primary-700'
+                                : 'border-gray-200 bg-white text-gray-600 hover:border-gray-300'
+                            }`}
+                          >
+                            {pref === 'all' ? '🎯 All' : pref === 'skins' ? '💰 Skins' : '📊 None'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Add button in content for manual tab */}
+                  <button
+                    onClick={handleAddGolfer}
+                    disabled={!golferName.trim()}
+                    className={`w-full py-3.5 rounded-xl font-bold text-base transition-all ${
+                      golferName.trim()
+                        ? isGroupHub 
+                          ? 'bg-purple-600 text-white hover:bg-purple-700 shadow-lg shadow-purple-200'
+                          : 'bg-primary-600 text-white hover:bg-primary-700 shadow-lg shadow-primary-200'
+                        : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                    }`}
+                  >
+                    {isGroupHub ? 'Add Member' : 'Add Golfer'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

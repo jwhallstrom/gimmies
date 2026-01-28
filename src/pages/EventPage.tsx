@@ -8,7 +8,7 @@
  * - Mobile-first with large tap targets
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useParams, Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import useStore from '../state/store';
 import { useEventSync } from '../hooks/useEventSync';
@@ -135,6 +135,21 @@ const EventPage: React.FC = () => {
   // Determine current tab for highlighting
   const currentPath = location.pathname.split('/').pop() || 'chat';
   const isOnTab = tabs.some(t => t.path === currentPath);
+
+  // Close menus on escape key
+  useEffect(() => {
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowMenu(false);
+        setShowEventsDropdown(false);
+      }
+    };
+    
+    if (showMenu || showEventsDropdown) {
+      document.addEventListener('keydown', handleEscape);
+      return () => document.removeEventListener('keydown', handleEscape);
+    }
+  }, [showMenu, showEventsDropdown]);
 
   return (
     <div className="min-h-screen -mx-4 -mt-6">
@@ -321,6 +336,7 @@ const EventPage: React.FC = () => {
               <button
                 onClick={() => setShowMenu(!showMenu)}
                 className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
+                aria-label="Open menu"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
@@ -329,8 +345,29 @@ const EventPage: React.FC = () => {
               
               {showMenu && (
                 <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
+                  <div 
+                    className="fixed inset-0 z-40 bg-black/20" 
+                    onClick={() => setShowMenu(false)}
+                    onKeyDown={(e) => e.key === 'Escape' && setShowMenu(false)}
+                    role="button"
+                    tabIndex={0}
+                    aria-label="Close menu"
+                  />
                   <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-xl border border-gray-200 py-1 z-50">
+                    {/* Close button header */}
+                    <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100">
+                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Menu</span>
+                      <button
+                        onClick={() => setShowMenu(false)}
+                        className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+                        aria-label="Close menu"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                    
                     {/* Settings (owner) */}
                     {isOwner && (
                       <button
@@ -344,6 +381,17 @@ const EventPage: React.FC = () => {
                         {isGroupHub ? 'Group Settings' : 'Event Settings'}
                       </button>
                     )}
+                    
+                    {/* Invite Members (groups) / Invite Players (events) */}
+                    <button
+                      onClick={() => { setShowMenu(false); setIsShareModalOpen(true); }}
+                      className="w-full px-4 py-2.5 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                      </svg>
+                      {isGroupHub ? 'Invite Members' : 'Invite Players'}
+                    </button>
                     
                     {/* Create Event (groups only) */}
                     {isGroupHub && (

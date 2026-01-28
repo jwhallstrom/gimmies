@@ -207,6 +207,56 @@ export interface Toast {
 // Event Interface
 // ============================================================================
 
+// ============================================================================
+// Group Settings Types
+// ============================================================================
+
+export interface GroupSettings {
+  /**
+   * Who can see this group:
+   * - 'public': Anyone can find and see the group
+   * - 'private': Only members can see it (default)
+   */
+  visibility: 'public' | 'private';
+  
+  /**
+   * How people join the group:
+   * - 'open': Anyone with link/code can join immediately
+   * - 'request': Must request to join, admin approves
+   * - 'invite_only': Only admin can add members
+   */
+  joinPolicy: 'open' | 'request' | 'invite_only';
+  
+  /**
+   * Can regular members share the invite link?
+   * - true: All members can share (default for 'open')
+   * - false: Only admin can share
+   */
+  membersCanInvite: boolean;
+  
+  /**
+   * Optional description for public groups
+   */
+  description?: string;
+  
+  /**
+   * Optional location/region for discovery
+   */
+  location?: string;
+}
+
+export interface JoinRequest {
+  id: string;
+  profileId: string;
+  profileName: string;
+  profileAvatar?: string;
+  message?: string;
+  requestedAt: string;
+  status: 'pending' | 'approved' | 'rejected';
+  respondedAt?: string;
+  respondedBy?: string;
+}
+
 export interface Event {
   id: string;
   /**
@@ -246,6 +296,12 @@ export interface Event {
   
   // Wallet settings for this event
   walletSettings?: EventWalletSettings;
+  
+  // Group-specific settings (only for hubType === 'group')
+  groupSettings?: GroupSettings;
+  
+  // Join requests for groups with joinPolicy === 'request'
+  joinRequests?: JoinRequest[];
 }
 
 // ============================================================================

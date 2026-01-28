@@ -600,13 +600,13 @@ const JoinEventPage: React.FC = () => {
                 {chars.map((c, i) => (
                   <div
                     key={i}
-                    className={`h-12 rounded-2xl border-2 flex items-center justify-center text-xl font-black font-mono ${
+                    className={`h-14 rounded-2xl border-2 flex items-center justify-center text-2xl font-black font-mono ${
                       codeStatus === 'error'
-                        ? 'border-amber-400 bg-amber-50'
-                        : 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800'
+                        ? 'border-amber-400 bg-amber-50 text-amber-900'
+                        : 'border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-800 text-gray-900 dark:text-white'
                     }`}
                   >
-                    {c || <span className="text-slate-300">•</span>}
+                    {c || <span className="text-gray-300 dark:text-slate-500">•</span>}
                   </div>
                 ))}
               </div>
