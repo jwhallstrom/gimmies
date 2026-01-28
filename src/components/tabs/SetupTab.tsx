@@ -54,9 +54,9 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
 
           <div className="space-y-4">
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Group Name</label>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Group Name</label>
               <input
-                className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+                className="w-full bg-white text-gray-900 placeholder:text-gray-500 disabled:text-gray-700 disabled:bg-gray-50 disabled:opacity-100 border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
                 value={event.name}
                 onChange={(e) => useStore.getState().updateEvent(eventId, { name: e.target.value })}
                 placeholder="e.g., Saturday Crew"
@@ -65,9 +65,9 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
             </div>
             
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Description (optional)</label>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Description (optional)</label>
               <textarea
-                className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 resize-none"
+                className="w-full bg-white text-gray-900 placeholder:text-gray-500 disabled:text-gray-700 disabled:bg-gray-50 disabled:opacity-100 border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 resize-none"
                 rows={2}
                 value={groupSettings.description || ''}
                 onChange={(e) => updateGroupSettings({ description: e.target.value })}
@@ -77,9 +77,9 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
             </div>
             
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Location (optional)</label>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Location (optional)</label>
               <input
-                className="w-full border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+                className="w-full bg-white text-gray-900 placeholder:text-gray-500 disabled:text-gray-700 disabled:bg-gray-50 disabled:opacity-100 border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
                 value={groupSettings.location || ''}
                 onChange={(e) => updateGroupSettings({ location: e.target.value })}
                 placeholder="e.g., Chicago, IL"
@@ -101,7 +101,7 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
             
             {/* Visibility */}
             <div className="mb-4">
-              <label className="block text-xs font-semibold text-gray-600 mb-2">Group Visibility</label>
+              <label className="block text-xs font-semibold text-gray-700 mb-2">Group Visibility</label>
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
@@ -116,7 +116,7 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
                     <span>🔒</span>
                     <span className="font-semibold text-sm text-gray-900">Private</span>
                   </div>
-                  <p className="text-xs text-gray-500">Only members can see</p>
+                  <p className="text-xs text-gray-600">Only members can see</p>
                 </button>
                 <button
                   type="button"
@@ -131,14 +131,14 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
                     <span>🌐</span>
                     <span className="font-semibold text-sm text-gray-900">Public</span>
                   </div>
-                  <p className="text-xs text-gray-500">Anyone can find it</p>
+                  <p className="text-xs text-gray-600">Anyone can find it</p>
                 </button>
               </div>
             </div>
             
             {/* Join Policy */}
             <div className="mb-4">
-              <label className="block text-xs font-semibold text-gray-600 mb-2">How People Join</label>
+              <label className="block text-xs font-semibold text-gray-700 mb-2">How People Join</label>
               <div className="space-y-2">
                 <button
                   type="button"
@@ -154,7 +154,7 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
                     <span className="font-semibold text-sm text-gray-900">Open</span>
                     <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">Recommended</span>
                   </div>
-                  <p className="text-xs text-gray-500">Anyone with the link can join instantly</p>
+                  <p className="text-xs text-gray-600">Anyone with the link can join instantly</p>
                 </button>
                 
                 <button
@@ -170,7 +170,7 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
                     <span>✋</span>
                     <span className="font-semibold text-sm text-gray-900">Request to Join</span>
                   </div>
-                  <p className="text-xs text-gray-500">People request, you approve</p>
+                  <p className="text-xs text-gray-600">People request, you approve</p>
                 </button>
                 
                 <button
@@ -186,7 +186,7 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
                     <span>🔐</span>
                     <span className="font-semibold text-sm text-gray-900">Invite Only</span>
                   </div>
-                  <p className="text-xs text-gray-500">Only you can add members</p>
+                  <p className="text-xs text-gray-600">Only you can add members</p>
                 </button>
               </div>
             </div>
@@ -196,7 +196,7 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
               <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
                 <div>
                   <div className="text-sm font-medium text-gray-900">Members can share invites</div>
-                  <p className="text-xs text-gray-500">Let everyone invite friends</p>
+                  <p className="text-xs text-gray-600">Let everyone invite friends</p>
                 </div>
                 <button
                   type="button"
@@ -219,7 +219,7 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-sm font-bold text-gray-900">Create an Event</div>
-              <div className="text-xs text-gray-500">Schedule a round for this group</div>
+              <div className="text-xs text-gray-600">Schedule a round for this group</div>
             </div>
             <button
               type="button"
@@ -236,7 +236,7 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
           <div className="flex items-center justify-between">
             <div>
               <div className="text-sm font-bold text-gray-900">Members</div>
-              <div className="text-xs text-gray-500">{event.golfers?.length || 0} members</div>
+              <div className="text-xs text-gray-600">{event.golfers?.length || 0} members</div>
             </div>
             <button
               type="button"
@@ -293,9 +293,9 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
         
         <div className="flex flex-wrap gap-4 items-end">
           <div className="flex-1 min-w-[180px]">
-            <label className="block text-xs font-semibold text-gray-600 mb-1">Event Name</label>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Event Name</label>
             <input
-              className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+              className="w-full bg-white text-gray-900 placeholder:text-gray-500 disabled:text-gray-700 disabled:bg-gray-50 disabled:opacity-100 border border-gray-300 rounded-xl px-3 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
               value={event.name}
               onChange={e => useStore.getState().updateEvent(eventId, { name: e.target.value })}
               placeholder="Event name"
@@ -303,10 +303,10 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
             />
           </div>
           <div className="w-40">
-            <label className="block text-xs font-semibold text-gray-600 mb-1">Date</label>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Date</label>
             <input
               type="date"
-              className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+              className="w-full bg-white text-gray-900 disabled:text-gray-700 disabled:bg-gray-50 disabled:opacity-100 border border-gray-300 rounded-xl px-3 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
               value={event.date}
               onChange={e => useStore.getState().updateEvent(eventId, { date: e.target.value })}
               disabled={event.isCompleted || !isOwner}
@@ -319,7 +319,7 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
         <h3 className="text-sm font-bold text-gray-900 mb-3">Course & Tee</h3>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">Course</label>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Course</label>
             <CourseSearch
               selectedCourseId={event.course.courseId}
               onSelect={(courseId) => {
@@ -329,9 +329,9 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">Tee</label>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Tee</label>
             <select
-              className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+              className="w-full bg-white text-gray-900 disabled:text-gray-700 disabled:bg-gray-50 disabled:opacity-100 border border-gray-300 rounded-xl px-3 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
               value={event.course.teeName || ''}
               onChange={e => useStore.getState().setEventTee(eventId, e.target.value)}
               disabled={!event.course.courseId || event.isCompleted || !isOwner}
@@ -357,7 +357,7 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-bold text-gray-900">Golfers</div>
-            <div className="text-xs text-gray-500">{event.golfers?.length || 0} players in this event</div>
+              <div className="text-xs text-gray-600">{event.golfers?.length || 0} players in this event</div>
           </div>
           <button
             type="button"

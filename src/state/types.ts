@@ -73,10 +73,11 @@ export interface EventGolfer {
   /**
    * Participation preference for bets/games.
    * - 'all': participates in all configured games
+   * - 'nassau': participates in Nassau only (no Skins/Pinky/Greenie)
    * - 'skins': participates in skins only
    * - 'none': participates in no games (leaderboard/score only)
    */
-  gamePreference?: 'all' | 'skins' | 'none';
+  gamePreference?: 'all' | 'nassau' | 'skins' | 'none';
 }
 
 // ============================================================================
@@ -463,7 +464,7 @@ export interface TournamentRegistration {
   handicapSnapshot?: number | null;
   divisionId?: string;
   teamId?: string;
-  gamePreference?: 'all' | 'skins' | 'none';
+  gamePreference?: 'all' | 'nassau' | 'skins' | 'none';
   paymentStatus: 'pending' | 'paid' | 'refunded';
   waitingListPosition?: number;
   createdAt: string;

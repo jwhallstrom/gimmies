@@ -92,11 +92,11 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
     const group = event.groups.find((gr: any) => gr.id === cfg.groupId);
     if (!group) return;
     let players: string[] = group.golferIds.slice();
-    // Respect per-golfer game preference (Nassau = "all games" only)
+    // Respect per-golfer game preference (Nassau = "all games" or "nassau only")
     players = players.filter((gid) => {
       const eg = event.golfers.find((g: any) => (g.profileId || g.customName || g.displayName) === gid);
-      const pref: 'all' | 'skins' | 'none' = (eg?.gamePreference as any) || 'all';
-      return pref === 'all';
+      const pref: 'all' | 'nassau' | 'skins' | 'none' = (eg?.gamePreference as any) || 'all';
+      return pref === 'all' || pref === 'nassau';
     });
     if (cfg.participantGolferIds && cfg.participantGolferIds.length > 1) {
       players = players.filter(p => cfg.participantGolferIds!.includes(p));
@@ -117,7 +117,7 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
   skinsConfigs.forEach(sk => {
     const eligible = (gid: string) => {
       const eg = event.golfers.find((g: any) => (g.profileId || g.customName || g.displayName) === gid);
-      const pref: 'all' | 'skins' | 'none' = (eg?.gamePreference as any) || 'all';
+      const pref: 'all' | 'nassau' | 'skins' | 'none' = (eg?.gamePreference as any) || 'all';
       return pref === 'all' || pref === 'skins';
     };
     const base = event.golfers

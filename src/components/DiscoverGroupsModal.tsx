@@ -138,7 +138,8 @@ export const DiscoverGroupsModal: React.FC<Props> = ({ isOpen, onClose }) => {
       onClick={onClose}
     >
       <div 
-        className="bg-white w-full sm:max-w-lg rounded-t-2xl sm:rounded-xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col animate-slide-up"
+        className="bg-white text-gray-900 w-full sm:max-w-lg rounded-t-2xl sm:rounded-xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col animate-slide-up"
+        style={{ colorScheme: 'light' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -169,7 +170,7 @@ export const DiscoverGroupsModal: React.FC<Props> = ({ isOpen, onClose }) => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search by name or location..."
-              className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+              className="w-full bg-white text-gray-900 placeholder:text-gray-400 pl-10 pr-4 py-3 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
               autoFocus
             />
           </div>

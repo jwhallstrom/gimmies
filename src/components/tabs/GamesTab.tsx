@@ -81,10 +81,12 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
       .filter((id: any) => !!id) as string[];
     return ids.filter((gid) => {
       const eg = (event.golfers || []).find((x: any) => (x.profileId || x.customName || x.displayName) === gid);
-      const pref: 'all' | 'skins' | 'none' = (eg?.gamePreference as any) || 'all';
+      const pref: 'all' | 'nassau' | 'skins' | 'none' = (eg?.gamePreference as any) || 'all';
       if (pref === 'none') return false;
       if (pref === 'skins') return game === 'skins';
-      return true; // all
+      if (pref === 'nassau') return game === 'nassau';
+      // 'all'
+      return true;
     });
   };
   const addNassau = (net: boolean) => {

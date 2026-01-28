@@ -90,7 +90,8 @@ const ShareModal: React.FC<ShareModalProps> = ({ eventId, isOpen, onClose }) => 
       onClick={onClose}
     >
       <div 
-        className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-xl shadow-2xl max-h-[90vh] overflow-y-auto animate-slide-up"
+        className="bg-white text-gray-900 w-full sm:max-w-md rounded-t-2xl sm:rounded-xl shadow-2xl max-h-[90vh] overflow-y-auto animate-slide-up"
+        style={{ colorScheme: 'light' }}
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -236,7 +237,7 @@ const ShareModal: React.FC<ShareModalProps> = ({ eventId, isOpen, onClose }) => 
                         type="text"
                         value={shareUrl}
                         readOnly
-                        className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm text-gray-600 font-mono truncate"
+                        className="flex-1 bg-white text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-xl px-4 py-3 text-sm font-mono truncate"
                       />
                       <button
                         onClick={() => handleCopy(shareUrl, 'Link')}

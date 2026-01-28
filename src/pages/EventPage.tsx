@@ -8,7 +8,7 @@
  * - Mobile-first with large tap targets
  */
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useParams, Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom';
 import useStore from '../state/store';
 import { useEventSync } from '../hooks/useEventSync';
@@ -90,33 +90,25 @@ const EventPage: React.FC = () => {
     return { joinedEvents: joined, unjoinedEvents: unjoined };
   }, [childEvents, currentProfile?.id]);
   
-  // Calculate event stats for header
+  // Header badges / counts
   const stats = useMemo(() => {
     const golferCount = event.golfers.length;
-    const scoresEntered = event.scorecards.filter(sc => sc.scores.length > 0).length;
-    const hasGames = (
-      (event.games?.nassau?.length ?? 0) +
-      (event.games?.skins?.length ?? 0) +
-      (event.games?.pinky?.length ?? 0) +
-      (event.games?.greenie?.length ?? 0)
-    ) > 0;
-    
-    return { golferCount, scoresEntered, hasGames };
-  }, [event]);
+    return { golferCount };
+  }, [event.golfers.length]);
 
   // Define tabs based on hub type
   // Groups get Chat + Golfers (members), Events get full tabs
   const tabs = isGroupHub
     ? [
         { path: 'chat', label: 'Chat', icon: '💬' },
-        { path: 'golfers', label: 'Members', icon: '👥' },
+        { path: 'golfers', label: 'Members', icon: '👥', badge: stats.golferCount },
         ...(isOwner ? [
           { path: 'settings', label: 'Settings', icon: '⚙️', ownerOnly: true },
         ] : []),
       ]
     : [
         { path: 'chat', label: 'Chat', icon: '💬' },
-        { path: 'golfers', label: 'Golfers', icon: '👥' },
+        { path: 'golfers', label: 'Golfers', icon: '👥', badge: stats.golferCount },
         { path: 'scorecard', label: 'Leaderboard', icon: '📊' },
         { path: 'payout', label: 'Payout', icon: '💵' },
         ...(isOwner ? [
@@ -135,21 +127,6 @@ const EventPage: React.FC = () => {
   // Determine current tab for highlighting
   const currentPath = location.pathname.split('/').pop() || 'chat';
   const isOnTab = tabs.some(t => t.path === currentPath);
-
-  // Close menus on escape key
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        setShowMenu(false);
-        setShowEventsDropdown(false);
-      }
-    };
-    
-    if (showMenu || showEventsDropdown) {
-      document.addEventListener('keydown', handleEscape);
-      return () => document.removeEventListener('keydown', handleEscape);
-    }
-  }, [showMenu, showEventsDropdown]);
 
   return (
     <div className="min-h-screen -mx-4 -mt-6">
@@ -304,21 +281,8 @@ const EventPage: React.FC = () => {
                 )}
               </div>
             )}
-            
-            {/* Share Button - Events only */}
-            {!isGroupHub && (
-              <button
-                onClick={() => setIsShareModalOpen(true)}
-                className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
-                title="Invite Players"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                </svg>
-              </button>
-            )}
-            
-            {/* Notify Button (owner only) */}
+
+            {/* Notify Button (owner only) - keep visible so it's discoverable */}
             {isOwner && event.golfers.length > 0 && (
               <button
                 onClick={() => setShowNotifications(true)}
@@ -336,7 +300,7 @@ const EventPage: React.FC = () => {
               <button
                 onClick={() => setShowMenu(!showMenu)}
                 className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
-                aria-label="Open menu"
+                title="More"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z" />
@@ -345,53 +309,22 @@ const EventPage: React.FC = () => {
               
               {showMenu && (
                 <>
-                  <div 
-                    className="fixed inset-0 z-40 bg-black/20" 
-                    onClick={() => setShowMenu(false)}
-                    onKeyDown={(e) => e.key === 'Escape' && setShowMenu(false)}
-                    role="button"
-                    tabIndex={0}
-                    aria-label="Close menu"
-                  />
+                  <div className="fixed inset-0 z-40" onClick={() => setShowMenu(false)} />
                   <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-xl border border-gray-200 py-1 z-50">
-                    {/* Close button header */}
-                    <div className="flex items-center justify-between px-4 py-2 border-b border-gray-100">
-                      <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Menu</span>
+                    {/* Invite (events only) */}
+                    {!isGroupHub && (
                       <button
-                        onClick={() => setShowMenu(false)}
-                        className="p-1 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
-                        aria-label="Close menu"
-                      >
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    </div>
-                    
-                    {/* Settings (owner) */}
-                    {isOwner && (
-                      <button
-                        onClick={() => { setShowMenu(false); navigate(`/event/${id}/settings`); }}
+                        onClick={() => { setShowMenu(false); setIsShareModalOpen(true); }}
                         className="w-full px-4 py-2.5 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                       >
                         <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
                         </svg>
-                        {isGroupHub ? 'Group Settings' : 'Event Settings'}
+                        Invite Players
                       </button>
                     )}
-                    
-                    {/* Invite Members (groups) / Invite Players (events) */}
-                    <button
-                      onClick={() => { setShowMenu(false); setIsShareModalOpen(true); }}
-                      className="w-full px-4 py-2.5 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-                      </svg>
-                      {isGroupHub ? 'Invite Members' : 'Invite Players'}
-                    </button>
+
+                    {/* Notify moved to dedicated icon for discoverability */}
                     
                     {/* Create Event (groups only) */}
                     {isGroupHub && (
@@ -403,17 +336,6 @@ const EventPage: React.FC = () => {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                         </svg>
                         Create Event
-                      </button>
-                    )}
-                    
-                    {/* Games Setup (events only, owner) */}
-                    {!isGroupHub && isOwner && (
-                      <button
-                        onClick={() => { setShowMenu(false); navigate(`/event/${id}/games`); }}
-                        className="w-full px-4 py-2.5 text-left text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                      >
-                        <span className="w-4 text-center">🎯</span>
-                        Setup Games
                       </button>
                     )}
                     
@@ -461,29 +383,48 @@ const EventPage: React.FC = () => {
           </p>
         </div>
         
-        {/* Quick Stats */}
-        {!isGroupHub && (
-          <div className="grid grid-cols-3 gap-2 mb-4">
-            <div className="bg-white/10 rounded-xl px-3 py-2 text-center">
-              <div className="text-lg font-bold text-white">{stats.golferCount}</div>
-              <div className="text-[10px] text-primary-200 font-medium">Golfers</div>
-            </div>
-            <div className="bg-white/10 rounded-xl px-3 py-2 text-center">
-              <div className="text-lg font-bold text-white">{stats.scoresEntered}</div>
-              <div className="text-[10px] text-primary-200 font-medium">Scoring</div>
-            </div>
-            <div className="bg-white/10 rounded-xl px-3 py-2 text-center">
-              <div className="text-lg font-bold text-white">{stats.hasGames ? '✓' : '—'}</div>
-              <div className="text-[10px] text-primary-200 font-medium">Games</div>
-            </div>
+        {/* Tab Navigation */}
+        {/* Mobile: grid to avoid horizontal scrolling */}
+        <div className="sm:hidden">
+          <div className={`grid ${tabs.length >= 6 ? 'grid-cols-4' : 'grid-cols-3'} gap-2`}>
+            {tabs.map((tab) => {
+              const isActive = currentPath === tab.path || (!isOnTab && tab.path === 'chat');
+              const badge = (tab as any).badge as number | undefined;
+              return (
+                <NavLink
+                  key={tab.path}
+                  to={tab.path}
+                  className={`flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-xl font-semibold text-xs transition-all ${
+                    isActive
+                      ? 'bg-white text-primary-800 shadow-md'
+                      : 'bg-white/10 text-white/85 hover:bg-white/20 hover:text-white'
+                  }`}
+                >
+                  <span className="relative text-base leading-none">
+                    {tab.icon}
+                    {typeof badge === 'number' && (
+                      <span
+                        className={`absolute -top-2 -right-3 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-extrabold flex items-center justify-center ${
+                          isActive ? 'bg-primary-700 text-white' : 'bg-white/25 text-white'
+                        }`}
+                        aria-label={`${badge}`}
+                      >
+                        {badge}
+                      </span>
+                    )}
+                  </span>
+                  <span className="leading-none">{tab.label}</span>
+                </NavLink>
+              );
+            })}
           </div>
-        )}
-        
-        {/* Tab Navigation - Pill Style */}
-        <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
-          {tabs.map(tab => {
+        </div>
+
+        {/* Desktop: pill row */}
+        <div className="hidden sm:flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
+          {tabs.map((tab) => {
             const isActive = currentPath === tab.path || (!isOnTab && tab.path === 'chat');
-            
+            const badge = (tab as any).badge as number | undefined;
             return (
               <NavLink
                 key={tab.path}
@@ -496,6 +437,16 @@ const EventPage: React.FC = () => {
               >
                 <span>{tab.icon}</span>
                 <span>{tab.label}</span>
+                {typeof badge === 'number' && (
+                  <span
+                    className={`ml-1.5 px-1.5 py-0.5 rounded-full text-[11px] font-extrabold leading-none ${
+                      isActive ? 'bg-primary-100 text-primary-800' : 'bg-white/15 text-white'
+                    }`}
+                    aria-label={`${badge}`}
+                  >
+                    {badge}
+                  </span>
+                )}
               </NavLink>
             );
           })}
