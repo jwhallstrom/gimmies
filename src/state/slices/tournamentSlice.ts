@@ -104,6 +104,10 @@ export const createTournamentSlice = (set: SetState, get: GetState): TournamentS
       id,
       name: initialData?.name || 'New Tournament',
       organizerId: currentProfile.id,
+
+      clubId: initialData?.clubId,
+      clubName: initialData?.clubName,
+      isClubHosted: initialData?.isClubHosted ?? !!initialData?.clubId,
       courseId: initialData?.courseId,
       courseName: initialData?.courseName,
       dates: initialData?.dates || [new Date().toISOString().split('T')[0]],
@@ -112,7 +116,19 @@ export const createTournamentSlice = (set: SetState, get: GetState): TournamentS
       visibility: initialData?.visibility || 'public',
       passcode: initialData?.passcode,
       entryFeeCents: initialData?.entryFeeCents || 0,
+      entryFeeEnabled:
+        initialData?.entryFeeEnabled ?? ((initialData?.entryFeeCents || 0) > 0),
+      earlyBirdFeeCents: initialData?.earlyBirdFeeCents,
+      earlyBirdDeadline: initialData?.earlyBirdDeadline,
+
+      prizePool: initialData?.prizePool || {
+        totalCents: 0,
+        distribution: [],
+        sidePots: [],
+      },
       maxPlayers: initialData?.maxPlayers || 72,
+      waitlistEnabled: initialData?.waitlistEnabled ?? false,
+      registrationDeadline: initialData?.registrationDeadline,
       status: 'draft',
       divisions: initialData?.divisions || [],
       teeTimes: [],
@@ -120,8 +136,12 @@ export const createTournamentSlice = (set: SetState, get: GetState): TournamentS
       roundsData: [],
       standings: [],
       hasBettingOverlay: initialData?.hasBettingOverlay || false,
+      bettingGames: initialData?.bettingGames,
       description: initialData?.description,
       rules: initialData?.rules,
+
+      contactEmail: initialData?.contactEmail,
+      contactPhone: initialData?.contactPhone,
       createdAt: now,
       updatedAt: now,
     };

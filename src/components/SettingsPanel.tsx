@@ -23,7 +23,7 @@ interface Props {
 
 const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
-  const { currentUser, currentProfile, updateProfile, logout, wallet, events } = useStore();
+  const { currentUser, currentProfile, updateProfile, logout, getProfileWallet, events } = useStore();
   const { isGuest } = useAuthMode();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -152,7 +152,8 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
   const groupCount = (events || []).filter(e => e?.hubType === 'group').length;
   const eventCount = (events || []).filter(e => e?.hubType !== 'group' && !e?.isCompleted).length;
   const roundCount = currentProfile?.stats?.roundsPlayed ?? 0;
-  const netBalance = (wallet?.lifetimeNet ?? 0) / 100;
+  const walletSummary = currentProfile ? getProfileWallet(currentProfile.id) : null;
+  const netBalance = walletSummary?.lifetimeNet ?? 0;
   const homeCourse = currentProfile?.preferences?.homeCourseName || 
     (currentProfile?.preferences as any)?.homeCourse || null;
   const profileName = currentProfile?.name || 'Golfer';

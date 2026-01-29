@@ -5,7 +5,7 @@ import SettingsPanel from './SettingsPanel';
 import { useAuthMode } from '../hooks/useAuthMode';
 
 const UserMenu: React.FC = () => {
-  const { currentUser, currentProfile, events, wallet } = useStore();
+  const { currentUser, currentProfile, events, settlements } = useStore();
   const { isGuest } = useAuthMode();
   const [showSettings, setShowSettings] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -16,8 +16,12 @@ const UserMenu: React.FC = () => {
     let count = 0;
     
     // Pending settlements
-    const settlements = wallet?.settlements || [];
-    count += settlements.filter((s: any) => s.status === 'pending').length;
+    const pending = (settlements || []).filter(
+      (s: any) =>
+        s?.status === 'pending' &&
+        (s?.toProfileId === currentProfile.id || s?.fromProfileId === currentProfile.id)
+    );
+    count += pending.length;
     
     // Join requests for groups you own
     events?.filter(e => e.hubType === 'group' && e.ownerProfileId === currentProfile.id).forEach(group => {
@@ -42,7 +46,7 @@ const UserMenu: React.FC = () => {
     });
     
     return Math.min(count, 99);
-  }, [currentProfile, events, wallet]);
+  }, [currentProfile, events, settlements]);
 
   if (!currentUser || !currentProfile) return null;
 
