@@ -9,7 +9,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { useParams, Routes, Route, NavLink, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, Routes, Route, NavLink, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import useStore from '../state/store';
 import { useEventSync } from '../hooks/useEventSync';
 import SetupTab from '../components/tabs/SetupTab';
@@ -65,13 +65,29 @@ const EventPage: React.FC = () => {
   const isOwner = Boolean(currentProfile && event.ownerProfileId === currentProfile.id);
   const courseName = event.course.courseId ? getCourseById(event.course.courseId)?.name : null;
   
-  // Get child events for this group
-  const childEvents = useStore((s) => {
-    if (!isGroupHub) return [];
-    return (s.events || [])
-      .filter((e: any) => e.hubType !== 'group' && e.parentGroupId === id && !e.isCompleted)
+  // Get child events for this group (both active and completed)
+  const { activeChildEvents, completedChildEvents } = useStore((s) => {
+    if (!isGroupHub) return { activeChildEvents: [], completedChildEvents: [] };
+    
+    const allEvents = [...(s.events || []), ...(s.completedEvents || [])];
+    const groupEvents = allEvents.filter((e: any) => e.hubType !== 'group' && e.parentGroupId === id);
+    
+    const active = groupEvents
+      .filter((e: any) => !e.isCompleted)
       .sort((a: any, b: any) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
+    
+    const completed = groupEvents
+      .filter((e: any) => e.isCompleted)
+      .sort((a: any, b: any) => new Date(b.completedAt || b.lastModified).getTime() - new Date(a.completedAt || a.lastModified).getTime());
+    
+    return { activeChildEvents: active, completedChildEvents: completed };
   });
+  
+  // For backward compatibility
+  const childEvents = activeChildEvents;
+  
+  // State for showing history
+  const [showHistory, setShowHistory] = useState(false);
   
   // Separate into events user has joined vs not joined
   const { joinedEvents, unjoinedEvents } = useMemo(() => {
@@ -110,9 +126,8 @@ const EventPage: React.FC = () => {
         { path: 'chat', label: 'Chat', icon: '💬' },
         { path: 'golfers', label: 'Golfers', icon: '👥', badge: stats.golferCount },
         { path: 'scorecard', label: 'Leaderboard', icon: '📊' },
-        { path: 'payout', label: 'Payout', icon: '💵' },
+        { path: 'games', label: 'Games', icon: '🎯' },
         ...(isOwner ? [
-          { path: 'games', label: 'Games', icon: '🎯', ownerOnly: true },
           { path: 'settings', label: 'Settings', icon: '⚙️', ownerOnly: true },
         ] : []),
       ];
@@ -151,16 +166,22 @@ const EventPage: React.FC = () => {
                 <button
                   onClick={() => setShowEventsDropdown(!showEventsDropdown)}
                   className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all ${
-                    childEvents.length > 0 
+                    activeChildEvents.length > 0 
                       ? 'bg-orange-500 text-white hover:bg-orange-600' 
-                      : 'bg-white/10 text-white hover:bg-white/20'
+                      : (completedChildEvents.length > 0 
+                          ? 'bg-white/20 text-white hover:bg-white/30' 
+                          : 'bg-white/10 text-white hover:bg-white/20')
                   }`}
                 >
                   <span>🎯</span>
                   <span>Events</span>
-                  {childEvents.length > 0 && (
-                    <span className="bg-white text-orange-600 px-1.5 py-0.5 rounded-full text-[10px] font-bold min-w-[18px] text-center">
-                      {childEvents.length}
+                  {(activeChildEvents.length > 0 || completedChildEvents.length > 0) && (
+                    <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold min-w-[18px] text-center ${
+                      activeChildEvents.length > 0 
+                        ? 'bg-white text-orange-600' 
+                        : 'bg-white/30 text-white'
+                    }`}>
+                      {activeChildEvents.length > 0 ? activeChildEvents.length : completedChildEvents.length}
                     </span>
                   )}
                   <svg className={`w-3.5 h-3.5 transition-transform ${showEventsDropdown ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -259,6 +280,54 @@ const EventPage: React.FC = () => {
                                   </div>
                                 </div>
                               ))}
+                            </div>
+                          )}
+                          
+                          {/* History toggle */}
+                          {completedChildEvents.length > 0 && (
+                            <div className="px-3 py-2 border-t border-gray-100">
+                              <button
+                                onClick={() => setShowHistory(!showHistory)}
+                                className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 rounded-lg text-xs font-bold text-gray-600 transition-colors"
+                              >
+                                <span className="flex items-center gap-2">
+                                  <span>📜</span>
+                                  <span>History ({completedChildEvents.length})</span>
+                                </span>
+                                <svg className={`w-4 h-4 transition-transform ${showHistory ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </button>
+                              
+                              {showHistory && (
+                                <div className="mt-2 space-y-1">
+                                  {completedChildEvents.slice(0, 10).map((evt: any) => (
+                                    <button
+                                      key={evt.id}
+                                      onClick={() => {
+                                        setShowEventsDropdown(false);
+                                        navigate(`/event/${evt.id}`);
+                                      }}
+                                      className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors text-left"
+                                    >
+                                      <div className="min-w-0">
+                                        <div className="font-medium text-gray-700 text-sm truncate">{evt.name || 'Event'}</div>
+                                        <div className="text-[10px] text-gray-500">
+                                          {evt.date ? formatDateShort(evt.date) : ''} • {evt.golfers?.length || 0} players
+                                        </div>
+                                      </div>
+                                      <span className="text-[9px] font-bold text-gray-500 bg-gray-200 px-2 py-0.5 rounded-full flex-shrink-0">
+                                        ✓ DONE
+                                      </span>
+                                    </button>
+                                  ))}
+                                  {completedChildEvents.length > 10 && (
+                                    <div className="text-[10px] text-gray-500 text-center py-1">
+                                      +{completedChildEvents.length - 10} more events
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           )}
                           
@@ -477,17 +546,15 @@ const EventPage: React.FC = () => {
           {!isGroupHub && (
             <>
               <Route path="scorecard" element={<ScoreHubTab eventId={event.id} />} />
-              <Route path="payout" element={<PayoutTab eventId={event.id} />} />
+              {/* Games tab - accessible to all, admin controls shown only to owner */}
+              <Route path="games" element={<GamesTab eventId={event.id} />} />
+              {/* Legacy payout route - redirect to games */}
+              <Route path="payout" element={<Navigate to={`/event/${event.id}/games`} replace />} />
               
               {/* Owner-only routes */}
               <Route 
                 path="settings" 
                 element={isOwner ? <SetupTab eventId={event.id} /> : <AccessDenied />} 
-              />
-              {/* Legacy games route kept for team picking navigation */}
-              <Route 
-                path="games" 
-                element={isOwner ? <GamesTab eventId={event.id} /> : <AccessDenied />} 
               />
               <Route 
                 path="games/nassau/:nassauId/teams" 

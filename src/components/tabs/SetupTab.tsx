@@ -459,6 +459,105 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
           </button>
         </div>
       </div>
+
+      {/* Event Actions - Start & Complete */}
+      {isOwner && !isGroupHub && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-4">
+          <div className="text-sm font-bold text-gray-900">Event Actions</div>
+          
+          {/* Event not started yet */}
+          {event.status !== 'started' && event.status !== 'completed' && !event.isCompleted && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <span className="text-xl">🏌️</span>
+                <div className="flex-1">
+                  <div className="font-semibold text-blue-900">Ready to Play?</div>
+                  <p className="text-sm text-blue-700 mt-1">Start the event when everyone is ready. This locks in the players.</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      useStore.getState().updateEvent(eventId, { status: 'started' });
+                      useStore.getState().addToast('Event started! Good luck!', 'success');
+                    }}
+                    className="mt-3 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-bold text-sm hover:from-blue-700 hover:to-blue-800 shadow-md"
+                  >
+                    🚀 Start Event
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Event started but not completed */}
+          {(event.status === 'started' || (event.status !== 'completed' && !event.isCompleted && event.scorecards?.some((sc: any) => sc.scores?.some((s: any) => s.strokes != null)))) && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <span className="text-xl">🏁</span>
+                <div className="flex-1">
+                  <div className="font-semibold text-amber-900">Ready to Complete?</div>
+                  <p className="text-sm text-amber-800 mt-1 mb-2">Completing the event will:</p>
+                  <ul className="text-sm text-amber-700 space-y-1 mb-3">
+                    <li className="flex items-start gap-2">
+                      <span>📊</span>
+                      <span>Add scores to each player's handicap</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span>💰</span>
+                      <span>Finalize all payouts (cannot be changed)</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span>📁</span>
+                      <span>Move event to history</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span>🔒</span>
+                      <span>Lock all scores (no more edits)</span>
+                    </li>
+                  </ul>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const allComplete = event.scorecards?.every((sc: any) => 
+                        sc.scores?.every((s: any) => s.strokes != null)
+                      );
+                      let confirmMsg = 'Are you sure you want to complete this event?\n\n';
+                      confirmMsg += '• All scores will be added to handicaps\n';
+                      confirmMsg += '• Payouts will be finalized\n';
+                      confirmMsg += '• Scores cannot be edited after completion';
+                      if (!allComplete) {
+                        confirmMsg = 'WARNING: Not all scores are entered!\n\n' + confirmMsg;
+                      }
+                      if (!window.confirm(confirmMsg)) return;
+                      
+                      const success = useStore.getState().completeEvent(eventId);
+                      if (success) {
+                        useStore.getState().addToast('Event completed! Scores added to handicaps.', 'success');
+                        navigate(`/event/${eventId}/payout`);
+                      } else {
+                        useStore.getState().addToast('Could not complete event - ensure all scores are entered', 'error');
+                      }
+                    }}
+                    className="mt-2 px-5 py-2.5 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl font-bold text-sm hover:from-green-700 hover:to-green-800 shadow-md"
+                  >
+                    ✓ Complete Event
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Event already completed */}
+          {event.isCompleted && (
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 flex items-center gap-3">
+              <span className="text-xl">🏆</span>
+              <div>
+                <div className="font-semibold text-gray-900">Event Completed</div>
+                <p className="text-sm text-gray-600">This event has been finalized.</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       
       {/* Danger Zone */}
       {isOwner && !event.isCompleted && (

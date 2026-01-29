@@ -299,48 +299,54 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-5 pb-32">
-      {/* Header */}
-      <header className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 -mx-4 -mt-6 px-4 pt-8 pb-6 shadow-lg">
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-3">
-            {/* Avatar - Opens Settings */}
-            <button 
-              onClick={() => setShowSettings(true)}
-              className="block"
-            >
-              <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center text-xl font-bold text-white border-2 border-white/30 hover:bg-white/30 transition-colors">
-                {currentProfile.avatar ? (
-                  <img src={currentProfile.avatar} alt="" className="w-full h-full rounded-full object-cover" />
-                ) : (
-                  currentProfile.name?.charAt(0)?.toUpperCase() || '?'
-                )}
-              </div>
-            </button>
-            <div>
-              <h1 className="text-xl font-bold text-white">
-                {currentProfile.name || 'Golfer'}
-              </h1>
-              <p className="text-primary-200 text-sm">
-                {homeCourse ? `⛳ ${homeCourse}` : 'Tap profile to set home course'}
-              </p>
+      {/* Compact Header - Avatar + Name + Quick Stats in one row */}
+      <header className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 -mx-4 -mt-6 px-4 pt-6 pb-4 shadow-lg">
+        <div className="flex items-center gap-3">
+          {/* Avatar - Opens Settings */}
+          <button 
+            onClick={() => setShowSettings(true)}
+            className="flex-shrink-0"
+          >
+            <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center text-lg font-bold text-white border-2 border-white/30 hover:bg-white/30 transition-colors">
+              {currentProfile.avatar ? (
+                <img src={currentProfile.avatar} alt="" className="w-full h-full rounded-full object-cover" />
+              ) : (
+                currentProfile.name?.charAt(0)?.toUpperCase() || '?'
+              )}
             </div>
+          </button>
+          
+          {/* Name + Course */}
+          <div className="flex-1 min-w-0">
+            <h1 className="text-lg font-bold text-white truncate">
+              {currentProfile.name || 'Golfer'}
+            </h1>
+            <p className="text-primary-200 text-xs truncate">
+              {homeCourse ? `⛳ ${homeCourse}` : 'Tap avatar for settings'}
+            </p>
           </div>
-        </div>
-
-        {/* Quick Stats - Only Handicap and Wallet */}
-        <div className="grid grid-cols-2 gap-3">
-          <Link to="/handicap" className="bg-white/10 hover:bg-white/15 rounded-xl p-3 text-center transition-colors">
-            <div className="text-2xl font-bold text-white">
-              {stats.handicap != null ? stats.handicap.toFixed(1) : '—'}
-            </div>
-            <div className="text-[10px] text-primary-200 font-medium uppercase tracking-wide">Handicap</div>
-          </Link>
-          <Link to="/wallet" className="bg-white/10 hover:bg-white/15 rounded-xl p-3 text-center transition-colors">
-            <div className="text-2xl font-bold text-white">
-              ${(stats.netBalance / 100).toFixed(0)}
-            </div>
-            <div className="text-[10px] text-primary-200 font-medium uppercase tracking-wide">Wallet</div>
-          </Link>
+          
+          {/* Compact Stats - Handicap & Wallet */}
+          <div className="flex gap-2 flex-shrink-0">
+            <Link 
+              to="/handicap" 
+              className="bg-white/10 hover:bg-white/15 rounded-lg px-3 py-2 text-center transition-colors min-w-[60px]"
+            >
+              <div className="text-lg font-bold text-white leading-tight">
+                {stats.handicap != null ? stats.handicap.toFixed(1) : '—'}
+              </div>
+              <div className="text-[9px] text-primary-200 font-medium uppercase tracking-wide">HCP</div>
+            </Link>
+            <Link 
+              to="/wallet" 
+              className="bg-white/10 hover:bg-white/15 rounded-lg px-3 py-2 text-center transition-colors min-w-[60px]"
+            >
+              <div className="text-lg font-bold text-white leading-tight">
+                ${(stats.netBalance / 100).toFixed(0)}
+              </div>
+              <div className="text-[9px] text-primary-200 font-medium uppercase tracking-wide">Wallet</div>
+            </Link>
+          </div>
         </div>
       </header>
 
@@ -468,52 +474,63 @@ const Dashboard: React.FC = () => {
           onClick={() => navigate('/join')}
           className="flex-1 bg-white rounded-xl py-3 px-4 border border-gray-200 font-bold text-sm text-gray-900 shadow-sm hover:shadow-md hover:border-primary-300 transition-all flex items-center justify-center gap-2"
         >
-          <span>🎫</span>
+          <span className="text-lg font-bold text-primary-600">+</span>
           <span>Join Event</span>
         </button>
       </section>
 
-      {/* Events & Groups */}
-      <section className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-        {/* Tabs */}
-        <div className="flex border-b border-gray-100">
+      {/* Events & Groups - Segmented Control Style */}
+      <section className="rounded-2xl overflow-hidden">
+        {/* Tab Bar - Pill Style with Colored Backgrounds */}
+        <div className="flex gap-2 p-1 bg-gray-100 rounded-2xl">
           <button
             onClick={() => setTab('events')}
-            className={`flex-1 py-3.5 text-sm font-semibold transition-colors relative ${
-              tab === 'events' ? 'text-primary-700' : 'text-gray-500 hover:text-gray-700'
+            className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+              tab === 'events' 
+                ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-md' 
+                : 'bg-transparent text-gray-600 hover:bg-white/50'
             }`}
           >
-            Events
+            <span className="text-base">⛳</span>
+            <span>Events</span>
             {activeEvents.length > 0 && (
-              <span className="ml-1.5 px-1.5 py-0.5 text-[10px] font-bold bg-primary-100 text-primary-700 rounded-full">
+              <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${
+                tab === 'events' 
+                  ? 'bg-white/25 text-white' 
+                  : 'bg-primary-100 text-primary-700'
+              }`}>
                 {activeEvents.length}
               </span>
-            )}
-            {tab === 'events' && (
-              <span className="absolute bottom-0 left-4 right-4 h-0.5 bg-primary-600 rounded-full" />
             )}
           </button>
           <button
             onClick={() => setTab('groups')}
-            className={`flex-1 py-3.5 text-sm font-semibold transition-colors relative ${
-              tab === 'groups' ? 'text-primary-700' : 'text-gray-500 hover:text-gray-700'
+            className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+              tab === 'groups' 
+                ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-md' 
+                : 'bg-transparent text-gray-600 hover:bg-white/50'
             }`}
           >
-            Groups
+            <span className="text-base">👥</span>
+            <span>Groups</span>
             {groups.length > 0 && (
-              <span className="ml-1.5 px-1.5 py-0.5 text-[10px] font-bold bg-gray-100 text-gray-600 rounded-full">
+              <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${
+                tab === 'groups' 
+                  ? 'bg-white/25 text-white' 
+                  : 'bg-purple-100 text-purple-700'
+              }`}>
                 {groups.length}
               </span>
             )}
-            {tab === 'groups' && (
-              <span className="absolute bottom-0 left-4 right-4 h-0.5 bg-primary-600 rounded-full" />
-            )}
           </button>
         </div>
+        
+        {/* Content Card */}
+        <div className="mt-2 bg-white rounded-2xl border border-gray-200 shadow-sm">
 
-        {/* Content */}
-        <div className="p-3">
-          {tab === 'events' && (
+          {/* Content */}
+          <div className="p-3">
+            {tab === 'events' && (
             <>
               {activeEvents.length === 0 ? (
                 <div className="py-8 text-center">
@@ -586,6 +603,7 @@ const Dashboard: React.FC = () => {
               )}
             </>
           )}
+          </div>
         </div>
       </section>
 

@@ -116,6 +116,8 @@ export async function saveEventToCloud(event: Event, currentProfileId: string): 
       scorecardView: event.scorecardView || 'individual',
       // Hub type: 'event' (default) or 'group' (chat crew)
       hubType: event.hubType || 'event',
+      // Parent group ID - links events created from groups
+      parentGroupId: event.parentGroupId || null,
       
       // Store complex objects as JSON strings
       golfersJson: JSON.stringify(event.golfers || []),
@@ -215,6 +217,7 @@ export async function loadEventById(eventId: string): Promise<Event | null> {
       shareCode: cloudEvent.shareCode || undefined,
       scorecardView: cloudEvent.scorecardView as any || 'individual',
       hubType: ((cloudEvent as any).hubType as 'event' | 'group') || 'event',
+      parentGroupId: (cloudEvent as any).parentGroupId || undefined,
       
       // Parse JSON strings back to objects
       golfers,
@@ -278,6 +281,7 @@ export async function loadEventByShareCode(shareCode: string): Promise<Event | n
       shareCode: cloudEvent.shareCode || undefined,
       scorecardView: cloudEvent.scorecardView as any || 'individual',
       hubType: ((cloudEvent as any).hubType as 'event' | 'group') || 'event',
+      parentGroupId: (cloudEvent as any).parentGroupId || undefined,
       
       // Parse JSON strings back to objects
       golfers: cloudEvent.golfersJson ? JSON.parse(cloudEvent.golfersJson as string) : [],
@@ -333,6 +337,7 @@ export async function loadUserEventsFromCloud(): Promise<Event[]> {
       shareCode: cloudEvent.shareCode || undefined,
       scorecardView: cloudEvent.scorecardView as any || 'individual',
       hubType: ((cloudEvent as any).hubType as 'event' | 'group') || 'event',
+      parentGroupId: (cloudEvent as any).parentGroupId || undefined,
       
       golfers: cloudEvent.golfersJson ? JSON.parse(cloudEvent.golfersJson as string) : [],
       groups: cloudEvent.groupsJson ? JSON.parse(cloudEvent.groupsJson as string) : [],

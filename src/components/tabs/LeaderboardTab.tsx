@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import useStore from '../../state/store';
 import { useCourse } from '../../hooks/useCourse';
 
@@ -15,6 +15,32 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
   );
   const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null);
   const [teamModal, setTeamModal] = useState<null | { id: string; name: string; golferIds: string[] }>(null);
+  
+  // Favorites - persisted in localStorage
+  const [favorites, setFavorites] = useState<Set<string>>(() => {
+    try {
+      const stored = localStorage.getItem(`leaderboard-favorites-${eventId}`);
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
+  
+  useEffect(() => {
+    localStorage.setItem(`leaderboard-favorites-${eventId}`, JSON.stringify([...favorites]));
+  }, [favorites, eventId]);
+  
+  const toggleFavorite = (playerId: string) => {
+    setFavorites(prev => {
+      const next = new Set(prev);
+      if (next.has(playerId)) {
+        next.delete(playerId);
+      } else {
+        next.add(playerId);
+      }
+      return next;
+    });
+  };
 
   if (!event) return null;
 
@@ -32,7 +58,7 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
 
   const nassauTeams: Array<{ id: string; name: string; golferIds: string[] }> = (event.games?.nassau || [])
     .flatMap((n: any) => (n?.teams || []) as any[])
-    .filter((t: any) => t && Array.isArray(t.golferIds));
+    .filter((t: any) => t && Array.isArray(t.golferIds) && t.golferIds.length > 0);
 
   const teamByGolferId = new Map<string, { id: string; name: string; golferIds: string[] }>();
   for (const t of nassauTeams) {
@@ -41,6 +67,9 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
       if (!teamByGolferId.has(gid)) teamByGolferId.set(gid, t);
     }
   }
+  
+  // Check if we should show team column
+  const hasTeams = nassauTeams.length > 0;
 
   const getPlayerScorecard = (playerId: string) => {
     const scorecard = event.scorecards.find((sc: any) => 
@@ -275,13 +304,11 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="px-2 sm:px-3 py-2 text-left font-semibold text-slate-700 text-xs">Pos</th>
-                <th className="px-2 sm:px-3 py-2 text-left font-semibold text-slate-700 text-xs">Player</th>
-                <th className="px-2 sm:px-3 py-2 text-left font-semibold text-slate-700 text-xs">Team</th>
-                <th className="px-2 sm:px-3 py-2 text-center font-semibold text-slate-700 text-xs">To Par</th>
-                <th className="px-2 sm:px-3 py-2 text-center font-semibold text-slate-700 text-xs">Out</th>
-                <th className="px-2 sm:px-3 py-2 text-center font-semibold text-slate-700 text-xs">In</th>
-                <th className="px-2 sm:px-3 py-2 text-center font-semibold text-slate-700 text-xs">Thru</th>
+                <th className="px-3 py-3 text-left font-semibold text-slate-700 text-xs">Pos</th>
+                <th className="px-3 py-3 text-left font-semibold text-slate-700 text-xs">Player</th>
+                {hasTeams && <th className="px-3 py-3 text-left font-semibold text-slate-700 text-xs">Team</th>}
+                <th className="px-3 py-3 text-center font-semibold text-slate-700 text-xs">Score</th>
+                <th className="px-3 py-3 text-center font-semibold text-slate-700 text-xs">Thru</th>
               </tr>
             </thead>
             <tbody>
@@ -293,9 +320,9 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
                     } ${expandedPlayer === player.id ? 'bg-blue-50' : ''}`}
                     onClick={() => togglePlayerExpanded(player.id)}
                   >
-                    <td className={`px-2 sm:px-3 py-2.5 font-mono text-center ${getPositionColor(player.position || 0)}`}>
+                    <td className={`px-3 py-3 font-mono text-center ${getPositionColor(player.position || 0)}`}>
                       {player.position ? (
-                        <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs ${
+                        <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm ${
                           player.position === 1 ? 'bg-yellow-400 text-yellow-900' :
                           player.position === 2 ? 'bg-gray-300 text-gray-800' :
                           player.position === 3 ? 'bg-amber-600 text-white' :
@@ -307,8 +334,21 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
                         <span className="text-slate-400">-</span>
                       )}
                     </td>
-                    <td className="px-2 sm:px-4 py-3 font-medium text-slate-900">
+                    <td className="px-3 py-3 font-medium text-slate-900">
                       <div className="flex items-center gap-2">
+                        {/* Favorite star */}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toggleFavorite(player.id);
+                          }}
+                          className={`flex-shrink-0 transition-colors ${favorites.has(player.id) ? 'text-yellow-500' : 'text-slate-300 hover:text-yellow-400'}`}
+                          title={favorites.has(player.id) ? 'Remove from favorites' : 'Add to favorites'}
+                        >
+                          {favorites.has(player.id) ? '★' : '☆'}
+                        </button>
                         {typeof onEnterScores === 'function' ? (
                           <button
                             type="button"
@@ -320,56 +360,46 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
                               }
                             }}
                             disabled={event.isCompleted || !canEditScore?.(eventId, player.id)}
-                            className="truncate max-w-[120px] sm:max-w-none text-left font-extrabold text-primary-700 hover:text-primary-900 hover:underline underline-offset-2 disabled:text-slate-400 disabled:no-underline disabled:cursor-not-allowed"
+                            className="truncate max-w-[140px] sm:max-w-none text-left font-bold text-slate-900 hover:text-primary-700 disabled:text-slate-400 disabled:cursor-not-allowed"
                             title={event.isCompleted ? 'Read-only' : (canEditScore?.(eventId, player.id) ? 'Enter scores' : 'You cannot edit this golfer')}
                           >
                             {player.name}
                           </button>
                         ) : (
-                          <span className="truncate max-w-[120px] sm:max-w-none">{player.name}</span>
+                          <span className="truncate max-w-[140px] sm:max-w-none font-bold">{player.name}</span>
                         )}
                         {player.emoji && <span className="text-lg">{player.emoji}</span>}
                       </div>
                     </td>
-                    <td className="px-2 sm:px-4 py-3">
-                      {(() => {
-                        const team = teamByGolferId.get(String(player.id));
-                        if (!team) return <span className="text-slate-400">—</span>;
-                        return (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setTeamModal(team);
-                            }}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[11px] font-extrabold bg-primary-50 text-primary-800 border border-primary-200 hover:bg-primary-100"
-                            title="View team roster"
-                          >
-                            <span className="w-2 h-2 rounded-full bg-primary-600" aria-hidden="true" />
-                            <span className="truncate max-w-[90px]">{team.name || 'Team'}</span>
-                          </button>
-                        );
-                      })()}
+                    {hasTeams && (
+                      <td className="px-3 py-3">
+                        {(() => {
+                          const team = teamByGolferId.get(String(player.id));
+                          if (!team) return <span className="text-slate-300">—</span>;
+                          return (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setTeamModal(team);
+                              }}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-primary-50 text-primary-700 border border-primary-200 hover:bg-primary-100"
+                              title="View team roster"
+                            >
+                              <span className="w-2 h-2 rounded-full bg-primary-500" aria-hidden="true" />
+                              <span className="truncate max-w-[100px]">{team.name || 'Team'}</span>
+                            </button>
+                          );
+                        })()}
+                      </td>
+                    )}
+                    <td className="px-3 py-3 text-center">
+                      <span className={`font-mono font-bold text-xl ${getToParColor(player.toPar)}`}>
+                        {player.holesPlayed > 0 ? formatToPar(player.toPar) : '-'}
+                      </span>
                     </td>
-                    <td className={`px-2 sm:px-4 py-3 text-center font-mono font-bold text-lg ${getToParColor(player.toPar)}`}>
-                      {formatToPar(player.toPar)}
-                    </td>
-                    <td className="px-2 sm:px-4 py-3 text-center font-mono text-slate-700">
-                      {player.outStrokes !== null ? (
-                        <span>{player.outStrokes}</span>
-                      ) : (
-                        <span className="text-slate-400">-</span>
-                      )}
-                    </td>
-                    <td className="px-2 sm:px-4 py-3 text-center font-mono text-slate-700">
-                      {player.inStrokes !== null ? (
-                        <span>{player.inStrokes}</span>
-                      ) : (
-                        <span className="text-slate-400">-</span>
-                      )}
-                    </td>
-                    <td className="px-2 sm:px-4 py-3 text-center text-slate-600 font-medium">
+                    <td className="px-3 py-3 text-center text-slate-600 font-medium">
                       {player.holesPlayed >= 18 ? (
                         <span className="text-green-600 font-bold">F</span>
                       ) : (
@@ -379,7 +409,7 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
                   </tr>
                   {expandedPlayer === player.id && (
                     <tr>
-                      <td colSpan={7} className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+                      <td colSpan={hasTeams ? 5 : 4} className="px-4 py-3 bg-slate-50 border-b border-slate-200">
                         <div className="space-y-3">
                           {/* Primary CTA: enter/edit scores (when allowed) */}
                           {typeof onEnterScores === 'function' && (
@@ -541,6 +571,97 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
           </div>
         )}
       </div>
+
+      {/* Event Actions Banner - Owner only */}
+      {currentProfile && event.ownerProfileId === currentProfile.id && !event.isCompleted && event.hubType !== 'group' && (
+        <div className="mt-4 mx-4 sm:mx-0">
+          {(() => {
+            const eventStatus = event.status || 'setup';
+            const allScoresComplete = event.scorecards?.every((sc: any) => 
+              sc.scores?.every((s: any) => s.strokes != null)
+            );
+            const someScoresEntered = event.scorecards?.some((sc: any) => 
+              sc.scores?.some((s: any) => s.strokes != null)
+            );
+            
+            // Not started yet
+            if (eventStatus !== 'started' && eventStatus !== 'completed') {
+              return (
+                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl">🏌️</span>
+                      <div>
+                        <div className="font-semibold text-blue-900 text-sm">Ready to Start?</div>
+                        <p className="text-xs text-blue-700 mt-0.5">Lock in players and begin the round</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        useStore.getState().updateEvent(eventId, { status: 'started' });
+                        useStore.getState().addToast('Event started! Good luck!', 'success');
+                      }}
+                      className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-bold text-sm hover:from-blue-700 hover:to-blue-800 shadow-md whitespace-nowrap"
+                    >
+                      🚀 Start
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+            
+            // Started but not complete
+            if (eventStatus === 'started') {
+              return (
+                <div className={`${allScoresComplete ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'} border rounded-xl p-4`}>
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl">{allScoresComplete ? '🏁' : '⏳'}</span>
+                      <div>
+                        <div className={`font-semibold text-sm ${allScoresComplete ? 'text-green-900' : 'text-amber-900'}`}>
+                          {allScoresComplete ? 'All Scores Complete!' : 'Round In Progress'}
+                        </div>
+                        <p className={`text-xs mt-0.5 ${allScoresComplete ? 'text-green-700' : 'text-amber-700'}`}>
+                          {allScoresComplete 
+                            ? 'Ready to finalize and add to handicaps' 
+                            : `${event.scorecards?.filter((sc: any) => sc.scores?.every((s: any) => s.strokes != null)).length || 0}/${event.scorecards?.length || 0} scorecards complete`}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        const confirmMsg = allScoresComplete 
+                          ? 'Complete this event? This finalizes all scores and payouts.'
+                          : 'WARNING: Not all scores are entered!\n\nComplete anyway? This finalizes all scores and payouts.';
+                        if (!window.confirm(confirmMsg)) return;
+                        
+                        const success = useStore.getState().completeEvent(eventId);
+                        if (success) {
+                          useStore.getState().addToast('Event completed! Scores added to handicaps.', 'success');
+                        } else {
+                          useStore.getState().addToast('Could not complete event', 'error');
+                        }
+                      }}
+                      disabled={!someScoresEntered}
+                      className={`px-4 py-2 rounded-xl font-bold text-sm whitespace-nowrap ${
+                        allScoresComplete
+                          ? 'bg-gradient-to-r from-green-600 to-green-700 text-white hover:from-green-700 hover:to-green-800 shadow-md'
+                          : someScoresEntered
+                            ? 'bg-amber-500 text-white hover:bg-amber-600'
+                            : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                      }`}
+                    >
+                      ✓ Complete
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+            
+            return null;
+          })()}
+        </div>
+      )}
 
       {/* Team roster modal */}
       {teamModal && (

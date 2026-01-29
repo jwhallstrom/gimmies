@@ -2,8 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
-html, body, #root { height: 100%; }
-body { font-family: ui-sans-serif, system-ui, sans-serif; }
+html { 
+  height: 100%;
+}
+
+body { 
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  min-height: 100%;
+  min-height: 100dvh;
+}
+
+#root {
+  min-height: 100%;
+  min-height: 100dvh;
+}
 
 /* ==========================================================================
    Mobile Optimizations - Touch & Performance
@@ -88,20 +100,20 @@ a:active,
 .pl-safe-base-0 { --pl-safe-base: 0; }
 .pr-safe-base-0 { --pr-safe-base: 0; }
 
+/* Bottom navigation - must fill to safe area on iOS */
 .bottom-nav {
-  padding: 0.5rem 0.25rem 0.5rem;
+  padding: 0.5rem 0.25rem;
+  padding-bottom: 0.5rem;
+  /* iOS safe area padding */
+  padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
 }
 
-@supports (padding-bottom: env(safe-area-inset-bottom)) {
-  .bottom-nav {
-    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
-  }
-}
-
-@supports (padding-bottom: constant(safe-area-inset-bottom)) {
-  .bottom-nav {
-    padding-bottom: max(0.5rem, constant(safe-area-inset-bottom));
-  }
+/* Ticker positioning - sits directly above the bottom nav */
+.ticker-above-footer {
+  /* Base: footer height (~56px) + some spacing */
+  bottom: 4.25rem;
+  /* Add safe area inset on iOS */
+  bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
 }
 
 .content-with-footer {
@@ -221,6 +233,12 @@ body.pwa-standalone .fullscreen-overlay {
 /* Use dynamic viewport units */
 body, html {
   min-height: 100dvh;
+}
+
+/* Dynamic viewport height utility */
+.h-dvh {
+  height: 100vh;
+  height: 100dvh;
 }
 
 /* Note: Footer safe area is handled by .bottom-nav class above */

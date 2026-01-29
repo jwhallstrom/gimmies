@@ -393,13 +393,13 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
                         const hcpStrokes = strokesForHole(event, golferId, s.hole, profiles);
                         const gross = s.strokes;
                         const diff = gross != null && par != null ? gross - par : null;
-                        let colorClass = '';
+                        let colorClass = 'bg-white text-gray-900'; // Default with visible text
                         if (diff != null) {
                           if (diff <= -3) colorClass = 'bg-fuchsia-600 text-white font-semibold';
-                          else if (diff === -2) colorClass = 'bg-amber-500 text-black font-semibold';
+                          else if (diff === -2) colorClass = 'bg-amber-500 text-gray-900 font-semibold';
                           else if (diff === -1) colorClass = 'bg-green-500 text-white font-semibold';
-                          else if (diff === 0) colorClass = 'bg-neutral-50';
-                          else if (diff === 1) colorClass = 'bg-orange-200';
+                          else if (diff === 0) colorClass = 'bg-neutral-100 text-gray-900';
+                          else if (diff === 1) colorClass = 'bg-orange-200 text-gray-900';
                           else if (diff === 2) colorClass = 'bg-red-300 text-red-900 font-semibold';
                           else if (diff >= 3) colorClass = 'bg-red-600 text-white font-semibold';
                         }
@@ -414,7 +414,7 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
                               </div>
                             )}
                             <input
-                              className={`w-full h-7 sm:h-8 lg:h-10 px-0.5 py-0 text-center text-[10px] sm:text-xs lg:text-sm outline-none focus:ring-2 focus:ring-primary-300 focus:bg-primary-50/70 transition rounded ${colorClass} ${hcpStrokes > 0 ? 'pl-2 sm:pl-3' : ''} ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
+                              className={`w-full h-7 sm:h-8 lg:h-10 px-0.5 py-0 text-center text-[10px] sm:text-xs lg:text-sm outline-none focus:ring-2 focus:ring-primary-300 focus:bg-primary-50/70 transition rounded border border-slate-200 ${colorClass} ${hcpStrokes > 0 ? 'pl-2 sm:pl-3' : ''} ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
                               value={gross ?? ''}
                               disabled={!canEdit}
                               inputMode="numeric"
@@ -526,13 +526,13 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
                         const hcpStrokes = strokesForHole(event, golferId, s.hole, profiles);
                         const gross = s.strokes;
                         const diff = gross != null && par != null ? gross - par : null;
-                        let colorClass = '';
+                        let colorClass = 'bg-white text-gray-900'; // Default with visible text
                         if (diff != null) {
                           if (diff <= -3) colorClass = 'bg-fuchsia-600 text-white font-semibold';
-                          else if (diff === -2) colorClass = 'bg-amber-500 text-black font-semibold';
+                          else if (diff === -2) colorClass = 'bg-amber-500 text-gray-900 font-semibold';
                           else if (diff === -1) colorClass = 'bg-green-500 text-white font-semibold';
-                          else if (diff === 0) colorClass = 'bg-neutral-50';
-                          else if (diff === 1) colorClass = 'bg-orange-200';
+                          else if (diff === 0) colorClass = 'bg-neutral-100 text-gray-900';
+                          else if (diff === 1) colorClass = 'bg-orange-200 text-gray-900';
                           else if (diff === 2) colorClass = 'bg-red-300 text-red-900 font-semibold';
                           else if (diff >= 3) colorClass = 'bg-red-600 text-white font-semibold';
                         }
@@ -547,7 +547,7 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
                               </div>
                             )}
                             <input
-                              className={`w-full h-7 sm:h-8 lg:h-10 px-0.5 py-0 text-center text-[10px] sm:text-xs lg:text-sm outline-none focus:ring-2 focus:ring-primary-300 focus:bg-primary-50/70 transition rounded ${colorClass} ${hcpStrokes > 0 ? 'pl-2 sm:pl-3' : ''} ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
+                              className={`w-full h-7 sm:h-8 lg:h-10 px-0.5 py-0 text-center text-[10px] sm:text-xs lg:text-sm outline-none focus:ring-2 focus:ring-primary-300 focus:bg-primary-50/70 transition rounded border border-slate-200 ${colorClass} ${hcpStrokes > 0 ? 'pl-2 sm:pl-3' : ''} ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
                               value={gross ?? ''}
                               disabled={!canEdit}
                               inputMode="numeric"
