@@ -130,18 +130,18 @@ const EventPage: React.FC = () => {
 
   return (
     <div className="min-h-screen -mx-4 -mt-6">
-      {/* Header */}
-      <div className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 px-4 pt-6 pb-4 shadow-lg">
+      {/* Header - Compact on mobile */}
+      <div className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 px-3 sm:px-4 pt-4 sm:pt-6 pb-3 sm:pb-4 shadow-lg">
         {/* Top Row: Back + Actions */}
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-2 sm:mb-3">
           <button
             onClick={() => navigate('/')}
-            className="flex items-center gap-1 text-white/80 hover:text-white transition-colors"
+            className="flex items-center gap-0.5 text-white/80 hover:text-white transition-colors"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
-            <span className="text-sm font-medium">Home</span>
+            <span className="text-xs sm:text-sm font-medium">Home</span>
           </button>
           
           <div className="flex items-center gap-1">
@@ -361,32 +361,35 @@ const EventPage: React.FC = () => {
           </div>
         </div>
         
-        {/* Event Info */}
-        <div className="mb-4">
-          <h1 className="text-xl font-bold text-white mb-1">
+        {/* Event Info - Compact single line on mobile */}
+        <div className="mb-2 sm:mb-4">
+          <h1 className="text-base sm:text-xl font-bold text-white leading-tight">
             {event.name || 'Untitled Event'}
           </h1>
-          {courseName && (
-            <p className="text-primary-200 text-sm font-medium">{courseName}</p>
-          )}
-          <p className="text-primary-300 text-xs mt-1">
-            {new Date(event.date).toLocaleDateString('en-US', { 
-              weekday: 'short', 
-              month: 'short', 
-              day: 'numeric' 
-            })}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5 sm:mt-1">
+            {courseName && (
+              <span className="text-primary-200 text-xs sm:text-sm font-medium">{courseName}</span>
+            )}
+            {courseName && <span className="text-primary-400 text-xs hidden sm:inline">•</span>}
+            <span className="text-primary-300 text-[11px] sm:text-xs">
+              {new Date(event.date).toLocaleDateString('en-US', { 
+                weekday: 'short', 
+                month: 'short', 
+                day: 'numeric' 
+              })}
+            </span>
             {event.isCompleted && (
-              <span className="ml-2 px-2 py-0.5 bg-green-500/20 text-green-300 rounded-full text-[10px] font-bold">
+              <span className="px-1.5 py-0.5 bg-green-500/20 text-green-300 rounded-full text-[9px] sm:text-[10px] font-bold">
                 COMPLETED
               </span>
             )}
-          </p>
+          </div>
         </div>
         
         {/* Tab Navigation */}
-        {/* Mobile: grid to avoid horizontal scrolling */}
-        <div className="sm:hidden">
-          <div className={`grid ${tabs.length >= 6 ? 'grid-cols-4' : 'grid-cols-3'} gap-2`}>
+        {/* Mobile: compact horizontal scroll */}
+        <div className="sm:hidden -mx-3 px-3">
+          <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
             {tabs.map((tab) => {
               const isActive = currentPath === tab.path || (!isOnTab && tab.path === 'chat');
               const badge = (tab as any).badge as number | undefined;
@@ -394,17 +397,17 @@ const EventPage: React.FC = () => {
                 <NavLink
                   key={tab.path}
                   to={tab.path}
-                  className={`flex flex-col items-center justify-center gap-1 px-2 py-2 rounded-xl font-semibold text-xs transition-all ${
+                  className={`flex flex-col items-center justify-center gap-0.5 px-3 py-1.5 rounded-lg font-semibold text-[10px] transition-all whitespace-nowrap flex-shrink-0 ${
                     isActive
                       ? 'bg-white text-primary-800 shadow-md'
                       : 'bg-white/10 text-white/85 hover:bg-white/20 hover:text-white'
                   }`}
                 >
-                  <span className="relative text-base leading-none">
+                  <span className="relative text-sm leading-none">
                     {tab.icon}
                     {typeof badge === 'number' && (
                       <span
-                        className={`absolute -top-2 -right-3 min-w-[18px] h-[18px] px-1 rounded-full text-[10px] font-extrabold flex items-center justify-center ${
+                        className={`absolute -top-1.5 -right-2 min-w-[14px] h-[14px] px-0.5 rounded-full text-[8px] font-extrabold flex items-center justify-center ${
                           isActive ? 'bg-primary-700 text-white' : 'bg-white/25 text-white'
                         }`}
                         aria-label={`${badge}`}
@@ -453,8 +456,8 @@ const EventPage: React.FC = () => {
         </div>
       </div>
       
-      {/* Content Area */}
-      <div className="px-4 py-4">
+      {/* Content Area - Tighter on mobile */}
+      <div className="px-4 py-3 sm:py-4">
         <Routes>
           <Route index element={<ChatTab eventId={event.id} />} />
           <Route path="chat" element={<ChatTab eventId={event.id} />} />

@@ -87,7 +87,7 @@ export const createUserSlice = (
             totalEagles: 0
           },
           preferences: {
-            theme: 'auto',
+            theme: 'dark',
             defaultNetScoring: false,
             autoAdvanceScores: true,
             showHandicapStrokes: true
@@ -182,7 +182,7 @@ export const createUserSlice = (
         totalEagles: 0
       },
       preferences: {
-        theme: 'auto',
+        theme: 'dark',
         defaultNetScoring: false,
         autoAdvanceScores: true,
         showHandicapStrokes: true

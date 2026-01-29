@@ -141,7 +141,7 @@ export const createEventSlice = (
       games: { nassau: [], skins: [], pinky: [], greenie: [] },
       ownerProfileId: currentProfile.id,
       scorecardView: 'individual',
-      isPublic: false,
+      isPublic: true,
       createdAt: new Date().toISOString(),
       lastModified: new Date().toISOString(),
       chat: [],

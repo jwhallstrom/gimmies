@@ -6,6 +6,7 @@ import Dashboard from './Dashboard'; // Keep eager - it's the landing page
 import UserMenu from '../components/UserMenu';
 import { ToastManager } from '../components/Toast';
 import LoadingSpinner from '../components/LoadingSpinner';
+import { LevelUpModal } from '../components/verified';
 import useStore from '../state/store';
 
 // Lazy load secondary routes for code splitting
@@ -27,7 +28,7 @@ const TournamentPage = lazy(() => import('./TournamentPage'));
 const ClubDashboard = lazy(() => import('./ClubDashboard'));
 
 const App: React.FC = () => {
-  const { currentUser, currentProfile, events, switchUser, createUser, joinEventByCode, addToast } = useStore();
+  const { currentUser, currentProfile, events, switchUser, createUser, joinEventByCode, addToast, pendingLevelUp, clearPendingLevelUp } = useStore();
   const location = useLocation();
   const navigate = useNavigate();
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
@@ -373,6 +374,17 @@ const App: React.FC = () => {
         </Link>
       </footer>
       <ToastManager />
+      
+      {/* Level Up Modal - shown when user reaches a new verified status tier */}
+      {pendingLevelUp && (
+        <LevelUpModal
+          isOpen={true}
+          onClose={clearPendingLevelUp}
+          oldLevel={pendingLevelUp.oldLevel}
+          newLevel={pendingLevelUp.newLevel}
+          verifiedRounds={pendingLevelUp.verifiedRounds}
+        />
+      )}
     </div>
   );
 };

@@ -12,6 +12,100 @@ export type { IndividualRound, HandicapHistory, CombinedRound, HandicapScoreEntr
 // Domain Models
 // ============================================================================
 
+// ============================================================================
+// Verified Status System - Gamification to Combat Sandbagging
+// ============================================================================
+
+/**
+ * Status tier definitions for the verified status system.
+ * Users progress through tiers by playing verified rounds with other users.
+ */
+export interface StatusTier {
+  level: number;
+  name: string;
+  emoji: string;
+  minRounds: number;
+  maxRounds: number | null; // null = unlimited
+  color: string; // Tailwind color class
+  badgeColor: string; // Badge background color
+  description: string;
+  perks: string[];
+}
+
+/**
+ * Predefined status tiers - professional golf community progression
+ */
+export const STATUS_TIERS: StatusTier[] = [
+  {
+    level: 0,
+    name: 'Provisional Member',
+    emoji: '🏌️',
+    minRounds: 0,
+    maxRounds: 4,
+    color: 'gray',
+    badgeColor: 'bg-gray-500',
+    description: 'Establishing your record. Play verified events with others to build your standing in the community.',
+    perks: []
+  },
+  {
+    level: 1,
+    name: 'Club Member',
+    emoji: '⭐',
+    minRounds: 5,
+    maxRounds: 19,
+    color: 'green',
+    badgeColor: 'bg-green-600',
+    description: 'Trusted participant. Your handicap reflects consistent, peer-verified play.',
+    perks: ['Basic handicap verification', 'Community standing']
+  },
+  {
+    level: 2,
+    name: 'Platinum Contender',
+    emoji: '💎',
+    minRounds: 20,
+    maxRounds: 49,
+    color: 'blue',
+    badgeColor: 'bg-blue-600',
+    description: 'Respected and verified. Integrity backed by real events—trusted in competitive play and wagers.',
+    perks: ['Verified handicap badge', 'Priority in event matching', 'Trusted for wagers']
+  },
+  {
+    level: 3,
+    name: 'Elite Member',
+    emoji: '🦅',
+    minRounds: 50,
+    maxRounds: 99,
+    color: 'purple',
+    badgeColor: 'bg-purple-600',
+    description: 'Proven excellence. High-caliber verification and standing in the Gimmies network.',
+    perks: ['Elite badge', 'Priority invites', 'Discounted entry fees', 'Network recognition']
+  },
+  {
+    level: 4,
+    name: 'Green Jacket',
+    emoji: '🧥',
+    minRounds: 100,
+    maxRounds: null,
+    color: 'emerald',
+    badgeColor: 'bg-emerald-700',
+    description: 'Ultimate prestige. Legendary status—your handicap is ironclad, emblematic of lifelong commitment, excellence, and community respect.',
+    perks: ['Green Jacket badge', 'VIP status', 'Free entry to select events', 'Handicap fully verified', 'Lifetime recognition']
+  }
+];
+
+/**
+ * Verified status data stored on user profile
+ */
+export interface VerifiedStatus {
+  verifiedRounds: number;      // Count of qualified verified events
+  statusLevel: number;         // 0-4 matching STATUS_TIERS
+  badges: string[];            // Earned badges e.g., ['par_player', 'first_event', 'streak_5']
+  lastVerifiedEventId?: string;
+  lastVerifiedEventDate?: string;
+  weeklyStreak?: number;       // Consecutive weeks with verified play
+  totalEventsWithBets?: number; // Events that had wallet activity
+}
+
 export interface HoleDef { 
   number: number; 
   par: number; 
@@ -57,7 +151,10 @@ export interface GolferProfile {
     homeCourseName?: string; // display name snapshot
     homeCourse?: string;     // legacy free-text (fallback display only)
     favoriteCourseIds?: string[]; // pinned courses for fast selection (local + cloud prefs)
+    showVerifiedStatus?: boolean; // Opt-in public status display
   };
+  // Verified Status - Gamification system to combat sandbagging
+  verifiedStatus?: VerifiedStatus;
   createdAt: string;
   lastActive: string;
 }
@@ -303,6 +400,17 @@ export interface Event {
   
   // Join requests for groups with joinPolicy === 'request'
   joinRequests?: JoinRequest[];
+  
+  // Verified Status System
+  /**
+   * Whether this event counts as a "verified round" for status progression.
+   * Auto-set to true if: ≥2 players, app-scored (not manual add), all players verified.
+   */
+  isVerifiedRound?: boolean;
+  /**
+   * Reason why the event wasn't verified (for user transparency)
+   */
+  verificationNote?: string;
 }
 
 // ============================================================================

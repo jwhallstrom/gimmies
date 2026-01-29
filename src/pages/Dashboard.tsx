@@ -16,6 +16,7 @@ import { useAuthMode } from '../hooks/useAuthMode';
 import { CreateEventWizard } from '../components/CreateEventWizard';
 import { CreateGroupWizard } from '../components/CreateGroupWizard';
 import { DiscoverGroupsModal } from '../components/DiscoverGroupsModal';
+import SettingsPanel from '../components/SettingsPanel';
 import { useEventsAdapter, useWalletAdapter } from '../adapters';
 import type { Event } from '../state/types';
 import useStore from '../state/store';
@@ -57,7 +58,21 @@ const Dashboard: React.FC = () => {
   const [showCreateWizard, setShowCreateWizard] = useState(false);
   const [showCreateGroupWizard, setShowCreateGroupWizard] = useState(false);
   const [showDiscoverGroups, setShowDiscoverGroups] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [tab, setTab] = useState<Tab>('events');
+  
+  // Prevent multiple wizards from opening simultaneously
+  const openEventWizard = () => {
+    setShowCreateGroupWizard(false);
+    setShowDiscoverGroups(false);
+    setShowCreateWizard(true);
+  };
+  
+  const openGroupWizard = () => {
+    setShowCreateWizard(false);
+    setShowDiscoverGroups(false);
+    setShowCreateGroupWizard(true);
+  };
   
   // Onboarding state - check localStorage
   const [showOnboarding, setShowOnboarding] = useState(() => {
@@ -288,16 +303,19 @@ const Dashboard: React.FC = () => {
       <header className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 -mx-4 -mt-6 px-4 pt-8 pb-6 shadow-lg">
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-3">
-            {/* Avatar */}
-            <Link to="/profile" className="block">
-              <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center text-xl font-bold text-white border-2 border-white/30">
+            {/* Avatar - Opens Settings */}
+            <button 
+              onClick={() => setShowSettings(true)}
+              className="block"
+            >
+              <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center text-xl font-bold text-white border-2 border-white/30 hover:bg-white/30 transition-colors">
                 {currentProfile.avatar ? (
                   <img src={currentProfile.avatar} alt="" className="w-full h-full rounded-full object-cover" />
                 ) : (
                   currentProfile.name?.charAt(0)?.toUpperCase() || '?'
                 )}
               </div>
-            </Link>
+            </button>
             <div>
               <h1 className="text-xl font-bold text-white">
                 {currentProfile.name || 'Golfer'}
@@ -374,7 +392,7 @@ const Dashboard: React.FC = () => {
               {/* Events */}
               <button 
                 className="w-full flex items-start gap-3 p-4 bg-primary-50 rounded-xl border border-primary-100 hover:bg-primary-100 transition-colors text-left"
-                onClick={() => { setShowCreateWizard(true); dismissOnboarding(false); }}
+                onClick={(e) => { e.stopPropagation(); openEventWizard(); dismissOnboarding(false); }}
               >
                 <div className="w-12 h-12 rounded-full bg-primary-200 flex items-center justify-center flex-shrink-0">
                   <span className="text-2xl">⛳</span>
@@ -410,7 +428,7 @@ const Dashboard: React.FC = () => {
             <div className="px-5 pb-6 pt-2 border-t border-gray-100">
               <div className="flex gap-3">
                 <button
-                  onClick={() => { setShowCreateGroupWizard(true); dismissOnboarding(false); }}
+                  onClick={(e) => { e.stopPropagation(); openGroupWizard(); dismissOnboarding(false); }}
                   className="flex-1 py-3.5 bg-purple-600 text-white rounded-xl font-bold text-sm hover:bg-purple-700 transition-colors flex items-center justify-center gap-2 shadow-md"
                 >
                   <span>👥</span> Start a Group
@@ -439,7 +457,7 @@ const Dashboard: React.FC = () => {
       {/* Quick Actions - Compact Buttons */}
       <section className="flex gap-3">
         <button
-          onClick={() => setShowCreateWizard(true)}
+          onClick={openEventWizard}
           className="flex-1 bg-gradient-to-r from-primary-600 to-primary-700 rounded-xl py-3 px-4 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
         >
           <span>⛳</span>
@@ -531,7 +549,7 @@ const Dashboard: React.FC = () => {
                   <p className="text-sm text-gray-500 mb-4">Create a group or find one to join</p>
                   <div className="flex flex-col sm:flex-row gap-2 justify-center">
                     <button
-                      onClick={() => setShowCreateGroupWizard(true)}
+                      onClick={openGroupWizard}
                       className="px-5 py-2.5 bg-purple-600 text-white rounded-xl font-semibold text-sm hover:bg-purple-700 transition-colors"
                     >
                       Create Group
@@ -552,7 +570,7 @@ const Dashboard: React.FC = () => {
                   
                   <div className="flex gap-2">
                     <button
-                      onClick={() => setShowCreateGroupWizard(true)}
+                      onClick={openGroupWizard}
                       className="flex-1 py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm font-medium text-gray-500 hover:border-purple-300 hover:text-purple-600 transition-colors"
                     >
                       + Create Group
@@ -571,11 +589,11 @@ const Dashboard: React.FC = () => {
         </div>
       </section>
 
-      {/* Score Ticker - Fixed at bottom */}
-      <div className="fixed left-4 right-4 bottom-[5.25rem] z-30">
+      {/* Score Ticker - Fixed at bottom, full width on mobile */}
+      <div className="fixed left-0 right-0 sm:left-4 sm:right-4 bottom-[5.25rem] z-30 px-0 sm:px-0">
         <button
           onClick={() => tickerEvent ? navigate(`/event/${tickerEvent.id}`) : navigate('/events')}
-          className="w-full gimmies-ticker rounded-xl bg-[#1561AE] border border-white/10 px-3 py-2.5 shadow-lg shadow-primary-900/25"
+          className="w-full gimmies-ticker rounded-none sm:rounded-xl bg-[#1561AE] border-y sm:border border-white/10 px-4 py-2.5 shadow-lg shadow-primary-900/25"
           aria-label="Activity ticker"
           style={{ ['--gimmies-ticker-duration' as any]: `${tickerDurationSeconds}s` }}
         >
@@ -647,6 +665,11 @@ const Dashboard: React.FC = () => {
       <DiscoverGroupsModal
         isOpen={showDiscoverGroups}
         onClose={() => setShowDiscoverGroups(false)}
+      />
+      
+      <SettingsPanel
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
       />
     </div>
   );

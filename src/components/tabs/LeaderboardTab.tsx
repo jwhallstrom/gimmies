@@ -269,19 +269,19 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
   };
 
   return (
-    <div>
-      <div className="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+    <div className="-mx-4 sm:mx-0">
+      <div className="bg-white sm:rounded-lg shadow-sm border-y sm:border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
               <tr>
-                <th className="px-2 sm:px-4 py-2 text-left font-semibold text-slate-700">Pos</th>
-                <th className="px-2 sm:px-4 py-2 text-left font-semibold text-slate-700">Player</th>
-                <th className="px-2 sm:px-4 py-2 text-left font-semibold text-slate-700">Team</th>
-                <th className="px-2 sm:px-4 py-2 text-center font-semibold text-slate-700">To Par</th>
-                <th className="px-2 sm:px-4 py-2 text-center font-semibold text-slate-700">Out</th>
-                <th className="px-2 sm:px-4 py-2 text-center font-semibold text-slate-700">In</th>
-                <th className="px-2 sm:px-4 py-2 text-center font-semibold text-slate-700">Thru</th>
+                <th className="px-2 sm:px-3 py-2 text-left font-semibold text-slate-700 text-xs">Pos</th>
+                <th className="px-2 sm:px-3 py-2 text-left font-semibold text-slate-700 text-xs">Player</th>
+                <th className="px-2 sm:px-3 py-2 text-left font-semibold text-slate-700 text-xs">Team</th>
+                <th className="px-2 sm:px-3 py-2 text-center font-semibold text-slate-700 text-xs">To Par</th>
+                <th className="px-2 sm:px-3 py-2 text-center font-semibold text-slate-700 text-xs">Out</th>
+                <th className="px-2 sm:px-3 py-2 text-center font-semibold text-slate-700 text-xs">In</th>
+                <th className="px-2 sm:px-3 py-2 text-center font-semibold text-slate-700 text-xs">Thru</th>
               </tr>
             </thead>
             <tbody>
@@ -293,9 +293,9 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
                     } ${expandedPlayer === player.id ? 'bg-blue-50' : ''}`}
                     onClick={() => togglePlayerExpanded(player.id)}
                   >
-                    <td className={`px-2 sm:px-4 py-3 font-mono text-center ${getPositionColor(player.position || 0)}`}>
+                    <td className={`px-2 sm:px-3 py-2.5 font-mono text-center ${getPositionColor(player.position || 0)}`}>
                       {player.position ? (
-                        <span className={`inline-flex items-center justify-center w-6 h-6 sm:w-8 sm:h-8 rounded-full text-xs sm:text-sm ${
+                        <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-xs ${
                           player.position === 1 ? 'bg-yellow-400 text-yellow-900' :
                           player.position === 2 ? 'bg-gray-300 text-gray-800' :
                           player.position === 3 ? 'bg-amber-600 text-white' :
