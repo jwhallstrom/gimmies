@@ -64,7 +64,7 @@ const schema = a.schema({
     allow.authenticated().to(['read']),
   ]),
 
-  // Golf Event (Round with multiple players)
+  // Golf Event (Round with multiple players) or Group (chat hub)
   Event: a.model({
     name: a.string().required(),
     date: a.date().required(),
@@ -80,6 +80,9 @@ const schema = a.schema({
     isCompleted: a.boolean().default(false),
     completedAt: a.datetime(),
     
+    // Hub type: 'event' (golf round) or 'group' (chat crew)
+    hubType: a.string().default('event'),
+    
     // Share code for joining
     shareCode: a.string(),
     
@@ -94,6 +97,9 @@ const schema = a.schema({
     pinkyResultsJson: a.json(), // Pinky game results by config ID
     greenieResultsJson: a.json(), // Greenie game results by config ID
     chatJson: a.json(), // ChatMessage[] - stored as JSON for quick sync
+    
+    // Group-specific settings (only for hubType === 'group')
+    groupSettingsJson: a.json(), // GroupSettings { visibility, joinPolicy, membersCanInvite }
     
     // Chat messages for this event (relationship - not currently used, keeping for future)
     chatMessages: a.hasMany('ChatMessage', 'eventId'),

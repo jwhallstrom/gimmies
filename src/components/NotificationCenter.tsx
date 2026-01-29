@@ -45,9 +45,18 @@ type FilterTab = 'all' | 'money' | 'activity' | 'social';
 
 const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
-  const { events, completedEvents, currentProfile, profiles, settlements, transactions } = useStore();
+  const {
+    events,
+    completedEvents,
+    currentProfile,
+    profiles,
+    settlements,
+    transactions,
+    notificationReadAt,
+    markNotificationRead,
+    markNotificationsRead,
+  } = useStore();
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
-  const [readIds, setReadIds] = useState<Set<string>>(new Set());
 
   // Generate notifications from app state
   const notifications = useMemo<Notification[]>(() => {
@@ -68,6 +77,7 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
       .slice(0, 5);
 
     relevantSettlements.forEach((s: any, idx: number) => {
+      const id = `settle-${s.id || idx}`;
       const isOwed = s.toProfileId === currentProfile.id;
       const otherProfile = profiles.find(p => p.id === (isOwed ? s.fromProfileId : s.toProfileId));
       const otherName = otherProfile?.name || 'Someone';
@@ -75,14 +85,14 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
       
       if (s.status === 'pending') {
         notifs.push({
-          id: `settle-${s.id || idx}`,
+          id,
           type: 'money',
           priority: 'high',
           icon: isOwed ? '💵' : '⚠️',
           title: isOwed ? `${otherName} owes you` : `You owe ${otherName}`,
           body: `$${Number(dollars || 0).toFixed(2)} from ${s.eventName || 'recent games'}`,
           timestamp: new Date(s.createdAt || now),
-          read: false,
+          read: Boolean(notificationReadAt?.[id]),
           actionLabel: isOwed ? 'Send reminder' : 'Settle up',
           actionPath: '/wallet',
           amount: Math.round(Number(dollars || 0) * 100),
@@ -100,15 +110,16 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
 
     myTransactions.forEach((t: any) => {
       const isWin = t.netAmount > 0;
+      const id = `txn-${t.id}`;
       notifs.push({
-        id: `txn-${t.id}`,
+        id,
         type: 'money',
         priority: 'normal',
         icon: isWin ? '💰' : '📉',
         title: isWin ? 'You won!' : 'You lost',
         body: `${isWin ? '+' : ''}$${Number(t.netAmount).toFixed(2)} from ${t.eventName}`,
         timestamp: new Date(t.createdAt || t.date || now),
-        read: readIds.has(`txn-${t.id}`),
+        read: Boolean(notificationReadAt?.[id]),
         actionLabel: 'View wallet',
         actionPath: '/wallet',
         eventId: t.eventId,
@@ -130,15 +141,16 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
       const hoursUntil = (eventDate.getTime() - now.getTime()) / (1000 * 60 * 60);
       
       if (hoursUntil > 0 && hoursUntil < 24) {
+        const id = `upcoming-${event.id}`;
         notifs.push({
-          id: `upcoming-${event.id}`,
+          id,
           type: 'live',
           priority: 'high',
           icon: '⛳',
           title: 'Tee time today',
           body: `${event.name} - ${event.golfers.length} players`,
           timestamp: eventDate,
-          read: readIds.has(`upcoming-${event.id}`),
+          read: Boolean(notificationReadAt?.[id]),
           actionLabel: 'View event',
           actionPath: `/event/${event.id}`,
           eventId: event.id,
@@ -159,15 +171,16 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
         
         const myPosition = leaderboard?.findIndex((p: any) => p.golferId === currentProfile.id);
         if (myPosition !== undefined && myPosition >= 0 && myPosition < 3) {
+          const id = `position-${event.id}`;
           notifs.push({
-            id: `position-${event.id}`,
+            id,
             type: 'live',
             priority: 'normal',
             icon: myPosition === 0 ? '🥇' : myPosition === 1 ? '🥈' : '🥉',
             title: myPosition === 0 ? "You're leading!" : `You're in ${myPosition + 1}${myPosition === 1 ? 'nd' : 'rd'} place`,
             body: `${event.name} - Thru ${holesPlayed} holes`,
             timestamp: new Date(event.lastModified),
-            read: readIds.has(`position-${event.id}`),
+            read: Boolean(notificationReadAt?.[id]),
             actionLabel: 'View leaderboard',
             actionPath: `/event/${event.id}/scorecard`,
             eventId: event.id,
@@ -186,17 +199,18 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
         .slice(-3);
       
       if (recentMessages.length > 0) {
+        const id = `chat-${group.id}`;
         const latestMsg = recentMessages[recentMessages.length - 1];
         const sender = profiles.find(p => p.id === latestMsg.profileId);
         notifs.push({
-          id: `chat-${group.id}`,
+          id,
           type: 'social',
           priority: 'normal',
           icon: '💬',
           title: group.name || 'Group',
           body: `${sender?.name || latestMsg.senderName}: ${latestMsg.text?.substring(0, 50)}${(latestMsg.text?.length || 0) > 50 ? '...' : ''}`,
           timestamp: new Date(latestMsg.createdAt),
-          read: readIds.has(`chat-${group.id}`),
+          read: Boolean(notificationReadAt?.[id]),
           actionLabel: 'Reply',
           actionPath: `/event/${group.id}/chat`,
           groupId: group.id,
@@ -211,15 +225,16 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
       recentMembers.forEach((member: any) => {
         const memberProfile = profiles.find(p => p.id === member.profileId);
         if (memberProfile) {
+          const id = `newmember-${group.id}-${member.profileId}`;
           notifs.push({
-            id: `newmember-${group.id}-${member.profileId}`,
+            id,
             type: 'social',
             priority: 'low',
             icon: '👋',
             title: 'New member',
             body: `${memberProfile.name} joined ${group.name}`,
             timestamp: new Date(group.lastModified),
-            read: readIds.has(`newmember-${group.id}-${member.profileId}`),
+            read: Boolean(notificationReadAt?.[id]),
             actionPath: `/event/${group.id}/golfers`,
             groupId: group.id,
           });
@@ -230,15 +245,16 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
       if (group.ownerProfileId === currentProfile.id && group.joinRequests?.length) {
         const pendingRequests = group.joinRequests.filter((r: any) => r.status === 'pending');
         if (pendingRequests.length > 0) {
+          const id = `joinreq-${group.id}`;
           notifs.push({
-            id: `joinreq-${group.id}`,
+            id,
             type: 'social',
             priority: 'high',
             icon: '🎫',
             title: `${pendingRequests.length} join request${pendingRequests.length > 1 ? 's' : ''}`,
             body: `${group.name} - Tap to review`,
             timestamp: new Date(pendingRequests[0].requestedAt),
-            read: false,
+            read: Boolean(notificationReadAt?.[id]),
             actionLabel: 'Review',
             actionPath: `/event/${group.id}/settings`,
             groupId: group.id,
@@ -276,15 +292,16 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
       , null);
       
       if (bestRound && rounds[0]?.id === bestRound.id) {
+        const id = `pb-${bestRound.id}`;
         notifs.push({
-          id: `pb-${bestRound.id}`,
+          id,
           type: 'personal',
           priority: 'high',
           icon: '🏆',
           title: 'Personal best!',
           body: `${bestRound.adjustedGross} at ${bestRound.courseName || 'your round'}`,
           timestamp: new Date(bestRound.datePlayed),
-          read: readIds.has(`pb-${bestRound.id}`),
+          read: Boolean(notificationReadAt?.[id]),
           actionLabel: 'View round',
           actionPath: `/handicap/round/${bestRound.id}`,
         });
@@ -298,7 +315,7 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
       if (pDiff !== 0) return pDiff;
       return b.timestamp.getTime() - a.timestamp.getTime();
     });
-  }, [events, completedEvents, currentProfile, profiles, settlements, transactions, readIds]);
+  }, [events, completedEvents, currentProfile, profiles, settlements, transactions, notificationReadAt]);
 
   // Filter notifications by tab
   const filteredNotifications = useMemo(() => {
@@ -318,7 +335,7 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
   }), [notifications]);
 
   const handleNotificationClick = (notif: Notification) => {
-    setReadIds(prev => new Set([...prev, notif.id]));
+    markNotificationRead?.(notif.id);
     if (notif.actionPath) {
       onClose();
       navigate(notif.actionPath);
@@ -326,7 +343,7 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
   };
 
   const markAllRead = () => {
-    setReadIds(new Set(notifications.map(n => n.id)));
+    markNotificationsRead?.(notifications.map(n => n.id));
   };
 
   const formatTime = (date: Date) => {

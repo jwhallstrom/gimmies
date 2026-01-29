@@ -114,6 +114,8 @@ export async function saveEventToCloud(event: Event, currentProfileId: string): 
       isCompleted: event.isCompleted || false,
       shareCode,
       scorecardView: event.scorecardView || 'individual',
+      // Hub type: 'event' (default) or 'group' (chat crew)
+      hubType: event.hubType || 'event',
       
       // Store complex objects as JSON strings
       golfersJson: JSON.stringify(event.golfers || []),
@@ -122,6 +124,8 @@ export async function saveEventToCloud(event: Event, currentProfileId: string): 
       gamesJson: JSON.stringify(event.games || {}),
       pinkyResultsJson: JSON.stringify(event.pinkyResults || {}),
       greenieResultsJson: JSON.stringify(event.greenieResults || {}),
+      // Group-specific settings
+      groupSettingsJson: event.hubType === 'group' ? JSON.stringify(event.groupSettings || {}) : null,
       // chatJson removed - using ChatMessage table instead
       
       lastModified: event.lastModified || new Date().toISOString(),
@@ -195,6 +199,8 @@ export async function loadEventById(eventId: string): Promise<Event | null> {
     const chat = await loadChatMessagesFromCloud(eventId);
     console.log('📥 loadEventById: Loaded chat:', chat.length, 'messages');
 
+    const groupSettings = (cloudEvent as any).groupSettingsJson ? JSON.parse((cloudEvent as any).groupSettingsJson as string) : undefined;
+    
     const localEvent: Event = {
       id: cloudEvent.id,
       name: cloudEvent.name,
@@ -208,6 +214,7 @@ export async function loadEventById(eventId: string): Promise<Event | null> {
       isCompleted: cloudEvent.isCompleted || false,
       shareCode: cloudEvent.shareCode || undefined,
       scorecardView: cloudEvent.scorecardView as any || 'individual',
+      hubType: ((cloudEvent as any).hubType as 'event' | 'group') || 'event',
       
       // Parse JSON strings back to objects
       golfers,
@@ -217,6 +224,7 @@ export async function loadEventById(eventId: string): Promise<Event | null> {
       pinkyResults,
       greenieResults,
       chat, // ✅ Use chat from cloud instead of empty array
+      groupSettings,
       
       createdAt: cloudEvent.createdAt,
       lastModified: cloudEvent.lastModified || new Date().toISOString(),
@@ -269,6 +277,7 @@ export async function loadEventByShareCode(shareCode: string): Promise<Event | n
       isCompleted: cloudEvent.isCompleted || false,
       shareCode: cloudEvent.shareCode || undefined,
       scorecardView: cloudEvent.scorecardView as any || 'individual',
+      hubType: ((cloudEvent as any).hubType as 'event' | 'group') || 'event',
       
       // Parse JSON strings back to objects
       golfers: cloudEvent.golfersJson ? JSON.parse(cloudEvent.golfersJson as string) : [],
@@ -277,6 +286,7 @@ export async function loadEventByShareCode(shareCode: string): Promise<Event | n
       games: cloudEvent.gamesJson ? JSON.parse(cloudEvent.gamesJson as string) : {},
       pinkyResults: cloudEvent.pinkyResultsJson ? JSON.parse(cloudEvent.pinkyResultsJson as string) : {},
       greenieResults: cloudEvent.greenieResultsJson ? JSON.parse(cloudEvent.greenieResultsJson as string) : {},
+      groupSettings: (cloudEvent as any).groupSettingsJson ? JSON.parse((cloudEvent as any).groupSettingsJson as string) : undefined,
       
       createdAt: cloudEvent.createdAt,
       lastModified: cloudEvent.lastModified || new Date().toISOString(),
@@ -322,6 +332,7 @@ export async function loadUserEventsFromCloud(): Promise<Event[]> {
       isCompleted: cloudEvent.isCompleted || false,
       shareCode: cloudEvent.shareCode || undefined,
       scorecardView: cloudEvent.scorecardView as any || 'individual',
+      hubType: ((cloudEvent as any).hubType as 'event' | 'group') || 'event',
       
       golfers: cloudEvent.golfersJson ? JSON.parse(cloudEvent.golfersJson as string) : [],
       groups: cloudEvent.groupsJson ? JSON.parse(cloudEvent.groupsJson as string) : [],
@@ -329,6 +340,7 @@ export async function loadUserEventsFromCloud(): Promise<Event[]> {
       games: cloudEvent.gamesJson ? JSON.parse(cloudEvent.gamesJson as string) : {},
       pinkyResults: cloudEvent.pinkyResultsJson ? JSON.parse(cloudEvent.pinkyResultsJson as string) : {},
       greenieResults: cloudEvent.greenieResultsJson ? JSON.parse(cloudEvent.greenieResultsJson as string) : {},
+      groupSettings: (cloudEvent as any).groupSettingsJson ? JSON.parse((cloudEvent as any).groupSettingsJson as string) : undefined,
       
       createdAt: cloudEvent.createdAt,
       lastModified: cloudEvent.lastModified || new Date().toISOString(),
@@ -377,6 +389,7 @@ export async function loadPublicEventsFromCloud(): Promise<Event[]> {
         isCompleted: cloudEvent.isCompleted || false,
         shareCode: cloudEvent.shareCode || undefined,
         scorecardView: (cloudEvent.scorecardView as any) || 'individual',
+        hubType: ((cloudEvent as any).hubType as 'event' | 'group') || 'event',
 
         golfers: cloudEvent.golfersJson ? JSON.parse(cloudEvent.golfersJson as string) : [],
         groups: cloudEvent.groupsJson ? JSON.parse(cloudEvent.groupsJson as string) : [],
@@ -384,6 +397,7 @@ export async function loadPublicEventsFromCloud(): Promise<Event[]> {
         games: cloudEvent.gamesJson ? JSON.parse(cloudEvent.gamesJson as string) : {},
         pinkyResults: cloudEvent.pinkyResultsJson ? JSON.parse(cloudEvent.pinkyResultsJson as string) : {},
         greenieResults: cloudEvent.greenieResultsJson ? JSON.parse(cloudEvent.greenieResultsJson as string) : {},
+        groupSettings: (cloudEvent as any).groupSettingsJson ? JSON.parse((cloudEvent as any).groupSettingsJson as string) : undefined,
 
         createdAt: cloudEvent.createdAt,
         lastModified: cloudEvent.lastModified || new Date().toISOString(),

@@ -12,6 +12,11 @@ import type { Toast } from '../types';
 
 export interface UISliceState {
   toasts: Toast[];
+  /**
+   * Notification read tracking (persists across sessions).
+   * Keyed by notification id (e.g. "settle-...", "chat-...", etc).
+   */
+  notificationReadAt: Record<string, string>;
 }
 
 // ============================================================================
@@ -21,6 +26,9 @@ export interface UISliceState {
 export interface UISliceActions {
   addToast: (message: string, type?: Toast['type'], duration?: number) => void;
   removeToast: (toastId: string) => void;
+  markNotificationRead: (id: string) => void;
+  markNotificationsRead: (ids: string[]) => void;
+  clearNotificationReads: () => void;
 }
 
 export type UISlice = UISliceState & UISliceActions;
@@ -31,6 +39,7 @@ export type UISlice = UISliceState & UISliceActions;
 
 export const initialUIState: UISliceState = {
   toasts: [],
+  notificationReadAt: {},
 };
 
 // ============================================================================
@@ -61,5 +70,28 @@ export const createUISlice = (
     set((state: any) => ({
       toasts: state.toasts.filter((t: Toast) => t.id !== toastId)
     }));
+  },
+
+  markNotificationRead: (id: string) => {
+    const now = new Date().toISOString();
+    set((state: any) => ({
+      notificationReadAt: { ...(state.notificationReadAt || {}), [id]: now },
+    }));
+  },
+
+  markNotificationsRead: (ids: string[]) => {
+    const now = new Date().toISOString();
+    set((state: any) => {
+      const prev = (state.notificationReadAt || {}) as Record<string, string>;
+      const next = { ...prev };
+      ids.forEach((id) => {
+        if (id) next[id] = now;
+      });
+      return { notificationReadAt: next };
+    });
+  },
+
+  clearNotificationReads: () => {
+    set(() => ({ notificationReadAt: {} }));
   },
 });
