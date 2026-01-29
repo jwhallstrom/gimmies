@@ -536,7 +536,7 @@ Code: ${event.shareCode}`,
                       value={golferName}
                       onChange={e => setGolferName(e.target.value)}
                       placeholder="Enter name"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base bg-white text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                       autoFocus={!isGroupHub || addModalTab === 'manual'}
                     />
                   </div>
@@ -550,7 +550,7 @@ Code: ${event.shareCode}`,
                       <select
                         value={customTeeName}
                         onChange={e => setCustomTeeName(e.target.value)}
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base bg-white text-gray-900 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                       >
                         <option value="">Use event default ({event.course?.teeName})</option>
                         {teesForCourse.map((tee: any) => (
@@ -572,7 +572,7 @@ Code: ${event.shareCode}`,
                         value={customHandicap}
                         onChange={e => setCustomHandicap(e.target.value)}
                         placeholder="e.g., 15.2"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base bg-white text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                       />
                     </div>
                   )}

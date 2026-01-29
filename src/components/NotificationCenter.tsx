@@ -49,64 +49,89 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
 
   // Generate notifications from app state
+  // Only show notifications from recent activity (last 7 days for most, 24h for transient ones)
   const notifications = useMemo<Notification[]>(() => {
     const notifs: Notification[] = [];
     const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const allEvents = [...(events || []), ...(completedEvents || [])];
 
     if (!currentProfile) return notifs;
+    
+    // Helper to check if notification was dismissed (marked read more than 24h ago)
+    const wasDismissed = (id: string, timestamp: Date) => {
+      const readAt = notificationReadAt?.[id];
+      if (!readAt) return false;
+      const readDate = new Date(readAt);
+      // If marked read and the notification is older than when it was read, it's dismissed
+      return readDate.getTime() > timestamp.getTime();
+    };
 
     // === MONEY NOTIFICATIONS ===
     
-    // Check wallet for recent transactions/settlements
+    // Check wallet for recent transactions/settlements (only pending ones)
     const settlements = wallet?.settlements || [];
-    settlements.slice(0, 5).forEach((s: any, idx: number) => {
+    settlements.forEach((s: any, idx: number) => {
+      if (s.status !== 'pending') return; // Only show pending settlements
+      
       const id = `settle-${s.id || idx}`;
+      const timestamp = new Date(s.createdAt || now);
+      
+      // Skip if dismissed
+      if (wasDismissed(id, timestamp)) return;
+      
       const isOwed = s.toProfileId === currentProfile.id;
       const otherProfile = profiles.find(p => p.id === (isOwed ? s.fromProfileId : s.toProfileId));
       const otherName = otherProfile?.name || 'Someone';
       
-      if (s.status === 'pending') {
-        notifs.push({
-          id,
-          type: 'money',
-          priority: 'high',
-          icon: isOwed ? '💵' : '⚠️',
-          title: isOwed ? `${otherName} owes you` : `You owe ${otherName}`,
-          body: `$${(s.amount / 100).toFixed(0)} from ${s.eventName || 'recent games'}`,
-          timestamp: new Date(s.createdAt || now),
-          read: Boolean(notificationReadAt?.[id]),
-          actionLabel: isOwed ? 'Send reminder' : 'Settle up',
-          actionPath: '/wallet',
-          amount: s.amount,
-          isPositive: isOwed,
-        });
-      }
+      notifs.push({
+        id,
+        type: 'money',
+        priority: 'high',
+        icon: isOwed ? '💵' : '⚠️',
+        title: isOwed ? `${otherName} owes you` : `You owe ${otherName}`,
+        body: `$${(s.amount / 100).toFixed(0)} from ${s.eventName || 'recent games'}`,
+        timestamp,
+        read: Boolean(notificationReadAt?.[id]),
+        actionLabel: isOwed ? 'Send reminder' : 'Settle up',
+        actionPath: '/wallet',
+        amount: s.amount,
+        isPositive: isOwed,
+      });
     });
 
-    // Recent winnings from completed events
-    completedEvents?.slice(0, 3).forEach((event: Event) => {
-      const id = `win-${event.id}`;
-      const myPayout = event.payouts?.find((p: any) => p.profileId === currentProfile.id);
-      if (myPayout && myPayout.net !== 0) {
-        const isWin = myPayout.net > 0;
-        notifs.push({
-          id,
-          type: 'money',
-          priority: 'normal',
-          icon: isWin ? '💰' : '📉',
-          title: isWin ? 'You won!' : 'Better luck next time',
-          body: `${isWin ? '+' : ''}$${(myPayout.net / 100).toFixed(0)} from ${event.name}`,
-          timestamp: new Date(event.lastModified),
-          read: Boolean(notificationReadAt?.[id]),
-          actionLabel: 'View details',
-          actionPath: `/event/${event.id}/payout`,
-          eventId: event.id,
-          amount: Math.abs(myPayout.net),
-          isPositive: isWin,
-        });
-      }
-    });
+    // Recent winnings from completed events (only from last 7 days)
+    completedEvents
+      ?.filter((event: Event) => new Date(event.lastModified) > sevenDaysAgo)
+      .slice(0, 3)
+      .forEach((event: Event) => {
+        const id = `win-${event.id}`;
+        const timestamp = new Date(event.lastModified);
+        
+        // Skip if dismissed
+        if (wasDismissed(id, timestamp)) return;
+        
+        const myPayout = event.payouts?.find((p: any) => p.profileId === currentProfile.id);
+        if (myPayout && myPayout.net !== 0) {
+          const isWin = myPayout.net > 0;
+          notifs.push({
+            id,
+            type: 'money',
+            priority: 'normal',
+            icon: isWin ? '💰' : '📉',
+            title: isWin ? 'You won!' : 'Better luck next time',
+            body: `${isWin ? '+' : ''}$${(myPayout.net / 100).toFixed(0)} from ${event.name}`,
+            timestamp,
+            read: Boolean(notificationReadAt?.[id]),
+            actionLabel: 'View details',
+            actionPath: `/event/${event.id}/payout`,
+            eventId: event.id,
+            amount: Math.abs(myPayout.net),
+            isPositive: isWin,
+          });
+        }
+      });
 
     // === LIVE/ACTIVITY NOTIFICATIONS ===
     
@@ -196,56 +221,38 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
 
     // === SOCIAL NOTIFICATIONS ===
     
-    // Groups with recent chat activity
+    // Groups with recent chat activity (only last 24h for chat)
     events?.filter((e: Event) => e.hubType === 'group').forEach((group: Event) => {
+      // Only show chat notifications from last 24 hours
       const recentMessages = (group.chat || [])
         .filter((m: any) => m.profileId !== currentProfile.id)
-        .slice(-3);
+        .filter((m: any) => new Date(m.createdAt) > oneDayAgo)
+        .slice(-1); // Only latest message
       
       if (recentMessages.length > 0) {
-        const id = `chat-${group.id}`;
         const latestMsg = recentMessages[recentMessages.length - 1];
-        const sender = profiles.find(p => p.id === latestMsg.profileId);
-        notifs.push({
-          id,
-          type: 'social',
-          priority: 'normal',
-          icon: '💬',
-          title: group.name || 'Group',
-          body: `${sender?.name || latestMsg.senderName}: ${latestMsg.text?.substring(0, 50)}${(latestMsg.text?.length || 0) > 50 ? '...' : ''}`,
-          timestamp: new Date(latestMsg.createdAt),
-          read: Boolean(notificationReadAt?.[id]),
-          actionLabel: 'Reply',
-          actionPath: `/event/${group.id}/chat`,
-          groupId: group.id,
-        });
-      }
-
-      // New members in groups
-      const recentMembers = group.golfers
-        .filter((g: any) => g.profileId !== currentProfile.id)
-        .slice(-1);
-      
-      recentMembers.forEach((member: any) => {
-        const memberProfile = profiles.find(p => p.id === member.profileId);
-        if (memberProfile) {
-          const id = `newmember-${group.id}-${member.profileId}`;
+        const id = `chat-${group.id}-${latestMsg.id || latestMsg.createdAt}`;
+        const timestamp = new Date(latestMsg.createdAt);
+        
+        if (!wasDismissed(id, timestamp)) {
+          const sender = profiles.find(p => p.id === latestMsg.profileId);
           notifs.push({
             id,
             type: 'social',
-            priority: 'low',
-            icon: '👋',
-            title: 'New member',
-            body: `${memberProfile.name} joined ${group.name}`,
-            timestamp: new Date(group.lastModified),
+            priority: 'normal',
+            icon: '💬',
+            title: group.name || 'Group',
+            body: `${sender?.name || latestMsg.senderName}: ${latestMsg.text?.substring(0, 50)}${(latestMsg.text?.length || 0) > 50 ? '...' : ''}`,
+            timestamp,
             read: Boolean(notificationReadAt?.[id]),
-            actionPath: `/event/${group.id}/golfers`,
+            actionLabel: 'Reply',
+            actionPath: `/event/${group.id}/chat`,
             groupId: group.id,
           });
         }
-      });
+      }
 
-      // Join requests (for group owners)
+      // Join requests (for group owners) - always show pending
       if (group.ownerProfileId === currentProfile.id && group.joinRequests?.length) {
         const pendingRequests = group.joinRequests.filter((r: any) => r.status === 'pending');
         if (pendingRequests.length > 0) {
@@ -269,46 +276,33 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
 
     // === PERSONAL NOTIFICATIONS ===
     
-    // Handicap changes
-    if (currentProfile.handicapIndex != null) {
-      const rounds = currentProfile.individualRounds || [];
-      if (rounds.length >= 3) {
-        notifs.push({
-          id: 'handicap-current',
-          type: 'personal',
-          priority: 'low',
-          icon: '📊',
-          title: 'Your handicap',
-          body: `Current index: ${currentProfile.handicapIndex.toFixed(1)}`,
-          timestamp: new Date(),
-          read: true,
-          actionLabel: 'View rounds',
-          actionPath: '/handicap',
-        });
-      }
-    }
-
-    // Personal best check
+    // Personal best check - only show if recent (last 7 days) and not dismissed
     const rounds = currentProfile.individualRounds || [];
     if (rounds.length > 0) {
+      const recentRounds = rounds.filter((r: any) => new Date(r.date || r.datePlayed) > sevenDaysAgo);
       const bestRound = rounds.reduce((best: any, r: any) => 
-        (!best || (r.adjustedGross && r.adjustedGross < best.adjustedGross)) ? r : best
+        (!best || (r.adjustedGrossScore && r.adjustedGrossScore < best.adjustedGrossScore)) ? r : best
       , null);
       
-      if (bestRound && rounds[0]?.id === bestRound.id) {
+      // Only show if the most recent round IS the personal best
+      if (bestRound && recentRounds.length > 0 && recentRounds[0]?.id === bestRound.id) {
         const id = `pb-${bestRound.id}`;
-        notifs.push({
-          id,
-          type: 'personal',
-          priority: 'high',
-          icon: '🏆',
-          title: 'Personal best!',
-          body: `${bestRound.adjustedGross} at ${bestRound.courseName || 'your round'}`,
-          timestamp: new Date(bestRound.datePlayed),
-          read: Boolean(notificationReadAt?.[id]),
-          actionLabel: 'View round',
-          actionPath: `/handicap/round/${bestRound.id}`,
-        });
+        const timestamp = new Date(bestRound.date || bestRound.datePlayed);
+        
+        if (!wasDismissed(id, timestamp)) {
+          notifs.push({
+            id,
+            type: 'personal',
+            priority: 'high',
+            icon: '🏆',
+            title: 'Personal best!',
+            body: `${bestRound.adjustedGrossScore || bestRound.grossScore} at ${bestRound.courseName || 'your round'}`,
+            timestamp,
+            read: Boolean(notificationReadAt?.[id]),
+            actionLabel: 'View round',
+            actionPath: `/handicap/round/${bestRound.id}`,
+          });
+        }
       }
     }
 

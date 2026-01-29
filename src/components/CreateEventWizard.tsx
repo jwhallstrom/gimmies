@@ -186,7 +186,7 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 bg-white text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     value={eventName}
                     onChange={(e) => setEventName(e.target.value)}
                     placeholder="e.g. Sunday Scramble"
@@ -209,7 +209,7 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
                   <input
                     type="date"
                     aria-label="Event Date"
-                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 bg-white text-gray-900 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     value={eventDate}
                     onChange={(e) => setEventDate(e.target.value)}
                   />
@@ -232,7 +232,7 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
                 <input
                   type="time"
                   aria-label="Tee Time"
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white text-gray-900 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                   value={teeTime}
                   onChange={(e) => setTeeTime(e.target.value)}
                 />

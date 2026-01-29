@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import useStore from '../../state/store';
 // Skins preview (holes won) moved to OverviewTab.
 import { nanoid } from 'nanoid/non-secure';
 import { useNavigate } from 'react-router-dom';
+import { calculateEventPayouts } from '../../games/payouts';
+import { EventSettlement } from '../wallet';
 
 type Props = { eventId: string };
 
@@ -49,6 +51,10 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
   const [skinsSetupId, setSkinsSetupId] = useState<string | null>(null);
   const [pinkySetupId, setPinkySetupId] = useState<string | null>(null);
   const [greenieSetupId, setGreenieSetupId] = useState<string | null>(null);
+  const [showSettlements, setShowSettlements] = useState(false);
+  
+  const completeEvent = useStore((s) => s.completeEvent);
+  const getEventSettlements = useStore((s) => s.getEventSettlements);
 
   if (!event) return null;
   
@@ -293,11 +299,59 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
       updateEvent(eventId, { status: 'setup' });
     }
   };
+  
+  const handleCompleteEvent = () => {
+    if (window.confirm('Complete this event? This finalizes all payouts.')) {
+      const success = completeEvent(eventId);
+      if (success) {
+        alert('Event completed!');
+      }
+    }
+  };
+  
+  // ========== PAYOUT CALCULATIONS ==========
+  const hasAnyGames = event.games.nassau.length + skinsArray.length + pinkyArray.length + greenieArray.length > 0;
+  const myGolferId = currentProfile?.id;
+  
+  // Calculate payouts
+  const payouts = useMemo(() => {
+    if (!hasAnyGames) return { nassau: [], skins: [], pinky: [], greenie: [], totals: {} };
+    return calculateEventPayouts(event, profiles);
+  }, [event, profiles, hasAnyGames]);
+  
+  // My balance calculations
+  const { myNet, myBuyin, myWinnings } = useMemo(() => {
+    if (!myGolferId || !payouts.totals) return { myNet: null, myBuyin: 0, myWinnings: 0 };
+    const totals = payouts.totals as Record<string, { buyin: number; winnings: number; net: number }>;
+    const myTotals = totals[myGolferId];
+    if (!myTotals) return { myNet: null, myBuyin: 0, myWinnings: 0 };
+    return { myNet: myTotals.net, myBuyin: myTotals.buyin, myWinnings: myTotals.winnings };
+  }, [payouts.totals, myGolferId]);
+  
+  // Get settlements (what I owe / am owed)
+  const allSettlements = useMemo(() => {
+    return getEventSettlements ? getEventSettlements(eventId) : [];
+  }, [eventId, getEventSettlements, payouts]);
+  
+  const mySettlements = useMemo(() => {
+    if (!myGolferId) return [];
+    return allSettlements.filter((s: any) => s.fromId === myGolferId || s.toId === myGolferId);
+  }, [allSettlements, myGolferId]);
+  
+  // Check if all scores are complete
+  const allScoresComplete = event.scorecards?.every((sc: any) => 
+    sc.scores?.every((s: any) => s.strokes != null)
+  );
+  
+  // Currency formatters
+  const currency = (n: number) => '$' + n.toFixed(2);
+  const signedCurrency = (n: number) => (n > 0 ? '+' : n < 0 ? '−' : '') + currency(Math.abs(n));
 
   return (
     <div className="space-y-6">
       {/* Event Started - Locked Banner */}
-      {isEventStarted && (
+      {/* Event In Progress - only show if NOT completed */}
+      {isEventStarted && !isEventCompleted && (
         <div className="bg-primary-50 border border-primary-200 rounded-xl p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -328,11 +382,11 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
         </div>
       )}
       
-      {!isEventCompleted && !isEventStarted && !isOwner && (
+      {!isEventCompleted && !isEventStarted && !isOwner && hasAnyGames && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
           <div className="flex items-center gap-2 text-sm text-blue-800">
             <span className="font-medium">ℹ️ View Only</span>
-            <span className="text-xs">Only the event owner can create and modify games</span>
+            <span className="text-xs">Only the event admin can modify games</span>
           </div>
         </div>
       )}
@@ -427,12 +481,26 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
         </div>
       )}
 
-      {/* Empty State */}
-      {event.games.nassau.length === 0 && skinsArray.length === 0 && pinkyArray.length === 0 && greenieArray.length === 0 && (
+      {/* Empty State - Different for admin vs non-admin */}
+      {!hasAnyGames && (
         <div className="text-center py-10 bg-gray-50 rounded-lg border border-gray-200">
-          <div className="text-4xl mb-3">🎮</div>
-          <h3 className="text-sm font-medium text-gray-900">No Games Configured</h3>
-          <p className="text-xs text-gray-500 mt-1">Add a game to start tracking bets and scores.</p>
+          <div className="text-4xl mb-3">{isOwner ? '🎲' : '⛳'}</div>
+          <h3 className="text-sm font-medium text-gray-900">
+            {isOwner ? 'Add a Side Game' : 'No Games Yet'}
+          </h3>
+          <p className="text-xs text-gray-500 mt-1 max-w-xs mx-auto">
+            {isOwner 
+              ? 'Set up Nassau, Skins, or other bets to track during your round.'
+              : 'The event admin hasn\'t set up any games yet. Check back later or just enjoy the round!'}
+          </p>
+          {isOwner && !isEventStarted && !isEventCompleted && (
+            <button
+              onClick={() => setShowAddGame(true)}
+              className="mt-4 px-6 py-2.5 bg-primary-600 text-white rounded-xl font-bold text-sm hover:bg-primary-700 transition-colors"
+            >
+              + Add Game
+            </button>
+          )}
         </div>
       )}
       
@@ -606,7 +674,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                         type="number"
                         min="0"
                         step="0.25"
-                        className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2 text-sm"
+                        className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white text-gray-900 font-bold"
                         value={fees.out}
                         onFocus={(e) => e.currentTarget.select()}
                         onChange={(e) => setFees({ ...fees, out: Number(e.target.value) })}
@@ -619,7 +687,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                         type="number"
                         min="0"
                         step="0.25"
-                        className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2 text-sm"
+                        className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white text-gray-900 font-bold"
                         value={fees.in}
                         onFocus={(e) => e.currentTarget.select()}
                         onChange={(e) => setFees({ ...fees, in: Number(e.target.value) })}
@@ -632,7 +700,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                         type="number"
                         min="0"
                         step="0.25"
-                        className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2 text-sm"
+                        className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white text-gray-900 font-bold"
                         value={fees.total}
                         onFocus={(e) => e.currentTarget.select()}
                         onChange={(e) => setFees({ ...fees, total: Number(e.target.value) })}
@@ -650,7 +718,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                         key={p.label}
                         type="button"
                         onClick={() => setFees(p.fees)}
-                        className="text-xs font-bold px-3 py-1.5 rounded-full border border-slate-200 bg-white hover:bg-slate-50"
+                        className="text-xs font-bold px-3 py-1.5 rounded-full border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200"
                         disabled={!canEdit}
                       >
                         {p.label}
@@ -682,7 +750,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 <button
                   type="button"
                   onClick={() => setNassauSetupId(null)}
-                  className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-200 bg-white hover:bg-slate-50"
+                  className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200"
                 >
                   Done
                 </button>
@@ -943,7 +1011,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                       onFocus={(e) => e.currentTarget.select()}
                       onChange={(e) => updateCfg({ fee: Number(e.target.value) })}
                       disabled={!canEdit}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold"
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold bg-white text-gray-900"
                     />
                   </div>
                   <label className="mt-3 flex items-center gap-2 text-xs text-slate-700">
@@ -1003,7 +1071,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 <button
                   type="button"
                   onClick={() => setSkinsSetupId(null)}
-                  className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-200 bg-white hover:bg-slate-50"
+                  className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200"
                 >
                   Done
                 </button>
@@ -1074,7 +1142,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                       onFocus={(e) => e.currentTarget.select()}
                       onChange={(e) => updateCfg({ fee: Number(e.target.value) })}
                       disabled={!canEdit}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold"
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold bg-white text-gray-900"
                     />
                   </div>
                 </div>
@@ -1158,7 +1226,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 <button
                   type="button"
                   onClick={() => setPinkySetupId(null)}
-                  className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-200 bg-white hover:bg-slate-50"
+                  className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200"
                 >
                   Done
                 </button>
@@ -1229,7 +1297,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                       onFocus={(e) => e.currentTarget.select()}
                       onChange={(e) => updateCfg({ fee: Number(e.target.value) })}
                       disabled={!canEdit}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold"
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold bg-white text-gray-900"
                     />
                   </div>
                 </div>
@@ -1314,7 +1382,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 <button
                   type="button"
                   onClick={() => setGreenieSetupId(null)}
-                  className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-200 bg-white hover:bg-slate-50"
+                  className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200"
                 >
                   Done
                 </button>
@@ -1323,6 +1391,95 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
           </div>
         );
       })()}
+      
+      {/* ========== PAYOUTS & BALANCE SECTION ========== */}
+      {hasAnyGames && (
+        <div className="mt-6 space-y-4">
+          {/* Section Header */}
+          <div className="flex items-center gap-2">
+            <span className="text-lg">💰</span>
+            <h3 className="font-bold text-gray-900">Payouts</h3>
+            {isEventCompleted && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">FINAL</span>}
+            {isEventStarted && !isEventCompleted && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">LIVE</span>}
+            {!isEventStarted && !isEventCompleted && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full font-bold">PREVIEW</span>}
+          </div>
+          
+          {/* Big Net Result - Completed events */}
+          {isEventCompleted && myNet != null && (
+            <div className={`rounded-2xl p-6 text-center ${myNet >= 0 ? 'bg-gradient-to-br from-green-500 to-green-600' : 'bg-gradient-to-br from-red-500 to-red-600'} text-white shadow-lg`}>
+              <div className="text-sm opacity-80 font-medium mb-1">Your Final Result</div>
+              <div className="text-5xl font-black">{signedCurrency(myNet)}</div>
+              <div className="text-sm opacity-80 mt-2">Buy-in: {currency(myBuyin)}</div>
+            </div>
+          )}
+          
+          {/* Running balance - In progress events */}
+          {isEventStarted && !isEventCompleted && myNet != null && (
+            <div className={`rounded-xl p-4 ${myNet >= 0 ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-bold text-gray-500 uppercase tracking-wide">Your Balance</div>
+                  <div className={`text-2xl font-black ${myNet >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {signedCurrency(myNet)}
+                  </div>
+                </div>
+                <div className="text-right text-xs text-gray-500">
+                  <div>Buy-in: {currency(myBuyin)}</div>
+                  <div>Winnings: {signedCurrency(myWinnings)}</div>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* All Settlements - Show all for transparency */}
+          {allSettlements.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <button
+                onClick={() => setShowSettlements(!showSettlements)}
+                className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">💸</span>
+                  <span className="font-bold text-gray-900 text-sm">Settlements</span>
+                  <span className="text-xs text-gray-500">({allSettlements.length})</span>
+                </div>
+                <svg className={`w-5 h-5 text-gray-400 transition-transform ${showSettlements ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {showSettlements && (
+                <div className="px-4 pb-4 space-y-2">
+                  {allSettlements.map((settlement: any, i: number) => (
+                    <EventSettlement key={i} settlement={settlement} eventId={eventId} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* No settlements yet message */}
+          {allSettlements.length === 0 && (isEventStarted || isEventCompleted) && (
+            <div className="bg-gray-50 rounded-xl p-4 text-center text-gray-500 text-sm">
+              No settlements calculated yet. Complete all scores to see payouts.
+            </div>
+          )}
+          
+          {/* Complete Event button - Owner only */}
+          {isOwner && isEventStarted && !isEventCompleted && (
+            <button
+              onClick={handleCompleteEvent}
+              disabled={!allScoresComplete}
+              className={`w-full py-4 rounded-xl font-bold text-base ${
+                !allScoresComplete
+                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-green-600 to-green-700 text-white shadow-lg hover:from-green-700 hover:to-green-800'
+              }`}
+            >
+              {!allScoresComplete ? 'Complete All Scores First' : '✓ Complete Event'}
+            </button>
+          )}
+        </div>
+      )}
       
       {bulkAssignState && (() => {
         const nassau = event.games.nassau.find((nn: any) => nn.id === bulkAssignState.nassauId);

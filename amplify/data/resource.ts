@@ -83,6 +83,9 @@ const schema = a.schema({
     // Hub type: 'event' (golf round) or 'group' (chat crew)
     hubType: a.string().default('event'),
     
+    // Parent group ID - links events created from groups
+    parentGroupId: a.string(),
+    
     // Share code for joining
     shareCode: a.string(),
     
