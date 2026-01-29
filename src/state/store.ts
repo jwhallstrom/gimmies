@@ -597,25 +597,22 @@ export const useStore = create<State>()(
           // Update verified status for each participant with a profile
           let firstLevelUp: { profileId: string; profileName: string; oldLevel: number; newLevel: number; verifiedRounds: number } | null = null;
           
-          completedEvent.golfers.forEach(golfer => {
-            if (!golfer.profileId) return;
-            
+          for (const golfer of completedEvent.golfers) {
+            if (!golfer.profileId) continue;
+
             const profile = get().profiles.find(p => p.id === golfer.profileId);
-            if (!profile) return;
-            
+            if (!profile) continue;
+
             const currentStatus = profile.verifiedStatus || {
               verifiedRounds: 0,
               statusLevel: 0,
               badges: [],
               lastVerifiedDate: undefined,
             };
-            
+
             // Calculate new status after this verified round
-            const newStatus = calculateNewStatus(currentStatus, completedEvent.id);
-            
-            // Check for level up
-            const leveledUp = newStatus.statusLevel > currentStatus.statusLevel;
-            
+            const { newStatus, leveledUp } = calculateNewStatus(currentStatus, completedEvent.id);
+
             if (leveledUp && !firstLevelUp) {
               // Only show modal for first person who levels up (typically current user)
               firstLevelUp = {
@@ -626,21 +623,22 @@ export const useStore = create<State>()(
                 verifiedRounds: newStatus.verifiedRounds,
               };
             }
-            
+
             // Update profile with new verified status
             set((state: any) => ({
-              profiles: state.profiles.map((p: GolferProfile) => 
-                p.id === profile.id 
-                  ? { ...p, verifiedStatus: newStatus, lastActive: new Date().toISOString() }
-                  : p
+              profiles: state.profiles.map((p: GolferProfile) =>
+                p.id === profile.id ? { ...p, verifiedStatus: newStatus, lastActive: new Date().toISOString() } : p
               ),
-              currentProfile: state.currentProfile?.id === profile.id
-                ? { ...state.currentProfile, verifiedStatus: newStatus, lastActive: new Date().toISOString() }
-                : state.currentProfile
+              currentProfile:
+                state.currentProfile?.id === profile.id
+                  ? { ...state.currentProfile, verifiedStatus: newStatus, lastActive: new Date().toISOString() }
+                  : state.currentProfile,
             }));
-            
-            console.log(`📊 Updated verified status for ${profile.name}: Level ${currentStatus.statusLevel} → ${newStatus.statusLevel}, Rounds: ${newStatus.verifiedRounds}`);
-          });
+
+            console.log(
+              `📊 Updated verified status for ${profile.name}: Level ${currentStatus.statusLevel} → ${newStatus.statusLevel}, Rounds: ${newStatus.verifiedRounds}`
+            );
+          }
           
           // Set pending level up for UI to display modal (prioritize current user)
           const currentProfile = get().currentProfile;
@@ -652,8 +650,8 @@ export const useStore = create<State>()(
             
             if (currentUserLevelUp) {
               const currentStatus = currentProfile?.verifiedStatus || { verifiedRounds: 0, statusLevel: 0 };
-              const newStatus = calculateNewStatus(currentStatus as any, completedEvent.id);
-              if (newStatus.statusLevel > (currentStatus.statusLevel || 0)) {
+              const { newStatus, leveledUp } = calculateNewStatus(currentStatus as any, completedEvent.id);
+              if (leveledUp) {
                 set({
                   pendingLevelUp: {
                     profileId: currentProfile!.id,

@@ -8,6 +8,7 @@ import { ToastManager } from '../components/Toast';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { LevelUpModal } from '../components/verified';
 import useStore from '../state/store';
+import { getStatusTierByLevel } from '../utils/verifiedStatus';
 
 // Lazy load secondary routes for code splitting
 const EventsPage = lazy(() => import('./EventsPage'));
@@ -382,8 +383,8 @@ const App: React.FC = () => {
         <LevelUpModal
           isOpen={true}
           onClose={clearPendingLevelUp}
-          oldLevel={pendingLevelUp.oldLevel}
-          newLevel={pendingLevelUp.newLevel}
+          oldTier={getStatusTierByLevel(pendingLevelUp.oldLevel)}
+          newTier={getStatusTierByLevel(pendingLevelUp.newLevel)}
           verifiedRounds={pendingLevelUp.verifiedRounds}
         />
       )}
