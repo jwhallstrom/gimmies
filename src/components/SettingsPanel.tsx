@@ -16,6 +16,7 @@ import { useAuthMode } from '../hooks/useAuthMode';
 import { fileToAvatarDataUrl } from '../utils/avatarImage';
 import { CourseSearch } from './CourseSearch';
 import { StatusBadge, StatusProgress } from './verified';
+import StatusLevelsInfo from './verified/StatusLevelsInfo';
 
 interface Props {
   isOpen: boolean;
@@ -34,6 +35,7 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
   const [editHandicap, setEditHandicap] = useState('');
   const [showCourseSearch, setShowCourseSearch] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [showStatusLevels, setShowStatusLevels] = useState(false);
 
   // Reset edit fields when profile changes or panel opens
   useEffect(() => {
@@ -346,7 +348,11 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
 
           {/* Verified Status */}
           <div className="mt-4 px-4">
-            <StatusProgress profile={currentProfile} showTierInfo={false} />
+            <StatusProgress 
+              profile={currentProfile} 
+              showTierInfo={true}
+              onShowAllLevels={() => setShowStatusLevels(true)}
+            />
           </div>
 
           {/* Golf Settings */}
@@ -597,6 +603,14 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
               />
             </div>
           </div>
+        )}
+
+        {/* Status Levels Info Modal */}
+        {showStatusLevels && (
+          <StatusLevelsInfo 
+            onClose={() => setShowStatusLevels(false)}
+            currentLevel={currentProfile?.verifiedStatus?.statusLevel || 0}
+          />
         )}
       </div>
     </div>,

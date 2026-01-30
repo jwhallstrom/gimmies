@@ -464,7 +464,7 @@ const Dashboard: React.FC = () => {
       <section className="flex gap-3">
         <button
           onClick={openEventWizard}
-          className="flex-1 bg-gradient-to-r from-primary-600 to-primary-700 rounded-xl py-3 px-4 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
+          className="flex-1 bg-gradient-to-r from-primary-600 to-primary-700 rounded-xl py-3 px-4 text-white font-bold text-sm shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 border border-primary-500"
         >
           <span>⛳</span>
           <span>Create Event</span>
@@ -472,7 +472,7 @@ const Dashboard: React.FC = () => {
         
         <button
           onClick={() => navigate('/join')}
-          className="flex-1 bg-white rounded-xl py-3 px-4 border border-gray-200 font-bold text-sm text-gray-900 shadow-sm hover:shadow-md hover:border-primary-300 transition-all flex items-center justify-center gap-2"
+          className="flex-1 bg-white rounded-xl py-3 px-4 border-2 border-slate-200 font-bold text-sm text-slate-800 shadow-md hover:shadow-lg hover:border-primary-400 hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
         >
           <span className="text-lg font-bold text-primary-600">+</span>
           <span>Join Event</span>
@@ -480,9 +480,9 @@ const Dashboard: React.FC = () => {
       </section>
 
       {/* Events & Groups - Segmented Control Style */}
-      <section className="rounded-2xl overflow-hidden">
+      <section className="rounded-2xl overflow-hidden border-2 border-slate-200 shadow-md bg-white">
         {/* Tab Bar - Pill Style with Colored Backgrounds */}
-        <div className="flex gap-2 p-1 bg-gray-100 rounded-2xl">
+        <div className="flex gap-2 p-1.5 bg-slate-100 border-b border-slate-200">
           <button
             onClick={() => setTab('events')}
             className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
@@ -525,11 +525,8 @@ const Dashboard: React.FC = () => {
           </button>
         </div>
         
-        {/* Content Card */}
-        <div className="mt-2 bg-white rounded-2xl border border-gray-200 shadow-sm">
-
-          {/* Content */}
-          <div className="p-3">
+        {/* Content Area */}
+        <div className="p-3">
             {tab === 'events' && (
             <>
               {activeEvents.length === 0 ? (
@@ -603,7 +600,6 @@ const Dashboard: React.FC = () => {
               )}
             </>
           )}
-          </div>
         </div>
       </section>
 

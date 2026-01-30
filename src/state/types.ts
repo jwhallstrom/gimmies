@@ -401,6 +401,12 @@ export interface Event {
   // Join requests for groups with joinPolicy === 'request'
   joinRequests?: JoinRequest[];
   
+  // Event settings (notifications, auto-recap, etc.)
+  settings?: {
+    /** If true, don't auto-post recap to chat when event completes */
+    disableAutoRecap?: boolean;
+  };
+  
   // Verified Status System
   /**
    * Whether this event counts as a "verified round" for status progression.
