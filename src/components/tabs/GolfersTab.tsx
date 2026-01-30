@@ -13,6 +13,8 @@
 import React, { useState, useMemo } from 'react';
 import useStore from '../../state/store';
 import { useCourse } from '../../hooks/useCourse';
+import { STATUS_TIERS } from '../../state/types';
+import StatusLevelsInfo from '../verified/StatusLevelsInfo';
 
 type Props = { eventId: string };
 type AddModalTab = 'invite' | 'manual';
@@ -33,6 +35,8 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
   const [guestGamePreference, setGuestGamePreference] = useState<'all' | 'nassau' | 'skins' | 'none'>('all');
   const [editingGolferId, setEditingGolferId] = useState<string | null>(null);
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
+  const [showStatusLevels, setShowStatusLevels] = useState(false);
 
   if (!event) return null;
 
@@ -56,6 +60,12 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
       const gamePreference = eg.gamePreference || 'all';
       const isCurrentUser = currentProfile?.id === eg.profileId;
       
+      // Extended profile data for player card
+      const verifiedStatus = profile?.verifiedStatus;
+      const statusTier = verifiedStatus ? STATUS_TIERS[verifiedStatus.statusLevel] || STATUS_TIERS[0] : STATUS_TIERS[0];
+      const individualRounds = profile?.individualRounds || [];
+      const homeCourse = profile?.preferences?.homeCourseName;
+      
       return {
         id: golferId,
         name,
@@ -66,9 +76,18 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
         isOwnerProfile: eg.profileId === event.ownerProfileId,
         hasProfile: !!eg.profileId,
         avatar: profile?.avatar,
+        // Extended data
+        profile,
+        verifiedStatus,
+        statusTier,
+        roundsPlayed: individualRounds.length,
+        homeCourse,
       };
     });
   }, [event.golfers, profiles, currentProfile?.id, event.ownerProfileId]);
+  
+  // Get selected player data for the modal
+  const selectedPlayer = selectedPlayerId ? golferData.find((g: any) => g.id === selectedPlayerId) : null;
 
   const handleAddGolfer = async () => {
     if (!canAddGolfer || event.isCompleted) return;
@@ -269,25 +288,37 @@ Code: ${event.shareCode}`,
               }`}
             >
               <div className="flex items-center gap-3">
-                {/* Avatar */}
-                <div className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold ${
-                  golfer.avatar 
-                    ? '' 
-                    : golfer.hasProfile 
-                      ? 'bg-primary-100 text-primary-700' 
-                      : 'bg-gray-200 text-gray-600'
-                }`}>
+                {/* Avatar - Clickable to open player card */}
+                <button
+                  onClick={() => setSelectedPlayerId(golfer.id)}
+                  className={`w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold transition-transform hover:scale-105 ${
+                    golfer.avatar 
+                      ? '' 
+                      : golfer.hasProfile 
+                        ? 'bg-primary-100 text-primary-700' 
+                        : 'bg-gray-200 text-gray-600'
+                  }`}
+                >
                   {golfer.avatar ? (
                     <img src={golfer.avatar} alt="" className="w-full h-full rounded-full object-cover" />
                   ) : (
                     golfer.name.charAt(0).toUpperCase()
                   )}
-                </div>
+                </button>
                 
-                {/* Info */}
-                <div className="flex-1 min-w-0">
+                {/* Info - Clickable to open player card */}
+                <button 
+                  onClick={() => setSelectedPlayerId(golfer.id)}
+                  className="flex-1 min-w-0 text-left hover:opacity-80 transition-opacity"
+                >
                   <div className="flex items-center gap-2">
                     <span className="font-semibold text-gray-900 truncate">{golfer.name}</span>
+                    {/* Status badge */}
+                    {golfer.hasProfile && golfer.statusTier && (
+                      <span className="text-sm" title={golfer.statusTier.name}>
+                        {golfer.statusTier.emoji}
+                      </span>
+                    )}
                     {golfer.isOwnerProfile && (
                       <span className="px-1.5 py-0.5 bg-primary-100 text-primary-700 text-[10px] font-bold rounded">
                         {isGroupHub ? 'ADMIN' : 'HOST'}
@@ -310,7 +341,7 @@ Code: ${event.shareCode}`,
                       )}
                     </div>
                   )}
-                </div>
+                </button>
                 
                 {/* Game Preference - Events only */}
                 {!isGroupHub && !event.isCompleted && (
@@ -621,6 +652,159 @@ Code: ${event.shareCode}`,
             </div>
           </div>
         </div>
+      )}
+
+      {/* ========== PLAYER CARD MODAL ========== */}
+      {selectedPlayer && (
+        <div 
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => setSelectedPlayerId(null)}
+        >
+          <div 
+            className="w-full max-w-sm bg-white rounded-2xl shadow-2xl overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header with gradient */}
+            <div className={`px-6 pt-6 pb-8 text-center relative ${selectedPlayer.statusTier?.badgeColor || 'bg-gray-500'}`}>
+              {/* Close button */}
+              <button
+                onClick={() => setSelectedPlayerId(null)}
+                className="absolute top-3 right-3 p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              
+              {/* Avatar */}
+              <div className="w-20 h-20 mx-auto rounded-full bg-white/20 flex items-center justify-center text-3xl font-bold text-white border-4 border-white/30 mb-3">
+                {selectedPlayer.avatar ? (
+                  <img src={selectedPlayer.avatar} alt="" className="w-full h-full rounded-full object-cover" />
+                ) : (
+                  selectedPlayer.name.charAt(0).toUpperCase()
+                )}
+              </div>
+              
+              {/* Name & Status */}
+              <h3 className="text-xl font-bold text-white">{selectedPlayer.name}</h3>
+              {selectedPlayer.hasProfile && selectedPlayer.statusTier && (
+                <div className="flex items-center justify-center gap-2 mt-1">
+                  <span className="text-lg">{selectedPlayer.statusTier.emoji}</span>
+                  <span className="text-white/90 text-sm font-medium">{selectedPlayer.statusTier.name}</span>
+                </div>
+              )}
+            </div>
+            
+            {/* Stats Grid */}
+            <div className="px-6 py-4">
+              {selectedPlayer.hasProfile ? (
+                <>
+                  {/* Quick Stats */}
+                  <div className="grid grid-cols-3 gap-3 mb-4">
+                    <div className="text-center bg-slate-50 rounded-xl py-3">
+                      <div className="text-xl font-black text-gray-900">
+                        {selectedPlayer.handicap != null ? selectedPlayer.handicap.toFixed(1) : '—'}
+                      </div>
+                      <div className="text-[10px] text-gray-500 font-medium uppercase">Handicap</div>
+                    </div>
+                    <div className="text-center bg-slate-50 rounded-xl py-3">
+                      <div className="text-xl font-black text-gray-900">
+                        {selectedPlayer.roundsPlayed || 0}
+                      </div>
+                      <div className="text-[10px] text-gray-500 font-medium uppercase">Rounds</div>
+                    </div>
+                    <div className="text-center bg-slate-50 rounded-xl py-3">
+                      <div className="text-xl font-black text-gray-900">
+                        {selectedPlayer.verifiedStatus?.verifiedRounds || 0}
+                      </div>
+                      <div className="text-[10px] text-gray-500 font-medium uppercase">Verified</div>
+                    </div>
+                  </div>
+                  
+                  {/* Home Course */}
+                  {selectedPlayer.homeCourse && (
+                    <div className="bg-slate-50 rounded-xl px-4 py-3 mb-4">
+                      <div className="text-[10px] text-gray-500 font-medium uppercase mb-1">Home Course</div>
+                      <div className="font-semibold text-gray-900">{selectedPlayer.homeCourse}</div>
+                    </div>
+                  )}
+                  
+                  {/* Status Progress */}
+                  {selectedPlayer.statusTier && (
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-gray-600 uppercase">Status Progress</span>
+                        <span className="text-xs text-gray-500">
+                          {selectedPlayer.verifiedStatus?.verifiedRounds || 0} / {selectedPlayer.statusTier.maxRounds || '∞'} rounds
+                        </span>
+                      </div>
+                      <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full ${selectedPlayer.statusTier.badgeColor}`}
+                          style={{ 
+                            width: `${Math.min(100, ((selectedPlayer.verifiedStatus?.verifiedRounds || 0) / (selectedPlayer.statusTier.maxRounds || 100)) * 100)}%` 
+                          }}
+                        />
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2">{selectedPlayer.statusTier.description}</p>
+                      
+                      {/* How Status Works Link */}
+                      <button
+                        onClick={() => setShowStatusLevels(true)}
+                        className="mt-2 text-xs text-primary-600 hover:text-primary-700 font-medium flex items-center gap-1"
+                      >
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        How do status levels work?
+                      </button>
+                    </div>
+                  )}
+                  
+                  {/* Badges */}
+                  {selectedPlayer.verifiedStatus?.badges && selectedPlayer.verifiedStatus.badges.length > 0 && (
+                    <div>
+                      <div className="text-xs font-bold text-gray-600 uppercase mb-2">Badges</div>
+                      <div className="flex flex-wrap gap-2">
+                        {selectedPlayer.verifiedStatus.badges.map((badge: string) => (
+                          <span key={badge} className="px-2 py-1 bg-amber-100 text-amber-800 rounded-full text-xs font-medium">
+                            🏅 {badge.replace(/_/g, ' ')}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-4">
+                  <div className="text-3xl mb-2">👤</div>
+                  <div className="font-medium text-gray-700">Guest Player</div>
+                  <p className="text-sm text-gray-500 mt-1">
+                    This player hasn't created a Gimmies profile yet
+                  </p>
+                </div>
+              )}
+            </div>
+            
+            {/* Footer */}
+            <div className="px-6 pb-6">
+              <button
+                onClick={() => setSelectedPlayerId(null)}
+                className="w-full py-3 bg-slate-100 text-gray-700 rounded-xl font-semibold hover:bg-slate-200 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Status Levels Info Modal */}
+      {showStatusLevels && (
+        <StatusLevelsInfo 
+          onClose={() => setShowStatusLevels(false)}
+          currentLevel={selectedPlayer?.verifiedStatus?.statusLevel || currentProfile?.verifiedStatus?.statusLevel || 0}
+        />
       )}
     </div>
   );

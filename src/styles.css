@@ -48,6 +48,11 @@ button, a, [role="button"], .no-select {
   user-select: none;
 }
 
+/* Hide bottom nav when chat input is focused (mobile keyboard visible) */
+body.chat-input-focused .bottom-nav {
+  display: none !important;
+}
+
 /* Smooth momentum scrolling */
 .scroll-smooth {
   -webkit-overflow-scrolling: touch;

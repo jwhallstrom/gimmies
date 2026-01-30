@@ -10,6 +10,7 @@ import { nanoid } from 'nanoid/non-secure';
 import { getCourseById, getHole } from '../data/cloudCourses';
 import { distributeHandicapStrokes, applyESCAdjustment, calculateScoreDifferential } from '../utils/handicap';
 import { calculateEventPayouts } from '../games/payouts';
+import { generateRoundRecap, generateRecapPushMessage } from '../utils/roundRecap';
 import { ScoreEntry as HandicapScoreEntry } from '../types/handicap';
 import { checkEventVerification, calculateNewStatus } from '../utils/verifiedStatus';
 
@@ -697,6 +698,49 @@ export const useStore = create<State>()(
             import('../utils/eventSync').then(({ saveEventToCloud }) => {
               saveEventToCloud(completedEvent, currentProfile.id).catch(console.error);
             });
+          }
+        }
+        
+        // ========================================================================
+        // AUTO-SEND RECAP: Post recap to event chat (unless disabled)
+        // ========================================================================
+        const autoRecapDisabled = completedEvent.settings?.disableAutoRecap === true;
+        if (!autoRecapDisabled) {
+          try {
+            const recap = generateRoundRecap(completedEvent);
+            const recapMsg = generateRecapPushMessage(recap);
+            
+            // Build a nice recap message for chat
+            const recapLines = [
+              `🏆 **Event Complete!** 🏆`,
+              ``,
+              recapMsg.body,
+              ``,
+              ...recap.highlights.slice(0, 5).map(h => `${h.emoji} ${h.title}: ${h.description}`),
+              ``,
+              `📊 Check the Games tab for full payout details.`
+            ];
+            
+            // Add recap as bot message to chat
+            const recapChatMessage: ChatMessage = {
+              id: nanoid(12),
+              senderId: 'gimmies-bot',
+              senderName: 'Gimmies Bot',
+              text: recapLines.join('\n'),
+              createdAt: new Date().toISOString(),
+            };
+            
+            set((state: any) => ({
+              completedEvents: state.completedEvents.map((e: Event) =>
+                e.id === eventId 
+                  ? { ...e, chat: [...(e.chat || []), recapChatMessage] }
+                  : e
+              )
+            }));
+            
+            console.log('📤 Auto-sent event recap to chat');
+          } catch (e) {
+            console.error('Failed to send auto-recap:', e);
           }
         }
         

@@ -14,13 +14,15 @@ interface StatusProgressProps {
   showTierInfo?: boolean;
   compact?: boolean;
   className?: string;
+  onShowAllLevels?: () => void;
 }
 
 export const StatusProgress: React.FC<StatusProgressProps> = ({
   profile,
   showTierInfo = true,
   compact = false,
-  className = ''
+  className = '',
+  onShowAllLevels
 }) => {
   const { tier, verifiedRounds } = getStatusDisplay(profile);
   const progress = getProgressToNextTier(verifiedRounds);
@@ -112,6 +114,19 @@ export const StatusProgress: React.FC<StatusProgressProps> = ({
                   ))}
                 </div>
               </div>
+            )}
+            
+            {/* View All Levels Link */}
+            {onShowAllLevels && (
+              <button
+                onClick={onShowAllLevels}
+                className="mt-4 w-full py-2 text-sm text-primary-600 hover:text-primary-700 font-medium flex items-center justify-center gap-1.5 bg-primary-50 rounded-lg hover:bg-primary-100 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z" />
+                </svg>
+                View All Status Levels
+              </button>
             )}
           </div>
         )}
