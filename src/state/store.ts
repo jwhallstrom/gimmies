@@ -724,7 +724,7 @@ export const useStore = create<State>()(
             // Add recap as bot message to chat
             const recapChatMessage: ChatMessage = {
               id: nanoid(12),
-              senderId: 'gimmies-bot',
+              profileId: 'gimmies-bot',
               senderName: 'Gimmies Bot',
               text: recapLines.join('\n'),
               createdAt: new Date().toISOString(),
