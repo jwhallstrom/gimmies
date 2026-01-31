@@ -73,11 +73,22 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
     });
   }, [courses, favoriteCourseIds, currentProfile?.preferences?.homeCourseId]);
 
-  const toggleFavoriteCourse = (courseId: string) => {
+  const toggleFavoriteCourse = async (courseId: string) => {
     if (!currentProfile) return;
     const current = currentProfile.preferences?.favoriteCourseIds || [];
     const next = current.includes(courseId) ? current.filter((id) => id !== courseId) : [courseId, ...current];
     updateProfile(currentProfile.id, { preferences: { ...currentProfile.preferences, favoriteCourseIds: next } });
+    // Sync favorite courses to cloud
+    try {
+      const { saveCloudProfile } = await import('../utils/profileSync');
+      const { profiles } = useStore.getState();
+      const updatedProfile = profiles.find(p => p.id === currentProfile.id);
+      if (updatedProfile) {
+        await saveCloudProfile(updatedProfile as any);
+      }
+    } catch (e) {
+      console.error('Failed to sync favorite courses to cloud:', e);
+    }
   };
 
   // Hydrate course name when we have an id (home course default) and courses are loaded.
@@ -270,13 +281,15 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
                             setSelectedTeeName(maybe);
                           }}
                           className={`group flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-all ${
-                            isSelected ? 'bg-primary-50 border-primary-500 ring-1 ring-primary-500' : 'bg-white border-slate-200 hover:bg-slate-50'
+                            isSelected 
+                              ? 'bg-primary-50 dark:bg-primary-900/40 border-primary-500 ring-1 ring-primary-500' 
+                              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800'
                           }`}
                           title={c.name}
                         >
                           <span className="font-semibold text-sm text-gray-900 dark:text-slate-100 truncate max-w-[180px]">{c.name}</span>
                           {c.courseId === currentProfile?.preferences?.homeCourseId && (
-                            <span className="text-[10px] font-bold text-primary-700 bg-primary-100 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                            <span className="text-[10px] font-bold text-primary-700 dark:text-primary-300 bg-primary-100 dark:bg-primary-900/50 px-1.5 py-0.5 rounded uppercase tracking-wider">
                               Home
                             </span>
                           )}
@@ -298,7 +311,9 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
                                 }
                               }}
                               className={`text-xs font-bold px-2 py-1 rounded-lg border ${
-                                isFavorite ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                                isFavorite 
+                                  ? 'bg-amber-50 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/60' 
+                                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'
                               }`}
                               title={isFavorite ? 'Remove favorite' : 'Add favorite'}
                             >
@@ -360,8 +375,8 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
                         onClick={() => setSelectedTeeName(tee.name)}
                         className={`p-3 rounded-lg border text-left transition-all ${
                           selectedTeeName === tee.name
-                            ? 'bg-primary-50 border-primary-500 ring-1 ring-primary-500'
-                            : 'bg-white border-gray-200 hover:bg-gray-50'
+                            ? 'bg-primary-50 dark:bg-primary-900/40 border-primary-500 ring-1 ring-primary-500'
+                            : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-800'
                         }`}
                       >
                         <div className="font-medium text-gray-900 dark:text-slate-100">{tee.name}</div>

@@ -20,6 +20,9 @@ const schema = a.schema({
     statsJson: a.string(), // Store as JSON string instead of json type
     preferencesJson: a.string(), // Store as JSON string instead of json type
     
+    // Verified Status - gamification system for handicap trust
+    verifiedStatusJson: a.string(), // VerifiedStatus object as JSON string
+    
     // Individual handicap rounds
     individualRounds: a.hasMany('IndividualRound', 'profileId'),
     

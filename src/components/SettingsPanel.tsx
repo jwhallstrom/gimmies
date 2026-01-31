@@ -118,15 +118,26 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
     }
   };
 
-  const handleUpdatePreference = (key: string, value: any) => {
+  const handleUpdatePreference = async (key: string, value: any) => {
     if (currentProfile) {
       updateProfile(currentProfile.id, {
         preferences: { ...currentProfile.preferences, [key]: value }
       });
+      // Sync preference change to cloud
+      try {
+        const { saveCloudProfile } = await import('../utils/profileSync');
+        const { profiles } = useStore.getState();
+        const updatedProfile = profiles.find(p => p.id === currentProfile.id);
+        if (updatedProfile) {
+          await saveCloudProfile(updatedProfile as any);
+        }
+      } catch (e) {
+        console.error('Failed to sync preference to cloud:', e);
+      }
     }
   };
 
-  const handleSetHomeCourse = (courseId: string, courseName: string) => {
+  const handleSetHomeCourse = async (courseId: string, courseName: string) => {
     if (currentProfile) {
       updateProfile(currentProfile.id, {
         preferences: {
@@ -136,6 +147,17 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
         }
       });
       setShowCourseSearch(false);
+      // Sync home course change to cloud
+      try {
+        const { saveCloudProfile } = await import('../utils/profileSync');
+        const { profiles } = useStore.getState();
+        const updatedProfile = profiles.find(p => p.id === currentProfile.id);
+        if (updatedProfile) {
+          await saveCloudProfile(updatedProfile as any);
+        }
+      } catch (e) {
+        console.error('Failed to sync home course to cloud:', e);
+      }
     }
   };
 

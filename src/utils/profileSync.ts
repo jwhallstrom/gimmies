@@ -19,6 +19,17 @@ function getClient() {
   }
 }
 
+// Verified Status for gamification sync
+export interface SyncableVerifiedStatus {
+  verifiedRounds: number;
+  statusLevel: number;
+  badges: string[];
+  lastVerifiedEventId?: string;
+  lastVerifiedEventDate?: string;
+  weeklyStreak?: number;
+  totalEventsWithBets?: number;
+}
+
 export interface SyncableProfile {
   id: string;
   userId: string;
@@ -44,7 +55,10 @@ export interface SyncableProfile {
     homeCourseId?: string;
     homeCourseName?: string;
     homeCourse?: string; // legacy
+    favoriteCourseIds?: string[]; // pinned courses
+    showVerifiedStatus?: boolean; // public status display
   };
+  verifiedStatus?: SyncableVerifiedStatus;
   createdAt: string;
   lastActive: string;
 }
@@ -100,6 +114,7 @@ export async function fetchCloudProfile(userId: string): Promise<SyncableProfile
         autoAdvanceScores: true,
         showHandicapStrokes: true,
       },
+      verifiedStatus: cloudProfile.verifiedStatusJson ? JSON.parse(cloudProfile.verifiedStatusJson as string) : undefined,
       createdAt: cloudProfile.createdAt || new Date().toISOString(),
       lastActive: cloudProfile.lastActive || new Date().toISOString(),
     };
@@ -151,6 +166,7 @@ export async function saveCloudProfile(profile: SyncableProfile): Promise<boolea
       preferredTee: profile.preferredTee || null,
       statsJson: JSON.stringify(statsJson), // Stringify for storage
       preferencesJson: JSON.stringify(preferencesJson), // Stringify for storage
+      verifiedStatusJson: profile.verifiedStatus ? JSON.stringify(profile.verifiedStatus) : null,
       lastActive: new Date().toISOString(),
     };
 
