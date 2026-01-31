@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import useStore from '../../state/store';
 // Skins preview (holes won) moved to OverviewTab.
 import { nanoid } from 'nanoid/non-secure';
 import { useNavigate } from 'react-router-dom';
+import { calculateEventPayouts } from '../../games/payouts';
+import { EventSettlement } from '../wallet';
 
 type Props = { eventId: string };
 
@@ -43,12 +45,19 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
   const currentProfile = useStore((s: any) => s.currentProfile);
   const updateEvent = useStore((s: any) => s.updateEvent);
   
+  // Sub-tab state: 'games' for configuration, 'payouts' for standings
+  const [subTab, setSubTab] = useState<'games' | 'payouts'>('games');
+  
   const [showAddGame, setShowAddGame] = useState(false);
   const [expandedDescription, setExpandedDescription] = useState<string | null>(null);
   const [nassauSetupId, setNassauSetupId] = useState<string | null>(null);
   const [skinsSetupId, setSkinsSetupId] = useState<string | null>(null);
   const [pinkySetupId, setPinkySetupId] = useState<string | null>(null);
   const [greenieSetupId, setGreenieSetupId] = useState<string | null>(null);
+  const [showSettlements, setShowSettlements] = useState(false);
+  
+  const completeEvent = useStore((s) => s.completeEvent);
+  const getEventSettlements = useStore((s) => s.getEventSettlements);
 
   if (!event) return null;
   
@@ -293,71 +302,921 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
       updateEvent(eventId, { status: 'setup' });
     }
   };
+  
+  const handleCompleteEvent = () => {
+    // First confirmation
+    if (!window.confirm('Complete this event?\n\nThis will finalize all scores and calculate final payouts.')) {
+      return;
+    }
+    
+    // Second confirmation - make it very clear this is final
+    if (!window.confirm('⚠️ FINAL CONFIRMATION ⚠️\n\nBy confirming, you certify that:\n\n• All scores have been reviewed and are correct\n• All payouts have been verified\n• This action CANNOT be undone\n\nProceed with finalizing this event?')) {
+      return;
+    }
+    
+    const success = completeEvent(eventId);
+    if (success) {
+      alert('✓ Event Completed!\n\nAll scores and payouts are now final.');
+    }
+  };
+  
+  // ========== PAYOUT CALCULATIONS ==========
+  const hasAnyGames = event.games.nassau.length + skinsArray.length + pinkyArray.length + greenieArray.length > 0;
+  const myGolferId = currentProfile?.id;
+  
+  // Calculate payouts
+  const payouts = useMemo(() => {
+    if (!hasAnyGames) return { nassau: [], skins: [], pinky: [], greenie: [], totals: {} };
+    return calculateEventPayouts(event, profiles);
+  }, [event, profiles, hasAnyGames]);
+  
+  // My balance calculations - calculate from totalByGolfer
+  const { myNet, myBuyin, myWinnings } = useMemo(() => {
+    if (!myGolferId || !payouts.totalByGolfer) return { myNet: null, myBuyin: 0, myWinnings: 0 };
+    
+    // Calculate buy-in from all games this golfer is in
+    let buyin = 0;
+    
+    // Nassau buy-ins
+    event.games.nassau.forEach((n: any) => {
+      const participants = n.participantGolferIds?.length > 1 
+        ? n.participantGolferIds 
+        : event.golfers.map((g: any) => g.profileId || g.customName);
+      if (participants.includes(myGolferId)) {
+        const fees = n.fees ?? { out: n.fee, in: n.fee, total: n.fee };
+        buyin += (fees.out || 0) + (fees.in || 0) + (fees.total || 0);
+      }
+    });
+    
+    // Skins buy-ins
+    skinsArray.forEach((s: any) => {
+      const participants = s.participantGolferIds?.length > 1 
+        ? s.participantGolferIds 
+        : event.golfers.map((g: any) => g.profileId || g.customName);
+      if (participants.includes(myGolferId)) {
+        buyin += s.fee || 0;
+      }
+    });
+    
+    const winnings = payouts.totalByGolfer[myGolferId] || 0;
+    const net = winnings - buyin;
+    
+    return { myNet: net, myBuyin: buyin, myWinnings: winnings };
+  }, [payouts.totalByGolfer, myGolferId, event.games.nassau, skinsArray, event.golfers]);
+  
+  // Get settlements (what I owe / am owed)
+  const allSettlements = useMemo(() => {
+    return getEventSettlements ? getEventSettlements(eventId) : [];
+  }, [eventId, getEventSettlements, payouts]);
+  
+  const mySettlements = useMemo(() => {
+    if (!myGolferId) return [];
+    return allSettlements.filter((s: any) => s.fromId === myGolferId || s.toId === myGolferId);
+  }, [allSettlements, myGolferId]);
+  
+  // Check if all scores are complete
+  const allScoresComplete = event.scorecards?.every((sc: any) => 
+    sc.scores?.every((s: any) => s.strokes != null)
+  );
+  
+  // Currency formatters
+  const currency = (n: number) => '$' + n.toFixed(2);
+  const signedCurrency = (n: number) => (n > 0 ? '+' : n < 0 ? '−' : '') + currency(Math.abs(n));
 
+  // Helper to get golfer name
+  const getGolferName = (golferId: string) => {
+    const golfer = allGolfers.find((g: any) => g.id === golferId);
+    return golfer?.name || golferId;
+  };
+
+  // ========== COMPUTED GAME STANDINGS ==========
+  // Nassau standings computation
+  const nassauStandings = useMemo(() => {
+    if (!payouts.nassau.length) return null;
+    return payouts.nassau.map(n => {
+      const nassauConfig = event.games.nassau.find((cfg: any) => cfg.id === n.configId);
+      const teams = nassauConfig?.teams || [];
+      const isMatch = nassauConfig?.scoringType === 'match';
+      
+      // Build standings per segment with winner payout info
+      const standings = n.segments.map(seg => {
+        const rows = Object.entries(seg.scores)
+          .filter(([id, score]) => Number.isFinite(score))
+          .map(([id, score]) => {
+            const team = teams.find((t: any) => t.id === id);
+            const isWinner = seg.winners.includes(id);
+            const toPar = seg.toPar[id] || 0;
+            return {
+              id,
+              name: team?.name || getGolferName(id),
+              score: isMatch ? toPar : score, // For match play show holes won
+              toPar,
+              isWinner,
+              isTeam: !!team
+            };
+          })
+          .sort((a, b) => {
+            if (isMatch) return (b.score as number) - (a.score as number); // Higher holes won = better
+            return (a.score as number) - (b.score as number); // Lower strokes = better
+          });
+        
+        // Calculate winner payouts for this segment
+        const winnerCount = seg.winners.length;
+        const payoutPerWinner = winnerCount > 0 ? seg.pot / winnerCount : 0;
+        const winnerNames = seg.winners.map(id => {
+          const team = teams.find((t: any) => t.id === id);
+          return team?.name || getGolferName(id);
+        });
+        const isSplit = winnerCount > 1;
+        const hasWinner = winnerCount > 0;
+        
+        return { 
+          segment: seg.segment, 
+          rows, 
+          pot: seg.pot, 
+          isMatch,
+          // Payout info
+          winnerNames,
+          winnerCount,
+          payoutPerWinner,
+          isSplit,
+          hasWinner
+        };
+      });
+      
+      return {
+        id: n.configId,
+        fees: n.feesPerPlayer,
+        pot: n.pot,
+        isNet: nassauConfig?.net,
+        isMatch,
+        teams,
+        standings
+      };
+    });
+  }, [payouts.nassau, event.games.nassau]);
+
+  // Skins standings computation  
+  const skinsStandings = useMemo(() => {
+    if (!payouts.skins.length) return null;
+    return payouts.skins.filter(Boolean).map(s => {
+      if (!s) return null;
+      const skinsConfig = skinsArray.find((cfg: any) => cfg.id === s.configId);
+      
+      // Group holes by winner
+      const winners = Object.entries(s.winningHolesByGolfer)
+        .filter(([_, holes]) => holes.length > 0)
+        .map(([golferId, holes]) => ({
+          name: getGolferName(golferId),
+          holes,
+          amount: s.winningsByGolfer[golferId] || 0
+        }))
+        .sort((a, b) => b.holes.length - a.holes.length);
+      
+      return {
+        id: s.configId,
+        fee: s.feePerPlayer,
+        totalPot: s.totalPot,
+        isNet: skinsConfig?.net,
+        carryovers: skinsConfig?.carryovers,
+        holeResults: s.holeResults,
+        winners
+      };
+    }).filter(Boolean);
+  }, [payouts.skins, skinsArray]);
+  
   return (
-    <div className="space-y-6">
-      {/* Event Started - Locked Banner */}
-      {isEventStarted && (
-        <div className="bg-primary-50 border border-primary-200 rounded-xl p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">🔒</span>
+    <div className="space-y-4">
+      {/* Personal Summary - Always visible if games exist */}
+      {hasAnyGames && myNet !== null && (
+        <div className={`rounded-xl px-4 py-3 flex items-center justify-between ${
+          myNet >= 0 ? 'bg-green-500' : 'bg-red-500'
+        }`}>
+          <div className="text-white">
+            <div className="text-xs font-medium opacity-90">YOUR BALANCE</div>
+            <div className="text-2xl font-black">{signedCurrency(myNet)}</div>
+          </div>
+          <div className="text-right text-white text-xs opacity-90">
+            <div>Buy-in: {currency(myBuyin)}</div>
+            <div>Winnings: +{currency(myWinnings)}</div>
+          </div>
+        </div>
+      )}
+
+      {/* No Games State */}
+      {!hasAnyGames && (
+        <div className="bg-white rounded-xl border border-slate-200 p-6 text-center">
+          <div className="text-3xl mb-2">{isOwner ? '🎲' : '⛳'}</div>
+          <div className="font-bold text-gray-900">{isOwner ? 'Add a Side Game' : 'No Games Yet'}</div>
+          <p className="text-sm text-gray-500 mt-1">
+            {isOwner ? 'Nassau, Skins, or other bets' : 'Admin hasn\'t set up games yet'}
+          </p>
+          {isOwner && canEdit && (
+            <button
+              onClick={() => setShowAddGame(true)}
+              className="mt-3 px-5 py-2 bg-primary-600 text-white rounded-lg font-bold text-sm hover:bg-primary-700"
+            >
+              + Add Game
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ========== NASSAU LEADERBOARD ========== */}
+      {nassauStandings && nassauStandings.map(nassau => {
+        const frontSeg = nassau.standings.find(s => s.segment === 'front');
+        const backSeg = nassau.standings.find(s => s.segment === 'back');
+        const totalSeg = nassau.standings.find(s => s.segment === 'total');
+        
+        const formatScore = (row: any) => {
+          if (!row || !Number.isFinite(row.score)) return '—';
+          if (nassau.isMatch) return `${row.score}`; // Holes won
+          const toPar = row.toPar;
+          if (toPar === 0) return 'E';
+          return toPar > 0 ? `+${toPar}` : `${toPar}`;
+        };
+        
+        return (
+        <div key={nassau.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          {/* Header */}
+          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🏌️</span>
               <div>
-                <div className="font-bold text-primary-800">Event In Progress</div>
-                <p className="text-sm text-primary-600">Games are locked.</p>
+                <div className="font-bold text-gray-900">Nassau</div>
+                <div className="text-[10px] text-gray-500">
+                  {nassau.isNet ? 'Net' : 'Gross'}{nassau.isMatch && ' · Match Play'} · Total Pot: {currency(nassau.pot)}
+                </div>
               </div>
             </div>
-            {isOwner && (
+            {(isOwner || !isEventStarted) && (
               <button
-                onClick={handleUnlockEvent}
-                className="px-4 py-2 bg-white border border-primary-300 text-primary-700 rounded-lg font-bold text-sm hover:bg-primary-50"
+                onClick={() => setNassauSetupId(nassau.id)}
+                className="text-xs text-primary-600 font-bold"
               >
-                🔓 Unlock to Edit
+                {canEdit ? 'Edit' : 'View'}
               </button>
             )}
           </div>
-        </div>
-      )}
-
-      {isEventCompleted && (
-        <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-          <div className="flex items-center gap-2 text-sm text-green-800">
-            <span className="font-medium">✓ Event Completed</span>
-            <span className="text-xs">Games configuration is read-only</span>
+          
+          {/* Wheel Payouts - The money breakdown */}
+          <div className="grid grid-cols-3 divide-x divide-slate-200 bg-slate-50 border-b border-slate-200">
+            {[
+              { label: 'Front 9', seg: frontSeg, fee: nassau.fees.out },
+              { label: 'Back 9', seg: backSeg, fee: nassau.fees.in },
+              { label: 'Total', seg: totalSeg, fee: nassau.fees.total }
+            ].map(({ label, seg, fee }) => (
+              <div key={label} className="py-3 px-2 text-center">
+                <div className="text-[10px] text-gray-500 font-bold uppercase">{label}</div>
+                <div className="text-lg font-black text-gray-900">{currency(seg?.pot || 0)}</div>
+                {seg?.hasWinner ? (
+                  <div className={`text-[10px] mt-1 ${seg.isSplit ? 'text-amber-600' : 'text-green-600'} font-bold`}>
+                    {seg.isSplit ? (
+                      <>SPLIT: {seg.winnerNames.join(' & ')}</>
+                    ) : (
+                      <>{seg.winnerNames[0]} WINS</>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-[10px] mt-1 text-gray-400">In progress</div>
+                )}
+                {seg?.isSplit && seg.hasWinner && (
+                  <div className="text-[9px] text-gray-500">{currency(seg.payoutPerWinner)} each</div>
+                )}
+              </div>
+            ))}
+          </div>
+          
+          {/* Team Standings Grid */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-100 text-[10px] text-gray-600 uppercase">
+                  <th className="text-left py-2 px-3 font-bold">Team</th>
+                  <th className="text-center py-2 px-2 font-bold w-20">Front</th>
+                  <th className="text-center py-2 px-2 font-bold w-20">Back</th>
+                  <th className="text-center py-2 px-2 font-bold w-20">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {nassau.teams.length > 0 ? nassau.teams.map((team: any) => {
+                  const frontRow = frontSeg?.rows.find(r => r.id === team.id);
+                  const backRow = backSeg?.rows.find(r => r.id === team.id);
+                  const totalRow = totalSeg?.rows.find(r => r.id === team.id);
+                  
+                  // Calculate team's total winnings from this Nassau
+                  const teamWinnings = 
+                    (frontRow?.isWinner ? (frontSeg?.payoutPerWinner || 0) : 0) +
+                    (backRow?.isWinner ? (backSeg?.payoutPerWinner || 0) : 0) +
+                    (totalRow?.isWinner ? (totalSeg?.payoutPerWinner || 0) : 0);
+                  
+                  return (
+                    <tr key={team.id} className="border-t border-slate-100">
+                      <td className="py-2.5 px-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <div className="font-semibold text-gray-900">{team.name}</div>
+                            <div className="text-[10px] text-gray-500">
+                              {team.golferIds.map((gid: string) => getGolferName(gid)).join(', ')}
+                            </div>
+                          </div>
+                          {teamWinnings > 0 && (
+                            <div className="text-green-600 font-bold text-sm">+{currency(teamWinnings)}</div>
+                          )}
+                        </div>
+                      </td>
+                      <td className={`text-center py-2.5 px-2 ${frontRow?.isWinner ? 'bg-green-50' : ''}`}>
+                        <div className={`font-bold ${frontRow?.isWinner ? 'text-green-600' : 'text-gray-700'}`}>
+                          {formatScore(frontRow)}
+                        </div>
+                        {frontRow?.isWinner && (
+                          <div className="text-[9px] text-green-600 font-medium">
+                            +{currency(frontSeg?.payoutPerWinner || 0)}
+                          </div>
+                        )}
+                      </td>
+                      <td className={`text-center py-2.5 px-2 ${backRow?.isWinner ? 'bg-green-50' : ''}`}>
+                        <div className={`font-bold ${backRow?.isWinner ? 'text-green-600' : 'text-gray-700'}`}>
+                          {formatScore(backRow)}
+                        </div>
+                        {backRow?.isWinner && (
+                          <div className="text-[9px] text-green-600 font-medium">
+                            +{currency(backSeg?.payoutPerWinner || 0)}
+                          </div>
+                        )}
+                      </td>
+                      <td className={`text-center py-2.5 px-2 ${totalRow?.isWinner ? 'bg-green-50' : ''}`}>
+                        <div className={`font-bold ${totalRow?.isWinner ? 'text-green-600' : 'text-gray-700'}`}>
+                          {formatScore(totalRow)}
+                        </div>
+                        {totalRow?.isWinner && (
+                          <div className="text-[9px] text-green-600 font-medium">
+                            +{currency(totalSeg?.payoutPerWinner || 0)}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                }) : (
+                  <tr>
+                    <td colSpan={4} className="py-4 text-center text-gray-500 text-sm">
+                      No teams assigned yet
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
-      )}
-      
-      {!isEventCompleted && !isEventStarted && !isOwner && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-          <div className="flex items-center gap-2 text-sm text-blue-800">
-            <span className="font-medium">ℹ️ View Only</span>
-            <span className="text-xs">Only the event owner can create and modify games</span>
-          </div>
-        </div>
-      )}
+        );
+      })}
 
-      {/* Start Event Button - Show when games are ready */}
-      {isOwner && !isEventStarted && !isEventCompleted && gamesReady && (
-        <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-          <div className="flex items-start gap-3">
-            <span className="text-2xl">✓</span>
-            <div className="flex-1">
-              <div className="font-bold text-green-800">Games Ready!</div>
-              <p className="text-sm text-green-700 mt-1">All games are set up. Start the event to lock games and begin play.</p>
+      {/* ========== SKINS LEADERBOARD ========== */}
+      {skinsStandings && skinsStandings.map((skins: any) => (
+        <div key={skins.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          {/* Header */}
+          <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">💰</span>
+              <div>
+                <div className="font-bold text-gray-900">Skins</div>
+                <div className="text-[10px] text-gray-500">
+                  ${skins.fee}/hole · {skins.isNet ? 'Net' : 'Gross'} · {skins.carryovers ? 'Carryovers' : 'No carry'}
+                </div>
+              </div>
+            </div>
+            {(isOwner || !isEventStarted) && (
               <button
-                onClick={handleStartEvent}
-                className="mt-3 px-6 py-3 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl font-bold hover:from-green-700 hover:to-green-800 shadow-lg"
+                onClick={() => setSkinsSetupId(skins.id)}
+                className="text-xs text-primary-600 font-bold"
               >
-                🚀 Start Event
+                {canEdit ? 'Edit' : 'View'}
               </button>
+            )}
+          </div>
+          
+          {/* Winners List */}
+          {skins.winners.length > 0 ? (
+            <div className="divide-y divide-slate-100">
+              {skins.winners.map((winner: any, idx: number) => (
+                <div key={idx} className="px-4 py-3 flex items-center justify-between">
+                  <div>
+                    <div className="font-semibold text-gray-900">{winner.name}</div>
+                    <div className="text-xs text-gray-500">
+                      Holes: {winner.holes.sort((a: number, b: number) => a - b).join(', ')}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-bold text-green-600">{currency(winner.amount)}</div>
+                    <div className="text-[10px] text-gray-500">{winner.holes.length} skin{winner.holes.length !== 1 ? 's' : ''}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-6 text-center text-gray-500 text-sm">
+              No skins won yet
+            </div>
+          )}
+          
+          {/* Hole Grid - Visual representation */}
+          {skins.holeResults.length > 0 && (
+            <div className="bg-slate-50 px-4 py-3 border-t border-slate-200">
+              <div className="text-[10px] text-gray-500 font-bold uppercase mb-2">Hole Results</div>
+              <div className="flex flex-wrap gap-1">
+                {Array.from({ length: 18 }, (_, i) => i + 1).map(hole => {
+                  const result = skins.holeResults.find((r: any) => r.hole === hole);
+                  const hasWinner = result && result.winners.length === 1;
+                  const isCarry = result?.carryIntoNext;
+                  const winnerName = hasWinner ? getGolferName(result.winners[0]) : null;
+                  
+                  return (
+                    <div
+                      key={hole}
+                      className={`w-7 h-7 rounded flex items-center justify-center text-[10px] font-bold ${
+                        hasWinner 
+                          ? 'bg-green-500 text-white' 
+                          : isCarry 
+                            ? 'bg-amber-200 text-amber-800'
+                            : 'bg-slate-200 text-slate-500'
+                      }`}
+                      title={hasWinner ? `${winnerName} won` : isCarry ? 'Carried' : 'Push/No score'}
+                    >
+                      {hole}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex gap-4 mt-2 text-[10px] text-gray-500">
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-green-500"></span> Won</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-amber-200"></span> Carried</span>
+                <span className="flex items-center gap-1"><span className="w-3 h-3 rounded bg-slate-200"></span> Push</span>
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+
+      {/* Pinky & Greenie - Compact cards */}
+      {pinkyArray.length > 0 && pinkyArray.map((p: any) => (
+        <button
+          key={p.id}
+          onClick={() => setPinkySetupId(p.id)}
+          className="w-full bg-white rounded-xl border border-slate-200 p-4 text-left hover:border-slate-300 transition-colors"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-xl">🤙</span>
+              <div>
+                <div className="font-bold text-gray-900">Pinky</div>
+                <div className="text-xs text-gray-500">${p.fee} per pinky</div>
+              </div>
+            </div>
+            <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>
+          </div>
+        </button>
+      ))}
+      
+      {greenieArray.length > 0 && greenieArray.map((g: any) => (
+        <button
+          key={g.id}
+          onClick={() => setGreenieSetupId(g.id)}
+          className="w-full bg-white rounded-xl border border-slate-200 p-4 text-left hover:border-slate-300 transition-colors"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-xl">🟢</span>
+              <div>
+                <div className="font-bold text-gray-900">Greenie</div>
+                <div className="text-xs text-gray-500">${g.fee} per greenie</div>
+              </div>
+            </div>
+            <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>
+          </div>
+        </button>
+      ))}
+
+      {/* Admin Actions */}
+      {isOwner && (
+        <div className="space-y-2 pt-2">
+          {/* Add Game - only in setup */}
+          {canEdit && hasAnyGames && (
+            <button
+              onClick={() => setShowAddGame(true)}
+              className="w-full py-3 border-2 border-dashed border-slate-300 rounded-xl text-slate-600 font-medium hover:bg-slate-50 hover:border-slate-400 transition-colors flex items-center justify-center gap-2"
+            >
+              <span>+</span> Add Game
+            </button>
+          )}
+          
+          {/* Start Event */}
+          {!isEventStarted && !isEventCompleted && hasAnyGames && gamesReady && (
+            <button
+              onClick={handleStartEvent}
+              className="w-full py-4 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl font-bold shadow-lg hover:from-green-700 hover:to-green-800"
+            >
+              🚀 Start Event
+            </button>
+          )}
+          
+          {/* Unlock (when in progress) */}
+          {isEventStarted && !isEventCompleted && (
+            <button
+              onClick={handleUnlockEvent}
+              className="w-full py-3 border border-amber-300 bg-amber-50 text-amber-700 rounded-xl font-medium hover:bg-amber-100"
+            >
+              🔓 Unlock Games
+            </button>
+          )}
+          
+          {/* Complete Event - Only when all scores are in */}
+          {isEventStarted && !isEventCompleted && (
+            <button
+              onClick={handleCompleteEvent}
+              disabled={!allScoresComplete}
+              className={`w-full py-4 rounded-xl font-bold shadow-lg transition-all ${
+                allScoresComplete
+                  ? 'bg-gradient-to-r from-green-600 to-green-700 text-white hover:from-green-700 hover:to-green-800'
+                  : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+              }`}
+            >
+              {allScoresComplete ? '✓ Complete Event & Finalize Payouts' : '⏳ Waiting for All Scores...'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ========== OLD SUB-TAB CODE (hidden - keeping modals) ========== */}
+      {false && (
+      <>
+      {/* Sub-tabs: Games / Payouts */}
+      <div className="flex bg-slate-100 rounded-xl p-1">
+        <button
+          onClick={() => setSubTab('games')}
+          className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-bold transition-all ${
+            subTab === 'games'
+              ? 'bg-white text-gray-900 shadow-sm'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          🎯 Games
+        </button>
+        <button
+          onClick={() => setSubTab('payouts')}
+          className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-bold transition-all ${
+            subTab === 'payouts'
+              ? 'bg-white text-gray-900 shadow-sm'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          💰 Payouts
+          {(isEventStarted || isEventCompleted) && myNet !== null && (
+            <span className={`ml-2 text-xs ${myNet >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {signedCurrency(myNet)}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* ========== GAMES SUB-TAB ========== */}
+      {subTab === 'games' && (
+        <div className="space-y-3">
+          {/* Status Banner - Compact */}
+          {isEventCompleted && (
+            <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2 flex items-center gap-2 text-sm text-green-800">
+              <span>✓</span>
+              <span className="font-medium">Event Completed</span>
+              <span className="text-xs text-green-600">· Games locked</span>
+            </div>
+          )}
+          
+          {isEventStarted && !isEventCompleted && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm text-amber-800">
+                <span>🔒</span>
+                <span className="font-medium">In Progress</span>
+              </div>
+              {isOwner && (
+                <button
+                  onClick={handleUnlockEvent}
+                  className="text-xs font-bold text-amber-700 hover:text-amber-900"
+                >
+                  Unlock
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Games List - Compact Cards */}
+          {!hasAnyGames ? (
+            <div className="bg-white rounded-xl border border-slate-200 p-6 text-center">
+              <div className="text-3xl mb-2">{isOwner ? '🎲' : '⛳'}</div>
+              <div className="font-bold text-gray-900">{isOwner ? 'Add a Side Game' : 'No Games Yet'}</div>
+              <p className="text-sm text-gray-500 mt-1">
+                {isOwner ? 'Nassau, Skins, or other bets' : 'Admin hasn\'t set up games yet'}
+              </p>
+              {isOwner && canEdit && (
+                <button
+                  onClick={() => setShowAddGame(true)}
+                  className="mt-3 px-5 py-2 bg-primary-600 text-white rounded-lg font-bold text-sm hover:bg-primary-700"
+                >
+                  + Add Game
+                </button>
+              )}
+            </div>
+          ) : (
+            <>
+              {/* Nassau Games */}
+              {event.games.nassau.map((n: any, i: number) => {
+                const fees = n.fees ?? { out: n.fee, in: n.fee, total: n.fee };
+                const hasTeams = (n.teams || []).filter((t: any) => t.golferIds?.length > 0).length >= 2;
+                return (
+                  <button
+                    key={n.id}
+                    onClick={() => setNassauSetupId(n.id)}
+                    className="w-full bg-white rounded-xl border border-slate-200 p-4 text-left hover:border-slate-300 transition-colors"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xl">🏌️</span>
+                        <div>
+                          <div className="font-bold text-gray-900">Nassau</div>
+                          <div className="text-xs text-gray-500">
+                            ${fees.out}/${fees.in}/${fees.total} · {n.net ? 'Net' : 'Gross'} · {hasTeams ? 'Teams' : 'Individual'}
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>
+                    </div>
+                  </button>
+                );
+              })}
+
+              {/* Skins Games */}
+              {skinsArray.map((s: any, i: number) => (
+                <button
+                  key={s.id}
+                  onClick={() => setSkinsSetupId(s.id)}
+                  className="w-full bg-white rounded-xl border border-slate-200 p-4 text-left hover:border-slate-300 transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl">💰</span>
+                      <div>
+                        <div className="font-bold text-gray-900">Skins</div>
+                        <div className="text-xs text-gray-500">
+                          ${s.fee}/hole · {s.net ? 'Net' : 'Gross'} · {s.carryovers ? 'Carryovers' : 'No carry'}
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>
+                  </div>
+                </button>
+              ))}
+
+              {/* Pinky Games */}
+              {pinkyArray.map((p: any, i: number) => (
+                <button
+                  key={p.id}
+                  onClick={() => setPinkySetupId(p.id)}
+                  className="w-full bg-white rounded-xl border border-slate-200 p-4 text-left hover:border-slate-300 transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl">🤙</span>
+                      <div>
+                        <div className="font-bold text-gray-900">Pinky</div>
+                        <div className="text-xs text-gray-500">${p.fee} per pinky</div>
+                      </div>
+                    </div>
+                    <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>
+                  </div>
+                </button>
+              ))}
+
+              {/* Greenie Games */}
+              {greenieArray.map((g: any, i: number) => (
+                <button
+                  key={g.id}
+                  onClick={() => setGreenieSetupId(g.id)}
+                  className="w-full bg-white rounded-xl border border-slate-200 p-4 text-left hover:border-slate-300 transition-colors"
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xl">🟢</span>
+                      <div>
+                        <div className="font-bold text-gray-900">Greenie</div>
+                        <div className="text-xs text-gray-500">${g.fee} per greenie</div>
+                      </div>
+                    </div>
+                    <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>
+                  </div>
+                </button>
+              ))}
+
+              {/* Add Game Button - Admin only */}
+              {isOwner && canEdit && (
+                <button
+                  onClick={() => setShowAddGame(true)}
+                  className="w-full py-3 border-2 border-dashed border-slate-300 rounded-xl text-slate-600 font-medium hover:bg-slate-50 hover:border-slate-400 transition-colors flex items-center justify-center gap-2"
+                >
+                  <span>+</span> Add Game
+                </button>
+              )}
+            </>
+          )}
+
+          {/* Admin Action: Start Event */}
+          {isOwner && !isEventStarted && !isEventCompleted && hasAnyGames && gamesReady && (
+            <button
+              onClick={handleStartEvent}
+              className="w-full py-4 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl font-bold shadow-lg hover:from-green-700 hover:to-green-800"
+            >
+              🚀 Start Event
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* ========== PAYOUTS SUB-TAB ========== */}
+      {subTab === 'payouts' && (
+        <div className="space-y-4">
+          {/* Your Position Summary */}
+          {myNet !== null && (
+            <div className={`rounded-xl p-4 ${myNet >= 0 ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+              <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Your Position</div>
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div>
+                  <div className="text-xs text-gray-500">Buy-in</div>
+                  <div className="font-bold text-gray-900">{currency(myBuyin)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500">Winning</div>
+                  <div className="font-bold text-green-600">{currency(myWinnings)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-gray-500">Net</div>
+                  <div className={`font-black text-xl ${myNet >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {signedCurrency(myNet)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Not Started Message */}
+          {!isEventStarted && !isEventCompleted && (
+            <div className="bg-white rounded-xl border border-slate-200 p-6 text-center">
+              <div className="text-3xl mb-2">⏳</div>
+              <div className="font-bold text-gray-900">Event Not Started</div>
+              <p className="text-sm text-gray-500 mt-1">
+                Payouts will appear once the event begins
+              </p>
+            </div>
+          )}
+
+          {/* Skins Standings */}
+          {(isEventStarted || isEventCompleted) && payouts.skins.length > 0 && payouts.skins.map((skinResult: any, idx: number) => {
+            if (!skinResult) return null;
+            const standings = Object.entries(skinResult.winningsByGolfer || {})
+              .map(([id, amt]) => ({ id, amount: amt as number, holes: skinResult.winningHolesByGolfer?.[id] || [] }))
+              .sort((a, b) => b.amount - a.amount);
+            
+            return (
+              <div key={skinResult.configId || idx} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span>💰</span>
+                    <span className="font-bold text-gray-900">Skins Standings</span>
+                  </div>
+                  <span className="text-xs text-gray-500">Pot: {currency(skinResult.totalPot || 0)}</span>
+                </div>
+                <div className="divide-y divide-slate-100">
+                  {standings.length === 0 ? (
+                    <div className="px-4 py-6 text-center text-gray-500 text-sm">No skins won yet</div>
+                  ) : (
+                    standings.map((s, i) => (
+                      <div key={s.id} className="px-4 py-3 flex items-center justify-between">
+                        <div>
+                          <div className="font-bold text-gray-900">{getGolferName(s.id)}</div>
+                          <div className="text-xs text-gray-500">
+                            {s.holes.length > 0 ? `Holes: ${s.holes.join(', ')}` : 'No holes won'}
+                          </div>
+                        </div>
+                        <div className={`font-bold ${s.amount > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                          {s.amount > 0 ? `+${currency(s.amount)}` : currency(0)}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Settlements */}
+          {(isEventStarted || isEventCompleted) && allSettlements.length > 0 && (
+            <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+              <button
+                onClick={() => setShowSettlements(!showSettlements)}
+                className="w-full px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between hover:bg-slate-100"
+              >
+                <div className="flex items-center gap-2">
+                  <span>💸</span>
+                  <span className="font-bold text-gray-900">Settlements</span>
+                  <span className="text-xs text-gray-500">({allSettlements.length})</span>
+                </div>
+                <svg className={`w-5 h-5 text-gray-400 transition-transform ${showSettlements ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {showSettlements && (
+                <div className="p-4 space-y-2">
+                  {allSettlements.map((settlement: any, i: number) => (
+                    <EventSettlement key={i} settlement={settlement} eventId={eventId} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Admin Actions */}
+          {isOwner && (
+            <div className="space-y-3 pt-2">
+              {/* Complete Event */}
+              {isEventStarted && !isEventCompleted && (
+                <button
+                  onClick={handleCompleteEvent}
+                  disabled={!allScoresComplete}
+                  className={`w-full py-4 rounded-xl font-bold ${
+                    allScoresComplete
+                      ? 'bg-gradient-to-r from-green-600 to-green-700 text-white shadow-lg hover:from-green-700 hover:to-green-800'
+                      : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                  }`}
+                >
+                  {allScoresComplete ? '✓ Complete Event' : 'Complete All Scores First'}
+                </button>
+              )}
+
+              {/* Send Recap - After completion */}
+              {isEventCompleted && (
+                <button
+                  onClick={() => {
+                    // TODO: Implement send recap notification
+                    alert('Recap notification sent to all players!');
+                  }}
+                  className="w-full py-3 bg-primary-600 text-white rounded-xl font-bold hover:bg-primary-700"
+                >
+                  📤 Send Recap to Players
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+      </>
+      )}
+
+      {/* ========== MODALS (Keep existing) ========== */}
+      
+      {/* Add Game Dropdown */}
+      {showAddGame && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={() => setShowAddGame(false)}>
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+              <span className="font-bold text-gray-900">Add Game</span>
+              <button onClick={() => setShowAddGame(false)} className="p-2 hover:bg-slate-100 rounded-lg">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="p-2 space-y-1">
+              {GAME_TYPES.map((type) => (
+                <button
+                  key={type.id}
+                  onClick={() => {
+                    if (type.id === 'nassau') addNassau(false);
+                    else if (type.id === 'skins') addSkins(false);
+                    else if (type.id === 'pinky') addPinky();
+                    else if (type.id === 'greenie') addGreenie();
+                    setShowAddGame(false);
+                  }}
+                  className="w-full px-4 py-3 text-left hover:bg-slate-50 rounded-xl transition-colors"
+                >
+                  <div className="font-bold text-gray-900">{type.name}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">{type.description}</div>
+                </button>
+              ))}
             </div>
           </div>
         </div>
       )}
 
-      {/* Add Game Button */}
-      {canEdit && (
+      {/* ========== SETUP MODALS ========== */}
+      
+      {/* Legacy Add Game Button - Hidden but kept for reference */}
+      {false && canEdit && (
         <div className="relative">
           <button
             onClick={() => setShowAddGame(!showAddGame)}
@@ -427,16 +1286,31 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
         </div>
       )}
 
-      {/* Empty State */}
-      {event.games.nassau.length === 0 && skinsArray.length === 0 && pinkyArray.length === 0 && greenieArray.length === 0 && (
+      {/* Empty State - Hidden, now in sub-tabs */}
+      {false && !hasAnyGames && (
         <div className="text-center py-10 bg-gray-50 rounded-lg border border-gray-200">
-          <div className="text-4xl mb-3">🎮</div>
-          <h3 className="text-sm font-medium text-gray-900">No Games Configured</h3>
-          <p className="text-xs text-gray-500 mt-1">Add a game to start tracking bets and scores.</p>
+          <div className="text-4xl mb-3">{isOwner ? '🎲' : '⛳'}</div>
+          <h3 className="text-sm font-medium text-gray-900">
+            {isOwner ? 'Add a Side Game' : 'No Games Yet'}
+          </h3>
+          <p className="text-xs text-gray-500 mt-1 max-w-xs mx-auto">
+            {isOwner 
+              ? 'Set up Nassau, Skins, or other bets to track during your round.'
+              : 'The event admin hasn\'t set up any games yet. Check back later or just enjoy the round!'}
+          </p>
+          {isOwner && !isEventStarted && !isEventCompleted && (
+            <button
+              onClick={() => setShowAddGame(true)}
+              className="mt-4 px-6 py-2.5 bg-primary-600 text-white rounded-xl font-bold text-sm hover:bg-primary-700 transition-colors"
+            >
+              + Add Game
+            </button>
+          )}
         </div>
       )}
       
-      {event.games.nassau.length > 0 && (
+      {/* Nassau inline cards - Hidden, now in sub-tabs */}
+      {false && event.games.nassau.length > 0 && (
         <section>
           <h2 className="font-semibold mb-2 flex items-center gap-2">
             <span className="w-1.5 h-4 bg-primary-600 rounded-full"></span>
@@ -606,7 +1480,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                         type="number"
                         min="0"
                         step="0.25"
-                        className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2 text-sm"
+                        className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white text-gray-900 font-bold"
                         value={fees.out}
                         onFocus={(e) => e.currentTarget.select()}
                         onChange={(e) => setFees({ ...fees, out: Number(e.target.value) })}
@@ -619,7 +1493,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                         type="number"
                         min="0"
                         step="0.25"
-                        className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2 text-sm"
+                        className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white text-gray-900 font-bold"
                         value={fees.in}
                         onFocus={(e) => e.currentTarget.select()}
                         onChange={(e) => setFees({ ...fees, in: Number(e.target.value) })}
@@ -632,7 +1506,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                         type="number"
                         min="0"
                         step="0.25"
-                        className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2 text-sm"
+                        className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white text-gray-900 font-bold"
                         value={fees.total}
                         onFocus={(e) => e.currentTarget.select()}
                         onChange={(e) => setFees({ ...fees, total: Number(e.target.value) })}
@@ -650,7 +1524,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                         key={p.label}
                         type="button"
                         onClick={() => setFees(p.fees)}
-                        className="text-xs font-bold px-3 py-1.5 rounded-full border border-slate-200 bg-white hover:bg-slate-50"
+                        className="text-xs font-bold px-3 py-1.5 rounded-full border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200"
                         disabled={!canEdit}
                       >
                         {p.label}
@@ -682,7 +1556,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 <button
                   type="button"
                   onClick={() => setNassauSetupId(null)}
-                  className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-200 bg-white hover:bg-slate-50"
+                  className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200"
                 >
                   Done
                 </button>
@@ -691,172 +1565,6 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
           </div>
         );
       })()}
-
-      {skinsArray.length > 0 && (
-        <section>
-          <h2 className="font-semibold mb-2 flex items-center gap-2">
-            <span className="w-1.5 h-4 bg-primary-600 rounded-full"></span>
-            Skins
-          </h2>
-          <div className="grid gap-3 max-w-lg">
-          {skinsArray.map((sk:any, i:number) => {
-            const participantIds =
-              sk.participantGolferIds && sk.participantGolferIds.length > 1 ? sk.participantGolferIds : allGolfers.map((gg: any) => gg.id);
-            return (
-              <button
-                key={sk.id}
-                type="button"
-                onClick={() => setSkinsSetupId(sk.id)}
-                className="text-left border rounded-xl p-4 bg-white shadow-sm hover:shadow-md transition-shadow"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <div className="font-extrabold text-gray-900">Skins #{i + 1}</div>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary-100 text-primary-700 font-bold">
-                        {sk.net ? 'Net' : 'Gross'}
-                      </span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold">
-                        {sk.carryovers ? 'Carryovers' : 'No carry'}
-                      </span>
-                    </div>
-                    <div className="mt-1 text-xs text-slate-600">
-                      <span className="font-bold text-slate-800">${sk.fee}</span> per player ·{' '}
-                      <span className="font-bold text-slate-800">{participantIds.length}</span> playing
-                    </div>
-                    <div className="mt-1 text-[11px] text-slate-500">Tap to edit</div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      removeSkins(sk.id);
-                    }}
-                    className="text-[11px] px-2 py-1 rounded-lg border border-red-200 bg-red-50 text-red-700 font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled={!canEdit}
-                    title="Remove Skins"
-                  >
-                    Remove
-                  </button>
-                </div>
-              </button>
-            );
-          })}
-          </div>
-        </section>
-      )}
-      
-      {pinkyArray.length > 0 && (
-        <section>
-          <h2 className="font-semibold mb-2 flex items-center gap-2">
-            <span className="w-1.5 h-4 bg-primary-600 rounded-full"></span>
-            Pinky
-          </h2>
-          <div className="grid gap-3 max-w-lg">
-            {pinkyArray.map((pinky: any, i: number) => {
-              const participantIds =
-                pinky.participantGolferIds && pinky.participantGolferIds.length > 1 ? pinky.participantGolferIds : allGolfers.map((g: any) => g.id);
-              const results = (event.pinkyResults && event.pinkyResults[pinky.id]) || [];
-              const entered = results.filter((r: any) => r.count > 0).length;
-              return (
-                <button
-                  key={pinky.id}
-                  type="button"
-                  onClick={() => setPinkySetupId(pinky.id)}
-                  className="text-left border rounded-xl p-4 bg-white shadow-sm hover:shadow-md transition-shadow"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <div className="font-extrabold text-gray-900">Pinky #{i + 1}</div>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold">
-                          ${pinky.fee} / pinky
-                        </span>
-                      </div>
-                      <div className="mt-1 text-xs text-slate-600">
-                        <span className="font-bold text-slate-800">{participantIds.length}</span> playing ·{' '}
-                        <span className="font-bold text-slate-800">{entered}</span> with counts
-                      </div>
-                      <div className="mt-1 text-[11px] text-slate-500">Tap to enter counts</div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        removePinky(pinky.id);
-                      }}
-                      className="text-[11px] px-2 py-1 rounded-lg border border-red-200 bg-red-50 text-red-700 font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-                      disabled={!canEdit}
-                      title="Remove Pinky"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-      )}
-
-      {greenieArray.length > 0 && (
-        <section>
-          <h2 className="font-semibold mb-2 flex items-center gap-2">
-            <span className="w-1.5 h-4 bg-primary-600 rounded-full"></span>
-            Greenie
-          </h2>
-          <div className="grid gap-3 max-w-lg">
-            {greenieArray.map((greenie: any, i: number) => {
-              const participantIds =
-                greenie.participantGolferIds && greenie.participantGolferIds.length > 1 ? greenie.participantGolferIds : allGolfers.map((g: any) => g.id);
-              const results = (event.greenieResults && event.greenieResults[greenie.id]) || [];
-              const entered = results.filter((r: any) => r.count > 0).length;
-              return (
-                <button
-                  key={greenie.id}
-                  type="button"
-                  onClick={() => setGreenieSetupId(greenie.id)}
-                  className="text-left border rounded-xl p-4 bg-white shadow-sm hover:shadow-md transition-shadow"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <div className="font-extrabold text-gray-900">Greenie #{i + 1}</div>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-bold">
-                          ${greenie.fee} / greenie
-                        </span>
-                      </div>
-                      <div className="mt-1 text-xs text-slate-600">
-                        <span className="font-bold text-slate-800">{participantIds.length}</span> playing ·{' '}
-                        <span className="font-bold text-slate-800">{entered}</span> with counts
-                      </div>
-                      <div className="mt-1 text-[11px] text-slate-500">Tap to enter counts</div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        removeGreenie(greenie.id);
-                      }}
-                      className="text-[11px] px-2 py-1 rounded-lg border border-red-200 bg-red-50 text-red-700 font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-                      disabled={!canEdit}
-                      title="Remove Greenie"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-      )}
 
       {/* Skins Setup Modal */}
       {skinsSetupId && (() => {
@@ -943,7 +1651,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                       onFocus={(e) => e.currentTarget.select()}
                       onChange={(e) => updateCfg({ fee: Number(e.target.value) })}
                       disabled={!canEdit}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold"
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold bg-white text-gray-900"
                     />
                   </div>
                   <label className="mt-3 flex items-center gap-2 text-xs text-slate-700">
@@ -1003,7 +1711,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 <button
                   type="button"
                   onClick={() => setSkinsSetupId(null)}
-                  className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-200 bg-white hover:bg-slate-50"
+                  className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200"
                 >
                   Done
                 </button>
@@ -1074,7 +1782,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                       onFocus={(e) => e.currentTarget.select()}
                       onChange={(e) => updateCfg({ fee: Number(e.target.value) })}
                       disabled={!canEdit}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold"
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold bg-white text-gray-900"
                     />
                   </div>
                 </div>
@@ -1158,7 +1866,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 <button
                   type="button"
                   onClick={() => setPinkySetupId(null)}
-                  className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-200 bg-white hover:bg-slate-50"
+                  className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200"
                 >
                   Done
                 </button>
@@ -1229,7 +1937,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                       onFocus={(e) => e.currentTarget.select()}
                       onChange={(e) => updateCfg({ fee: Number(e.target.value) })}
                       disabled={!canEdit}
-                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold"
+                      className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold bg-white text-gray-900"
                     />
                   </div>
                 </div>
@@ -1314,7 +2022,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 <button
                   type="button"
                   onClick={() => setGreenieSetupId(null)}
-                  className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-200 bg-white hover:bg-slate-50"
+                  className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200"
                 >
                   Done
                 </button>
@@ -1323,6 +2031,139 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
           </div>
         );
       })()}
+      
+      {/* ========== PAYOUTS & BALANCE SECTION (HIDDEN - replaced by inline wheel payouts) ========== */}
+      {false && hasAnyGames && (
+        <div className="mt-6 space-y-4">
+          {/* Section Header - with background for contrast */}
+          <div className="flex items-center gap-2 bg-white rounded-xl px-4 py-3 border border-slate-200 shadow-sm">
+            <span className="text-lg">💰</span>
+            <h3 className="font-bold text-gray-900">Payouts</h3>
+            {isEventCompleted && <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-bold">FINAL</span>}
+            {isEventStarted && !isEventCompleted && <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-bold">LIVE</span>}
+            {!isEventStarted && !isEventCompleted && <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-bold">PREVIEW</span>}
+          </div>
+          
+          {/* Live Skins Results */}
+          {payouts.skins.length > 0 && (isEventStarted || isEventCompleted) && payouts.skins.map((skinResult: any, idx: number) => {
+            if (!skinResult) return null;
+            const skinsWon = Object.entries(skinResult.winningsByGolfer || {})
+              .filter(([_, amt]) => (amt as number) > 0)
+              .sort((a, b) => (b[1] as number) - (a[1] as number));
+            
+            return (
+              <div key={skinResult.configId || idx} className="bg-white rounded-xl border border-slate-200 shadow-sm p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">💰</span>
+                    <span className="font-bold text-gray-900">Skins Results</span>
+                  </div>
+                  <span className="text-xs text-gray-500">Pot: ${skinResult.totalPot?.toFixed(2)}</span>
+                </div>
+                
+                {skinsWon.length === 0 ? (
+                  <div className="text-sm text-gray-500 text-center py-2">
+                    No skins won yet
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {skinsWon.map(([golferId, amount]) => {
+                      const golfer = allGolfers.find((g: any) => g.id === golferId);
+                      const holesWon = skinResult.winningHolesByGolfer?.[golferId] || [];
+                      return (
+                        <div key={golferId} className="flex items-center justify-between bg-green-50 rounded-lg px-3 py-2">
+                          <div>
+                            <div className="font-bold text-gray-900 text-sm">{golfer?.name || golferId}</div>
+                            <div className="text-xs text-gray-500">
+                              Holes: {holesWon.join(', ') || 'None'}
+                            </div>
+                          </div>
+                          <div className="font-bold text-green-600">+${(amount as number).toFixed(2)}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          
+          {/* Big Net Result - Completed events */}
+          {isEventCompleted && myNet != null && (
+            <div className={`rounded-2xl p-6 text-center ${myNet >= 0 ? 'bg-gradient-to-br from-green-500 to-green-600' : 'bg-gradient-to-br from-red-500 to-red-600'} text-white shadow-lg`}>
+              <div className="text-sm opacity-80 font-medium mb-1">Your Final Result</div>
+              <div className="text-5xl font-black">{signedCurrency(myNet)}</div>
+              <div className="text-sm opacity-80 mt-2">Buy-in: {currency(myBuyin)}</div>
+            </div>
+          )}
+          
+          {/* Running balance - In progress events */}
+          {isEventStarted && !isEventCompleted && myNet != null && (
+            <div className={`rounded-xl p-4 ${myNet >= 0 ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-bold text-gray-500 uppercase tracking-wide">Your Balance</div>
+                  <div className={`text-2xl font-black ${myNet >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {signedCurrency(myNet)}
+                  </div>
+                </div>
+                <div className="text-right text-xs text-gray-500">
+                  <div>Buy-in: {currency(myBuyin)}</div>
+                  <div>Winnings: {signedCurrency(myWinnings)}</div>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* All Settlements - Show all for transparency */}
+          {allSettlements.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <button
+                onClick={() => setShowSettlements(!showSettlements)}
+                className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">💸</span>
+                  <span className="font-bold text-gray-900 text-sm">Settlements</span>
+                  <span className="text-xs text-gray-500">({allSettlements.length})</span>
+                </div>
+                <svg className={`w-5 h-5 text-gray-400 transition-transform ${showSettlements ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {showSettlements && (
+                <div className="px-4 pb-4 space-y-2">
+                  {allSettlements.map((settlement: any, i: number) => (
+                    <EventSettlement key={i} settlement={settlement} eventId={eventId} />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          
+          {/* No settlements yet message */}
+          {allSettlements.length === 0 && (isEventStarted || isEventCompleted) && (
+            <div className="bg-white rounded-xl p-4 text-center text-gray-600 text-sm border border-slate-200">
+              No settlements calculated yet. Complete all scores to see payouts.
+            </div>
+          )}
+          
+          {/* Complete Event button - Owner only */}
+          {isOwner && isEventStarted && !isEventCompleted && (
+            <button
+              onClick={handleCompleteEvent}
+              disabled={!allScoresComplete}
+              className={`w-full py-4 rounded-xl font-bold text-base ${
+                !allScoresComplete
+                  ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                  : 'bg-gradient-to-r from-green-600 to-green-700 text-white shadow-lg hover:from-green-700 hover:to-green-800'
+              }`}
+            >
+              {!allScoresComplete ? 'Complete All Scores First' : '✓ Complete Event'}
+            </button>
+          )}
+        </div>
+      )}
       
       {bulkAssignState && (() => {
         const nassau = event.games.nassau.find((nn: any) => nn.id === bulkAssignState.nassauId);

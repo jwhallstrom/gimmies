@@ -324,26 +324,26 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
               }`}
             >
                 {/* Golfer header */}
-                <div className="bg-primary-50 px-2 sm:px-3 py-2 border-b border-primary-200">
+                <div className="bg-primary-700 px-2 sm:px-3 py-2 border-b border-primary-800">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="font-semibold text-sm">{displayName}</span>
+                      <span className="font-bold text-sm text-white">{displayName}</span>
                       {scoreToPar != null && (
                         <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
-                          scoreToPar < 0 ? 'bg-green-500 text-white' :
-                          scoreToPar === 0 ? 'bg-blue-100 text-blue-800' :
-                          'bg-red-100 text-red-800'
+                          scoreToPar < 0 ? 'bg-green-400 text-green-900' :
+                          scoreToPar === 0 ? 'bg-white/90 text-blue-800' :
+                          'bg-red-400 text-red-900'
                         }`}>
                           {scoreToPar > 0 ? `+${scoreToPar}` : scoreToPar}
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-primary-700">
+                    <div className="text-xs text-white font-medium">
                       {(() => {
                         const handicap = eventGolfer.handicapOverride ?? (profile?.handicapIndex ?? null);
                         return handicap != null ? `CH ${courseHandicap(event, golferId, profiles)?.toFixed(1) || 'N/A'}` : '';
                       })()}
-                      {!canEdit && <span className="ml-2 bg-gray-100 px-1 rounded">Read-only</span>}
+                      {!canEdit && <span className="ml-2 bg-white/20 px-1 rounded text-white/80">Read-only</span>}
                     </div>
                   </div>
                 </div>
@@ -393,13 +393,13 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
                         const hcpStrokes = strokesForHole(event, golferId, s.hole, profiles);
                         const gross = s.strokes;
                         const diff = gross != null && par != null ? gross - par : null;
-                        let colorClass = '';
+                        let colorClass = 'bg-white text-gray-900'; // Default with visible text
                         if (diff != null) {
                           if (diff <= -3) colorClass = 'bg-fuchsia-600 text-white font-semibold';
-                          else if (diff === -2) colorClass = 'bg-amber-500 text-black font-semibold';
+                          else if (diff === -2) colorClass = 'bg-amber-500 text-gray-900 font-semibold';
                           else if (diff === -1) colorClass = 'bg-green-500 text-white font-semibold';
-                          else if (diff === 0) colorClass = 'bg-neutral-50';
-                          else if (diff === 1) colorClass = 'bg-orange-200';
+                          else if (diff === 0) colorClass = 'bg-neutral-100 text-gray-900';
+                          else if (diff === 1) colorClass = 'bg-orange-200 text-gray-900';
                           else if (diff === 2) colorClass = 'bg-red-300 text-red-900 font-semibold';
                           else if (diff >= 3) colorClass = 'bg-red-600 text-white font-semibold';
                         }
@@ -414,7 +414,7 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
                               </div>
                             )}
                             <input
-                              className={`w-full h-7 sm:h-8 lg:h-10 px-0.5 py-0 text-center text-[10px] sm:text-xs lg:text-sm outline-none focus:ring-2 focus:ring-primary-300 focus:bg-primary-50/70 transition rounded ${colorClass} ${hcpStrokes > 0 ? 'pl-2 sm:pl-3' : ''} ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
+                              className={`w-full h-7 sm:h-8 lg:h-10 px-0.5 py-0 text-center text-[10px] sm:text-xs lg:text-sm outline-none focus:ring-2 focus:ring-primary-300 focus:bg-primary-50/70 transition rounded border border-slate-200 ${colorClass} ${hcpStrokes > 0 ? 'pl-2 sm:pl-3' : ''} ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
                               value={gross ?? ''}
                               disabled={!canEdit}
                               inputMode="numeric"
@@ -445,37 +445,36 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
                           </div>
                         );
                       })}
-                      <div className="w-8 sm:w-12 lg:w-14 text-[10px] sm:text-xs py-1 text-center font-semibold bg-slate-100 rounded ml-0.5 sm:ml-1">
+                      <div className="w-8 sm:w-12 lg:w-14 h-7 sm:h-8 lg:h-10 flex items-center justify-center text-[10px] sm:text-xs font-black bg-primary-600 text-white rounded ml-0.5 sm:ml-1">
                         {(() => {
-                          const frontScores = sc.scores.slice(0, 9).map((s: any) => s.strokes);
-                          const completeFront = frontScores.every((v: any) => v != null);
-                          return completeFront ? frontScores.reduce((a: number, b: number) => a + b, 0) : '';
+                          const frontScores = sc.scores.slice(0, 9).map((s: any) => s.strokes).filter((v: any) => v != null) as number[];
+                          return frontScores.length > 0 ? frontScores.reduce((a: number, b: number) => a + b, 0) : '—';
                         })()}
                       </div>
                     </div>
 
                     {/* Net Scores 1-9 */}
                     <div className="flex gap-0.5 sm:gap-1">
-                      <div className="w-10 sm:w-12 lg:w-14 text-[10px] sm:text-xs font-medium text-primary-700 py-1">Net</div>
+                      <div className="w-10 sm:w-12 lg:w-14 text-[10px] sm:text-xs font-bold text-primary-800 py-1">Net</div>
                       {sc.scores.slice(0, 9).map((s: any) => {
                         const hcpStrokes = strokesForHole(event, golferId, s.hole, profiles);
                         const gross = s.strokes;
                         const net = gross != null ? gross - hcpStrokes : null;
                         
                         return (
-                          <div key={`net-${s.hole}`} className="w-7 sm:w-8 lg:w-10 xl:w-12 text-[10px] sm:text-xs py-1 text-center text-primary-700 font-medium">
+                          <div key={`net-${s.hole}`} className="w-7 sm:w-8 lg:w-10 xl:w-12 text-[10px] sm:text-xs py-1 text-center text-primary-800 font-bold">
                             {net !== null ? net : ''}
                           </div>
                         );
                       })}
-                      <div className="w-8 sm:w-12 lg:w-14 text-[10px] sm:text-xs py-1 text-center font-medium text-primary-700 bg-primary-50 rounded ml-0.5 sm:ml-1">
+                      <div className="w-8 sm:w-12 lg:w-14 h-7 sm:h-8 lg:h-10 flex items-center justify-center text-[10px] sm:text-xs font-black bg-primary-500 text-white rounded ml-0.5 sm:ml-1">
                         {(() => {
                           const frontNets = sc.scores.slice(0, 9).map((s: any) => {
                             const hcpStrokes = strokesForHole(event, golferId, s.hole, profiles);
                             const gross = s.strokes;
                             return gross != null ? gross - hcpStrokes : null;
                           }).filter((v: any) => v != null) as number[];
-                          return frontNets.length === 9 ? frontNets.reduce((a: number, b: number) => a + b, 0) : '';
+                          return frontNets.length > 0 ? frontNets.reduce((a: number, b: number) => a + b, 0) : '';
                         })()}
                       </div>
                     </div>
@@ -526,13 +525,13 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
                         const hcpStrokes = strokesForHole(event, golferId, s.hole, profiles);
                         const gross = s.strokes;
                         const diff = gross != null && par != null ? gross - par : null;
-                        let colorClass = '';
+                        let colorClass = 'bg-white text-gray-900'; // Default with visible text
                         if (diff != null) {
                           if (diff <= -3) colorClass = 'bg-fuchsia-600 text-white font-semibold';
-                          else if (diff === -2) colorClass = 'bg-amber-500 text-black font-semibold';
+                          else if (diff === -2) colorClass = 'bg-amber-500 text-gray-900 font-semibold';
                           else if (diff === -1) colorClass = 'bg-green-500 text-white font-semibold';
-                          else if (diff === 0) colorClass = 'bg-neutral-50';
-                          else if (diff === 1) colorClass = 'bg-orange-200';
+                          else if (diff === 0) colorClass = 'bg-neutral-100 text-gray-900';
+                          else if (diff === 1) colorClass = 'bg-orange-200 text-gray-900';
                           else if (diff === 2) colorClass = 'bg-red-300 text-red-900 font-semibold';
                           else if (diff >= 3) colorClass = 'bg-red-600 text-white font-semibold';
                         }
@@ -547,7 +546,7 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
                               </div>
                             )}
                             <input
-                              className={`w-full h-7 sm:h-8 lg:h-10 px-0.5 py-0 text-center text-[10px] sm:text-xs lg:text-sm outline-none focus:ring-2 focus:ring-primary-300 focus:bg-primary-50/70 transition rounded ${colorClass} ${hcpStrokes > 0 ? 'pl-2 sm:pl-3' : ''} ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
+                              className={`w-full h-7 sm:h-8 lg:h-10 px-0.5 py-0 text-center text-[10px] sm:text-xs lg:text-sm outline-none focus:ring-2 focus:ring-primary-300 focus:bg-primary-50/70 transition rounded border border-slate-200 ${colorClass} ${hcpStrokes > 0 ? 'pl-2 sm:pl-3' : ''} ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
                               value={gross ?? ''}
                               disabled={!canEdit}
                               inputMode="numeric"
@@ -578,37 +577,36 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
                           </div>
                         );
                       })}
-                      <div className="w-8 sm:w-12 lg:w-14 text-[10px] sm:text-xs py-1 text-center font-semibold bg-slate-100 rounded ml-0.5 sm:ml-1">
+                      <div className="w-8 sm:w-12 lg:w-14 h-7 sm:h-8 lg:h-10 flex items-center justify-center text-[10px] sm:text-xs font-black bg-primary-600 text-white rounded ml-0.5 sm:ml-1">
                         {(() => {
-                          const backScores = sc.scores.slice(9, 18).map((s: any) => s.strokes);
-                          const completeBack = backScores.every((v: any) => v != null);
-                          return completeBack ? backScores.reduce((a: number, b: number) => a + b, 0) : '';
+                          const backScores = sc.scores.slice(9, 18).map((s: any) => s.strokes).filter((v: any) => v != null) as number[];
+                          return backScores.length > 0 ? backScores.reduce((a: number, b: number) => a + b, 0) : '—';
                         })()}
                       </div>
                     </div>
 
                     {/* Net Scores 10-18 */}
                     <div className="flex gap-0.5 sm:gap-1">
-                      <div className="w-10 sm:w-12 lg:w-14 text-[10px] sm:text-xs font-medium text-primary-700 py-1">Net</div>
+                      <div className="w-10 sm:w-12 lg:w-14 text-[10px] sm:text-xs font-bold text-primary-800 py-1">Net</div>
                       {sc.scores.slice(9, 18).map((s: any) => {
                         const hcpStrokes = strokesForHole(event, golferId, s.hole, profiles);
                         const gross = s.strokes;
                         const net = gross != null ? gross - hcpStrokes : null;
                         
                         return (
-                          <div key={`net-${s.hole}`} className="w-7 sm:w-8 lg:w-10 xl:w-12 text-[10px] sm:text-xs py-1 text-center text-primary-700 font-medium">
+                          <div key={`net-${s.hole}`} className="w-7 sm:w-8 lg:w-10 xl:w-12 text-[10px] sm:text-xs py-1 text-center text-primary-800 font-bold">
                             {net !== null ? net : ''}
                           </div>
                         );
                       })}
-                      <div className="w-8 sm:w-12 lg:w-14 text-[10px] sm:text-xs py-1 text-center font-medium text-primary-700 bg-primary-50 rounded ml-0.5 sm:ml-1">
+                      <div className="w-8 sm:w-12 lg:w-14 h-7 sm:h-8 lg:h-10 flex items-center justify-center text-[10px] sm:text-xs font-black bg-primary-500 text-white rounded ml-0.5 sm:ml-1">
                         {(() => {
                           const backNets = sc.scores.slice(9, 18).map((s: any) => {
                             const hcpStrokes = strokesForHole(event, golferId, s.hole, profiles);
                             const gross = s.strokes;
                             return gross != null ? gross - hcpStrokes : null;
                           }).filter((v: any) => v != null) as number[];
-                          return backNets.length === 9 ? backNets.reduce((a: number, b: number) => a + b, 0) : '';
+                          return backNets.length > 0 ? backNets.reduce((a: number, b: number) => a + b, 0) : '';
                         })()}
                       </div>
                     </div>
@@ -619,14 +617,13 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
 
                 {/* Total - show only in 'full' view */}
                 {view === 'full' && (
-                <div className="px-3 py-2 bg-slate-50 border-t border-slate-200">
+                <div className="px-3 py-2 bg-primary-700 border-t border-primary-800">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm font-semibold">Total</span>
-                    <span className="text-lg font-bold">
+                    <span className="text-sm font-bold text-white">Total</span>
+                    <span className="text-lg font-black text-white">
                       {(() => {
-                        const allScores = sc.scores.map((s: any) => s.strokes);
-                        const allComplete = allScores.every((v: any) => v != null);
-                        return allComplete ? allScores.reduce((a: number, b: number) => a + b, 0) : '';
+                        const allScores = sc.scores.map((s: any) => s.strokes).filter((v: any) => v != null) as number[];
+                        return allScores.length > 0 ? allScores.reduce((a: number, b: number) => a + b, 0) : '—';
                       })()}
                     </span>
                   </div>

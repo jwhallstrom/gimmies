@@ -1,10 +1,26 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useEventChatAdapter } from '../../adapters';
 
 interface ChatTabProps { 
   eventId: string;
   onCreateEvent?: () => void;
 }
+
+// Hide bottom nav when chat input is focused (mobile keyboard)
+const useHideBottomNavOnFocus = () => {
+  const handleFocus = useCallback(() => {
+    document.body.classList.add('chat-input-focused');
+  }, []);
+  
+  const handleBlur = useCallback(() => {
+    // Small delay to prevent flicker when tapping send button
+    setTimeout(() => {
+      document.body.classList.remove('chat-input-focused');
+    }, 100);
+  }, []);
+  
+  return { handleFocus, handleBlur };
+};
 
 // Simple relative time helper
 const timeAgo = (iso: string) => {
@@ -24,6 +40,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent }) => {
   const { event, currentProfile, messages, profilesById, send } = useEventChatAdapter(eventId);
   const [text, setText] = useState('');
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const { handleFocus, handleBlur } = useHideBottomNavOnFocus();
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -64,7 +81,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent }) => {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-280px)] min-h-[300px] max-h-[500px] bg-white/95 backdrop-blur rounded-xl shadow-lg shadow-slate-200/50 border border-slate-200/80 overflow-hidden">
+    <div className="flex flex-col h-[calc(100dvh-200px)] min-h-[300px] bg-white/95 backdrop-blur rounded-t-xl rounded-b-none shadow-lg shadow-slate-200/50 border border-slate-200/80 border-b-0 overflow-hidden -mx-4 -mb-6">
       <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2 text-[13px] scroll-smooth">
         {messages.length === 0 && (
           <div className="text-center text-gray-500 text-sm mt-8">No messages yet. Start the conversation!</div>
@@ -129,16 +146,18 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent }) => {
         <div ref={bottomRef} />
       </div>
       {/* Input area - sticky at bottom with better mobile handling */}
-      <div className="border-t border-gray-200 p-3 bg-white rounded-b-xl flex-shrink-0">
+      <div className="border-t border-gray-200 p-3 pb-safe bg-white flex-shrink-0">
         <div className="flex items-end gap-2">
           <textarea
             value={text}
             onChange={e => setText(e.target.value)}
             onKeyDown={handleKey}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
             placeholder={currentProfile ? 'Type a message...' : 'Create a profile to chat'}
             disabled={!currentProfile}
             rows={1}
-            className="flex-1 resize-none rounded-xl border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 px-4 py-2.5 text-base bg-gray-50 text-gray-900 placeholder-gray-500 disabled:opacity-50"
+            className="flex-1 resize-none rounded-xl border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 px-4 py-2.5 text-base bg-white text-gray-900 placeholder-gray-400 disabled:opacity-50"
             style={{ minHeight: '44px', maxHeight: '100px' }}
           />
           <button
