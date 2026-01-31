@@ -523,6 +523,54 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
         </div>
       )}
 
+      {/* ========== NASSAU SETUP CARDS (before scores exist) ========== */}
+      {(!nassauStandings || nassauStandings.length === 0) && event.games.nassau.length > 0 && event.games.nassau.map((n: any) => {
+        const fees = n.fees ?? { out: n.fee, in: n.fee, total: n.fee };
+        const hasTeams = (n.teams || []).filter((t: any) => t.golferIds?.length > 0).length >= 2;
+        return (
+          <button
+            key={n.id}
+            onClick={() => setNassauSetupId(n.id)}
+            className="w-full bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 text-left hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-xl">🏌️</span>
+                <div>
+                  <div className="font-bold text-gray-900 dark:text-white">Nassau</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400">
+                    ${fees.out}/${fees.in}/${fees.total} · {n.net ? 'Net' : 'Gross'} · {hasTeams ? 'Teams' : 'Individual'}
+                  </div>
+                </div>
+              </div>
+              <span className="text-xs text-primary-600 dark:text-primary-400 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>
+            </div>
+          </button>
+        );
+      })}
+
+      {/* ========== SKINS SETUP CARDS (before scores exist) ========== */}
+      {(!skinsStandings || skinsStandings.length === 0) && skinsArray.length > 0 && skinsArray.map((s: any) => (
+        <button
+          key={s.id}
+          onClick={() => setSkinsSetupId(s.id)}
+          className="w-full bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-4 text-left hover:border-slate-300 dark:hover:border-slate-600 transition-colors"
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-xl">💰</span>
+              <div>
+                <div className="font-bold text-gray-900 dark:text-white">Skins</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  ${s.fee}/hole · {s.net ? 'Net' : 'Gross'} · {s.carryovers ? 'Carryovers' : 'No carry'}
+                </div>
+              </div>
+            </div>
+            <span className="text-xs text-primary-600 dark:text-primary-400 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>
+          </div>
+        </button>
+      ))}
+
       {/* ========== NASSAU LEADERBOARD ========== */}
       {nassauStandings && nassauStandings.map(nassau => {
         const frontSeg = nassau.standings.find(s => s.segment === 'front');
@@ -1551,7 +1599,19 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
               </div>
 
               {/* Footer */}
-              <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-end">
+              <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      removeNassau(n.id);
+                      setNassauSetupId(null);
+                    }}
+                    className="px-4 py-2 rounded-lg text-xs font-extrabold border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+                  >
+                    Remove
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setNassauSetupId(null)}
@@ -1706,7 +1766,19 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 </div>
               </div>
 
-              <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-end">
+              <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+                {canEdit && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      removeSkins(sk.id);
+                      setSkinsSetupId(null);
+                    }}
+                    className="px-4 py-2 rounded-lg text-xs font-extrabold border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+                  >
+                    Remove
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => setSkinsSetupId(null)}
