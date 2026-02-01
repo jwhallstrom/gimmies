@@ -8,7 +8,7 @@
  * - Mobile-first with large tap targets
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useParams, Routes, Route, NavLink, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import useStore from '../state/store';
 import { useEventSync } from '../hooks/useEventSync';
@@ -34,19 +34,6 @@ const EventPage: React.FC = () => {
   const [showEventsDropdown, setShowEventsDropdown] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  
-  // Disable parent scroll container when EventPage is mounted (for fixed chat layout)
-  useEffect(() => {
-    const scrollContainer = document.getElementById('main-scroll-container');
-    if (scrollContainer) {
-      scrollContainer.style.overflow = 'hidden';
-    }
-    return () => {
-      if (scrollContainer) {
-        scrollContainer.style.overflow = 'auto';
-      }
-    };
-  }, []);
   
   // Auto-sync event from cloud every 30 seconds
   useEventSync(id, 30000);
@@ -140,7 +127,7 @@ const EventPage: React.FC = () => {
     : [
         { path: 'chat', label: 'Chat', icon: '💬' },
         { path: 'golfers', label: 'Golfers', icon: '👥', badge: stats.golferCount },
-        { path: 'scorecard', label: 'Leaderboard', icon: '📊' },
+        { path: 'scorecard', label: 'Leaderboard', icon: '🏆' },
         { path: 'games', label: 'Games', icon: '🎯' },
         ...(isOwner ? [
           { path: 'alerts', label: 'Alerts', icon: '🔔', ownerOnly: true },
@@ -158,11 +145,16 @@ const EventPage: React.FC = () => {
   // Determine current tab for highlighting
   const currentPath = location.pathname.split('/').pop() || 'chat';
   const isOnTab = tabs.some(t => t.path === currentPath);
+  const isChatLike = currentPath === 'chat' || !isOnTab;
+  // Icon-only tabs (no labels): saves space and removes sideways scrolling.
+  const tabPillClass =
+    'flex items-center justify-center w-11 h-11 rounded-xl font-semibold text-[11px] transition-all flex-shrink-0';
+  const tabBarClass = 'flex gap-1 px-3 pb-2 -mx-3 justify-center';
 
   return (
-    <div className="h-full -mx-4 -mt-6 flex flex-col overflow-hidden">
-      {/* Header - Fixed at top, doesn't scroll */}
-      <div className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 px-3 py-2 shadow-lg z-30 flex-shrink-0">
+    <div className={isChatLike ? 'h-full min-h-0 flex flex-col' : 'min-h-screen -mx-4 -mt-6 flex flex-col'}>
+      {/* Header - Compact & Sticky */}
+      <div className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 px-3 py-2 shadow-lg sticky top-0 z-30 flex-shrink-0">
         {/* Single Row: Event Info + Actions */}
         <div className="flex items-center gap-2">
           {/* Event Title - Takes remaining space */}
@@ -186,13 +178,10 @@ const EventPage: React.FC = () => {
         </div>
         
         {/* Tab Navigation - Inline */}
-        <div className={`flex justify-center px-3 pb-2 -mx-3 ${isGroupHub ? 'gap-1' : 'gap-3'}`}>
+        <div className={tabBarClass}>
           {tabs.map((tab) => {
             const isActive = currentPath === tab.path || (!isOnTab && tab.path === 'chat');
             const badge = (tab as any).badge as number | undefined;
-            
-            // For events (not groups), show icons only to save space
-            const showLabel = isGroupHub;
             
             // Alerts tab opens modal instead of navigating
             if (tab.path === 'alerts') {
@@ -200,13 +189,11 @@ const EventPage: React.FC = () => {
                 <button
                   key={tab.path}
                   onClick={() => setShowNotifications(true)}
-                  className={`flex items-center justify-center gap-1 rounded-lg font-semibold transition-all flex-shrink-0 bg-white/10 text-white/85 hover:bg-white/20 hover:text-white ${
-                    showLabel ? 'px-2.5 py-1.5 text-[11px]' : 'w-10 h-10 text-lg'
-                  }`}
+                  aria-label={tab.label}
                   title={tab.label}
+                  className={`relative ${tabPillClass} ${isActive ? 'bg-white text-primary-800 shadow-sm' : 'bg-white/10 text-white/85 hover:bg-white/20 hover:text-white'}`}
                 >
-                  <span className={showLabel ? 'text-sm leading-none' : ''}>{tab.icon}</span>
-                  {showLabel && <span className="leading-none whitespace-nowrap">{tab.label}</span>}
+                  <span className="text-lg leading-none" aria-hidden="true">{tab.icon}</span>
                 </button>
               );
             }
@@ -217,22 +204,20 @@ const EventPage: React.FC = () => {
                 <button
                   key={tab.path}
                   onClick={() => setShowEventsDropdown(!showEventsDropdown)}
-                  className={`flex items-center justify-center gap-1 rounded-lg font-semibold transition-all flex-shrink-0 ${
-                    showLabel ? 'px-2.5 py-1.5 text-[11px]' : 'w-10 h-10 text-lg'
-                  } ${
+                  aria-label={tab.label}
+                  title={tab.label}
+                  className={`relative ${tabPillClass} ${
                     showEventsDropdown
                       ? 'bg-white text-primary-800 shadow-sm'
                       : badge && badge > 0
                         ? 'bg-orange-500 text-white hover:bg-orange-600'
                         : 'bg-white/10 text-white/85 hover:bg-white/20 hover:text-white'
                   }`}
-                  title={tab.label}
                 >
-                  <span className={showLabel ? 'text-sm leading-none' : ''}>{tab.icon}</span>
-                  {showLabel && <span className="leading-none whitespace-nowrap">{tab.label}</span>}
+                  <span className="text-lg leading-none" aria-hidden="true">{tab.icon}</span>
                   {typeof badge === 'number' && badge > 0 && (
                     <span
-                      className={`ml-0.5 px-1 py-0.5 rounded-full text-[9px] font-extrabold leading-none ${
+                      className={`absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-extrabold leading-none flex items-center justify-center ${
                         showEventsDropdown ? 'bg-primary-100 text-primary-800' : 'bg-white/30 text-white'
                       }`}
                     >
@@ -247,35 +232,23 @@ const EventPage: React.FC = () => {
               <NavLink
                 key={tab.path}
                 to={tab.path}
-                className={`relative flex items-center justify-center gap-1 rounded-lg font-semibold transition-all flex-shrink-0 ${
-                  showLabel ? 'px-2.5 py-1.5 text-[11px]' : 'w-10 h-10 text-lg'
-                } ${
+                aria-label={tab.label}
+                title={tab.label}
+                className={`relative ${tabPillClass} ${
                   isActive
                     ? 'bg-white text-primary-800 shadow-sm'
                     : 'bg-white/10 text-white/85 hover:bg-white/20 hover:text-white'
                 }`}
-                title={tab.label}
               >
-                <span className={showLabel ? 'text-sm leading-none' : ''}>{tab.icon}</span>
-                {showLabel && <span className="leading-none whitespace-nowrap">{tab.label}</span>}
+                <span className="text-lg leading-none" aria-hidden="true">{tab.icon}</span>
                 {typeof badge === 'number' && (
-                  showLabel ? (
-                    <span
-                      className={`ml-0.5 px-1 py-0.5 rounded-full text-[9px] font-extrabold leading-none ${
-                        isActive ? 'bg-primary-100 text-primary-800' : 'bg-white/20 text-white'
-                      }`}
-                    >
-                      {badge}
-                    </span>
-                  ) : (
-                    <span
-                      className={`absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-[10px] font-bold ${
-                        isActive ? 'bg-primary-600 text-white' : 'bg-white text-primary-800'
-                      }`}
-                    >
-                      {badge}
-                    </span>
-                  )
+                  <span
+                    className={`absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-extrabold leading-none flex items-center justify-center ${
+                      isActive ? 'bg-primary-100 text-primary-800' : 'bg-white/20 text-white'
+                    }`}
+                  >
+                    {badge}
+                  </span>
                 )}
               </NavLink>
             );
@@ -446,8 +419,8 @@ const EventPage: React.FC = () => {
         </>
       )}
       
-      {/* Content Area - Fills remaining height, children handle scrolling */}
-      <div className="flex-1 overflow-hidden px-4 py-2 flex flex-col">
+      {/* Content Area - Chat: fixed composer, messages scroll. Other tabs: page scroll. */}
+      <div className={isChatLike ? 'flex-1 min-h-0 overflow-hidden px-4 py-2' : 'px-4 py-2'}>
         <Routes>
           <Route index element={<ChatTab eventId={event.id} />} />
           <Route path="chat" element={<ChatTab eventId={event.id} />} />

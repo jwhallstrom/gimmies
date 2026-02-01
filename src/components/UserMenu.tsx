@@ -5,7 +5,7 @@ import SettingsPanel from './SettingsPanel';
 import { useAuthMode } from '../hooks/useAuthMode';
 
 const UserMenu: React.FC = () => {
-  const { currentUser, currentProfile, events, settlements } = useStore();
+  const { currentUser, currentProfile, events, settlements, notificationReadAt } = useStore();
   const { isGuest } = useAuthMode();
   const [showSettings, setShowSettings] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -13,40 +13,88 @@ const UserMenu: React.FC = () => {
   // Calculate notification count (unread items)
   const notificationCount = useMemo(() => {
     if (!currentProfile) return 0;
+    const now = new Date();
+    const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const readAt = notificationReadAt || {};
+
+    const isRead = (id: string) => Boolean(readAt?.[id]);
+
+    // Matches NotificationCenter semantics: when read, it should stop counting immediately.
+    // "Dismissal" also hides stale items, but for the badge, read presence is enough.
     let count = 0;
-    
-    // Pending settlements
-    const pending = (settlements || []).filter(
-      (s: any) =>
-        s?.status === 'pending' &&
-        (s?.toProfileId === currentProfile.id || s?.fromProfileId === currentProfile.id)
-    );
-    count += pending.length;
-    
-    // Join requests for groups you own
-    events?.filter(e => e.hubType === 'group' && e.ownerProfileId === currentProfile.id).forEach(group => {
-      count += (group.joinRequests || []).filter((r: any) => r.status === 'pending').length;
+
+    // Pending settlements (same id scheme as NotificationCenter)
+    (settlements || []).forEach((s: any, idx: number) => {
+      if (s.status !== 'pending') return;
+      const id = `settle-${s.id || idx}`;
+      if (!isRead(id)) count++;
     });
-    
-    // Active events with scores (you might have updates)
-    events?.filter(e => !e.isCompleted && e.hubType !== 'group').forEach(event => {
-      const hasActivity = event.scorecards?.some(sc => sc.scores?.length > 0);
-      if (hasActivity) count++;
-    });
-    
-    // Recent chat messages in groups
-    events?.filter(e => e.hubType === 'group').forEach(group => {
-      const recentMsgs = (group.chat || []).filter((m: any) => {
-        if (m.profileId === currentProfile.id) return false;
-        const msgTime = new Date(m.createdAt).getTime();
-        const hourAgo = Date.now() - (60 * 60 * 1000);
-        return msgTime > hourAgo;
+
+    // Upcoming events today (same id scheme as NotificationCenter)
+    (events || [])
+      .filter((e: any) => !e?.isCompleted && e?.hubType !== 'group')
+      .forEach((event: any) => {
+        const eventDate = new Date(event.date);
+        const hoursUntil = (eventDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+        if (hoursUntil > 0 && hoursUntil < 24) {
+          const id = `upcoming-${event.id}`;
+          if (!isRead(id)) count++;
+        }
       });
-      if (recentMsgs.length > 0) count++;
-    });
-    
+
+    // Lightweight "leaderboard position" alerts (same id scheme)
+    (events || [])
+      .filter((e: any) => !e?.isCompleted && e?.hubType !== 'group')
+      .forEach((event: any) => {
+        const hasScores = event.scorecards?.some((sc: any) => (sc.scores?.length || 0) > 0);
+        if (!hasScores) return;
+        const myScorecard = event.scorecards?.find((sc: any) => sc.golferId === currentProfile.id);
+        const holesPlayed = myScorecard?.scores?.filter((s: any) => s?.strokes != null).length || 0;
+        if (holesPlayed <= 0) return;
+
+        const leaderboard = (event.scorecards || [])
+          .map((sc: any) => {
+            const scores = sc.scores || [];
+            const gross = scores.reduce((sum: number, s: any) => sum + (s?.strokes || 0), 0);
+            return { golferId: sc.golferId, gross, holes: scores.filter((s: any) => s?.strokes).length };
+          })
+          .filter((p: any) => p.holes > 0)
+          .sort((a: any, b: any) => a.gross - b.gross);
+
+        const myPosition = leaderboard?.findIndex((p: any) => p.golferId === currentProfile.id);
+        if (myPosition >= 0 && myPosition < 3) {
+          const id = `position-${event.id}`;
+          if (!isRead(id)) count++;
+        }
+      });
+
+    // Group chat activity (same id scheme as NotificationCenter)
+    (events || [])
+      .filter((e: any) => e?.hubType === 'group')
+      .forEach((group: any) => {
+        const recentMessages = (group.chat || [])
+          .filter((m: any) => m.profileId !== currentProfile.id)
+          .filter((m: any) => new Date(m.createdAt) > oneDayAgo)
+          .slice(-1);
+        if (recentMessages.length === 0) return;
+        const latestMsg = recentMessages[recentMessages.length - 1];
+        const id = `chat-${group.id}-${latestMsg.id || latestMsg.createdAt}`;
+        if (!isRead(id)) count++;
+      });
+
+    // Group join requests (same id scheme as NotificationCenter)
+    (events || [])
+      .filter((e: any) => e?.hubType === 'group' && e?.ownerProfileId === currentProfile.id)
+      .forEach((group: any) => {
+        const pending = (group.joinRequests || []).filter((r: any) => r.status === 'pending');
+        if (pending.length === 0) return;
+        const id = `joinreq-${group.id}`;
+        if (!isRead(id)) count++;
+      });
+
+    // Cap for badge display
     return Math.min(count, 99);
-  }, [currentProfile, events, settlements]);
+  }, [currentProfile, events, settlements, notificationReadAt]);
 
   if (!currentUser || !currentProfile) return null;
 

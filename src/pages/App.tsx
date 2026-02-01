@@ -8,7 +8,6 @@ import { ToastManager } from '../components/Toast';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { LevelUpModal } from '../components/verified';
 import useStore from '../state/store';
-import { getStatusTierByLevel } from '../utils/verifiedStatus';
 
 // Lazy load secondary routes for code splitting
 const EventsPage = lazy(() => import('./EventsPage'));
@@ -20,7 +19,6 @@ const EventPage = lazy(() => import('./EventPage'));
 const JoinEventPage = lazy(() => import('./JoinEventPage'));
 const WalletPage = lazy(() => import('./WalletPage'));
 const AuthDemoPage = lazy(() => import('./AuthDemoPage').then(m => ({ default: m.AuthDemoPage })));
-const EditProfilePage = lazy(() => import('./EditProfilePage'));
 
 // Tournament pages (prototype feature)
 const TournamentsPage = lazy(() => import('./TournamentsPage'));
@@ -36,6 +34,10 @@ const App: React.FC = () => {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [amplifyUser, setAmplifyUser] = useState<any>(null);
   const [pendingJoinHandled, setPendingJoinHandled] = useState(false);
+  const isEventRoute = location.pathname.startsWith('/event/');
+  const isEventChatRoute =
+    isEventRoute &&
+    (location.pathname.endsWith('/chat') || /^\/event\/[^/]+\/?$/.test(location.pathname));
 
   // If someone opens a join link before their profile is set up, we store the code in sessionStorage.
   // Once a profile exists, auto-join and navigate them straight into the event.
@@ -269,14 +271,19 @@ const App: React.FC = () => {
         </Link>
         <UserMenu />
       </header>
-      <main className="flex-1 relative w-full overflow-hidden">
-        <div className="absolute inset-0 overflow-y-auto" id="main-scroll-container">
-          <div className="px-4 pt-6 content-with-footer max-w-5xl w-full mx-auto h-full">
+      <main className="flex-1 relative w-full">
+        <div
+          className={`absolute inset-0 ${
+            isEventRoute
+              ? `${isEventChatRoute ? 'overflow-hidden' : 'overflow-y-auto'} app-scroll-with-bottom-nav`
+              : 'overflow-y-auto'
+          }`}
+        >
+          <div className={isEventRoute ? 'h-full w-full' : 'px-4 pt-6 content-with-footer max-w-5xl w-full mx-auto'}>
             <Suspense fallback={<LoadingSpinner message="Loading page..." />}>
               <Routes>
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/events" element={<EventsPage />} />
-                <Route path="/profile" element={<EditProfilePage />} />
                 <Route path="/handicap" element={<HandicapPage />} />
                 <Route path="/handicap/add-round" element={<AddScorePage />} />
                 <Route path="/handicap/round/:roundId" element={<RoundDetailPage />} />
@@ -299,16 +306,16 @@ const App: React.FC = () => {
           </div>
         </div>
       </main>
-      <footer className="bottom-nav fixed bottom-0 inset-x-0 bg-white/95 dark:bg-slate-900/85 backdrop-blur-lg border-t border-primary-900/20 dark:border-white/15 shadow-[0_-1px_20px_rgba(0,0,0,0.06)] dark:shadow-[0_-1px_24px_rgba(0,0,0,0.45)] flex items-center justify-around z-40 px-2">
+      <footer className="bottom-nav fixed bottom-0 inset-x-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg border-t border-gray-200 dark:border-white/10 flex items-center justify-around z-40 px-2">
         <Link
           to="/"
           className={`flex flex-col items-center justify-center gap-0.5 min-w-[56px] min-h-[52px] py-1.5 rounded-xl transition-all ${
-            location.pathname === '/'
-              ? 'text-primary-600 dark:text-primary-300 bg-primary-50 dark:bg-primary-900/30'
-              : 'text-primary-800 dark:text-slate-200 hover:text-primary-600 dark:hover:text-primary-200 active:bg-gray-100 dark:active:bg-white/10'
+            location.pathname === '/' 
+              ? 'text-primary-600 bg-primary-50 dark:bg-primary-900/30' 
+              : 'text-gray-500 dark:text-gray-400 active:bg-gray-100'
           }`}
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
           </svg>
           <span className="text-[10px] font-medium">Home</span>
@@ -317,12 +324,12 @@ const App: React.FC = () => {
         <Link
           to="/events"
           className={`flex flex-col items-center justify-center gap-0.5 min-w-[56px] min-h-[52px] py-1.5 rounded-xl transition-all relative ${
-            location.pathname === '/events'
-              ? 'text-primary-600 dark:text-primary-300 bg-primary-50 dark:bg-primary-900/30'
-              : 'text-primary-800 dark:text-slate-200 hover:text-primary-600 dark:hover:text-primary-200 active:bg-gray-100 dark:active:bg-white/10'
+            location.pathname === '/events' 
+              ? 'text-primary-600 bg-primary-50 dark:bg-primary-900/30' 
+              : 'text-gray-500 dark:text-gray-400 active:bg-gray-100'
           }`}
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
           <span className="text-[10px] font-medium">Events</span>
@@ -336,12 +343,12 @@ const App: React.FC = () => {
         <Link
           to="/handicap"
           className={`flex flex-col items-center justify-center gap-0.5 min-w-[56px] min-h-[52px] py-1.5 rounded-xl transition-all ${
-            location.pathname === '/handicap'
-              ? 'text-primary-600 dark:text-primary-300 bg-primary-50 dark:bg-primary-900/30'
-              : 'text-primary-800 dark:text-slate-200 hover:text-primary-600 dark:hover:text-primary-200 active:bg-gray-100 dark:active:bg-white/10'
+            location.pathname === '/handicap' 
+              ? 'text-primary-600 bg-primary-50 dark:bg-primary-900/30' 
+              : 'text-gray-500 dark:text-gray-400 active:bg-gray-100'
           }`}
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <circle cx="12" cy="12" r="10" strokeWidth={2}/>
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h8M8 12a4 4 0 004-4m0 8a4 4 0 01-4-4" />
           </svg>
@@ -351,12 +358,12 @@ const App: React.FC = () => {
         <Link
           to="/wallet"
           className={`flex flex-col items-center justify-center gap-0.5 min-w-[56px] min-h-[52px] py-1.5 rounded-xl transition-all ${
-            location.pathname.startsWith('/wallet')
-              ? 'text-primary-600 dark:text-primary-300 bg-primary-50 dark:bg-primary-900/30'
-              : 'text-primary-800 dark:text-slate-200 hover:text-primary-600 dark:hover:text-primary-200 active:bg-gray-100 dark:active:bg-white/10'
+            location.pathname.startsWith('/wallet') 
+              ? 'text-primary-600 bg-primary-50 dark:bg-primary-900/30' 
+              : 'text-gray-500 dark:text-gray-400 active:bg-gray-100'
           }`}
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
           </svg>
           <span className="text-[10px] font-medium">Wallet</span>
@@ -365,12 +372,12 @@ const App: React.FC = () => {
         <Link
           to="/analytics"
           className={`flex flex-col items-center justify-center gap-0.5 min-w-[56px] min-h-[52px] py-1.5 rounded-xl transition-all ${
-            location.pathname === '/analytics'
-              ? 'text-primary-600 dark:text-primary-300 bg-primary-50 dark:bg-primary-900/30'
-              : 'text-primary-800 dark:text-slate-200 hover:text-primary-600 dark:hover:text-primary-200 active:bg-gray-100 dark:active:bg-white/10'
+            location.pathname === '/analytics' 
+              ? 'text-primary-600 bg-primary-50 dark:bg-primary-900/30' 
+              : 'text-gray-500 dark:text-gray-400 active:bg-gray-100'
           }`}
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
           </svg>
           <span className="text-[10px] font-medium">Stats</span>
@@ -383,8 +390,8 @@ const App: React.FC = () => {
         <LevelUpModal
           isOpen={true}
           onClose={clearPendingLevelUp}
-          oldTier={getStatusTierByLevel(pendingLevelUp.oldLevel)}
-          newTier={getStatusTierByLevel(pendingLevelUp.newLevel)}
+          oldTier={pendingLevelUp.oldTier}
+          newTier={pendingLevelUp.newTier}
           verifiedRounds={pendingLevelUp.verifiedRounds}
         />
       )}

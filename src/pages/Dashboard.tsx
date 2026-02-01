@@ -17,6 +17,7 @@ import { CreateEventWizard } from '../components/CreateEventWizard';
 import { CreateGroupWizard } from '../components/CreateGroupWizard';
 import { DiscoverGroupsModal } from '../components/DiscoverGroupsModal';
 import SettingsPanel from '../components/SettingsPanel';
+import { SignInRequired } from '../components/SignInRequired';
 import { useEventsAdapter, useWalletAdapter } from '../adapters';
 import type { Event } from '../state/types';
 import useStore from '../state/store';
@@ -54,21 +55,41 @@ const Dashboard: React.FC = () => {
   const { wallet } = useWalletAdapter();
   const { isGuest } = useAuthMode();
   const navigate = useNavigate();
+  const addToast = useStore((s: any) => s.addToast);
+  const logout = useStore((s: any) => s.logout);
 
   const [showCreateWizard, setShowCreateWizard] = useState(false);
   const [showCreateGroupWizard, setShowCreateGroupWizard] = useState(false);
   const [showDiscoverGroups, setShowDiscoverGroups] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [tab, setTab] = useState<Tab>('events');
+  const homeDefaultTabPref = (currentProfile?.preferences as any)?.homeDefaultTab as Tab | undefined;
+  const [tabTouched, setTabTouched] = useState(false);
+  const [tab, setTab] = useState<Tab>(() => (homeDefaultTabPref === 'groups' ? 'groups' : 'events'));
+  const [eventSearch, setEventSearch] = useState('');
+  const [groupSearch, setGroupSearch] = useState('');
+
+  // Apply preferred default tab when profile loads (unless user already interacted)
+  useEffect(() => {
+    if (tabTouched) return;
+    setTab(homeDefaultTabPref === 'groups' ? 'groups' : 'events');
+  }, [homeDefaultTabPref, tabTouched]);
   
   // Prevent multiple wizards from opening simultaneously
   const openEventWizard = () => {
+    if (isGuest) {
+      addToast?.('Sign in to create events', 'error', 2500);
+      return;
+    }
     setShowCreateGroupWizard(false);
     setShowDiscoverGroups(false);
     setShowCreateWizard(true);
   };
   
   const openGroupWizard = () => {
+    if (isGuest) {
+      addToast?.('Sign in to create groups', 'error', 2500);
+      return;
+    }
     setShowCreateWizard(false);
     setShowDiscoverGroups(false);
     setShowCreateGroupWizard(true);
@@ -97,8 +118,9 @@ const Dashboard: React.FC = () => {
   // Load events on mount
   useEffect(() => {
     if (!currentProfile) return;
+    if (isGuest) return;
     loadEventsFromCloud().catch(() => {});
-  }, [currentProfile?.id]);
+  }, [currentProfile?.id, isGuest]);
 
   // Separate active events from groups
   const { activeEvents, completedEvents, groups } = useMemo(() => {
@@ -123,6 +145,18 @@ const Dashboard: React.FC = () => {
     
     return { activeEvents: active, completedEvents: completed, groups: groupList };
   }, [userEvents]);
+
+  const filteredActiveEvents = useMemo(() => {
+    const q = eventSearch.trim().toLowerCase();
+    if (!q) return activeEvents;
+    return activeEvents.filter(e => (e.name || '').toLowerCase().includes(q));
+  }, [activeEvents, eventSearch]);
+
+  const filteredGroups = useMemo(() => {
+    const q = groupSearch.trim().toLowerCase();
+    if (!q) return groups;
+    return groups.filter(g => (g.name || '').toLowerCase().includes(q));
+  }, [groups, groupSearch]);
 
   // Quick stats
   const stats = useMemo(() => {
@@ -299,6 +333,20 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-5 pb-32">
+      {isGuest && (
+        <SignInRequired
+          title="You're in Guest Mode"
+          message="Browse the app, but creating/joining games is locked until you sign in so everything stays cloud-synced."
+          actionLabel="Sign In / Create Account"
+          onAction={() => {
+            setShowCreateWizard(false);
+            setShowCreateGroupWizard(false);
+            setShowDiscoverGroups(false);
+            setShowSettings(false);
+            logout();
+          }}
+        />
+      )}
       {/* Compact Header - Avatar + Name + Quick Stats in one row */}
       <header className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 -mx-4 -mt-6 px-4 pt-6 pb-4 shadow-lg">
         <div className="flex items-center gap-3">
@@ -381,7 +429,7 @@ const Dashboard: React.FC = () => {
               {/* Groups */}
               <button 
                 className="w-full flex items-start gap-3 p-4 bg-purple-50 rounded-xl border border-purple-100 hover:bg-purple-100 transition-colors text-left"
-                onClick={() => { setTab('groups'); dismissOnboarding(false); }}
+                onClick={() => { setTabTouched(true); setTab('groups'); dismissOnboarding(false); }}
               >
                 <div className="w-12 h-12 rounded-full bg-purple-200 flex items-center justify-center flex-shrink-0">
                   <span className="text-2xl">👥</span>
@@ -440,7 +488,15 @@ const Dashboard: React.FC = () => {
                   <span>👥</span> Start a Group
                 </button>
                 <button
-                  onClick={() => { navigate('/join'); dismissOnboarding(false); }}
+                  onClick={() => {
+                    if (isGuest) {
+                      addToast?.('Sign in to join events', 'error', 2500);
+                      dismissOnboarding(false);
+                      return;
+                    }
+                    navigate('/join');
+                    dismissOnboarding(false);
+                  }}
                   className="flex-1 py-3.5 bg-gray-100 text-gray-700 rounded-xl font-bold text-sm hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
                 >
                   <span>🎫</span> Join with Code
@@ -471,20 +527,25 @@ const Dashboard: React.FC = () => {
         </button>
         
         <button
-          onClick={() => navigate('/join')}
+          onClick={() => {
+            if (isGuest) {
+              addToast?.('Sign in to join events', 'error', 2500);
+              return;
+            }
+            navigate('/join');
+          }}
           className="flex-1 bg-white rounded-xl py-3 px-4 border-2 border-slate-200 font-bold text-sm text-slate-800 shadow-md hover:shadow-lg hover:border-primary-400 hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
         >
           <span className="text-lg font-bold text-primary-600">+</span>
           <span>Join Event</span>
         </button>
       </section>
-
       {/* Events & Groups - Segmented Control Style */}
-      <section className="rounded-2xl overflow-hidden border-2 border-slate-200 shadow-md bg-white">
+      <section className="-mx-4 sm:mx-0 rounded-none sm:rounded-2xl overflow-hidden border-y border-x-0 sm:border-2 border-slate-200 shadow-md bg-white">
         {/* Tab Bar - Pill Style with Colored Backgrounds */}
         <div className="flex gap-2 p-1.5 bg-slate-100 border-b border-slate-200">
           <button
-            onClick={() => setTab('events')}
+            onClick={() => { setTabTouched(true); setTab('events'); }}
             className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
               tab === 'events' 
                 ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-md' 
@@ -504,7 +565,7 @@ const Dashboard: React.FC = () => {
             )}
           </button>
           <button
-            onClick={() => setTab('groups')}
+            onClick={() => { setTabTouched(true); setTab('groups'); }}
             className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
               tab === 'groups' 
                 ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-md' 
@@ -529,24 +590,61 @@ const Dashboard: React.FC = () => {
         <div className="p-3">
             {tab === 'events' && (
             <>
-              {activeEvents.length === 0 ? (
+              {/* Primary actions (moved inside the Events tab) */}
+              <div className="flex gap-2 mb-3">
+                <button
+                  onClick={openEventWizard}
+                  className="flex-1 px-4 py-2.5 bg-white border-2 border-primary-200 text-primary-800 rounded-xl font-black text-sm hover:bg-primary-50 hover:border-primary-300 transition-colors shadow-sm"
+                >
+                  ⛳ Create
+                </button>
+                <button
+                  onClick={() => navigate('/join')}
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-accent to-orange-500 text-white rounded-xl font-black text-sm hover:from-orange-500 hover:to-accent transition-colors shadow-sm"
+                  title="Join an event with a code"
+                >
+                  <span className="inline-flex items-center justify-center gap-2">
+                    <span className="text-lg leading-none">+</span>
+                    <span>Join</span>
+                  </span>
+                </button>
+              </div>
+
+              {/* Search */}
+              <div className="mb-3">
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔎</span>
+                  <input
+                    value={eventSearch}
+                    onChange={(e) => setEventSearch(e.target.value)}
+                    placeholder="Search your events…"
+                    className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200"
+                  />
+                </div>
+              </div>
+
+              {filteredActiveEvents.length === 0 ? (
                 <div className="py-8 text-center">
                   <div className="text-4xl mb-3">⛳</div>
-                  <div className="font-semibold text-gray-700 mb-1">No active events</div>
-                  <p className="text-sm text-gray-500 mb-4">Create or join an event to get started</p>
+                  <div className="font-semibold text-gray-700 mb-1">
+                    {activeEvents.length === 0 ? 'No active events' : 'No matching events'}
+                  </div>
+                  <p className="text-sm text-gray-500">
+                    {activeEvents.length === 0 ? 'Create an event or join with a code' : 'Try a different search'}
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {activeEvents.slice(0, 5).map(event => (
-                    <EventCard key={event.id} event={event} profiles={profiles} allEvents={userEvents} />
+                  {filteredActiveEvents.slice(0, 5).map(event => (
+                    <EventCard key={event.id} event={event} profiles={profiles} />
                   ))}
                   
-                  {activeEvents.length > 5 && (
+                  {filteredActiveEvents.length > 5 && (
                     <Link 
                       to="/events" 
                       className="block text-center py-2 text-sm font-medium text-primary-600 hover:text-primary-700"
                     >
-                      View all {activeEvents.length} events →
+                      View all {filteredActiveEvents.length} events →
                     </Link>
                   )}
                 </div>
@@ -556,46 +654,51 @@ const Dashboard: React.FC = () => {
 
           {tab === 'groups' && (
             <>
-              {groups.length === 0 ? (
+              {/* Primary actions (moved to the top of the Groups tab) */}
+              <div className="flex gap-2 mb-3">
+                <button
+                  onClick={openGroupWizard}
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl font-bold text-sm hover:from-purple-700 hover:to-purple-800 transition-colors shadow-sm"
+                >
+                  👥 Create
+                </button>
+                <button
+                  onClick={() => setShowDiscoverGroups(true)}
+                  className="px-4 py-2.5 bg-white border border-gray-300 text-gray-800 rounded-xl font-bold text-sm hover:bg-gray-50 transition-colors"
+                  title="Find groups to join"
+                >
+                  🔍 Find
+                </button>
+              </div>
+
+              {/* Search */}
+              <div className="mb-3">
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔎</span>
+                  <input
+                    value={groupSearch}
+                    onChange={(e) => setGroupSearch(e.target.value)}
+                    placeholder="Search your groups…"
+                    className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-200"
+                  />
+                </div>
+              </div>
+
+              {filteredGroups.length === 0 ? (
                 <div className="py-8 text-center">
                   <div className="text-4xl mb-3">👥</div>
-                  <div className="font-semibold text-gray-700 mb-1">No groups yet</div>
-                  <p className="text-sm text-gray-500 mb-4">Create a group or find one to join</p>
-                  <div className="flex flex-col sm:flex-row gap-2 justify-center">
-                    <button
-                      onClick={openGroupWizard}
-                      className="px-5 py-2.5 bg-purple-600 text-white rounded-xl font-semibold text-sm hover:bg-purple-700 transition-colors"
-                    >
-                      Create Group
-                    </button>
-                    <button
-                      onClick={() => setShowDiscoverGroups(true)}
-                      className="px-5 py-2.5 bg-white border border-gray-300 text-gray-700 rounded-xl font-semibold text-sm hover:bg-gray-50 transition-colors"
-                    >
-                      🔍 Find Groups
-                    </button>
+                  <div className="font-semibold text-gray-700 mb-1">
+                    {groups.length === 0 ? 'No groups yet' : 'No matching groups'}
                   </div>
+                  <p className="text-sm text-gray-500">
+                    {groups.length === 0 ? 'Create a group or find one to join' : 'Try a different search'}
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {groups.map(group => (
+                  {filteredGroups.map(group => (
                     <GroupCard key={group.id} group={group} />
                   ))}
-                  
-                  <div className="flex gap-2">
-                    <button
-                      onClick={openGroupWizard}
-                      className="flex-1 py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm font-medium text-gray-500 hover:border-purple-300 hover:text-purple-600 transition-colors"
-                    >
-                      + Create Group
-                    </button>
-                    <button
-                      onClick={() => setShowDiscoverGroups(true)}
-                      className="py-3 px-4 border border-gray-300 rounded-xl text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
-                    >
-                      🔍 Find
-                    </button>
-                  </div>
                 </div>
               )}
             </>
@@ -603,16 +706,13 @@ const Dashboard: React.FC = () => {
         </div>
       </section>
 
-  {/* Score Ticker - Fixed at bottom, full width on mobile */}
-  <div
-    className="fixed left-0 right-0 sm:left-4 sm:right-4 bottom-[5.25rem] z-30 px-0 sm:px-0"
-    style={{ bottom: 'calc(5.25rem + env(safe-area-inset-bottom))' }}
-  >
+      {/* Score Ticker - Fixed at bottom, full width on mobile, above footer with safe area */}
+      <div className="fixed left-0 right-0 sm:left-4 sm:right-4 ticker-above-footer z-30 px-0 sm:px-0">
+        <style>{`.gimmies-ticker{--gimmies-ticker-duration:${tickerDurationSeconds}s;}`}</style>
         <button
           onClick={() => tickerEvent ? navigate(`/event/${tickerEvent.id}`) : navigate('/events')}
           className="w-full gimmies-ticker rounded-none sm:rounded-xl bg-[#1561AE] border-y sm:border border-white/10 px-4 py-2.5 shadow-lg shadow-primary-900/25"
           aria-label="Activity ticker"
-          style={{ ['--gimmies-ticker-duration' as any]: `${tickerDurationSeconds}s` }}
         >
           <div className="gimmies-ticker__inner text-[11px] font-black text-white">
             <span className="gimmies-ticker__track">
@@ -693,17 +793,11 @@ const Dashboard: React.FC = () => {
 };
 
 // Event Card Component
-const EventCard: React.FC<{ event: Event; profiles: any[]; allEvents?: Event[] }> = ({ event, profiles, allEvents = [] }) => {
+const EventCard: React.FC<{ event: Event; profiles: any[] }> = ({ event, profiles }) => {
   const navigate = useNavigate();
   
   const golferCount = event.golfers.length;
   const scoringCount = event.scorecards.filter(sc => sc.scores.length > 0).length;
-  
-  // Get parent group name if this is a group child event
-  const parentGroup = event.parentGroupId 
-    ? allEvents.find(e => e.id === event.parentGroupId && e.hubType === 'group')
-    : null;
-  const parentGroupName = parentGroup?.name || (event.parentGroupId ? 'Group' : null);
   
   return (
     <button
@@ -712,21 +806,8 @@ const EventCard: React.FC<{ event: Event; profiles: any[]; allEvents?: Event[] }
     >
       <div className="flex items-center justify-between">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-gray-900 group-hover:text-primary-700 truncate transition-colors">
-              {event.name || 'Untitled Event'}
-            </span>
-            {parentGroupName && (
-              <span 
-                className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded flex items-center gap-0.5 flex-shrink-0"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  navigate(`/event/${event.parentGroupId}/chat`);
-                }}
-              >
-                👥 {parentGroupName}
-              </span>
-            )}
+          <div className="font-semibold text-gray-900 group-hover:text-primary-700 truncate transition-colors">
+            {event.name || 'Untitled Event'}
           </div>
           <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
             <span>{formatDateShort(event.date)}</span>

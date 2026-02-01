@@ -250,12 +250,13 @@ export async function loadEventByShareCode(shareCode: string): Promise<Event | n
     const client = getClient();
     if (!client) return null;
 
-    console.log('Loading event from cloud with code:', shareCode);
+    const normalized = String(shareCode || '').trim().toUpperCase();
+    console.log('Loading event from cloud with code:', normalized);
 
     // Query events by shareCode
     const { data: events, errors } = await client.models.Event.list({
       filter: {
-        shareCode: { eq: shareCode },
+        shareCode: { eq: normalized },
       },
     });
 

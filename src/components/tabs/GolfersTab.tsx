@@ -122,28 +122,6 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
     }
   };
 
-  const handleLeaveEvent = (golferId: string) => {
-    if (event.isCompleted) return;
-    
-    // Check if user has any scores entered
-    const scorecard = event.scorecards?.find((sc: any) => sc.golferId === golferId);
-    const hasScores = scorecard?.scores?.some((s: any) => s.strokes !== null);
-    
-    let confirmMsg = isGroupHub
-      ? 'Are you sure you want to leave this group?'
-      : 'Are you sure you want to leave this event?';
-    
-    if (hasScores) {
-      confirmMsg = isGroupHub
-        ? 'You have scores recorded in this group. Are you sure you want to leave? Your scores will be removed.'
-        : 'You have scores recorded in this event. Are you sure you want to leave? Your scores will be removed.';
-    }
-    
-    if (window.confirm(confirmMsg)) {
-      removeGolferFromEvent(eventId, golferId);
-    }
-  };
-
   const handleUpdatePreference = (golferId: string, preference: 'all' | 'nassau' | 'skins' | 'none') => {
     updateEventGolfer(eventId, golferId, { gamePreference: preference } as any);
     setEditingGolferId(null);
@@ -152,13 +130,27 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
   // Generate share URL for invites
   const shareUrl = event.shareCode ? `${window.location.origin}/join/${event.shareCode}` : '';
   
-  const handleGenerateCode = async () => {
+  const ensureShareCode = async (): Promise<string | null> => {
+    if (event.shareCode) return event.shareCode;
+
+    // In cloud mode, only the owner can generate/persist a join code.
+    if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true' && !isOwner) {
+      addToast('Only the host can create an invite code for this event.', 'error');
+      return null;
+    }
+
     setIsGeneratingCode(true);
     try {
-      await generateShareCode(eventId);
+      const code = await generateShareCode(eventId);
+      if (!code) {
+        addToast('Could not create invite link', 'error');
+        return null;
+      }
       addToast('Invite link created!', 'success');
+      return code;
     } catch (e) {
       addToast('Could not create invite link', 'error');
+      return null;
     } finally {
       setIsGeneratingCode(false);
     }
@@ -200,26 +192,54 @@ Code: ${event.shareCode}`,
   };
 
   const handleTextInvite = async () => {
-    if (!event.shareCode) {
-      await handleGenerateCode();
-    }
-    const msg = getInviteMessage();
+    const code = await ensureShareCode();
+    if (!code) return;
+    const url = `${window.location.origin}/join/${code}`;
+    const msg = (() => {
+      const senderName = currentProfile?.name || 'A friend';
+      if (isGroupHub) {
+        return {
+          title: `Join ${event.name || 'our golf group'} on Gimmies Golf`,
+          text: `Hey! ${senderName} invited you to join "${event.name || 'our golf group'}" on Gimmies Golf 🏌️\n\nGimmies is a free app to:\n⛳ Track scores & handicap\n💰 Manage Nassau, skins & side bets\n👥 Chat with your golf crew\n📊 See live leaderboards\n\nJoin here: ${url}\n\nOr use code: ${code}`,
+          shortText: `${senderName} invited you to "${event.name || 'our golf group'}" on Gimmies Golf! Join: ${url}`
+        };
+      }
+      return {
+        title: `Join ${event.name || 'my golf event'}`,
+        text: `Hey! Join me for golf - "${event.name || 'my golf event'}"\n\nTrack scores, run games, and see the leaderboard live.\n\nJoin: ${url}\nCode: ${code}`,
+        shortText: `Join my golf event "${event.name || 'my golf event'}": ${url}`
+      };
+    })();
     const smsUrl = `sms:?body=${encodeURIComponent(msg.text)}`;
     window.open(smsUrl, '_self');
   };
 
   const handleShareInvite = async () => {
-    if (!event.shareCode) {
-      await handleGenerateCode();
-    }
-    const msg = getInviteMessage();
+    const code = await ensureShareCode();
+    if (!code) return;
+    const url = `${window.location.origin}/join/${code}`;
+    const msg = (() => {
+      const senderName = currentProfile?.name || 'A friend';
+      if (isGroupHub) {
+        return {
+          title: `Join ${event.name || 'our golf group'} on Gimmies Golf`,
+          text: `Hey! ${senderName} invited you to join "${event.name || 'our golf group'}" on Gimmies Golf 🏌️\n\nJoin here: ${url}\n\nOr use code: ${code}`,
+          shortText: `${senderName} invited you to "${event.name || 'our golf group'}" on Gimmies Golf! Join: ${url}`
+        };
+      }
+      return {
+        title: `Join ${event.name || 'my golf event'}`,
+        text: `Hey! Join me for golf - "${event.name || 'my golf event'}"\n\nJoin: ${url}\nCode: ${code}`,
+        shortText: `Join my golf event "${event.name || 'my golf event'}": ${url}`
+      };
+    })();
     
     if (navigator.share) {
       try {
         await navigator.share({
           title: msg.title,
           text: msg.shortText,
-          url: shareUrl,
+          url,
         });
       } catch (e) {
         // User cancelled or error
@@ -263,8 +283,8 @@ Code: ${event.shareCode}`,
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-bold text-gray-900 dark:text-white">{isGroupHub ? 'Members' : 'Golfers'}</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-300">
+          <h2 className="text-lg font-bold text-gray-900">{isGroupHub ? 'Members' : 'Golfers'}</h2>
+          <p className="text-sm text-gray-500">
             {golferData.length} {isGroupHub ? 'member' : 'player'}{golferData.length !== 1 ? 's' : ''} in this {isGroupHub ? 'group' : 'event'}
           </p>
         </div>
@@ -406,16 +426,6 @@ Code: ${event.shareCode}`,
                     </svg>
                   </button>
                 )}
-
-                {/* Leave Event Button (current user who is not owner) */}
-                {golfer.isCurrentUser && !golfer.isOwnerProfile && !event.isCompleted && (
-                  <button
-                    onClick={() => handleLeaveEvent(golfer.id)}
-                    className="px-2 py-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors font-medium"
-                  >
-                    Leave
-                  </button>
-                )}
               </div>
             </div>
           ))}
@@ -454,66 +464,47 @@ Code: ${event.shareCode}`,
               </button>
             </div>
 
-            {/* Tabs - Both groups and events get invite/manual */}
-            <div className="flex border-b border-gray-200 flex-shrink-0">
-              <button
-                onClick={() => setAddModalTab('invite')}
-                className={`flex-1 py-4 font-semibold transition-colors relative ${
-                  isGroupHub ? 'text-sm' : 'text-2xl'
-                } ${
-                  addModalTab === 'invite' 
-                    ? (isGroupHub ? 'text-purple-700' : 'text-primary-700') 
-                    : 'text-gray-500'
-                }`}
-              >
-                {isGroupHub ? '📲 Send Invite' : '📲'}
-                {!isGroupHub && <span className="sr-only">Send Invite</span>}
-                {addModalTab === 'invite' && (
-                  <span className={`absolute bottom-0 left-4 right-4 h-0.5 rounded-full ${
-                    isGroupHub ? 'bg-purple-600' : 'bg-primary-600'
-                  }`} />
-                )}
-              </button>
-              <button
-                onClick={() => setAddModalTab('manual')}
-                className={`flex-1 py-4 font-semibold transition-colors relative ${
-                  isGroupHub ? 'text-sm' : 'text-2xl'
-                } ${
-                  addModalTab === 'manual' 
-                    ? (isGroupHub ? 'text-purple-700' : 'text-primary-700') 
-                    : 'text-gray-500'
-                }`}
-              >
-                {isGroupHub ? '✏️ Add by Name' : '✏️'}
-                {!isGroupHub && <span className="sr-only">Add by Name</span>}
-                {addModalTab === 'manual' && (
-                  <span className={`absolute bottom-0 left-4 right-4 h-0.5 rounded-full ${
-                    isGroupHub ? 'bg-purple-600' : 'bg-primary-600'
-                  }`} />
-                )}
-              </button>
-            </div>
+            {/* Tabs - Groups get invite/manual, Events just manual */}
+            {isGroupHub && (
+              <div className="flex border-b border-gray-200 flex-shrink-0">
+                <button
+                  onClick={() => setAddModalTab('invite')}
+                  className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${
+                    addModalTab === 'invite' ? 'text-purple-700' : 'text-gray-500'
+                  }`}
+                >
+                  📲 Send Invite
+                  {addModalTab === 'invite' && (
+                    <span className="absolute bottom-0 left-4 right-4 h-0.5 bg-purple-600 rounded-full" />
+                  )}
+                </button>
+                <button
+                  onClick={() => setAddModalTab('manual')}
+                  className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${
+                    addModalTab === 'manual' ? 'text-purple-700' : 'text-gray-500'
+                  }`}
+                >
+                  ✏️ Add by Name
+                  {addModalTab === 'manual' && (
+                    <span className="absolute bottom-0 left-4 right-4 h-0.5 bg-purple-600 rounded-full" />
+                  )}
+                </button>
+              </div>
+            )}
             
             {/* Modal Content */}
             <div className="flex-1 overflow-y-auto">
-              {/* INVITE TAB - Groups and Events */}
-              {addModalTab === 'invite' && (
+              {/* INVITE TAB - Groups only */}
+              {isGroupHub && addModalTab === 'invite' && (
                 <div className="p-5 space-y-5">
                   {/* Hero section */}
                   <div className="text-center py-2">
-                    <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 ${
-                      isGroupHub ? 'bg-purple-100' : 'bg-primary-100'
-                    }`}>
+                    <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
                       <span className="text-3xl">📲</span>
                     </div>
-                    <h4 className="font-bold text-gray-900 mb-1">
-                      {isGroupHub ? 'Invite friends to join' : 'Invite golfers to play'}
-                    </h4>
+                    <h4 className="font-bold text-gray-900 mb-1">Invite friends to join</h4>
                     <p className="text-sm text-gray-500">
-                      {isGroupHub 
-                        ? "Send a link - they'll get the app and join your group"
-                        : "Send a link - they'll get the app and join your event"
-                      }
+                      Send a link - they'll get the app and join your group
                     </p>
                   </div>
 
@@ -536,21 +527,15 @@ Code: ${event.shareCode}`,
                     <button
                       onClick={handleShareInvite}
                       disabled={isGeneratingCode}
-                      className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors disabled:opacity-60 ${
-                        isGroupHub 
-                          ? 'bg-purple-50 hover:bg-purple-100 border-purple-200'
-                          : 'bg-primary-50 hover:bg-primary-100 border-primary-200'
-                      }`}
+                      className="flex flex-col items-center gap-2 p-4 bg-purple-50 hover:bg-purple-100 rounded-xl border border-purple-200 transition-colors disabled:opacity-60"
                     >
-                      <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                        isGroupHub ? 'bg-purple-500' : 'bg-primary-500'
-                      }`}>
+                      <div className="w-12 h-12 bg-purple-500 rounded-full flex items-center justify-center">
                         <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                         </svg>
                       </div>
-                      <span className={`text-sm font-bold ${isGroupHub ? 'text-purple-700' : 'text-primary-700'}`}>Share Link</span>
-                      <span className={`text-[10px] ${isGroupHub ? 'text-purple-600' : 'text-primary-600'}`}>Any app or group chat</span>
+                      <span className="text-sm font-bold text-purple-700">Share Link</span>
+                      <span className="text-[10px] text-purple-600">Any app or group chat</span>
                     </button>
                   </div>
 
@@ -600,29 +585,19 @@ Code: ${event.shareCode}`,
                   )}
 
                   {/* What they'll see */}
-                  <div className={`bg-gradient-to-br to-white border rounded-xl p-4 ${
-                    isGroupHub 
-                      ? 'from-purple-50 border-purple-100'
-                      : 'from-primary-50 border-primary-100'
-                  }`}>
-                    <div className={`text-xs font-semibold uppercase tracking-wider mb-2 ${
-                      isGroupHub ? 'text-purple-700' : 'text-primary-700'
-                    }`}>What they'll receive</div>
+                  <div className="bg-gradient-to-br from-purple-50 to-white border border-purple-100 rounded-xl p-4">
+                    <div className="text-xs font-semibold text-purple-700 uppercase tracking-wider mb-2">What they'll receive</div>
                     <div className="text-sm text-gray-600 space-y-1">
                       <p>📱 A link to download Gimmies (free)</p>
-                      <p>🔗 Auto-join your {isGroupHub ? 'group' : 'event'} "{event.name}"</p>
-                      {isGroupHub ? (
-                        <p>💬 Access to group chat & events</p>
-                      ) : (
-                        <p>⛳ Ready to play when they arrive</p>
-                      )}
+                      <p>🔗 Auto-join your group "{event.name}"</p>
+                      <p>💬 Access to group chat & events</p>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* MANUAL TAB */}
-              {addModalTab === 'manual' && (
+              {/* MANUAL TAB - or default for events */}
+              {(!isGroupHub || addModalTab === 'manual') && (
                 <div className="p-4 space-y-4">
                   {/* Name */}
                   <div>

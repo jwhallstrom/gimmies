@@ -28,6 +28,12 @@ export async function saveSettlementToCloud(settlement: Settlement): Promise<boo
     const client = getClient();
     if (!client) return false;
 
+    const SettlementModel = (client.models as any)?.Settlement;
+    if (!SettlementModel) {
+      console.warn('💰 saveSettlementToCloud: Settlement model not available in schema; skipping cloud save');
+      return false;
+    }
+
     console.log('💰 saveSettlementToCloud: Saving settlement:', settlement.id);
 
     const cloudData = {
@@ -53,11 +59,11 @@ export async function saveSettlementToCloud(settlement: Settlement): Promise<boo
     };
 
     // Try update first, then create if not exists
-    const { data, errors } = await client.models.Settlement.update(cloudData);
+    const { data, errors } = await SettlementModel.update(cloudData);
 
     if (errors || !data) {
       console.log('💰 saveSettlementToCloud: Update failed, attempting create...');
-      const createResult = await client.models.Settlement.create(cloudData);
+      const createResult = await SettlementModel.create(cloudData);
       
       if (createResult.errors) {
         console.error('❌ saveSettlementToCloud: Create failed:', createResult.errors);
@@ -97,15 +103,21 @@ export async function loadSettlementsForProfile(profileId: string): Promise<Sett
     const client = getClient();
     if (!client) return [];
 
+    const SettlementModel = (client.models as any)?.Settlement;
+    if (!SettlementModel) {
+      console.warn('📥 loadSettlementsForProfile: Settlement model not available in schema; returning []');
+      return [];
+    }
+
     console.log('📥 loadSettlementsForProfile: Loading settlements for:', profileId);
 
     // Get settlements where user is the payer
-    const { data: fromSettlements, errors: fromErrors } = await client.models.Settlement.list({
+    const { data: fromSettlements, errors: fromErrors } = await SettlementModel.list({
       filter: { fromProfileId: { eq: profileId } }
     });
 
     // Get settlements where user is the recipient
-    const { data: toSettlements, errors: toErrors } = await client.models.Settlement.list({
+    const { data: toSettlements, errors: toErrors } = await SettlementModel.list({
       filter: { toProfileId: { eq: profileId } }
     });
 
@@ -117,7 +129,7 @@ export async function loadSettlementsForProfile(profileId: string): Promise<Sett
     // Combine and dedupe
     const allCloud = [...(fromSettlements || []), ...(toSettlements || [])];
     const seen = new Set<string>();
-    const uniqueCloud = allCloud.filter(s => {
+    const uniqueCloud = allCloud.filter((s: any) => {
       if (seen.has(s.id)) return false;
       seen.add(s.id);
       return true;
@@ -140,9 +152,15 @@ export async function loadSettlementsForEvent(eventId: string): Promise<Settleme
     const client = getClient();
     if (!client) return [];
 
+    const SettlementModel = (client.models as any)?.Settlement;
+    if (!SettlementModel) {
+      console.warn('📥 loadSettlementsForEvent: Settlement model not available in schema; returning []');
+      return [];
+    }
+
     console.log('📥 loadSettlementsForEvent: Loading settlements for event:', eventId);
 
-    const { data: cloudSettlements, errors } = await client.models.Settlement.list({
+    const { data: cloudSettlements, errors } = await SettlementModel.list({
       filter: { eventId: { eq: eventId } }
     });
 
@@ -172,6 +190,12 @@ export async function updateSettlementStatus(
     const client = getClient();
     if (!client) return false;
 
+    const SettlementModel = (client.models as any)?.Settlement;
+    if (!SettlementModel) {
+      console.warn('💰 updateSettlementStatus: Settlement model not available in schema; skipping update');
+      return false;
+    }
+
     console.log('💰 updateSettlementStatus:', settlementId, '→', status);
 
     const updateData: any = {
@@ -186,7 +210,7 @@ export async function updateSettlementStatus(
       }
     }
 
-    const { errors } = await client.models.Settlement.update(updateData);
+    const { errors } = await SettlementModel.update(updateData);
 
     if (errors) {
       console.error('❌ updateSettlementStatus: Error:', errors);
@@ -209,9 +233,15 @@ export async function deleteSettlementFromCloud(settlementId: string): Promise<b
     const client = getClient();
     if (!client) return false;
 
+    const SettlementModel = (client.models as any)?.Settlement;
+    if (!SettlementModel) {
+      console.warn('🗑️ deleteSettlementFromCloud: Settlement model not available in schema; skipping delete');
+      return false;
+    }
+
     console.log('🗑️ deleteSettlementFromCloud: Deleting settlement:', settlementId);
 
-    const { errors } = await client.models.Settlement.delete({ id: settlementId });
+    const { errors } = await SettlementModel.delete({ id: settlementId });
 
     if (errors) {
       console.error('❌ deleteSettlementFromCloud: Error:', errors);

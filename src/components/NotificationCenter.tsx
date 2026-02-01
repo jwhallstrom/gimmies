@@ -14,6 +14,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../state/store';
 import type { Event } from '../state/types';
+import { calculateEventPayouts } from '../games/payouts';
+import { computeSkins } from '../games/skins';
 
 // Notification types for categorization
 type NotificationType = 'money' | 'live' | 'social' | 'personal' | 'system';
@@ -51,7 +53,6 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
     currentProfile,
     profiles,
     settlements,
-    transactions,
     notificationReadAt,
     markNotificationRead,
     markNotificationsRead,
@@ -80,15 +81,10 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
 
     // === MONEY NOTIFICATIONS ===
     
-    // Check wallet for recent transactions/settlements
-    const relevantSettlements = (settlements || [])
-      .filter((s: any) =>
-        s?.status === 'pending' &&
-        (s?.toProfileId === currentProfile.id || s?.fromProfileId === currentProfile.id)
-      )
-      .slice(0, 5);
-
-    relevantSettlements.forEach((s: any, idx: number) => {
+    // Check wallet for pending settlements
+    (settlements || []).forEach((s: any, idx: number) => {
+      if (s.status !== 'pending') return; // Only show pending settlements
+      
       const id = `settle-${s.id || idx}`;
       const timestamp = new Date(s.createdAt || now);
       
@@ -98,52 +94,55 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
       const isOwed = s.toProfileId === currentProfile.id;
       const otherProfile = profiles.find(p => p.id === (isOwed ? s.fromProfileId : s.toProfileId));
       const otherName = otherProfile?.name || 'Someone';
-      const dollars = typeof s.roundedAmount === 'number' ? s.roundedAmount : s.calculatedAmount;
       
-      if (s.status === 'pending') {
-        notifs.push({
-          id,
-          type: 'money',
-          priority: 'high',
-          icon: isOwed ? '💵' : '⚠️',
-          title: isOwed ? `${otherName} owes you` : `You owe ${otherName}`,
-          body: `$${Number(dollars || 0).toFixed(2)} from ${s.eventName || 'recent games'}`,
-          timestamp: new Date(s.createdAt || now),
-          read: Boolean(notificationReadAt?.[id]),
-          actionLabel: isOwed ? 'Send reminder' : 'Settle up',
-          actionPath: '/wallet',
-          amount: Math.round(Number(dollars || 0) * 100),
-          isPositive: isOwed,
-        });
-      }
-    });
-
-    // Recent winnings/losses based on wallet transactions
-    const myTransactions = (transactions || [])
-      .filter((t: any) => t?.profileId === currentProfile.id && typeof t?.netAmount === 'number' && t.netAmount !== 0)
-      .slice(-5)
-      .reverse()
-      .slice(0, 3);
-
-    myTransactions.forEach((t: any) => {
-      const isWin = t.netAmount > 0;
-      const id = `txn-${t.id}`;
       notifs.push({
         id,
         type: 'money',
-        priority: 'normal',
-        icon: isWin ? '💰' : '📉',
-        title: isWin ? 'You won!' : 'You lost',
-        body: `${isWin ? '+' : ''}$${Number(t.netAmount).toFixed(2)} from ${t.eventName}`,
-        timestamp: new Date(t.createdAt || t.date || now),
+        priority: 'high',
+        icon: isOwed ? '💵' : '⚠️',
+        title: isOwed ? `${otherName} owes you` : `You owe ${otherName}`,
+        body: `$${Number(s.roundedAmount || 0).toFixed(0)} from ${s.eventName || 'recent games'}`,
+        timestamp,
         read: Boolean(notificationReadAt?.[id]),
-        actionLabel: 'View wallet',
+        actionLabel: isOwed ? 'Send reminder' : 'Settle up',
         actionPath: '/wallet',
-        eventId: t.eventId,
-        amount: Math.round(Math.abs(Number(t.netAmount)) * 100),
-        isPositive: isWin,
+        amount: Math.abs(Number(s.roundedAmount || 0)),
+        isPositive: isOwed,
       });
     });
+
+    // Recent winnings from completed events (only from last 7 days)
+    completedEvents
+      ?.filter((event: Event) => new Date(event.lastModified) > sevenDaysAgo)
+      .slice(0, 3)
+      .forEach((event: Event) => {
+        const id = `win-${event.id}`;
+        const timestamp = new Date(event.lastModified);
+        
+        // Skip if dismissed
+        if (wasDismissed(id, timestamp)) return;
+        
+        const payouts = calculateEventPayouts(event as any, profiles);
+        const myNet = payouts.totalByGolfer?.[currentProfile.id] ?? 0;
+        if (myNet !== 0) {
+          const isWin = myNet > 0;
+          notifs.push({
+            id,
+            type: 'money',
+            priority: 'normal',
+            icon: isWin ? '💰' : '📉',
+            title: isWin ? 'You won!' : 'Better luck next time',
+            body: `${isWin ? '+' : ''}$${Math.abs(myNet).toFixed(0)} from ${event.name}`,
+            timestamp,
+            read: Boolean(notificationReadAt?.[id]),
+            actionLabel: 'View details',
+            actionPath: `/event/${event.id}/payout`,
+            eventId: event.id,
+            amount: Math.abs(myNet),
+            isPositive: isWin,
+          });
+        }
+      });
 
     // === LIVE/ACTIVITY NOTIFICATIONS ===
     
@@ -205,6 +204,28 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
         }
       }
 
+      // Recent skins wins (derived from scorecards)
+      const skinsCfg = event.games?.skins?.[0];
+      if (skinsCfg) {
+        const summary = computeSkins(event as any, skinsCfg as any, profiles);
+        const holes = summary?.winningHolesByGolfer?.[currentProfile.id] || [];
+        holes.slice(-2).forEach((hole: number) => {
+          const id = `skin-${event.id}-${hole}`;
+          notifs.push({
+            id,
+            type: 'money',
+            priority: 'high',
+            icon: '🎯',
+            title: 'Skin won!',
+            body: `You won the skin on hole ${hole}`,
+            timestamp: new Date(event.lastModified),
+            read: Boolean(notificationReadAt?.[id]),
+            actionLabel: 'View skins',
+            actionPath: `/event/${event.id}/payout`,
+            eventId: event.id,
+          });
+        });
+      }
     });
 
     // === SOCIAL NOTIFICATIONS ===
@@ -301,7 +322,7 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
       if (pDiff !== 0) return pDiff;
       return b.timestamp.getTime() - a.timestamp.getTime();
     });
-  }, [events, completedEvents, currentProfile, profiles, settlements, transactions, notificationReadAt]);
+  }, [events, completedEvents, currentProfile, profiles, settlements, notificationReadAt]);
 
   // Filter notifications by tab
   const filteredNotifications = useMemo(() => {

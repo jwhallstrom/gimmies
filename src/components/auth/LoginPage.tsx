@@ -198,15 +198,7 @@ export function LoginPage({ onSuccess, onGuestMode }: LoginPageProps) {
   };
 
   return (
-    <div 
-      className="min-h-screen flex items-center justify-center bg-gradient-to-b from-primary-900 via-primary-800 to-primary-900 relative p-4 pt-safe pb-safe pb-safe-base-0 pl-safe pr-safe"
-      style={{
-        backgroundImage: 'url(/File_000.jpeg)',
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat'
-      }}
-    >
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-primary-900 via-primary-800 to-primary-900 bg-[url('/File_000.jpeg')] bg-cover bg-center bg-no-repeat relative p-4 pt-safe pb-safe pb-safe-base-0 pl-safe pr-safe">
       {/* Very light overlay for better text readability */}
       <div className="absolute inset-0 bg-black/10"></div>
       
@@ -217,11 +209,10 @@ export function LoginPage({ onSuccess, onGuestMode }: LoginPageProps) {
             <img 
               src="/gimmies-logo.png" 
               alt="Gimmies Golf" 
-              className="h-24 w-auto"
-              style={{ filter: 'brightness(0)' }}
+              className="h-24 w-auto filter brightness-0"
             />
           </div>
-          <p className="text-white text-lg font-semibold drop-shadow-lg" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.8)' }}>Golf Scoring & Gambling</p>
+          <p className="text-white text-lg font-semibold drop-shadow-[2px_2px_4px_rgba(0,0,0,0.8)]">Golf Scoring & Gambling</p>
         </div>
 
         {/* Main Card - Semi-transparent with backdrop blur */}
@@ -549,10 +540,10 @@ export function LoginPage({ onSuccess, onGuestMode }: LoginPageProps) {
             className="w-full max-w-xs mx-auto text-base font-semibold text-white bg-gradient-to-r from-blue-600 to-green-600 hover:from-blue-700 hover:to-green-700 flex items-center justify-center gap-2 px-6 py-3 rounded-xl shadow-lg hover:shadow-xl transition-all"
           >
             <span>🚀</span>
-            <span>Quick Start (Guest Mode)</span>
+            <span>Explore (Guest Mode)</span>
           </button>
           <p className="text-xs text-gray-600 mt-2 bg-white/60 backdrop-blur-sm px-3 py-1 rounded inline-block">
-            No account needed • Your data stays on this device
+            No account needed • Sign in required to create/join games
           </p>
         </div>
       </div>

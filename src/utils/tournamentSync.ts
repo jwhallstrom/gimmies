@@ -28,6 +28,12 @@ export async function saveTournamentToCloud(tournament: Tournament): Promise<boo
     const client = getClient();
     if (!client) return false;
 
+    const TournamentModel = (client.models as any)?.Tournament;
+    if (!TournamentModel) {
+      console.warn('🏆 saveTournamentToCloud: Tournament model not available in schema; skipping cloud save');
+      return false;
+    }
+
     console.log('🏆 saveTournamentToCloud: Saving tournament:', tournament.id, tournament.name);
 
     // startDate is required - use first date from array or today's date
@@ -60,7 +66,6 @@ export async function saveTournamentToCloud(tournament: Tournament): Promise<boo
         prizePool: tournament.prizePool,
         rules: tournament.rules,
         waitlistEnabled: tournament.waitlistEnabled,
-        // Club integration
         clubName: tournament.clubName,
         isClubHosted: tournament.isClubHosted,
         // Betting overlay
@@ -82,11 +87,11 @@ export async function saveTournamentToCloud(tournament: Tournament): Promise<boo
     };
 
     // Try update first, then create if not exists
-    const { data, errors } = await client.models.Tournament.update(cloudData);
+    const { data, errors } = await TournamentModel.update(cloudData);
 
     if (errors || !data) {
       console.log('🏆 saveTournamentToCloud: Update failed, attempting create...');
-      const createResult = await client.models.Tournament.create(cloudData);
+      const createResult = await TournamentModel.create(cloudData);
       
       if (createResult.errors) {
         console.error('❌ saveTournamentToCloud: Create failed:', createResult.errors);
@@ -113,9 +118,15 @@ export async function loadTournamentById(tournamentId: string): Promise<Tourname
     const client = getClient();
     if (!client) return null;
 
+    const TournamentModel = (client.models as any)?.Tournament;
+    if (!TournamentModel) {
+      console.warn('📥 loadTournamentById: Tournament model not available in schema; returning null');
+      return null;
+    }
+
     console.log('📥 loadTournamentById: Loading tournament:', tournamentId);
 
-    const { data: cloudTournament, errors } = await client.models.Tournament.get({ id: tournamentId });
+    const { data: cloudTournament, errors } = await TournamentModel.get({ id: tournamentId });
 
     if (errors || !cloudTournament) {
       console.log('❌ loadTournamentById: Tournament not found');
@@ -137,10 +148,16 @@ export async function loadTournamentsFromCloud(profileId: string): Promise<Tourn
     const client = getClient();
     if (!client) return [];
 
+    const TournamentModel = (client.models as any)?.Tournament;
+    if (!TournamentModel) {
+      console.warn('📥 loadTournamentsFromCloud: Tournament model not available in schema; returning []');
+      return [];
+    }
+
     console.log('📥 loadTournamentsFromCloud: Loading tournaments for profile:', profileId);
 
     // Get all tournaments (we'll filter client-side for now)
-    const { data: cloudTournaments, errors } = await client.models.Tournament.list();
+    const { data: cloudTournaments, errors } = await TournamentModel.list();
 
     if (errors || !cloudTournaments) {
       console.error('❌ loadTournamentsFromCloud: Error:', errors);
@@ -149,10 +166,10 @@ export async function loadTournamentsFromCloud(profileId: string): Promise<Tourn
 
     // Convert and filter - include owned OR registered
     const tournaments: Tournament[] = cloudTournaments
-      .map(ct => cloudTournamentToLocal(ct))
-      .filter(t => 
+      .map((ct: any) => cloudTournamentToLocal(ct))
+      .filter((t: Tournament) => 
         t.organizerId === profileId || 
-        t.registrations.some(r => r.profileId === profileId)
+        t.registrations.some((r: any) => r.profileId === profileId)
       );
 
     console.log(`✅ loadTournamentsFromCloud: Loaded ${tournaments.length} tournaments`);
@@ -171,9 +188,15 @@ export async function loadPublicTournaments(): Promise<Tournament[]> {
     const client = getClient();
     if (!client) return [];
 
+    const TournamentModel = (client.models as any)?.Tournament;
+    if (!TournamentModel) {
+      console.warn('📥 loadPublicTournaments: Tournament model not available in schema; returning []');
+      return [];
+    }
+
     console.log('📥 loadPublicTournaments: Loading public tournaments...');
 
-    const { data: cloudTournaments, errors } = await client.models.Tournament.list({
+    const { data: cloudTournaments, errors } = await TournamentModel.list({
       filter: {
         visibility: { eq: 'public' },
         status: { ne: 'draft' },
@@ -185,7 +208,7 @@ export async function loadPublicTournaments(): Promise<Tournament[]> {
       return [];
     }
 
-    const tournaments = cloudTournaments.map(ct => cloudTournamentToLocal(ct));
+    const tournaments = cloudTournaments.map((ct: any) => cloudTournamentToLocal(ct));
     console.log(`✅ loadPublicTournaments: Loaded ${tournaments.length} public tournaments`);
     return tournaments;
   } catch (error) {
@@ -202,9 +225,15 @@ export async function deleteTournamentFromCloud(tournamentId: string): Promise<b
     const client = getClient();
     if (!client) return false;
 
+    const TournamentModel = (client.models as any)?.Tournament;
+    if (!TournamentModel) {
+      console.warn('🗑️ deleteTournamentFromCloud: Tournament model not available in schema; skipping delete');
+      return false;
+    }
+
     console.log('🗑️ deleteTournamentFromCloud: Deleting tournament:', tournamentId);
 
-    const { errors } = await client.models.Tournament.delete({ id: tournamentId });
+    const { errors } = await TournamentModel.delete({ id: tournamentId });
 
     if (errors) {
       console.error('❌ deleteTournamentFromCloud: Error:', errors);

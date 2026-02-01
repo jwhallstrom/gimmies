@@ -114,7 +114,8 @@ export async function fetchCloudProfile(userId: string): Promise<SyncableProfile
         autoAdvanceScores: true,
         showHandicapStrokes: true,
       },
-      verifiedStatus: cloudProfile.verifiedStatusJson ? JSON.parse(cloudProfile.verifiedStatusJson as string) : undefined,
+        // verifiedStatus is currently local-only unless the cloud schema includes a verifiedStatusJson field
+        verifiedStatus: undefined,
       createdAt: cloudProfile.createdAt || new Date().toISOString(),
       lastActive: cloudProfile.lastActive || new Date().toISOString(),
     };
@@ -166,7 +167,6 @@ export async function saveCloudProfile(profile: SyncableProfile): Promise<boolea
       preferredTee: profile.preferredTee || null,
       statsJson: JSON.stringify(statsJson), // Stringify for storage
       preferencesJson: JSON.stringify(preferencesJson), // Stringify for storage
-      verifiedStatusJson: profile.verifiedStatus ? JSON.stringify(profile.verifiedStatus) : null,
       lastActive: new Date().toISOString(),
     };
 

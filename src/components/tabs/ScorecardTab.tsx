@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import useStore from '../../state/store';
 import { strokesForHole, courseHandicap } from '../../games/handicap';
 import { useCourse } from '../../hooks/useCourse';
+import { useAuthMode } from '../../hooks/useAuthMode';
 
 type Props = {
   eventId: string;
@@ -13,6 +14,7 @@ type Props = {
 
 const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMode }) => {
   const { events, completedEvents, profiles, currentProfile, updateScore, canEditScore, setScorecardView } = useStore();
+  const { isGuest } = useAuthMode();
   const event = events.find((e: any) => e.id === eventId) || completedEvents.find((e: any) => e.id === eventId);
   if (!event) return null;
 
@@ -264,7 +266,7 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
                 const name = eventGolfer.displayName || (profile ? profile.name : eventGolfer.customName);
                 const gid = eventGolfer.profileId || eventGolfer.customName;
                 if (!name || !gid) return null;
-                const canEdit = canEditScore(eventId, gid) && !event.isCompleted;
+                const canEdit = !isGuest && canEditScore(eventId, gid) && !event.isCompleted;
                 const sc = event.scorecards.find((s: any) => s.golferId === gid);
                 const existing = sc?.scores?.find((s: any) => s.hole === teamHole)?.strokes ?? null;
                 return (
@@ -304,7 +306,7 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
           if (!displayName) return null;
 
           const golferId = eventGolfer.profileId || eventGolfer.customName;
-          const canEdit = canEditScore(eventId, golferId) && !event.isCompleted;
+          const canEdit = !isGuest && canEditScore(eventId, golferId) && !event.isCompleted;
           const sc = event.scorecards.find((s: any) => s.golferId === golferId)!;
 
           // Calculate score to par

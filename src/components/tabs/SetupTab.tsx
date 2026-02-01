@@ -374,8 +374,8 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
         )}
       </div>
       
-      {/* Privacy & Access - Events (not shown for group child events since they're always private) */}
-      {isOwner && !event.isCompleted && !event.parentGroupId && (
+      {/* Privacy & Access - Events (similar to groups) */}
+      {isOwner && !event.isCompleted && (
         <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
           <div className="flex items-center gap-2 mb-4">
             <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -441,19 +441,6 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
               }`} />
             </button>
           </div>
-        </div>
-      )}
-
-      {/* Group child event privacy notice */}
-      {event.parentGroupId && (
-        <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4">
-          <div className="flex items-center gap-2 mb-1">
-            <span>👥</span>
-            <span className="text-sm font-bold text-purple-900">Group Event</span>
-          </div>
-          <p className="text-xs text-purple-700">
-            This event is part of a group and is only visible to group members. Group events cannot be made public.
-          </p>
         </div>
       )}
 

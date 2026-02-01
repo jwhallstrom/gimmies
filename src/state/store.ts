@@ -20,6 +20,7 @@ import type {
   NassauTeam, NassauConfig, SkinsConfig, PinkyConfig, PinkyResult,
   GreenieConfig, GreenieResult, ScoreEntry, PlayerScorecard,
   EventGameConfig, EventCourseSelection, ChatMessage, Toast,
+  StatusTier,
   Event, CompletedRound, IndividualRound, HandicapHistory, CombinedRound,
   EventWalletSettings, WalletTransaction, Settlement, TipFund, ProfileWallet,
   Tournament, TournamentRegistration, TournamentDivision, TournamentTeeTime,
@@ -68,8 +69,8 @@ interface State {
   pendingLevelUp: {
     profileId: string;
     profileName: string;
-    oldLevel: number;
-    newLevel: number;
+    oldTier: StatusTier;
+    newTier: StatusTier;
     verifiedRounds: number;
   } | null;
   clearPendingLevelUp: () => void;
@@ -396,36 +397,6 @@ export const useStore = create<State>()(
           } catch (error) {
             console.error('Failed to load CompletedRounds from cloud:', error);
           }
-          
-          // Load Tournaments from cloud
-          try {
-            const { loadTournamentsFromCloud } = await import('../utils/tournamentSync');
-            const cloudTournaments = await loadTournamentsFromCloud(currentProfile.id);
-            const existingTournaments = get().tournaments;
-            const tournamentsToAdd = cloudTournaments.filter(newTournament => 
-              !existingTournaments.some(existing => existing.id === newTournament.id)
-            );
-            if (tournamentsToAdd.length > 0) {
-              set({ tournaments: [...existingTournaments, ...tournamentsToAdd] });
-            }
-          } catch (error) {
-            console.error('Failed to load Tournaments from cloud:', error);
-          }
-          
-          // Load Settlements from cloud
-          try {
-            const { loadSettlementsForProfile } = await import('../utils/walletSync');
-            const cloudSettlements = await loadSettlementsForProfile(currentProfile.id);
-            const existingSettlements = get().settlements;
-            const settlementsToAdd = cloudSettlements.filter(newSettlement => 
-              !existingSettlements.some(existing => existing.id === newSettlement.id)
-            );
-            if (settlementsToAdd.length > 0) {
-              set({ settlements: [...existingSettlements, ...settlementsToAdd] });
-            }
-          } catch (error) {
-            console.error('Failed to load Settlements from cloud:', error);
-          }
         } catch (error) {
           console.error('loadEventsFromCloud error:', error);
         } finally {
@@ -626,54 +597,56 @@ export const useStore = create<State>()(
           console.log('✅ Event qualifies as verified round:', verification.reason);
           
           // Update verified status for each participant with a profile
-          let firstLevelUp: { profileId: string; profileName: string; oldLevel: number; newLevel: number; verifiedRounds: number } | null = null;
+          let firstLevelUp: { profileId: string; profileName: string; oldTier: StatusTier; newTier: StatusTier; verifiedRounds: number } | null = null;
           
-          for (const golfer of completedEvent.golfers) {
-            if (!golfer.profileId) continue;
-
+          completedEvent.golfers.forEach(golfer => {
+            if (!golfer.profileId) return;
+            
             const profile = get().profiles.find(p => p.id === golfer.profileId);
-            if (!profile) continue;
-
+            if (!profile) return;
+            
             const currentStatus = profile.verifiedStatus || {
               verifiedRounds: 0,
               statusLevel: 0,
               badges: [],
               lastVerifiedDate: undefined,
             };
-
+            
             // Calculate new status after this verified round
-            const { newStatus, leveledUp } = calculateNewStatus(currentStatus, completedEvent.id);
+            const result = calculateNewStatus(currentStatus, completedEvent.id);
+            const newStatus = result.newStatus;
+            const leveledUp = result.leveledUp;
 
-            if (leveledUp && !firstLevelUp) {
+            if (leveledUp && !firstLevelUp && result.newTier && result.oldTier) {
               // Only show modal for first person who levels up (typically current user)
               firstLevelUp = {
                 profileId: profile.id,
                 profileName: profile.name,
-                oldLevel: currentStatus.statusLevel,
-                newLevel: newStatus.statusLevel,
+                oldTier: result.oldTier,
+                newTier: result.newTier,
                 verifiedRounds: newStatus.verifiedRounds,
               };
             }
-
+            
             // Update profile with new verified status
             set((state: any) => ({
-              profiles: state.profiles.map((p: GolferProfile) =>
-                p.id === profile.id ? { ...p, verifiedStatus: newStatus, lastActive: new Date().toISOString() } : p
+              profiles: state.profiles.map((p: GolferProfile) => 
+                p.id === profile.id 
+                  ? { ...p, verifiedStatus: newStatus, lastActive: new Date().toISOString() }
+                  : p
               ),
-              currentProfile:
-                state.currentProfile?.id === profile.id
-                  ? { ...state.currentProfile, verifiedStatus: newStatus, lastActive: new Date().toISOString() }
-                  : state.currentProfile,
+              currentProfile: state.currentProfile?.id === profile.id
+                ? { ...state.currentProfile, verifiedStatus: newStatus, lastActive: new Date().toISOString() }
+                : state.currentProfile
             }));
-
-            console.log(
-              `📊 Updated verified status for ${profile.name}: Level ${currentStatus.statusLevel} → ${newStatus.statusLevel}, Rounds: ${newStatus.verifiedRounds}`
-            );
-          }
+            
+            console.log(`📊 Updated verified status for ${profile.name}: Level ${currentStatus.statusLevel} → ${newStatus.statusLevel}, Rounds: ${newStatus.verifiedRounds}`);
+          });
           
           // Set pending level up for UI to display modal (prioritize current user)
           const currentProfile = get().currentProfile;
-          if (firstLevelUp) {
+          const levelUp = firstLevelUp;
+          if (levelUp) {
             // If current user leveled up, show their modal
             const currentUserLevelUp = completedEvent.golfers.some(g => 
               g.profileId === currentProfile?.id
@@ -681,26 +654,26 @@ export const useStore = create<State>()(
             
             if (currentUserLevelUp) {
               const currentStatus = currentProfile?.verifiedStatus || { verifiedRounds: 0, statusLevel: 0 };
-              const { newStatus, leveledUp } = calculateNewStatus(currentStatus as any, completedEvent.id);
-              if (leveledUp) {
+              const result = calculateNewStatus(currentStatus as any, completedEvent.id);
+              if (result.leveledUp && result.newTier && result.oldTier) {
                 set({
                   pendingLevelUp: {
                     profileId: currentProfile!.id,
                     profileName: currentProfile!.name,
-                    oldLevel: currentStatus.statusLevel || 0,
-                    newLevel: newStatus.statusLevel,
-                    verifiedRounds: newStatus.verifiedRounds,
+                    oldTier: result.oldTier,
+                    newTier: result.newTier,
+                    verifiedRounds: result.newStatus.verifiedRounds,
                   }
                 });
               } else {
-                set({ pendingLevelUp: firstLevelUp });
+                set({ pendingLevelUp: levelUp });
               }
             } else {
-              set({ pendingLevelUp: firstLevelUp });
+              set({ pendingLevelUp: levelUp });
             }
             
             // Also show a toast notification
-            get().addToast(`🎉 Level Up! ${firstLevelUp.profileName} reached a new status tier!`, 'achievement', 5000);
+            get().addToast('🎉 Level Up! New status tier reached!', 'achievement', 5000);
           }
           
           // Mark event as verified for future reference

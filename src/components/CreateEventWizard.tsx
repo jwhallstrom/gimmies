@@ -4,6 +4,8 @@ import useStore from '../state/store';
 import { CourseSearch } from './CourseSearch';
 import { generateFunnyEventName } from '../utils/nameGenerator';
 import { useCourses } from '../hooks/useCourses';
+import { useAuthMode } from '../hooks/useAuthMode';
+import { SignInRequired } from './SignInRequired';
 
 interface Props {
   isOpen: boolean;
@@ -21,6 +23,7 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
     useStore();
   const updateProfile = useStore((s) => s.updateProfile);
   const { courses } = useCourses();
+  const { isGuest } = useAuthMode();
   
   const [step, setStep] = useState<WizardStep>('details');
   const [eventName, setEventName] = useState('');
@@ -78,16 +81,18 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
     const current = currentProfile.preferences?.favoriteCourseIds || [];
     const next = current.includes(courseId) ? current.filter((id) => id !== courseId) : [courseId, ...current];
     updateProfile(currentProfile.id, { preferences: { ...currentProfile.preferences, favoriteCourseIds: next } });
-    // Sync favorite courses to cloud
-    try {
-      const { saveCloudProfile } = await import('../utils/profileSync');
-      const { profiles } = useStore.getState();
-      const updatedProfile = profiles.find(p => p.id === currentProfile.id);
-      if (updatedProfile) {
-        await saveCloudProfile(updatedProfile as any);
+    // Sync favorite courses to cloud (signed-in only)
+    if (!isGuest) {
+      try {
+        const { saveCloudProfile } = await import('../utils/profileSync');
+        const { profiles } = useStore.getState();
+        const updatedProfile = profiles.find((p) => p.id === currentProfile.id);
+        if (updatedProfile) {
+          await saveCloudProfile(updatedProfile as any);
+        }
+      } catch (e) {
+        console.error('Failed to sync favorite courses to cloud:', e);
       }
-    } catch (e) {
-      console.error('Failed to sync favorite courses to cloud:', e);
     }
   };
 
@@ -101,6 +106,30 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
   }, [isOpen, selectedCourseId, selectedCourseName, courses]);
 
   if (!isOpen) return null;
+
+  if (isGuest) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+        <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
+          <div className="bg-primary-900 p-4 text-white flex justify-between items-center">
+            <h2 className="text-lg font-bold">New Event</h2>
+            <button onClick={onClose} className="text-white/80 hover:text-white" aria-label="Close">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div className="p-5">
+            <SignInRequired
+              title="🔒 Sign in to create events"
+              message="Guest Mode is browse-only right now. Sign in to create events, invite players, and sync across devices."
+              onAction={onClose}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleNext = () => {
     if (step === 'details') setStep('course');
@@ -167,7 +196,7 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
         
         {/* Header */}
         <div className="bg-primary-600 p-4 text-white flex justify-between items-center">
@@ -180,7 +209,7 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
         </div>
 
         {/* Progress Bar */}
-        <div className="flex gap-1 p-2 bg-gray-50 dark:bg-slate-800">
+        <div className="flex gap-1 p-2 bg-gray-50">
           <div className={`h-1 flex-1 rounded-full ${step === 'details' || step === 'course' ? 'bg-primary-500' : 'bg-gray-200'}`} />
           <div className={`h-1 flex-1 rounded-full ${step === 'course' ? 'bg-primary-500' : 'bg-gray-200'}`} />
         </div>
@@ -190,14 +219,14 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
           
           {step === 'details' && (
             <div className="space-y-4">
-              <h3 className="text-xl font-semibold text-gray-800 dark:text-slate-100">Event Details</h3>
+              <h3 className="text-xl font-semibold text-gray-800">Event Details</h3>
               
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Event Name</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Event Name</label>
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    className="flex-1 border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 bg-white text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     value={eventName}
                     onChange={(e) => setEventName(e.target.value)}
                     placeholder="e.g. Sunday Scramble"
@@ -215,18 +244,18 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">Date</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
                 <div className="flex gap-2">
                   <input
                     type="date"
                     aria-label="Event Date"
-                    className="flex-1 border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    className="flex-1 border border-gray-300 rounded-lg px-3 py-2 bg-white text-gray-900 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                     value={eventDate}
                     onChange={(e) => setEventDate(e.target.value)}
                   />
                   <button
                     onClick={() => setEventDate(new Date().toISOString().slice(0, 10))}
-                    className="bg-gray-100 text-gray-700 p-2 rounded-lg hover:bg-gray-200 transition-colors dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
+                    className="bg-gray-100 text-gray-700 p-2 rounded-lg hover:bg-gray-200 transition-colors"
                     title="Set to Today"
                   >
                     <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -237,31 +266,31 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1">
-                  Tee Time <span className="text-xs text-gray-500 dark:text-slate-400 font-normal">(optional)</span>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Tee Time <span className="text-xs text-gray-500 font-normal">(optional)</span>
                 </label>
                 <input
                   type="time"
                   aria-label="Tee Time"
-                  className="w-full border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 rounded-lg px-3 py-2 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 bg-white text-gray-900 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                   value={teeTime}
                   onChange={(e) => setTeeTime(e.target.value)}
                 />
-                <div className="text-xs text-gray-500 dark:text-slate-400 mt-1">You can change this later from the event hub.</div>
+                <div className="text-xs text-gray-500 mt-1">You can change this later from the event hub.</div>
               </div>
             </div>
           )}
 
           {step === 'course' && (
             <div className="space-y-4 min-h-[400px] pb-20">
-              <h3 className="text-xl font-semibold text-gray-800 dark:text-slate-100">Course & Tee</h3>
-              <p className="text-sm text-gray-600 dark:text-slate-300">Pick the course and tees your group will play.</p>
+              <h3 className="text-xl font-semibold text-gray-800">Course & Tee</h3>
+              <p className="text-sm text-gray-600">Pick the course and tees your group will play.</p>
               
               {favoriteCourses.length > 0 && (
-                <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 p-3">
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <div className="flex items-center justify-between mb-2">
-                    <div className="text-[10px] font-bold tracking-[0.15em] text-gray-400 dark:text-slate-400 uppercase">Favorites</div>
-                    <div className="text-xs text-gray-500 dark:text-slate-400">Tap to select</div>
+                    <div className="text-[10px] font-bold tracking-[0.15em] text-gray-400 uppercase">Favorites</div>
+                    <div className="text-xs text-gray-500">Tap to select</div>
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {favoriteCourses.map((c) => {
@@ -281,15 +310,13 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
                             setSelectedTeeName(maybe);
                           }}
                           className={`group flex items-center gap-2 px-3 py-2 rounded-xl border text-left transition-all ${
-                            isSelected 
-                              ? 'bg-primary-50 dark:bg-primary-900/40 border-primary-500 ring-1 ring-primary-500' 
-                              : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-800'
+                            isSelected ? 'bg-primary-50 border-primary-500 ring-1 ring-primary-500' : 'bg-white border-slate-200 hover:bg-slate-50'
                           }`}
                           title={c.name}
                         >
-                          <span className="font-semibold text-sm text-gray-900 dark:text-slate-100 truncate max-w-[180px]">{c.name}</span>
+                          <span className="font-semibold text-sm text-gray-900 truncate max-w-[180px]">{c.name}</span>
                           {c.courseId === currentProfile?.preferences?.homeCourseId && (
-                            <span className="text-[10px] font-bold text-primary-700 dark:text-primary-300 bg-primary-100 dark:bg-primary-900/50 px-1.5 py-0.5 rounded uppercase tracking-wider">
+                            <span className="text-[10px] font-bold text-primary-700 bg-primary-100 px-1.5 py-0.5 rounded uppercase tracking-wider">
                               Home
                             </span>
                           )}
@@ -311,9 +338,7 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
                                 }
                               }}
                               className={`text-xs font-bold px-2 py-1 rounded-lg border ${
-                                isFavorite 
-                                  ? 'bg-amber-50 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/60' 
-                                  : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-600 hover:bg-slate-50 dark:hover:bg-slate-700'
+                                isFavorite ? 'bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                               }`}
                               title={isFavorite ? 'Remove favorite' : 'Add favorite'}
                             >
@@ -344,14 +369,14 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
                 <button
                   type="button"
                   onClick={() => toggleFavoriteCourse(selectedCourseId)}
-                  className="inline-flex items-center gap-2 text-xs font-bold px-3 py-2 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 w-fit dark:bg-amber-900/30 dark:text-amber-200 dark:border-amber-800"
+                  className="inline-flex items-center gap-2 text-xs font-bold px-3 py-2 rounded-xl border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100 w-fit"
                 >
                   ★ {favoriteCourseIds.includes(selectedCourseId) ? 'Remove from favorites' : 'Add to favorites'}
                 </button>
               )}
               
               {selectedCourseId && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center gap-2 text-green-800 dark:bg-green-900/30 dark:border-green-800 dark:text-green-200">
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-center gap-2 text-green-800">
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
@@ -361,11 +386,11 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
 
               {/* Tee selection (inline, right after course) */}
               <div className="space-y-2">
-                <div className="text-sm font-medium text-gray-700 dark:text-slate-300">Tee</div>
+                <div className="text-sm font-medium text-gray-700">Tee</div>
                 {!selectedCourseId ? (
-                  <div className="text-xs text-gray-500 dark:text-slate-400">Select a course to see available tees.</div>
+                  <div className="text-xs text-gray-500">Select a course to see available tees.</div>
                 ) : tees.length === 0 ? (
-                  <div className="text-xs text-gray-500 dark:text-slate-400">No tee data found for this course.</div>
+                  <div className="text-xs text-gray-500">No tee data found for this course.</div>
                 ) : (
                   <div className="grid grid-cols-1 gap-2">
                     {tees.map((tee: any) => (
@@ -375,12 +400,12 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
                         onClick={() => setSelectedTeeName(tee.name)}
                         className={`p-3 rounded-lg border text-left transition-all ${
                           selectedTeeName === tee.name
-                            ? 'bg-primary-50 dark:bg-primary-900/40 border-primary-500 ring-1 ring-primary-500'
-                            : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-600 hover:bg-gray-50 dark:hover:bg-slate-800'
+                            ? 'bg-primary-50 border-primary-500 ring-1 ring-primary-500'
+                            : 'bg-white border-gray-200 hover:bg-gray-50'
                         }`}
                       >
-                        <div className="font-medium text-gray-900 dark:text-slate-100">{tee.name}</div>
-                        <div className="text-xs text-gray-500 dark:text-slate-400 flex gap-3 mt-1">
+                        <div className="font-medium text-gray-900">{tee.name}</div>
+                        <div className="text-xs text-gray-500 flex gap-3 mt-1">
                           <span>Rating: {tee.courseRating || tee.rating || 'N/A'}</span>
                           <span>Slope: {tee.slopeRating || tee.slope || 'N/A'}</span>
                           <span>Par: {tee.par}</span>
@@ -396,11 +421,11 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 border-t bg-gray-50 dark:bg-slate-800 dark:border-slate-700 flex justify-between items-center">
+        <div className="p-4 border-t bg-gray-50 flex justify-between items-center">
           {step !== 'details' ? (
             <button
               onClick={handleBack}
-              className="px-4 py-2 text-gray-600 dark:text-slate-300 font-medium hover:text-gray-900 dark:hover:text-white"
+              className="px-4 py-2 text-gray-600 font-medium hover:text-gray-900"
             >
               Back
             </button>

@@ -53,6 +53,17 @@ body.chat-input-focused .bottom-nav {
   display: none !important;
 }
 
+/* When the bottom nav is present, reserve its height for full-screen pages (e.g. Event/Group chat)
+   so the composer can sit snug against it without extra scrolling. */
+.app-scroll-with-bottom-nav {
+  bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* When the keyboard is up, we hide the bottom nav. Remove the reserved space so content can extend fully. */
+body.chat-input-focused .app-scroll-with-bottom-nav {
+  bottom: 0;
+}
+
 /* Smooth momentum scrolling */
 .scroll-smooth {
   -webkit-overflow-scrolling: touch;
@@ -122,18 +133,18 @@ a:active,
 }
 
 .content-with-footer {
-  padding-bottom: 6rem;
+  padding-bottom: 8rem;
 }
 
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
   .content-with-footer {
-    padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+    padding-bottom: calc(8rem + env(safe-area-inset-bottom));
   }
 }
 
 @supports (padding-bottom: constant(safe-area-inset-bottom)) {
   .content-with-footer {
-    padding-bottom: calc(6rem + constant(safe-area-inset-bottom));
+    padding-bottom: calc(8rem + constant(safe-area-inset-bottom));
   }
 }
 
@@ -265,27 +276,6 @@ body, html {
 
 .gimmies-ticker {
   overflow: hidden;
-}
-
-/* Dashboard ticker container: sit above bottom nav + iOS safe area */
-.gimmies-ticker-above-nav {
-  position: fixed;
-  left: 1rem;
-  right: 1rem;
-  bottom: 3.75rem;
-  z-index: 30;
-}
-
-@supports (bottom: env(safe-area-inset-bottom)) {
-  .gimmies-ticker-above-nav {
-    bottom: calc(3.75rem + env(safe-area-inset-bottom));
-  }
-}
-
-@supports (bottom: constant(safe-area-inset-bottom)) {
-  .gimmies-ticker-above-nav {
-    bottom: calc(3.75rem + constant(safe-area-inset-bottom));
-  }
 }
 
 .gimmies-ticker__inner {
