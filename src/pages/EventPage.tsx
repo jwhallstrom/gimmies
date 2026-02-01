@@ -173,10 +173,13 @@ const EventPage: React.FC = () => {
         </div>
         
         {/* Tab Navigation - Inline */}
-        <div className="flex gap-1 overflow-x-auto px-3 pb-2 scrollbar-hide -mx-3">
+        <div className={`flex justify-center px-3 pb-2 -mx-3 ${isGroupHub ? 'gap-1' : 'gap-3'}`}>
           {tabs.map((tab) => {
             const isActive = currentPath === tab.path || (!isOnTab && tab.path === 'chat');
             const badge = (tab as any).badge as number | undefined;
+            
+            // For events (not groups), show icons only to save space
+            const showLabel = isGroupHub;
             
             // Alerts tab opens modal instead of navigating
             if (tab.path === 'alerts') {
@@ -184,10 +187,13 @@ const EventPage: React.FC = () => {
                 <button
                   key={tab.path}
                   onClick={() => setShowNotifications(true)}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-semibold text-[11px] transition-all whitespace-nowrap flex-shrink-0 bg-white/10 text-white/85 hover:bg-white/20 hover:text-white"
+                  className={`flex items-center justify-center gap-1 rounded-lg font-semibold transition-all flex-shrink-0 bg-white/10 text-white/85 hover:bg-white/20 hover:text-white ${
+                    showLabel ? 'px-2.5 py-1.5 text-[11px]' : 'w-10 h-10 text-lg'
+                  }`}
+                  title={tab.label}
                 >
-                  <span className="text-sm leading-none">{tab.icon}</span>
-                  <span className="leading-none">{tab.label}</span>
+                  <span className={showLabel ? 'text-sm leading-none' : ''}>{tab.icon}</span>
+                  {showLabel && <span className="leading-none whitespace-nowrap">{tab.label}</span>}
                 </button>
               );
             }
@@ -198,16 +204,19 @@ const EventPage: React.FC = () => {
                 <button
                   key={tab.path}
                   onClick={() => setShowEventsDropdown(!showEventsDropdown)}
-                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-semibold text-[11px] transition-all whitespace-nowrap flex-shrink-0 ${
+                  className={`flex items-center justify-center gap-1 rounded-lg font-semibold transition-all flex-shrink-0 ${
+                    showLabel ? 'px-2.5 py-1.5 text-[11px]' : 'w-10 h-10 text-lg'
+                  } ${
                     showEventsDropdown
                       ? 'bg-white text-primary-800 shadow-sm'
                       : badge && badge > 0
                         ? 'bg-orange-500 text-white hover:bg-orange-600'
                         : 'bg-white/10 text-white/85 hover:bg-white/20 hover:text-white'
                   }`}
+                  title={tab.label}
                 >
-                  <span className="text-sm leading-none">{tab.icon}</span>
-                  <span className="leading-none">{tab.label}</span>
+                  <span className={showLabel ? 'text-sm leading-none' : ''}>{tab.icon}</span>
+                  {showLabel && <span className="leading-none whitespace-nowrap">{tab.label}</span>}
                   {typeof badge === 'number' && badge > 0 && (
                     <span
                       className={`ml-0.5 px-1 py-0.5 rounded-full text-[9px] font-extrabold leading-none ${
@@ -225,22 +234,35 @@ const EventPage: React.FC = () => {
               <NavLink
                 key={tab.path}
                 to={tab.path}
-                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-semibold text-[11px] transition-all whitespace-nowrap flex-shrink-0 ${
+                className={`relative flex items-center justify-center gap-1 rounded-lg font-semibold transition-all flex-shrink-0 ${
+                  showLabel ? 'px-2.5 py-1.5 text-[11px]' : 'w-10 h-10 text-lg'
+                } ${
                   isActive
                     ? 'bg-white text-primary-800 shadow-sm'
                     : 'bg-white/10 text-white/85 hover:bg-white/20 hover:text-white'
                 }`}
+                title={tab.label}
               >
-                <span className="text-sm leading-none">{tab.icon}</span>
-                <span className="leading-none">{tab.label}</span>
+                <span className={showLabel ? 'text-sm leading-none' : ''}>{tab.icon}</span>
+                {showLabel && <span className="leading-none whitespace-nowrap">{tab.label}</span>}
                 {typeof badge === 'number' && (
-                  <span
-                    className={`ml-0.5 px-1 py-0.5 rounded-full text-[9px] font-extrabold leading-none ${
-                      isActive ? 'bg-primary-100 text-primary-800' : 'bg-white/20 text-white'
-                    }`}
-                  >
-                    {badge}
-                  </span>
+                  showLabel ? (
+                    <span
+                      className={`ml-0.5 px-1 py-0.5 rounded-full text-[9px] font-extrabold leading-none ${
+                        isActive ? 'bg-primary-100 text-primary-800' : 'bg-white/20 text-white'
+                      }`}
+                    >
+                      {badge}
+                    </span>
+                  ) : (
+                    <span
+                      className={`absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 flex items-center justify-center rounded-full text-[10px] font-bold ${
+                        isActive ? 'bg-primary-600 text-white' : 'bg-white text-primary-800'
+                      }`}
+                    >
+                      {badge}
+                    </span>
+                  )
                 )}
               </NavLink>
             );
