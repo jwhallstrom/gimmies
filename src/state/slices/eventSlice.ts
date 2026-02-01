@@ -141,11 +141,14 @@ export const createEventSlice = (
       games: { nassau: [], skins: [], pinky: [], greenie: [] },
       ownerProfileId: currentProfile.id,
       scorecardView: 'individual',
-      isPublic: true,
+      // Default to private; group child events are always private
+      isPublic: initialData?.parentGroupId ? false : false,
       createdAt: new Date().toISOString(),
       lastModified: new Date().toISOString(),
       chat: [],
-      ...initialData
+      ...initialData,
+      // Ensure group child events can never be public
+      ...(initialData?.parentGroupId ? { isPublic: false } : {})
     };
     set((state: any) => ({ events: [...state.events, newEvent] }));
     return id;
@@ -201,7 +204,9 @@ export const createEventSlice = (
           pinky: patch.games.pinky ?? currentGames.pinky ?? [],
           greenie: patch.games.greenie ?? currentGames.greenie ?? []
         } : currentGames;
-        return { ...e, ...patch, games: updatedGames, lastModified: new Date().toISOString() };
+        // Prevent group child events from being set to public
+        const safePatch = e.parentGroupId && patch.isPublic ? { ...patch, isPublic: false } : patch;
+        return { ...e, ...safePatch, games: updatedGames, lastModified: new Date().toISOString() };
       })
     }));
     await syncEventToCloud(id, get);

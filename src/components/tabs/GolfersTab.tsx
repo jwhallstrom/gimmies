@@ -122,6 +122,28 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
     }
   };
 
+  const handleLeaveEvent = (golferId: string) => {
+    if (event.isCompleted) return;
+    
+    // Check if user has any scores entered
+    const scorecard = event.scorecards?.find((sc: any) => sc.golferId === golferId);
+    const hasScores = scorecard?.scores?.some((s: any) => s.strokes !== null);
+    
+    let confirmMsg = isGroupHub
+      ? 'Are you sure you want to leave this group?'
+      : 'Are you sure you want to leave this event?';
+    
+    if (hasScores) {
+      confirmMsg = isGroupHub
+        ? 'You have scores recorded in this group. Are you sure you want to leave? Your scores will be removed.'
+        : 'You have scores recorded in this event. Are you sure you want to leave? Your scores will be removed.';
+    }
+    
+    if (window.confirm(confirmMsg)) {
+      removeGolferFromEvent(eventId, golferId);
+    }
+  };
+
   const handleUpdatePreference = (golferId: string, preference: 'all' | 'nassau' | 'skins' | 'none') => {
     updateEventGolfer(eventId, golferId, { gamePreference: preference } as any);
     setEditingGolferId(null);
@@ -382,6 +404,16 @@ Code: ${event.shareCode}`,
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                     </svg>
+                  </button>
+                )}
+
+                {/* Leave Event Button (current user who is not owner) */}
+                {golfer.isCurrentUser && !golfer.isOwnerProfile && !event.isCompleted && (
+                  <button
+                    onClick={() => handleLeaveEvent(golfer.id)}
+                    className="px-2 py-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors font-medium"
+                  >
+                    Leave
                   </button>
                 )}
               </div>

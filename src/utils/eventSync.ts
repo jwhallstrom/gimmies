@@ -381,6 +381,9 @@ export async function loadPublicEventsFromCloud(): Promise<Event[]> {
 
     const localEvents: Event[] = (events || [])
       .filter((cloudEvent) => !cloudEvent.isCompleted)
+      // Exclude groups (hubType === 'group') and group child events (have parentGroupId)
+      .filter((cloudEvent) => (cloudEvent as any).hubType !== 'group')
+      .filter((cloudEvent) => !(cloudEvent as any).parentGroupId)
       .map((cloudEvent) => ({
         id: cloudEvent.id,
         name: cloudEvent.name,
