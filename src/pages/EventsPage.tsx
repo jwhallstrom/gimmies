@@ -13,6 +13,13 @@ const EventsPage: React.FC = () => {
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
 
+  // Helper to get parent group name for group child events
+  const getParentGroupName = (event: any) => {
+    if (!event.parentGroupId) return null;
+    const parentGroup = events.find((e: any) => e.id === event.parentGroupId && e.hubType === 'group');
+    return parentGroup?.name || 'Group';
+  };
+
   // Load events from cloud when profile is available
   useEffect(() => {
     if (currentProfile && !isLoadingEvents) {
@@ -189,11 +196,22 @@ const EventsPage: React.FC = () => {
                         {event.date} • {event.golfers.length} players
                         {event.course.courseId && ` • ${getCourseById(event.course.courseId)?.name || event.course.courseId}`}
                       </div>
-                      {isOwner && (
-                        <span className="text-xs bg-primary-100 text-primary-800 px-2 py-0.5 rounded w-fit mt-1">
-                          Owner
-                        </span>
-                      )}
+                      <div className="flex gap-2 mt-1 flex-wrap">
+                        {isOwner && (
+                          <span className="text-xs bg-primary-100 text-primary-800 px-2 py-0.5 rounded">
+                            Owner
+                          </span>
+                        )}
+                        {getParentGroupName(event) && (
+                          <Link
+                            to={`/event/${event.parentGroupId}/chat`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded hover:bg-purple-200 transition-colors flex items-center gap-1"
+                          >
+                            <span>👥</span> {getParentGroupName(event)}
+                          </Link>
+                        )}
+                      </div>
                     </div>
                     <div className="mt-3">
                       <Link
@@ -241,7 +259,7 @@ const EventsPage: React.FC = () => {
                         {event.course.courseId && ` • ${getCourseById(event.course.courseId)?.name || event.course.courseId}`}
                         {event.completedAt && ` • Completed ${new Date(event.completedAt).toLocaleDateString()}`}
                       </div>
-                      <div className="flex gap-2 mt-1">
+                      <div className="flex gap-2 mt-1 flex-wrap">
                         {isOwner && (
                           <span className="text-xs bg-primary-100 text-primary-800 px-2 py-0.5 rounded">
                             Owner
@@ -250,6 +268,15 @@ const EventsPage: React.FC = () => {
                         <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded">
                           Read-only
                         </span>
+                        {getParentGroupName(event) && (
+                          <Link
+                            to={`/event/${event.parentGroupId}/chat`}
+                            onClick={(e) => e.stopPropagation()}
+                            className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded hover:bg-purple-200 transition-colors flex items-center gap-1"
+                          >
+                            <span>👥</span> {getParentGroupName(event)}
+                          </Link>
+                        )}
                       </div>
                     </div>
                     <div className="mt-3">

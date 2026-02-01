@@ -538,7 +538,7 @@ const Dashboard: React.FC = () => {
               ) : (
                 <div className="space-y-2">
                   {activeEvents.slice(0, 5).map(event => (
-                    <EventCard key={event.id} event={event} profiles={profiles} />
+                    <EventCard key={event.id} event={event} profiles={profiles} allEvents={userEvents} />
                   ))}
                   
                   {activeEvents.length > 5 && (
@@ -693,11 +693,17 @@ const Dashboard: React.FC = () => {
 };
 
 // Event Card Component
-const EventCard: React.FC<{ event: Event; profiles: any[] }> = ({ event, profiles }) => {
+const EventCard: React.FC<{ event: Event; profiles: any[]; allEvents?: Event[] }> = ({ event, profiles, allEvents = [] }) => {
   const navigate = useNavigate();
   
   const golferCount = event.golfers.length;
   const scoringCount = event.scorecards.filter(sc => sc.scores.length > 0).length;
+  
+  // Get parent group name if this is a group child event
+  const parentGroup = event.parentGroupId 
+    ? allEvents.find(e => e.id === event.parentGroupId && e.hubType === 'group')
+    : null;
+  const parentGroupName = parentGroup?.name || (event.parentGroupId ? 'Group' : null);
   
   return (
     <button
@@ -706,8 +712,21 @@ const EventCard: React.FC<{ event: Event; profiles: any[] }> = ({ event, profile
     >
       <div className="flex items-center justify-between">
         <div className="min-w-0 flex-1">
-          <div className="font-semibold text-gray-900 group-hover:text-primary-700 truncate transition-colors">
-            {event.name || 'Untitled Event'}
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-gray-900 group-hover:text-primary-700 truncate transition-colors">
+              {event.name || 'Untitled Event'}
+            </span>
+            {parentGroupName && (
+              <span 
+                className="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded flex items-center gap-0.5 flex-shrink-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/event/${event.parentGroupId}/chat`);
+                }}
+              >
+                👥 {parentGroupName}
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
             <span>{formatDateShort(event.date)}</span>
