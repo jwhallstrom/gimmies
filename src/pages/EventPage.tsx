@@ -127,7 +127,7 @@ const EventPage: React.FC = () => {
     : [
         { path: 'chat', label: 'Chat', icon: '💬' },
         { path: 'golfers', label: 'Golfers', icon: '👥', badge: stats.golferCount },
-        { path: 'scorecard', label: 'Leaderboard', icon: '📊' },
+        { path: 'scorecard', label: 'Leaderboard', icon: '🏆' },
         { path: 'games', label: 'Games', icon: '🎯' },
         ...(isOwner ? [
           { path: 'alerts', label: 'Alerts', icon: '🔔', ownerOnly: true },
@@ -145,9 +145,14 @@ const EventPage: React.FC = () => {
   // Determine current tab for highlighting
   const currentPath = location.pathname.split('/').pop() || 'chat';
   const isOnTab = tabs.some(t => t.path === currentPath);
+  const isChatLike = currentPath === 'chat' || !isOnTab;
+  // Icon-only tabs (no labels): saves space and removes sideways scrolling.
+  const tabPillClass =
+    'flex items-center justify-center w-11 h-11 rounded-xl font-semibold text-[11px] transition-all flex-shrink-0';
+  const tabBarClass = 'flex gap-1 px-3 pb-2 -mx-3 justify-center';
 
   return (
-    <div className="min-h-screen -mx-4 -mt-6 flex flex-col">
+    <div className={isChatLike ? 'h-full min-h-0 flex flex-col' : 'min-h-screen -mx-4 -mt-6 flex flex-col'}>
       {/* Header - Compact & Sticky */}
       <div className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 px-3 py-2 shadow-lg sticky top-0 z-30 flex-shrink-0">
         {/* Single Row: Event Info + Actions */}
@@ -173,7 +178,7 @@ const EventPage: React.FC = () => {
         </div>
         
         {/* Tab Navigation - Inline */}
-        <div className="flex gap-1 overflow-x-auto px-3 pb-2 scrollbar-hide -mx-3">
+        <div className={tabBarClass}>
           {tabs.map((tab) => {
             const isActive = currentPath === tab.path || (!isOnTab && tab.path === 'chat');
             const badge = (tab as any).badge as number | undefined;
@@ -184,10 +189,11 @@ const EventPage: React.FC = () => {
                 <button
                   key={tab.path}
                   onClick={() => setShowNotifications(true)}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-semibold text-[11px] transition-all whitespace-nowrap flex-shrink-0 bg-white/10 text-white/85 hover:bg-white/20 hover:text-white"
+                  aria-label={tab.label}
+                  title={tab.label}
+                  className={`relative ${tabPillClass} ${isActive ? 'bg-white text-primary-800 shadow-sm' : 'bg-white/10 text-white/85 hover:bg-white/20 hover:text-white'}`}
                 >
-                  <span className="text-sm leading-none">{tab.icon}</span>
-                  <span className="leading-none">{tab.label}</span>
+                  <span className="text-lg leading-none" aria-hidden="true">{tab.icon}</span>
                 </button>
               );
             }
@@ -198,7 +204,9 @@ const EventPage: React.FC = () => {
                 <button
                   key={tab.path}
                   onClick={() => setShowEventsDropdown(!showEventsDropdown)}
-                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-semibold text-[11px] transition-all whitespace-nowrap flex-shrink-0 ${
+                  aria-label={tab.label}
+                  title={tab.label}
+                  className={`relative ${tabPillClass} ${
                     showEventsDropdown
                       ? 'bg-white text-primary-800 shadow-sm'
                       : badge && badge > 0
@@ -206,11 +214,10 @@ const EventPage: React.FC = () => {
                         : 'bg-white/10 text-white/85 hover:bg-white/20 hover:text-white'
                   }`}
                 >
-                  <span className="text-sm leading-none">{tab.icon}</span>
-                  <span className="leading-none">{tab.label}</span>
+                  <span className="text-lg leading-none" aria-hidden="true">{tab.icon}</span>
                   {typeof badge === 'number' && badge > 0 && (
                     <span
-                      className={`ml-0.5 px-1 py-0.5 rounded-full text-[9px] font-extrabold leading-none ${
+                      className={`absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-extrabold leading-none flex items-center justify-center ${
                         showEventsDropdown ? 'bg-primary-100 text-primary-800' : 'bg-white/30 text-white'
                       }`}
                     >
@@ -225,17 +232,18 @@ const EventPage: React.FC = () => {
               <NavLink
                 key={tab.path}
                 to={tab.path}
-                className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg font-semibold text-[11px] transition-all whitespace-nowrap flex-shrink-0 ${
+                aria-label={tab.label}
+                title={tab.label}
+                className={`relative ${tabPillClass} ${
                   isActive
                     ? 'bg-white text-primary-800 shadow-sm'
                     : 'bg-white/10 text-white/85 hover:bg-white/20 hover:text-white'
                 }`}
               >
-                <span className="text-sm leading-none">{tab.icon}</span>
-                <span className="leading-none">{tab.label}</span>
+                <span className="text-lg leading-none" aria-hidden="true">{tab.icon}</span>
                 {typeof badge === 'number' && (
                   <span
-                    className={`ml-0.5 px-1 py-0.5 rounded-full text-[9px] font-extrabold leading-none ${
+                    className={`absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-extrabold leading-none flex items-center justify-center ${
                       isActive ? 'bg-primary-100 text-primary-800' : 'bg-white/20 text-white'
                     }`}
                   >
@@ -411,8 +419,8 @@ const EventPage: React.FC = () => {
         </>
       )}
       
-      {/* Content Area - Fills remaining height, scrolls internally */}
-      <div className="flex-1 overflow-auto px-4 py-2">
+      {/* Content Area - Chat: fixed composer, messages scroll. Other tabs: page scroll. */}
+      <div className={isChatLike ? 'flex-1 min-h-0 overflow-hidden px-4 py-2' : 'px-4 py-2'}>
         <Routes>
           <Route index element={<ChatTab eventId={event.id} />} />
           <Route path="chat" element={<ChatTab eventId={event.id} />} />

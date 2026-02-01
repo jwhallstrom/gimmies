@@ -60,6 +60,17 @@ const TournamentChat: React.FC<Props> = ({
   const [isAnnouncement, setIsAnnouncement] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Match main chat UX: hide bottom nav when typing (mobile keyboard)
+  const handleFocus = () => {
+    document.body.classList.add('chat-input-focused');
+  };
+
+  const handleBlur = () => {
+    setTimeout(() => {
+      document.body.classList.remove('chat-input-focused');
+    }, 100);
+  };
   
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {
@@ -123,7 +134,7 @@ const TournamentChat: React.FC<Props> = ({
   }
   
   return (
-    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col" style={{ height: '500px' }}>
+    <div className="bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col h-full min-h-0">
       {/* Header */}
       <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
         <div>
@@ -185,7 +196,7 @@ const TournamentChat: React.FC<Props> = ({
       </div>
       
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3 scroll-smooth">
         {/* Pinned Messages */}
         {pinnedMessages.map(msg => (
           <div key={msg.id} className="bg-yellow-50 border border-yellow-200 rounded-xl p-3">
@@ -294,7 +305,7 @@ const TournamentChat: React.FC<Props> = ({
       
       {/* Input */}
       {canPost && (
-        <div className="p-3 border-t border-gray-100 flex-shrink-0">
+        <div className="p-3 border-t border-gray-100 flex-shrink-0 pb-safe">
           {/* Announcement Toggle (Organizer only) */}
           {isOrganizer && (
             <div className="flex items-center gap-2 mb-2">
@@ -321,6 +332,8 @@ const TournamentChat: React.FC<Props> = ({
               value={newMessage}
               onChange={e => setNewMessage(e.target.value)}
               onKeyPress={handleKeyPress}
+              onFocus={handleFocus}
+              onBlur={handleBlur}
               placeholder={isAnnouncement ? 'Type an announcement...' : 'Type a message...'}
               className="flex-1 px-4 py-2 border border-gray-300 rounded-xl focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
             />

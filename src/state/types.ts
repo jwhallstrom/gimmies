@@ -147,6 +147,7 @@ export interface GolferProfile {
     autoAdvanceScores: boolean;
     showHandicapStrokes: boolean;
     // Stored inside preferencesJson in cloud (no schema change required)
+    homeDefaultTab?: 'events' | 'groups';
     homeCourseId?: string;   // canonical id for default behaviors
     homeCourseName?: string; // display name snapshot
     homeCourse?: string;     // legacy free-text (fallback display only)

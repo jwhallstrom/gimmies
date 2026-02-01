@@ -81,8 +81,8 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent }) => {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-200px)] min-h-[300px] bg-white/95 backdrop-blur rounded-t-xl rounded-b-none shadow-lg shadow-slate-200/50 border border-slate-200/80 border-b-0 overflow-hidden -mx-4 -mb-6">
-      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2 text-[13px] scroll-smooth">
+    <div className="flex flex-col h-full min-h-0 bg-white/95 backdrop-blur rounded-t-xl rounded-b-none shadow-lg shadow-slate-200/50 border border-slate-200/80 border-b-0 overflow-hidden -mx-4">
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-2 text-[13px] scroll-smooth">
         {messages.length === 0 && (
           <div className="text-center text-gray-500 text-sm mt-8">No messages yet. Start the conversation!</div>
         )}

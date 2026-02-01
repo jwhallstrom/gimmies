@@ -34,6 +34,10 @@ const App: React.FC = () => {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [amplifyUser, setAmplifyUser] = useState<any>(null);
   const [pendingJoinHandled, setPendingJoinHandled] = useState(false);
+  const isEventRoute = location.pathname.startsWith('/event/');
+  const isEventChatRoute =
+    isEventRoute &&
+    (location.pathname.endsWith('/chat') || /^\/event\/[^/]+\/?$/.test(location.pathname));
 
   // If someone opens a join link before their profile is set up, we store the code in sessionStorage.
   // Once a profile exists, auto-join and navigate them straight into the event.
@@ -268,8 +272,14 @@ const App: React.FC = () => {
         <UserMenu />
       </header>
       <main className="flex-1 relative w-full">
-        <div className="absolute inset-0 overflow-y-auto">
-          <div className="px-4 pt-6 content-with-footer max-w-5xl w-full mx-auto">
+        <div
+          className={`absolute inset-0 ${
+            isEventRoute
+              ? `${isEventChatRoute ? 'overflow-hidden' : 'overflow-y-auto'} app-scroll-with-bottom-nav`
+              : 'overflow-y-auto'
+          }`}
+        >
+          <div className={isEventRoute ? 'h-full w-full' : 'px-4 pt-6 content-with-footer max-w-5xl w-full mx-auto'}>
             <Suspense fallback={<LoadingSpinner message="Loading page..." />}>
               <Routes>
                 <Route path="/" element={<Dashboard />} />

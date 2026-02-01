@@ -53,6 +53,17 @@ body.chat-input-focused .bottom-nav {
   display: none !important;
 }
 
+/* When the bottom nav is present, reserve its height for full-screen pages (e.g. Event/Group chat)
+   so the composer can sit snug against it without extra scrolling. */
+.app-scroll-with-bottom-nav {
+  bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* When the keyboard is up, we hide the bottom nav. Remove the reserved space so content can extend fully. */
+body.chat-input-focused .app-scroll-with-bottom-nav {
+  bottom: 0;
+}
+
 /* Smooth momentum scrolling */
 .scroll-smooth {
   -webkit-overflow-scrolling: touch;
