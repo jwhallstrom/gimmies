@@ -20,6 +20,7 @@ import type {
   NassauTeam, NassauConfig, SkinsConfig, PinkyConfig, PinkyResult,
   GreenieConfig, GreenieResult, ScoreEntry, PlayerScorecard,
   EventGameConfig, EventCourseSelection, ChatMessage, Toast,
+  StatusTier,
   Event, CompletedRound, IndividualRound, HandicapHistory, CombinedRound,
   EventWalletSettings, WalletTransaction, Settlement, TipFund, ProfileWallet,
   Tournament, TournamentRegistration, TournamentDivision, TournamentTeeTime,
@@ -68,8 +69,8 @@ interface State {
   pendingLevelUp: {
     profileId: string;
     profileName: string;
-    oldLevel: number;
-    newLevel: number;
+    oldTier: StatusTier;
+    newTier: StatusTier;
     verifiedRounds: number;
   } | null;
   clearPendingLevelUp: () => void;
@@ -596,7 +597,7 @@ export const useStore = create<State>()(
           console.log('✅ Event qualifies as verified round:', verification.reason);
           
           // Update verified status for each participant with a profile
-          let firstLevelUp: { profileId: string; profileName: string; oldLevel: number; newLevel: number; verifiedRounds: number } | null = null;
+          let firstLevelUp: { profileId: string; profileName: string; oldTier: StatusTier; newTier: StatusTier; verifiedRounds: number } | null = null;
           
           completedEvent.golfers.forEach(golfer => {
             if (!golfer.profileId) return;
@@ -612,18 +613,17 @@ export const useStore = create<State>()(
             };
             
             // Calculate new status after this verified round
-            const newStatus = calculateNewStatus(currentStatus, completedEvent.id);
-            
-            // Check for level up
-            const leveledUp = newStatus.statusLevel > currentStatus.statusLevel;
-            
-            if (leveledUp && !firstLevelUp) {
+            const result = calculateNewStatus(currentStatus, completedEvent.id);
+            const newStatus = result.newStatus;
+            const leveledUp = result.leveledUp;
+
+            if (leveledUp && !firstLevelUp && result.newTier && result.oldTier) {
               // Only show modal for first person who levels up (typically current user)
               firstLevelUp = {
                 profileId: profile.id,
                 profileName: profile.name,
-                oldLevel: currentStatus.statusLevel,
-                newLevel: newStatus.statusLevel,
+                oldTier: result.oldTier,
+                newTier: result.newTier,
                 verifiedRounds: newStatus.verifiedRounds,
               };
             }
@@ -645,7 +645,8 @@ export const useStore = create<State>()(
           
           // Set pending level up for UI to display modal (prioritize current user)
           const currentProfile = get().currentProfile;
-          if (firstLevelUp) {
+          const levelUp = firstLevelUp;
+          if (levelUp) {
             // If current user leveled up, show their modal
             const currentUserLevelUp = completedEvent.golfers.some(g => 
               g.profileId === currentProfile?.id
@@ -653,26 +654,26 @@ export const useStore = create<State>()(
             
             if (currentUserLevelUp) {
               const currentStatus = currentProfile?.verifiedStatus || { verifiedRounds: 0, statusLevel: 0 };
-              const newStatus = calculateNewStatus(currentStatus as any, completedEvent.id);
-              if (newStatus.statusLevel > (currentStatus.statusLevel || 0)) {
+              const result = calculateNewStatus(currentStatus as any, completedEvent.id);
+              if (result.leveledUp && result.newTier && result.oldTier) {
                 set({
                   pendingLevelUp: {
                     profileId: currentProfile!.id,
                     profileName: currentProfile!.name,
-                    oldLevel: currentStatus.statusLevel || 0,
-                    newLevel: newStatus.statusLevel,
-                    verifiedRounds: newStatus.verifiedRounds,
+                    oldTier: result.oldTier,
+                    newTier: result.newTier,
+                    verifiedRounds: result.newStatus.verifiedRounds,
                   }
                 });
               } else {
-                set({ pendingLevelUp: firstLevelUp });
+                set({ pendingLevelUp: levelUp });
               }
             } else {
-              set({ pendingLevelUp: firstLevelUp });
+              set({ pendingLevelUp: levelUp });
             }
             
             // Also show a toast notification
-            get().addToast(`🎉 Level Up! ${firstLevelUp.profileName} reached a new status tier!`, 'achievement', 5000);
+            get().addToast('🎉 Level Up! New status tier reached!', 'achievement', 5000);
           }
           
           // Mark event as verified for future reference
@@ -726,7 +727,7 @@ export const useStore = create<State>()(
             // Add recap as bot message to chat
             const recapChatMessage: ChatMessage = {
               id: nanoid(12),
-              senderId: 'gimmies-bot',
+              profileId: 'gimmies-bot',
               senderName: 'Gimmies Bot',
               text: recapLines.join('\n'),
               createdAt: new Date().toISOString(),

@@ -140,7 +140,7 @@ const TournamentRegistrationFlow: React.FC<Props> = ({ isOpen, onClose, tourname
         divisionId: selectedDivision || undefined,
         gamePreference: registration.gamePreference,
         paymentStatus: effectiveFee > 0 ? 'paid' : 'paid',
-        waitingListPosition: isFull ? waitlistPosition : undefined,
+        waitingListPosition: isFull ? (waitlistPosition ?? undefined) : undefined,
         createdAt: new Date().toISOString(),
       };
       

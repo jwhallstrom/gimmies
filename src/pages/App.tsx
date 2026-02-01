@@ -390,8 +390,8 @@ const App: React.FC = () => {
         <LevelUpModal
           isOpen={true}
           onClose={clearPendingLevelUp}
-          oldLevel={pendingLevelUp.oldLevel}
-          newLevel={pendingLevelUp.newLevel}
+          oldTier={pendingLevelUp.oldTier}
+          newTier={pendingLevelUp.newTier}
           verifiedRounds={pendingLevelUp.verifiedRounds}
         />
       )}

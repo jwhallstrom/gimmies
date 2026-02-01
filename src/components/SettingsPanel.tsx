@@ -160,7 +160,8 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
       });
       setShowCourseSearch(false);
       // Sync home course change to cloud (signed-in only)
-      if (!isGuest) {
+      if (isGuest) return;
+      void (async () => {
         try {
           const { saveCloudProfile } = await import('../utils/profileSync');
           const { profiles } = useStore.getState();
@@ -171,7 +172,7 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
         } catch (e) {
           console.error('Failed to sync home course to cloud:', e);
         }
-      }
+      })();
     }
   };
 

@@ -104,6 +104,11 @@ export const createTournamentSlice = (set: SetState, get: GetState): TournamentS
       id,
       name: initialData?.name || 'New Tournament',
       organizerId: currentProfile.id,
+
+      // Club integration defaults
+      clubId: initialData?.clubId,
+      clubName: initialData?.clubName,
+      isClubHosted: Boolean(initialData?.clubId),
       courseId: initialData?.courseId,
       courseName: initialData?.courseName,
       dates: initialData?.dates || [new Date().toISOString().split('T')[0]],
@@ -112,7 +117,20 @@ export const createTournamentSlice = (set: SetState, get: GetState): TournamentS
       visibility: initialData?.visibility || 'public',
       passcode: initialData?.passcode,
       entryFeeCents: initialData?.entryFeeCents || 0,
+      entryFeeEnabled: (initialData?.entryFeeCents || 0) > 0,
+      earlyBirdFeeCents: initialData?.earlyBirdFeeCents,
+      earlyBirdDeadline: initialData?.earlyBirdDeadline,
+
+      prizePool: initialData?.prizePool || {
+        totalCents: 0,
+        distribution: [],
+        sidePots: [],
+      },
       maxPlayers: initialData?.maxPlayers || 72,
+
+      waitlistEnabled: initialData?.waitlistEnabled ?? true,
+      registrationDeadline: initialData?.registrationDeadline,
+
       status: 'draft',
       divisions: initialData?.divisions || [],
       teeTimes: [],

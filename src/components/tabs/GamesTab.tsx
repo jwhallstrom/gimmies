@@ -326,7 +326,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
   
   // Calculate payouts
   const payouts = useMemo(() => {
-    if (!hasAnyGames) return { nassau: [], skins: [], pinky: [], greenie: [], totals: {} };
+    if (!hasAnyGames) return { nassau: [], skins: [], pinky: [], greenie: [], totalByGolfer: {} };
     return calculateEventPayouts(event, profiles);
   }, [event, profiles, hasAnyGames]);
   
@@ -382,6 +382,8 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
   // Currency formatters
   const currency = (n: number) => '$' + n.toFixed(2);
   const signedCurrency = (n: number) => (n > 0 ? '+' : n < 0 ? '−' : '') + currency(Math.abs(n));
+
+  const myNetValue = myNet ?? 0;
 
   // Helper to get golfer name
   const getGolferName = (golferId: string) => {
@@ -490,11 +492,11 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
       {/* Personal Summary - Always visible if games exist */}
       {hasAnyGames && myNet !== null && (
         <div className={`rounded-xl px-4 py-3 flex items-center justify-between ${
-          myNet >= 0 ? 'bg-green-500' : 'bg-red-500'
+          myNetValue >= 0 ? 'bg-green-500' : 'bg-red-500'
         }`}>
           <div className="text-white">
             <div className="text-xs font-medium opacity-90">YOUR BALANCE</div>
-            <div className="text-2xl font-black">{signedCurrency(myNet)}</div>
+            <div className="text-2xl font-black">{signedCurrency(myNetValue)}</div>
           </div>
           <div className="text-right text-white text-xs opacity-90">
             <div>Buy-in: {currency(myBuyin)}</div>
@@ -871,8 +873,8 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
         >
           💰 Payouts
           {(isEventStarted || isEventCompleted) && myNet !== null && (
-            <span className={`ml-2 text-xs ${myNet >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {signedCurrency(myNet)}
+            <span className={`ml-2 text-xs ${myNetValue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {signedCurrency(myNetValue)}
             </span>
           )}
         </button>
@@ -1043,7 +1045,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
         <div className="space-y-4">
           {/* Your Position Summary */}
           {myNet !== null && (
-            <div className={`rounded-xl p-4 ${myNet >= 0 ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+            <div className={`rounded-xl p-4 ${myNetValue >= 0 ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
               <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Your Position</div>
               <div className="grid grid-cols-3 gap-3 text-center">
                 <div>
@@ -1056,8 +1058,8 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 </div>
                 <div>
                   <div className="text-xs text-gray-500">Net</div>
-                  <div className={`font-black text-xl ${myNet >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {signedCurrency(myNet)}
+                  <div className={`font-black text-xl ${myNetValue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {signedCurrency(myNetValue)}
                   </div>
                 </div>
               </div>
@@ -1132,9 +1134,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
               </button>
               {showSettlements && (
                 <div className="p-4 space-y-2">
-                  {allSettlements.map((settlement: any, i: number) => (
-                    <EventSettlement key={i} settlement={settlement} eventId={eventId} />
-                  ))}
+                  <EventSettlement eventId={eventId} />
                 </div>
               )}
             </div>
@@ -2090,21 +2090,21 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
           
           {/* Big Net Result - Completed events */}
           {isEventCompleted && myNet != null && (
-            <div className={`rounded-2xl p-6 text-center ${myNet >= 0 ? 'bg-gradient-to-br from-green-500 to-green-600' : 'bg-gradient-to-br from-red-500 to-red-600'} text-white shadow-lg`}>
+            <div className={`rounded-2xl p-6 text-center ${myNetValue >= 0 ? 'bg-gradient-to-br from-green-500 to-green-600' : 'bg-gradient-to-br from-red-500 to-red-600'} text-white shadow-lg`}>
               <div className="text-sm opacity-80 font-medium mb-1">Your Final Result</div>
-              <div className="text-5xl font-black">{signedCurrency(myNet)}</div>
+              <div className="text-5xl font-black">{signedCurrency(myNetValue)}</div>
               <div className="text-sm opacity-80 mt-2">Buy-in: {currency(myBuyin)}</div>
             </div>
           )}
           
           {/* Running balance - In progress events */}
           {isEventStarted && !isEventCompleted && myNet != null && (
-            <div className={`rounded-xl p-4 ${myNet >= 0 ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+            <div className={`rounded-xl p-4 ${myNetValue >= 0 ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
               <div className="flex items-center justify-between">
                 <div>
                   <div className="text-xs font-bold text-gray-500 uppercase tracking-wide">Your Balance</div>
-                  <div className={`text-2xl font-black ${myNet >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {signedCurrency(myNet)}
+                  <div className={`text-2xl font-black ${myNetValue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {signedCurrency(myNetValue)}
                   </div>
                 </div>
                 <div className="text-right text-xs text-gray-500">
@@ -2133,9 +2133,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
               </button>
               {showSettlements && (
                 <div className="px-4 pb-4 space-y-2">
-                  {allSettlements.map((settlement: any, i: number) => (
-                    <EventSettlement key={i} settlement={settlement} eventId={eventId} />
-                  ))}
+                  <EventSettlement eventId={eventId} />
                 </div>
               )}
             </div>
