@@ -17,6 +17,7 @@ import { CreateEventWizard } from '../components/CreateEventWizard';
 import { CreateGroupWizard } from '../components/CreateGroupWizard';
 import { DiscoverGroupsModal } from '../components/DiscoverGroupsModal';
 import SettingsPanel from '../components/SettingsPanel';
+import { SignInRequired } from '../components/SignInRequired';
 import { useEventsAdapter, useWalletAdapter } from '../adapters';
 import type { Event } from '../state/types';
 import useStore from '../state/store';
@@ -54,6 +55,8 @@ const Dashboard: React.FC = () => {
   const { wallet } = useWalletAdapter();
   const { isGuest } = useAuthMode();
   const navigate = useNavigate();
+  const addToast = useStore((s: any) => s.addToast);
+  const logout = useStore((s: any) => s.logout);
 
   const [showCreateWizard, setShowCreateWizard] = useState(false);
   const [showCreateGroupWizard, setShowCreateGroupWizard] = useState(false);
@@ -73,12 +76,20 @@ const Dashboard: React.FC = () => {
   
   // Prevent multiple wizards from opening simultaneously
   const openEventWizard = () => {
+    if (isGuest) {
+      addToast?.('Sign in to create events', 'error', 2500);
+      return;
+    }
     setShowCreateGroupWizard(false);
     setShowDiscoverGroups(false);
     setShowCreateWizard(true);
   };
   
   const openGroupWizard = () => {
+    if (isGuest) {
+      addToast?.('Sign in to create groups', 'error', 2500);
+      return;
+    }
     setShowCreateWizard(false);
     setShowDiscoverGroups(false);
     setShowCreateGroupWizard(true);
@@ -107,8 +118,9 @@ const Dashboard: React.FC = () => {
   // Load events on mount
   useEffect(() => {
     if (!currentProfile) return;
+    if (isGuest) return;
     loadEventsFromCloud().catch(() => {});
-  }, [currentProfile?.id]);
+  }, [currentProfile?.id, isGuest]);
 
   // Separate active events from groups
   const { activeEvents, completedEvents, groups } = useMemo(() => {
@@ -321,6 +333,20 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-5 pb-32">
+      {isGuest && (
+        <SignInRequired
+          title="You're in Guest Mode"
+          message="Browse the app, but creating/joining games is locked until you sign in so everything stays cloud-synced."
+          actionLabel="Sign In / Create Account"
+          onAction={() => {
+            setShowCreateWizard(false);
+            setShowCreateGroupWizard(false);
+            setShowDiscoverGroups(false);
+            setShowSettings(false);
+            logout();
+          }}
+        />
+      )}
       {/* Compact Header - Avatar + Name + Quick Stats in one row */}
       <header className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 -mx-4 -mt-6 px-4 pt-6 pb-4 shadow-lg">
         <div className="flex items-center gap-3">
@@ -462,7 +488,15 @@ const Dashboard: React.FC = () => {
                   <span>👥</span> Start a Group
                 </button>
                 <button
-                  onClick={() => { navigate('/join'); dismissOnboarding(false); }}
+                  onClick={() => {
+                    if (isGuest) {
+                      addToast?.('Sign in to join events', 'error', 2500);
+                      dismissOnboarding(false);
+                      return;
+                    }
+                    navigate('/join');
+                    dismissOnboarding(false);
+                  }}
                   className="flex-1 py-3.5 bg-gray-100 text-gray-700 rounded-xl font-bold text-sm hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
                 >
                   <span>🎫</span> Join with Code
@@ -482,6 +516,30 @@ const Dashboard: React.FC = () => {
         document.body
       )}
 
+      {/* Quick Actions - Compact Buttons */}
+      <section className="flex gap-3">
+        <button
+          onClick={openEventWizard}
+          className="flex-1 bg-gradient-to-r from-primary-600 to-primary-700 rounded-xl py-3 px-4 text-white font-bold text-sm shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 border border-primary-500"
+        >
+          <span>⛳</span>
+          <span>Create Event</span>
+        </button>
+        
+        <button
+          onClick={() => {
+            if (isGuest) {
+              addToast?.('Sign in to join events', 'error', 2500);
+              return;
+            }
+            navigate('/join');
+          }}
+          className="flex-1 bg-white rounded-xl py-3 px-4 border-2 border-slate-200 font-bold text-sm text-slate-800 shadow-md hover:shadow-lg hover:border-primary-400 hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
+        >
+          <span className="text-lg font-bold text-primary-600">+</span>
+          <span>Join Event</span>
+        </button>
+      </section>
       {/* Events & Groups - Segmented Control Style */}
       <section className="-mx-4 sm:mx-0 rounded-none sm:rounded-2xl overflow-hidden border-y border-x-0 sm:border-2 border-slate-200 shadow-md bg-white">
         {/* Tab Bar - Pill Style with Colored Backgrounds */}
@@ -650,11 +708,11 @@ const Dashboard: React.FC = () => {
 
       {/* Score Ticker - Fixed at bottom, full width on mobile, above footer with safe area */}
       <div className="fixed left-0 right-0 sm:left-4 sm:right-4 ticker-above-footer z-30 px-0 sm:px-0">
+        <style>{`.gimmies-ticker{--gimmies-ticker-duration:${tickerDurationSeconds}s;}`}</style>
         <button
           onClick={() => tickerEvent ? navigate(`/event/${tickerEvent.id}`) : navigate('/events')}
           className="w-full gimmies-ticker rounded-none sm:rounded-xl bg-[#1561AE] border-y sm:border border-white/10 px-4 py-2.5 shadow-lg shadow-primary-900/25"
           aria-label="Activity ticker"
-          style={{ ['--gimmies-ticker-duration' as any]: `${tickerDurationSeconds}s` }}
         >
           <div className="gimmies-ticker__inner text-[11px] font-black text-white">
             <span className="gimmies-ticker__track">

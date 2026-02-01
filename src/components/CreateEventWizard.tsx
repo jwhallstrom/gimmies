@@ -4,6 +4,8 @@ import useStore from '../state/store';
 import { CourseSearch } from './CourseSearch';
 import { generateFunnyEventName } from '../utils/nameGenerator';
 import { useCourses } from '../hooks/useCourses';
+import { useAuthMode } from '../hooks/useAuthMode';
+import { SignInRequired } from './SignInRequired';
 
 interface Props {
   isOpen: boolean;
@@ -21,6 +23,7 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
     useStore();
   const updateProfile = useStore((s) => s.updateProfile);
   const { courses } = useCourses();
+  const { isGuest } = useAuthMode();
   
   const [step, setStep] = useState<WizardStep>('details');
   const [eventName, setEventName] = useState('');
@@ -73,11 +76,24 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
     });
   }, [courses, favoriteCourseIds, currentProfile?.preferences?.homeCourseId]);
 
-  const toggleFavoriteCourse = (courseId: string) => {
+  const toggleFavoriteCourse = async (courseId: string) => {
     if (!currentProfile) return;
     const current = currentProfile.preferences?.favoriteCourseIds || [];
     const next = current.includes(courseId) ? current.filter((id) => id !== courseId) : [courseId, ...current];
     updateProfile(currentProfile.id, { preferences: { ...currentProfile.preferences, favoriteCourseIds: next } });
+    // Sync favorite courses to cloud (signed-in only)
+    if (!isGuest) {
+      try {
+        const { saveCloudProfile } = await import('../utils/profileSync');
+        const { profiles } = useStore.getState();
+        const updatedProfile = profiles.find((p) => p.id === currentProfile.id);
+        if (updatedProfile) {
+          await saveCloudProfile(updatedProfile as any);
+        }
+      } catch (e) {
+        console.error('Failed to sync favorite courses to cloud:', e);
+      }
+    }
   };
 
   // Hydrate course name when we have an id (home course default) and courses are loaded.
@@ -90,6 +106,30 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
   }, [isOpen, selectedCourseId, selectedCourseName, courses]);
 
   if (!isOpen) return null;
+
+  if (isGuest) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+        <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
+          <div className="bg-primary-900 p-4 text-white flex justify-between items-center">
+            <h2 className="text-lg font-bold">New Event</h2>
+            <button onClick={onClose} className="text-white/80 hover:text-white" aria-label="Close">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div className="p-5">
+            <SignInRequired
+              title="🔒 Sign in to create events"
+              message="Guest Mode is browse-only right now. Sign in to create events, invite players, and sync across devices."
+              onAction={onClose}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleNext = () => {
     if (step === 'details') setStep('course');

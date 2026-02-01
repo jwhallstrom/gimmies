@@ -417,6 +417,13 @@ export const createEventSlice = (
     const currentProfile = get().currentProfile;
     if (!event || !currentProfile) return '';
 
+    const createSafeLocalShareCode = () => {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let code = '';
+      for (let i = 0; i < 6; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+      return code;
+    };
+
     if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
       try {
         const { saveEventToCloud } = await import('../../utils/eventSync');
@@ -432,9 +439,18 @@ export const createEventSlice = (
       } catch (error) {
         console.error('Failed to generate share code in cloud:', error);
       }
+
+      // Cloud mode but couldn't persist the code: don't generate a local-only code that others can't join.
+      try {
+        get().addToast?.('Could not create an invite code right now. Please try again.', 'error', 3500);
+      } catch {
+        // ignore
+      }
+      return '';
     }
 
-    const shareCode = nanoid(6).toUpperCase();
+    // Local-only mode
+    const shareCode = createSafeLocalShareCode();
     set((state: any) => ({
       events: state.events.map((e: Event) => e.id === eventId ? { ...e, shareCode, lastModified: new Date().toISOString() } : e)
     }));
@@ -447,10 +463,15 @@ export const createEventSlice = (
       return { success: false, error: 'Please create a profile first to join events.' };
     }
 
+    const normalized = String(shareCode || '').trim().toUpperCase();
+    if (!normalized) {
+      return { success: false, error: 'Please enter a valid join code.' };
+    }
+
     if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
       try {
         const { loadEventByShareCode } = await import('../../utils/eventSync');
-        const cloudEvent = await loadEventByShareCode(shareCode);
+        const cloudEvent = await loadEventByShareCode(normalized);
         
         if (cloudEvent) {
           const alreadyJoined = cloudEvent.golfers.some((g: EventGolfer) => g.profileId === currentProfile.id);
@@ -478,7 +499,7 @@ export const createEventSlice = (
     }
 
     // Local-only fallback: allow joining invite-only games (not necessarily public/discoverable)
-    const event = get().events.find((e: Event) => e.shareCode === shareCode);
+    const event = get().events.find((e: Event) => (e.shareCode || '').toUpperCase() === normalized);
     if (!event) {
       return { success: false, error: 'Event not found or share code is invalid.' };
     }

@@ -25,7 +25,12 @@ interface Props {
 
 const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
-  const { currentUser, currentProfile, updateProfile, logout, wallet, events } = useStore();
+  const currentUser = useStore((s) => s.currentUser);
+  const currentProfile = useStore((s) => s.currentProfile);
+  const updateProfile = useStore((s) => s.updateProfile);
+  const logout = useStore((s) => s.logout);
+  const getProfileWallet = useStore((s) => s.getProfileWallet);
+  const events = useStore((s) => s.events);
   const { isGuest } = useAuthMode();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -73,16 +78,18 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
         const avatar = await fileToAvatarDataUrl(file, { maxSize: 512, quality: 0.85 });
         updateProfile(currentProfile.id, { avatar });
         
-        // Save to cloud
-        try {
-          const { saveCloudProfile } = await import('../utils/profileSync');
-          const { profiles } = useStore.getState();
-          const updatedProfile = profiles.find(p => p.id === currentProfile.id);
-          if (updatedProfile) {
-            await saveCloudProfile({ ...updatedProfile, avatar });
+        // Save to cloud (signed-in only)
+        if (!isGuest) {
+          try {
+            const { saveCloudProfile } = await import('../utils/profileSync');
+            const { profiles } = useStore.getState();
+            const updatedProfile = profiles.find(p => p.id === currentProfile.id);
+            if (updatedProfile) {
+              await saveCloudProfile({ ...updatedProfile, avatar });
+            }
+          } catch (e) {
+            console.error('Failed to save avatar to cloud:', e);
           }
-        } catch (e) {
-          console.error('Failed to save avatar to cloud:', e);
         }
       } finally {
         event.currentTarget.value = '';
@@ -100,16 +107,18 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
         handicapIndex: editHandicap ? parseFloat(editHandicap) : undefined,
       });
       
-      // Save to cloud
-      try {
-        const { saveCloudProfile } = await import('../utils/profileSync');
-        const { profiles } = useStore.getState();
-        const updatedProfile = profiles.find(p => p.id === currentProfile.id);
-        if (updatedProfile) {
-          await saveCloudProfile(updatedProfile);
+      // Save to cloud (signed-in only)
+      if (!isGuest) {
+        try {
+          const { saveCloudProfile } = await import('../utils/profileSync');
+          const { profiles } = useStore.getState();
+          const updatedProfile = profiles.find(p => p.id === currentProfile.id);
+          if (updatedProfile) {
+            await saveCloudProfile(updatedProfile);
+          }
+        } catch (e) {
+          console.error('Failed to save profile to cloud:', e);
         }
-      } catch (e) {
-        console.error('Failed to save profile to cloud:', e);
       }
       
       setEditMode(false);
@@ -121,17 +130,18 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
   const handleUpdatePreference = (key: string, value: any) => {
     if (!currentProfile) return;
     updateProfile(currentProfile.id, {
-      preferences: { ...currentProfile.preferences, [key]: value }
+      preferences: { ...currentProfile.preferences, [key]: value },
     });
 
-    // Best-effort cloud save (same pattern as profile/avatar save)
-    (async () => {
+    // Best-effort cloud save (signed-in only)
+    if (isGuest) return;
+    void (async () => {
       try {
         const { saveCloudProfile } = await import('../utils/profileSync');
         const { profiles } = useStore.getState();
-        const updatedProfile = profiles.find(p => p.id === currentProfile.id);
+        const updatedProfile = profiles.find((p) => p.id === currentProfile.id);
         if (updatedProfile) {
-          await saveCloudProfile(updatedProfile);
+          await saveCloudProfile(updatedProfile as any);
         }
       } catch (e) {
         console.error('Failed to save preferences to cloud:', e);
@@ -149,6 +159,19 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
         }
       });
       setShowCourseSearch(false);
+      // Sync home course change to cloud (signed-in only)
+      if (!isGuest) {
+        try {
+          const { saveCloudProfile } = await import('../utils/profileSync');
+          const { profiles } = useStore.getState();
+          const updatedProfile = profiles.find((p) => p.id === currentProfile.id);
+          if (updatedProfile) {
+            await saveCloudProfile(updatedProfile as any);
+          }
+        } catch (e) {
+          console.error('Failed to sync home course to cloud:', e);
+        }
+      }
     }
   };
 
@@ -168,7 +191,8 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
   const groupCount = (events || []).filter(e => e?.hubType === 'group').length;
   const eventCount = (events || []).filter(e => e?.hubType !== 'group' && !e?.isCompleted).length;
   const roundCount = currentProfile?.stats?.roundsPlayed ?? 0;
-  const netBalance = (wallet?.lifetimeNet ?? 0) / 100;
+  const walletSummary = currentProfile ? getProfileWallet(currentProfile.id) : null;
+  const netBalance = walletSummary?.lifetimeNet ?? 0;
   const homeCourse = currentProfile?.preferences?.homeCourseName || 
     (currentProfile?.preferences as any)?.homeCourse || null;
   const profileName = currentProfile?.name || 'Golfer';
@@ -191,12 +215,35 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
           <button
             onClick={onClose}
             className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+            aria-label="Close settings"
+            title="Close"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
+
+        {isGuest && (
+          <div className="px-4 pt-4">
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+              <div className="text-sm font-extrabold text-amber-900">Guest Mode</div>
+              <div className="text-xs text-amber-800 mt-1">
+                Creating/joining games is disabled until you sign in.
+              </div>
+              <button
+                onClick={() => {
+                  // Return to LoginPage by clearing the local guest user.
+                  logout();
+                  onClose();
+                }}
+                className="mt-3 w-full bg-primary-700 hover:bg-primary-800 text-white py-2.5 rounded-xl font-extrabold"
+              >
+                Sign In / Create Account
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto pb-safe relative bg-gray-50">
@@ -234,6 +281,8 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
                   accept="image/*"
                   onChange={handleImageUpload}
                   className="hidden"
+                  aria-label="Upload profile photo"
+                  title="Upload profile photo"
                 />
                 
                 <div className="flex-1 min-w-0">
@@ -257,6 +306,8 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
                 <button
                   onClick={() => setEditMode(true)}
                   className="p-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+                  aria-label="Edit profile"
+                  title="Edit profile"
                 >
                   <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
@@ -632,6 +683,8 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
               <button
                 onClick={() => setShowCourseSearch(false)}
                 className="p-2 -ml-2 rounded-lg hover:bg-white/10"
+                aria-label="Back"
+                title="Back"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />

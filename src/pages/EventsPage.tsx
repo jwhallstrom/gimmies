@@ -3,11 +3,14 @@ import useStore from '../state/store';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { getCourseById } from '../data/cloudCourses';
 import { CreateEventWizard } from '../components/CreateEventWizard';
+import { useAuthMode } from '../hooks/useAuthMode';
 
 const EventsPage: React.FC = () => {
   const { events, completedEvents, currentProfile, profiles, deleteEvent, loadEventsFromCloud } = useStore();
   const navigate = useNavigate();
   const location = useLocation();
+  const { isGuest } = useAuthMode();
+  const addToast = useStore((s: any) => s.addToast);
   const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
   const [previousCompletedCount, setPreviousCompletedCount] = useState(0);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
@@ -15,7 +18,7 @@ const EventsPage: React.FC = () => {
 
   // Load events from cloud when profile is available
   useEffect(() => {
-    if (currentProfile && !isLoadingEvents) {
+    if (currentProfile && !isLoadingEvents && !isGuest) {
       console.log('📥 EventsPage: Loading events from cloud for profile:', currentProfile.id);
       setIsLoadingEvents(true);
       loadEventsFromCloud().finally(() => {
@@ -23,13 +26,13 @@ const EventsPage: React.FC = () => {
         setIsLoadingEvents(false);
       });
     }
-  }, [currentProfile?.id]);
+  }, [currentProfile?.id, isGuest]);
 
   // Support deep-linking into event creation (e.g. from Chat hub): /events?create=true&returnTo=chat
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const shouldCreate = params.get('create') === 'true';
-    if (shouldCreate) setIsWizardOpen(true);
+    if (shouldCreate && !isGuest) setIsWizardOpen(true);
   }, [location.search]);
 
   // Auto-switch to history tab when a new event is completed
@@ -68,9 +71,16 @@ const EventsPage: React.FC = () => {
     <div className="space-y-6 relative">
       {/* Floating New Event Button */}
       <button
-        onClick={() => setIsWizardOpen(true)}
+        onClick={() => {
+          if (isGuest) {
+            addToast?.('Sign in to create events', 'error', 2500);
+            return;
+          }
+          setIsWizardOpen(true);
+        }}
         className="fixed bottom-20 right-4 z-50 bg-primary-600 hover:bg-primary-700 text-white p-4 rounded-full shadow-lg transition-all duration-200 hover:scale-110"
         title="Create New Event"
+        disabled={isGuest}
       >
         <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -114,9 +124,16 @@ const EventsPage: React.FC = () => {
           </div>
           <button
             type="button"
-            onClick={() => navigate('/join')}
+            onClick={() => {
+              if (isGuest) {
+                addToast?.('Sign in to join events', 'error', 2500);
+                return;
+              }
+              navigate('/join');
+            }}
             className="px-4 py-2 rounded-xl bg-gradient-to-r from-accent to-orange-500 hover:from-orange-500 hover:to-accent text-white font-extrabold shadow-md"
             title="Join an event with a code"
+            disabled={isGuest}
           >
             Join Event
           </button>

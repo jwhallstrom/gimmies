@@ -130,13 +130,27 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
   // Generate share URL for invites
   const shareUrl = event.shareCode ? `${window.location.origin}/join/${event.shareCode}` : '';
   
-  const handleGenerateCode = async () => {
+  const ensureShareCode = async (): Promise<string | null> => {
+    if (event.shareCode) return event.shareCode;
+
+    // In cloud mode, only the owner can generate/persist a join code.
+    if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true' && !isOwner) {
+      addToast('Only the host can create an invite code for this event.', 'error');
+      return null;
+    }
+
     setIsGeneratingCode(true);
     try {
-      await generateShareCode(eventId);
+      const code = await generateShareCode(eventId);
+      if (!code) {
+        addToast('Could not create invite link', 'error');
+        return null;
+      }
       addToast('Invite link created!', 'success');
+      return code;
     } catch (e) {
       addToast('Could not create invite link', 'error');
+      return null;
     } finally {
       setIsGeneratingCode(false);
     }
@@ -178,26 +192,54 @@ Code: ${event.shareCode}`,
   };
 
   const handleTextInvite = async () => {
-    if (!event.shareCode) {
-      await handleGenerateCode();
-    }
-    const msg = getInviteMessage();
+    const code = await ensureShareCode();
+    if (!code) return;
+    const url = `${window.location.origin}/join/${code}`;
+    const msg = (() => {
+      const senderName = currentProfile?.name || 'A friend';
+      if (isGroupHub) {
+        return {
+          title: `Join ${event.name || 'our golf group'} on Gimmies Golf`,
+          text: `Hey! ${senderName} invited you to join "${event.name || 'our golf group'}" on Gimmies Golf 🏌️\n\nGimmies is a free app to:\n⛳ Track scores & handicap\n💰 Manage Nassau, skins & side bets\n👥 Chat with your golf crew\n📊 See live leaderboards\n\nJoin here: ${url}\n\nOr use code: ${code}`,
+          shortText: `${senderName} invited you to "${event.name || 'our golf group'}" on Gimmies Golf! Join: ${url}`
+        };
+      }
+      return {
+        title: `Join ${event.name || 'my golf event'}`,
+        text: `Hey! Join me for golf - "${event.name || 'my golf event'}"\n\nTrack scores, run games, and see the leaderboard live.\n\nJoin: ${url}\nCode: ${code}`,
+        shortText: `Join my golf event "${event.name || 'my golf event'}": ${url}`
+      };
+    })();
     const smsUrl = `sms:?body=${encodeURIComponent(msg.text)}`;
     window.open(smsUrl, '_self');
   };
 
   const handleShareInvite = async () => {
-    if (!event.shareCode) {
-      await handleGenerateCode();
-    }
-    const msg = getInviteMessage();
+    const code = await ensureShareCode();
+    if (!code) return;
+    const url = `${window.location.origin}/join/${code}`;
+    const msg = (() => {
+      const senderName = currentProfile?.name || 'A friend';
+      if (isGroupHub) {
+        return {
+          title: `Join ${event.name || 'our golf group'} on Gimmies Golf`,
+          text: `Hey! ${senderName} invited you to join "${event.name || 'our golf group'}" on Gimmies Golf 🏌️\n\nJoin here: ${url}\n\nOr use code: ${code}`,
+          shortText: `${senderName} invited you to "${event.name || 'our golf group'}" on Gimmies Golf! Join: ${url}`
+        };
+      }
+      return {
+        title: `Join ${event.name || 'my golf event'}`,
+        text: `Hey! Join me for golf - "${event.name || 'my golf event'}"\n\nJoin: ${url}\nCode: ${code}`,
+        shortText: `Join my golf event "${event.name || 'my golf event'}": ${url}`
+      };
+    })();
     
     if (navigator.share) {
       try {
         await navigator.share({
           title: msg.title,
           text: msg.shortText,
-          url: shareUrl,
+          url,
         });
       } catch (e) {
         // User cancelled or error

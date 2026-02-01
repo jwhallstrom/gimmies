@@ -2,12 +2,15 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { getCourseById } from '../data/cloudCourses';
 import useStore from '../state/store';
+import { useAuthMode } from '../hooks/useAuthMode';
+import { SignInRequired } from '../components/SignInRequired';
 
 const PENDING_JOIN_KEY = 'gimmies.pendingJoinCode.v1';
 
 function extractJoinCode(raw: string): string {
   const upper = String(raw || '').toUpperCase();
-  const match = upper.match(/[A-Z0-9]{6}/);
+  // Support legacy codes that may have been generated with URL-safe chars (e.g. '_' or '-')
+  const match = upper.match(/[A-Z0-9_-]{6}/);
   return match ? match[0] : '';
 }
 
@@ -49,6 +52,7 @@ function getCourseMeta(courseId?: string | null): { name: string; location: stri
 const JoinEventPage: React.FC = () => {
   const { code: codeParam } = useParams();
   const navigate = useNavigate();
+  const { isGuest } = useAuthMode();
 
   const joinEventByCode = useStore((s: any) => s.joinEventByCode);
   const addGolferToEvent = useStore((s: any) => s.addGolferToEvent);
@@ -79,20 +83,20 @@ const JoinEventPage: React.FC = () => {
     if (!extracted) return;
 
     setShowCodeJoin(true);
-    if (!currentProfile) {
+    if (!currentProfile || isGuest) {
       try {
         sessionStorage.setItem(PENDING_JOIN_KEY, extracted);
       } catch {
         // ignore
       }
       setCodeStatus('idle');
-      setCodeMessage('One quick step: set up your profile, then we’ll join you automatically.');
+      setCodeMessage(isGuest ? 'Sign in to join. We’ll keep this code ready.' : 'One quick step: set up your profile, then we’ll join you automatically.');
     } else {
       setRawInput(extracted);
       setCodeMessage('');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [codeParam, currentProfile?.id]);
+  }, [codeParam, currentProfile?.id, isGuest]);
 
   // Load discoverable/public events (the common join flow).
   useEffect(() => {
@@ -212,6 +216,10 @@ const JoinEventPage: React.FC = () => {
   };
 
   const handleJoinPublicEvent = async (eventId: string) => {
+    if (isGuest) {
+      addToast?.('Sign in to join events', 'error', 2500);
+      return;
+    }
     if (!currentProfile) {
       navigate('/');
       return;
@@ -245,6 +253,10 @@ const JoinEventPage: React.FC = () => {
   };
 
   const attemptJoinByCode = async () => {
+    if (isGuest) {
+      addToast?.('Sign in to join events', 'error', 2500);
+      return;
+    }
     const normalized = extractJoinCode(rawInput);
     if (!normalized) {
       setCodeStatus('error');
@@ -289,6 +301,13 @@ const JoinEventPage: React.FC = () => {
 
   return (
     <div className="space-y-5">
+      {isGuest && (
+        <SignInRequired
+          title="🔒 Sign in to join"
+          message="Joining games is disabled in Guest Mode so everything stays cloud-synced. Sign in, then come back here and we’ll use your join code."
+          actionLabel="Sign In / Create Account"
+        />
+      )}
       <div className="flex items-start justify-between gap-3">
         <div>
           <div className="text-2xl font-black text-gray-900 dark:text-white">Join a Game</div>
@@ -576,14 +595,25 @@ const JoinEventPage: React.FC = () => {
               </div>
             )}
 
-            <div
-              className="relative"
-              onClick={() => hiddenInputRef.current?.focus()}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => e.key === 'Enter' && hiddenInputRef.current?.focus()}
-            >
+            <div className="relative">
+              <label htmlFor="join-code-input" className="block">
+                <div className="grid grid-cols-6 gap-2">
+                  {chars.map((c, i) => (
+                    <div
+                      key={i}
+                      className={`h-14 rounded-2xl border-2 flex items-center justify-center text-2xl font-black font-mono ${
+                        codeStatus === 'error'
+                          ? 'border-amber-400 bg-amber-50 text-amber-900'
+                          : 'border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-800 text-gray-900 dark:text-white'
+                      }`}
+                    >
+                      {c || <span className="text-gray-300 dark:text-slate-500">•</span>}
+                    </div>
+                  ))}
+                </div>
+              </label>
               <input
+                id="join-code-input"
                 ref={hiddenInputRef}
                 value={rawInput}
                 onChange={(e) => setRawInput(e.target.value)}
@@ -595,21 +625,6 @@ const JoinEventPage: React.FC = () => {
                 className="absolute inset-0 opacity-0"
                 aria-label="Join code"
               />
-
-              <div className="grid grid-cols-6 gap-2">
-                {chars.map((c, i) => (
-                  <div
-                    key={i}
-                    className={`h-14 rounded-2xl border-2 flex items-center justify-center text-2xl font-black font-mono ${
-                      codeStatus === 'error'
-                        ? 'border-amber-400 bg-amber-50 text-amber-900'
-                        : 'border-slate-300 bg-white dark:border-slate-600 dark:bg-slate-800 text-gray-900 dark:text-white'
-                    }`}
-                  >
-                    {c || <span className="text-gray-300 dark:text-slate-500">•</span>}
-                  </div>
-                ))}
-              </div>
               <div className="mt-2 text-[11px] text-slate-500 font-semibold text-center">
                 You can paste a full link — we’ll pull out the code.
               </div>
