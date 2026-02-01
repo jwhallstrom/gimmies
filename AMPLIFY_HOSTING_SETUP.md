@@ -1,18 +1,51 @@
 # 🚀 Amplify Hosting Deployment Guide
 
-## ✅ DEPLOYMENT COMPLETE (Nov 2, 2025)
+## ✅ MULTI-APP DEPLOYMENT COMPLETE (Feb 1, 2026)
 
-**Production URL:** https://master.dtsoc1s7k1bk8.amplifyapp.com  
+### Production URLs (Custom Domain)
+| App | URL | Branch |
+|-----|-----|--------|
+| **Main App** | https://app.golfwithgimmies.com | `master` |
+| **Landing Page** | https://golfwithgimmies.com | `landing` |
+| **Landing (www)** | https://www.golfwithgimmies.com | `landing` |
+| **Tournaments** | https://play.golfwithgimmies.com | `tournaments` |
+
+### Legacy Amplify URLs (still work)
+- Main: https://master.dtsoc1sfk1bk8.amplifyapp.com
+- Landing: https://landing.dtsoc1sfk1bk8.amplifyapp.com
+- Tournaments: https://tournaments.dtsoc1sfk1bk8.amplifyapp.com
+
 **App ID:** dtsoc1sfk1bk8  
-**Service Role:** AmplifyGimmiesGolfServiceRole
+**Service Role:** AmplifyGimmiesGolfServiceRole  
+**CloudFront Distribution:** d3kbgj2v1dsd9d.cloudfront.net
 
 ### Current Status
 - ✅ Amplify Gen 2 Backend deployed (Cognito, AppSync, DynamoDB)
-- ✅ GitHub repository connected
-- ✅ amplify.yml build config working
-- ✅ IAM service role configured with proper permissions
-- ✅ Latest analytics fixes deployed (Oct 10-14 session)
-- ✅ Amplify Hosting active with CloudFront CDN
+- ✅ GitHub repository connected with 3 branches
+- ✅ Custom domain golfwithgimmies.com configured
+- ✅ All subdomains verified and SSL active
+- ✅ Route 53 DNS configured with CloudFront CNAME
+- ✅ Each branch auto-deploys to its subdomain
+
+---
+
+## Multi-App Architecture
+
+```
+golfwithgimmies.com/
+├── master branch → app.golfwithgimmies.com (Main Gimmies App)
+│   └── Build output: dist/
+├── landing branch → golfwithgimmies.com + www (Marketing Landing Page)  
+│   └── Build output: apps/landing/dist/
+└── tournaments branch → play.golfwithgimmies.com (Tournaments PWA)
+    └── Build output: apps/tournaments/dist/
+```
+
+### Branch-specific amplify.yml
+Each branch has its own build configuration:
+- `master`: Builds root app, outputs to `dist/`
+- `landing`: Builds `apps/landing/`, outputs to `apps/landing/dist/`
+- `tournaments`: Builds `apps/tournaments/`, outputs to `apps/tournaments/dist/`
 
 ---
 

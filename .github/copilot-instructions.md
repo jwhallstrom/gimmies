@@ -2,36 +2,63 @@
 
 These instructions apply to GitHub Copilot Chat/Agents working in this repository.
 
+## Multi-App Architecture (IMPORTANT - Updated Feb 2026)
+
+This repo now hosts **three separate apps** deployed to different subdomains:
+
+| Branch | Subdomain | App | Build Output |
+|--------|-----------|-----|--------------|
+| `master` | app.golfwithgimmies.com | Main Gimmies App | `dist/` (root) |
+| `landing` | golfwithgimmies.com + www | Marketing Landing Page | `apps/landing/dist/` |
+| `tournaments` | play.golfwithgimmies.com | Tournaments PWA | `apps/tournaments/dist/` |
+
+### Key Architecture Points
+- **Main app** (`src/`): Full-featured golf app with rounds, events, handicaps, cloud sync
+- **Landing page** (`apps/landing/`): Marketing site with PWA install instructions, links to apps
+- **Tournaments app** (`apps/tournaments/`): Standalone PWA for tournament discovery/management
+- All three apps share the same Amplify backend (Cognito auth, AppSync, DynamoDB)
+- Each branch auto-deploys to its subdomain when pushed
+
 ## Repo workflow (IMPORTANT)
-- Default branch is `master`.
-- Do **not** push directly to `master` unless explicitly instructed by the repo owner.
-- All work should be done on a feature branch and delivered via a Pull Request into `master`.
+- Default branch is `master` (deploys to app.golfwithgimmies.com).
+- Do **not** push directly to `master`, `landing`, or `tournaments` unless explicitly instructed.
+- All work should be done on a feature branch and delivered via a Pull Request.
 
 ### Branch / PR workflow
-- Create a feature branch from the latest `master`:
-  - `git checkout master`
-  - `git pull --ff-only`
+- Create a feature branch from the appropriate base:
+  - Main app changes: branch from `master`
+  - Landing page changes: branch from `landing`
+  - Tournament app changes: branch from `tournaments`
+- Example:
+  - `git checkout master && git pull --ff-only`
   - `git checkout -b <username>/<short-description>`
-- Push the branch and open a PR targeting `master`.
-- Keep PRs small and focused. Prefer incremental PRs over “mega merges”.
+- Push the branch and open a PR targeting the correct base branch.
+- Keep PRs small and focused. Prefer incremental PRs over "mega merges".
+
+### Syncing branches
+When core changes in `master` need to propagate to other apps:
+```bash
+git checkout landing && git merge master --no-edit && git push origin landing
+git checkout tournaments && git merge master --no-edit && git push origin tournaments
+```
 
 ## Deployment awareness (Amplify)
-- AWS Amplify Hosting is wired to auto-build/deploy from `master`.
-- Treat merges into `master` as production-impacting.
-- Default workflow: implement on a feature branch, validate locally, then ask for explicit approval before merging to `master`.
+- AWS Amplify Hosting auto-builds/deploys from `master`, `landing`, and `tournaments`.
+- **All three branches are production-impacting** - merges trigger live deployments.
+- Default workflow: implement on a feature branch, validate locally, then ask for explicit approval.
 - Avoid changing deployment config files unless explicitly requested:
   - `amplify.yml`
   - `amplify_outputs.json`
   - `amplify/` backend files
 
 ## Local validation before deploy (REQUIRED)
-- Before any deploy-impacting change (i.e., anything that would end up on `master`), the agent MUST offer a local verification pass first.
+- Before any deploy-impacting change, the agent MUST offer a local verification pass first.
 - Preferred verification path for UI/UX changes:
   - Run **Build (prod)** (`npm run build`)
   - Run **Preview (prod build)** (`npx vite preview --host`)
   - Wait for the repo owner to confirm the change looks good in preview.
-- Only after confirmation should the agent proceed to merge/PR into `master`.
-- This enables batching multiple related fixes into larger chunks with one deploy, instead of shipping every small tweak to production.
+- Only after confirmation should the agent proceed to merge/PR.
+- This enables batching multiple related fixes into larger chunks with one deploy.
 
 ## Dev/build tasks (VS Code)
 - Prefer existing VS Code tasks over starting duplicate processes:
@@ -56,7 +83,8 @@ These instructions apply to GitHub Copilot Chat/Agents working in this repositor
 
 ## PWA / service worker
 - PWA uses `vite-plugin-pwa` with `registerType: 'prompt'` (user-controlled updates).
-- Avoid changing service worker / caching behavior unless explicitly requested; if changed, validate update/refresh behavior in a production preview.
+- Avoid changing service worker / caching behavior unless explicitly requested.
+- Each app (main, tournaments) has its own PWA manifest and service worker.
 
 ## Change quality bar
 - Keep changes minimal, consistent with existing style.
