@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#1e3a5f">
+  <title>Gimmies Golf - Track Your Handicap, Join Tournaments, Manage Your Club</title>
+  <meta name="description" content="The ultimate golf companion app. Track your handicap, join tournaments with live scoring, and manage your golf club - all in one platform.">
+  
+  <!-- Open Graph -->
+  <meta property="og:title" content="Gimmies Golf">
+  <meta property="og:description" content="Track your handicap, join tournaments, manage your club.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://golfwithgimmies.com">
+  <meta property="og:image" content="https://golfwithgimmies.com/og-image.png">
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+  
+  <style>
+    :root {
+      --primary: #1e3a5f;
+      --primary-light: #2d5a87;
+      --accent: #4ade80;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --card-bg: rgba(255, 255, 255, 0.05);
+      --card-border: rgba(255, 255, 255, 0.1);
+    }
+    
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 50%, #0f172a 100%);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 20px;
+    }
+    
+    /* Header */
+    header {
+      padding: 20px 0;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: rgba(15, 23, 42, 0.9);
+      backdrop-filter: blur(10px);
+      z-index: 100;
+      border-bottom: 1px solid var(--card-border);
+    }
+    
+    header .container {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--text);
+    }
+    
+    .logo img {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+    }
+    
+    .logo span {
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+    
+    .nav-links {
+      display: flex;
+      gap: 24px;
+      align-items: center;
+    }
+    
+    .nav-links a {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-weight: 500;
+      transition: color 0.2s;
+    }
+    
+    .nav-links a:hover {
+      color: var(--text);
+    }
+    
+    .btn-primary {
+      background: var(--accent);
+      color: #0f172a;
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+    
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 30px rgba(74, 222, 128, 0.3);
+    }
+    
+    /* Hero */
+    .hero {
+      padding: 160px 0 100px;
+      text-align: center;
+    }
+    
+    .hero h1 {
+      font-size: clamp(2.5rem, 6vw, 4rem);
+      font-weight: 800;
+      margin-bottom: 24px;
+      background: linear-gradient(135deg, #fff 0%, #4ade80 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    
+    .hero p {
+      font-size: 1.25rem;
+      color: var(--text-muted);
+      max-width: 600px;
+      margin: 0 auto 40px;
+    }
+    
+    .hero-buttons {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    
+    .btn-secondary {
+      background: var(--card-bg);
+      color: var(--text);
+      padding: 12px 28px;
+      border-radius: 8px;
+      font-weight: 600;
+      text-decoration: none;
+      border: 1px solid var(--card-border);
+      transition: background 0.2s, border-color 0.2s;
+    }
+    
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+    
+    /* Apps Section */
+    .apps {
+      padding: 80px 0;
+    }
+    
+    .apps h2 {
+      text-align: center;
+      font-size: 2rem;
+      margin-bottom: 16px;
+    }
+    
+    .apps .subtitle {
+      text-align: center;
+      color: var(--text-muted);
+      margin-bottom: 48px;
+    }
+    
+    .apps-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 24px;
+    }
+    
+    .app-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 32px;
+      text-decoration: none;
+      color: var(--text);
+      transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+    }
+    
+    .app-card:hover {
+      transform: translateY(-4px);
+      border-color: var(--accent);
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+    }
+    
+    .app-card .icon {
+      width: 64px;
+      height: 64px;
+      background: linear-gradient(135deg, var(--primary-light), var(--primary));
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      margin-bottom: 20px;
+    }
+    
+    .app-card h3 {
+      font-size: 1.5rem;
+      margin-bottom: 12px;
+    }
+    
+    .app-card p {
+      color: var(--text-muted);
+      margin-bottom: 20px;
+    }
+    
+    .app-card .features {
+      list-style: none;
+    }
+    
+    .app-card .features li {
+      padding: 8px 0;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    
+    .app-card .features li::before {
+      content: "✓";
+      color: var(--accent);
+      font-weight: bold;
+    }
+    
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-left: 8px;
+    }
+    
+    .badge-beta {
+      background: rgba(251, 146, 60, 0.2);
+      color: #fb923c;
+    }
+    
+    .badge-coming {
+      background: rgba(148, 163, 184, 0.2);
+      color: #94a3b8;
+    }
+    
+    /* PWA Install Section */
+    .pwa-section {
+      padding: 80px 0;
+      background: rgba(0, 0, 0, 0.2);
+    }
+    
+    .pwa-section h2 {
+      text-align: center;
+      font-size: 2rem;
+      margin-bottom: 16px;
+    }
+    
+    .pwa-section .subtitle {
+      text-align: center;
+      color: var(--text-muted);
+      margin-bottom: 48px;
+    }
+    
+    .install-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 24px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    
+    .install-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      padding: 28px;
+    }
+    
+    .install-card h3 {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+      font-size: 1.25rem;
+    }
+    
+    .install-card h3 img {
+      width: 32px;
+      height: 32px;
+    }
+    
+    .install-card ol {
+      padding-left: 20px;
+      color: var(--text-muted);
+    }
+    
+    .install-card li {
+      padding: 8px 0;
+    }
+    
+    .install-card code {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 0.9em;
+    }
+    
+    /* Features */
+    .features-section {
+      padding: 80px 0;
+    }
+    
+    .features-section h2 {
+      text-align: center;
+      font-size: 2rem;
+      margin-bottom: 48px;
+    }
+    
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 32px;
+    }
+    
+    .feature {
+      text-align: center;
+    }
+    
+    .feature .icon {
+      font-size: 3rem;
+      margin-bottom: 16px;
+    }
+    
+    .feature h3 {
+      margin-bottom: 8px;
+    }
+    
+    .feature p {
+      color: var(--text-muted);
+    }
+    
+    /* Footer */
+    footer {
+      padding: 40px 0;
+      border-top: 1px solid var(--card-border);
+      text-align: center;
+      color: var(--text-muted);
+    }
+    
+    footer a {
+      color: var(--text-muted);
+      text-decoration: none;
+    }
+    
+    footer a:hover {
+      color: var(--text);
+    }
+    
+    /* Mobile */
+    @media (max-width: 768px) {
+      .nav-links {
+        display: none;
+      }
+      
+      .hero {
+        padding: 120px 0 60px;
+      }
+      
+      .hero-buttons {
+        flex-direction: column;
+        align-items: center;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <header>
+    <div class="container">
+      <a href="/" class="logo">
+        <img src="/logo.png" alt="Gimmies Golf">
+        <span>Gimmies</span>
+      </a>
+      <nav class="nav-links">
+        <a href="#apps">Apps</a>
+        <a href="#install">Install</a>
+        <a href="#features">Features</a>
+        <a href="https://app.golfwithgimmies.com" class="btn-primary">Open App</a>
+      </nav>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <h1>Your Complete Golf Companion</h1>
+      <p>Track your handicap, join tournaments with live scoring, and manage your golf club — all from your phone.</p>
+      <div class="hero-buttons">
+        <a href="https://app.golfwithgimmies.com" class="btn-primary">🏌️ Start Tracking</a>
+        <a href="#install" class="btn-secondary">📲 Add to Home Screen</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Apps -->
+  <section class="apps" id="apps">
+    <div class="container">
+      <h2>Choose Your Experience</h2>
+      <p class="subtitle">Purpose-built apps for every aspect of your golf life</p>
+      
+      <div class="apps-grid">
+        <!-- Main App -->
+        <a href="https://app.golfwithgimmies.com" class="app-card">
+          <div class="icon">🏌️</div>
+          <h3>Gimmies App</h3>
+          <p>Your personal golf companion for tracking rounds and managing your handicap.</p>
+          <ul class="features">
+            <li>USGA Handicap Index calculation</li>
+            <li>Round-by-round scoring</li>
+            <li>Course database with tees</li>
+            <li>Statistics & trends</li>
+            <li>Play games with friends</li>
+          </ul>
+        </a>
+        
+        <!-- Tournament App -->
+        <a href="https://play.golfwithgimmies.com" class="app-card">
+          <div class="icon">🏆</div>
+          <h3>Tournaments <span class="badge badge-beta">BETA</span></h3>
+          <p>Create, join, and compete in golf tournaments with live leaderboards.</p>
+          <ul class="features">
+            <li>Create custom tournaments</li>
+            <li>Live scoring & leaderboards</li>
+            <li>Multiple formats (stroke, match, etc.)</li>
+            <li>Automated tee times</li>
+            <li>Entry fee collection</li>
+          </ul>
+        </a>
+        
+        <!-- Clubs App -->
+        <a href="#" class="app-card" style="opacity: 0.7; pointer-events: none;">
+          <div class="icon">⛳</div>
+          <h3>Club Manager <span class="badge badge-coming">COMING SOON</span></h3>
+          <p>Everything courses and organizations need to run their golf programs.</p>
+          <ul class="features">
+            <li>Member management</li>
+            <li>Tournament scheduling</li>
+            <li>Course setup & tee sheets</li>
+            <li>Payment processing</li>
+            <li>Analytics dashboard</li>
+          </ul>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- PWA Install -->
+  <section class="pwa-section" id="install">
+    <div class="container">
+      <h2>Install on Your Device</h2>
+      <p class="subtitle">Add Gimmies to your home screen for the best experience — works offline!</p>
+      
+      <div class="install-grid">
+        <!-- iOS -->
+        <div class="install-card">
+          <h3>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+            </svg>
+            iPhone / iPad
+          </h3>
+          <ol>
+            <li>Open <a href="https://app.golfwithgimmies.com" style="color: var(--accent);">app.golfwithgimmies.com</a> in <strong>Safari</strong></li>
+            <li>Tap the <strong>Share</strong> button (square with arrow)</li>
+            <li>Scroll down and tap <strong>"Add to Home Screen"</strong></li>
+            <li>Tap <strong>Add</strong> in the top right</li>
+          </ol>
+        </div>
+        
+        <!-- Android -->
+        <div class="install-card">
+          <h3>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="#3DDC84">
+              <path d="M17.6 9.48l1.84-3.18c.16-.31.04-.69-.26-.85-.31-.16-.68-.04-.85.26l-1.86 3.23c-1.44-.66-3.06-1.03-4.77-1.03s-3.33.37-4.77 1.03L5.11 5.71c-.16-.31-.54-.42-.85-.26-.31.16-.42.54-.26.85L5.84 9.48C2.66 11.24.51 14.2.51 17.55h22.98c0-3.35-2.15-6.31-5.33-8.07M7 14.5c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1m10 0c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1"/>
+            </svg>
+            Android
+          </h3>
+          <ol>
+            <li>Open <a href="https://app.golfwithgimmies.com" style="color: var(--accent);">app.golfwithgimmies.com</a> in <strong>Chrome</strong></li>
+            <li>Tap the <strong>⋮ menu</strong> (three dots)</li>
+            <li>Tap <strong>"Add to Home screen"</strong> or <strong>"Install app"</strong></li>
+            <li>Tap <strong>Add</strong> to confirm</li>
+          </ol>
+        </div>
+        
+        <!-- Desktop -->
+        <div class="install-card">
+          <h3>
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M20 3H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h6v2H8v2h8v-2h-2v-2h6c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 13H4V5h16v11z"/>
+            </svg>
+            Desktop (Chrome/Edge)
+          </h3>
+          <ol>
+            <li>Open <a href="https://app.golfwithgimmies.com" style="color: var(--accent);">app.golfwithgimmies.com</a></li>
+            <li>Look for the <strong>install icon</strong> in the address bar (⊕)</li>
+            <li>Click <strong>"Install"</strong></li>
+            <li>App opens in its own window!</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features -->
+  <section class="features-section" id="features">
+    <div class="container">
+      <h2>Why Golfers Love Gimmies</h2>
+      
+      <div class="features-grid">
+        <div class="feature">
+          <div class="icon">📱</div>
+          <h3>Works Offline</h3>
+          <p>Track your round even without cell service on the course.</p>
+        </div>
+        
+        <div class="feature">
+          <div class="icon">☁️</div>
+          <h3>Cloud Synced</h3>
+          <p>Your data syncs across all devices automatically.</p>
+        </div>
+        
+        <div class="feature">
+          <div class="icon">🎯</div>
+          <h3>USGA Compliant</h3>
+          <p>Handicap calculated using official USGA formula.</p>
+        </div>
+        
+        <div class="feature">
+          <div class="icon">🏆</div>
+          <h3>Live Tournaments</h3>
+          <p>Real-time leaderboards and automatic scoring.</p>
+        </div>
+        
+        <div class="feature">
+          <div class="icon">👥</div>
+          <h3>Play with Friends</h3>
+          <p>Nassau, skins, and more side games built in.</p>
+        </div>
+        
+        <div class="feature">
+          <div class="icon">🔒</div>
+          <h3>Secure & Private</h3>
+          <p>Your data is encrypted and never sold.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <p>© 2026 Gimmies Golf. Built with ❤️ for golfers.</p>
+      <p style="margin-top: 12px;">
+        <a href="mailto:support@golfwithgimmies.com">Contact</a> · 
+        <a href="/privacy">Privacy</a> · 
+        <a href="/terms">Terms</a>
+      </p>
+    </div>
+  </footer>
+</body>
+</html>

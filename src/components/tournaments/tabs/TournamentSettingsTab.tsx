@@ -92,7 +92,8 @@ const TournamentSettingsTab: React.FC<Props> = ({ tournamentId }) => {
   
   const handleDelete = () => {
     deleteTournament(tournamentId);
-    navigate('/tournaments');
+    // Redirect to external tournament app
+    window.location.href = 'https://play.golfwithgimmies.com';
   };
   
   return (

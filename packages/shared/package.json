@@ -1,0 +1,24 @@
+{
+  "name": "@gimmies/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types/index.ts",
+    "./auth": "./src/auth/index.ts",
+    "./sync": "./src/sync/index.ts",
+    "./utils": "./src/utils/index.ts"
+  },
+  "dependencies": {
+    "aws-amplify": "^6.0.0",
+    "@aws-amplify/ui-react": "^6.0.0",
+    "nanoid": "^5.0.0"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
+  }
+}

@@ -543,9 +543,12 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
                 </div>
               </div>
 
-              {/* Tournaments */}
-              <button
-                onClick={() => { onClose(); navigate('/tournaments'); }}
+              {/* Tournaments - External PWA */}
+              <a
+                href="https://play.golfwithgimmies.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={onClose}
                 className="w-full px-4 py-3.5 flex items-center justify-between hover:bg-gray-50 transition-colors"
               >
                 <div className="flex items-center gap-3">
@@ -555,8 +558,13 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
                     <div className="text-xs text-gray-500">Manage & join tournaments</div>
                   </div>
                 </div>
-                <span className="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded font-bold">BETA</span>
-              </button>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded font-bold">BETA</span>
+                  <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </div>
+              </a>
               
               {/* Club Dashboard */}
               <button

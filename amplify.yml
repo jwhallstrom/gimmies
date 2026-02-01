@@ -12,7 +12,34 @@ frontend:
         - npm ci
     build:
       commands:
-        - npm run build
+        - |
+          echo "Building for branch: $AWS_BRANCH"
+          if [ "$AWS_BRANCH" = "landing" ]; then
+            echo "=== Building Landing Page ==="
+            cd apps/landing
+            npm install
+            npm run build
+            # Move dist up for Amplify to find it
+            mv dist ../../dist-landing
+            cd ../..
+            rm -rf dist
+            mv dist-landing dist
+          elif [ "$AWS_BRANCH" = "tournaments" ]; then
+            echo "=== Building Tournament App ==="
+            cd apps/tournaments
+            # Copy Amplify config
+            cp ../../amplify_outputs.json ./
+            npm install
+            npm run build
+            # Move dist up for Amplify to find it
+            mv dist ../../dist-tournaments
+            cd ../..
+            rm -rf dist
+            mv dist-tournaments dist
+          else
+            echo "=== Building Main App ==="
+            npm run build
+          fi
   artifacts:
     baseDirectory: dist
     files:
@@ -20,3 +47,5 @@ frontend:
   cache:
     paths:
       - node_modules/**/*
+      - apps/landing/node_modules/**/*
+      - apps/tournaments/node_modules/**/*

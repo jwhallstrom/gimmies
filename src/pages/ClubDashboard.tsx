@@ -288,13 +288,15 @@ const ClubDashboard: React.FC = () => {
       
       {/* Quick Actions */}
       <div className="grid grid-cols-2 gap-4">
-        <button
-          onClick={() => navigate('/tournaments/create')}
+        <a
+          href="https://play.golfwithgimmies.com/create"
+          target="_blank"
+          rel="noopener noreferrer"
           className="p-4 bg-primary-600 text-white rounded-xl font-bold hover:bg-primary-700 transition-colors flex items-center justify-center gap-2"
         >
           <span className="text-xl">🏆</span>
           Create Tournament
-        </button>
+        </a>
         <button
           onClick={() => setTab('staff')}
           className="p-4 bg-white border border-gray-200 text-gray-900 rounded-xl font-bold hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
@@ -310,12 +312,14 @@ const ClubDashboard: React.FC = () => {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="font-bold text-gray-900">All Tournaments</h3>
-        <button
-          onClick={() => navigate('/tournaments/create')}
+        <a
+          href="https://play.golfwithgimmies.com/create"
+          target="_blank"
+          rel="noopener noreferrer"
           className="px-4 py-2 bg-primary-600 text-white rounded-lg font-medium hover:bg-primary-700 transition-colors flex items-center gap-2"
         >
           <span>+</span> New Tournament
-        </button>
+        </a>
       </div>
       
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
