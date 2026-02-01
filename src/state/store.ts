@@ -396,6 +396,36 @@ export const useStore = create<State>()(
           } catch (error) {
             console.error('Failed to load CompletedRounds from cloud:', error);
           }
+          
+          // Load Tournaments from cloud
+          try {
+            const { loadTournamentsFromCloud } = await import('../utils/tournamentSync');
+            const cloudTournaments = await loadTournamentsFromCloud(currentProfile.id);
+            const existingTournaments = get().tournaments;
+            const tournamentsToAdd = cloudTournaments.filter(newTournament => 
+              !existingTournaments.some(existing => existing.id === newTournament.id)
+            );
+            if (tournamentsToAdd.length > 0) {
+              set({ tournaments: [...existingTournaments, ...tournamentsToAdd] });
+            }
+          } catch (error) {
+            console.error('Failed to load Tournaments from cloud:', error);
+          }
+          
+          // Load Settlements from cloud
+          try {
+            const { loadSettlementsForProfile } = await import('../utils/walletSync');
+            const cloudSettlements = await loadSettlementsForProfile(currentProfile.id);
+            const existingSettlements = get().settlements;
+            const settlementsToAdd = cloudSettlements.filter(newSettlement => 
+              !existingSettlements.some(existing => existing.id === newSettlement.id)
+            );
+            if (settlementsToAdd.length > 0) {
+              set({ settlements: [...existingSettlements, ...settlementsToAdd] });
+            }
+          } catch (error) {
+            console.error('Failed to load Settlements from cloud:', error);
+          }
         } catch (error) {
           console.error('loadEventsFromCloud error:', error);
         } finally {

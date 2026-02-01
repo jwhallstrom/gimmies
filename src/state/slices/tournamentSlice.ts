@@ -17,6 +17,7 @@ import type {
   TournamentStatus,
   ScoreEntry,
 } from '../types';
+import { saveTournamentToCloud, deleteTournamentFromCloud } from '../../utils/tournamentSync';
 
 // ============================================================================
 // State Interface
@@ -87,6 +88,14 @@ export const initialTournamentState: TournamentSliceState = {
 
 type SetState = (partial: Partial<TournamentSliceState> | ((state: any) => Partial<any>)) => void;
 type GetState = () => any;
+
+// Helper to sync a tournament after state change
+const syncTournamentAfterChange = (get: GetState, tournamentId: string): void => {
+  const tournament = get().tournaments.find((t: Tournament) => t.id === tournamentId);
+  if (tournament) {
+    saveTournamentToCloud(tournament).catch(console.error);
+  }
+};
 
 export const createTournamentSlice = (set: SetState, get: GetState): TournamentSliceActions => ({
   // ============================================================================
@@ -160,19 +169,31 @@ export const createTournamentSlice = (set: SetState, get: GetState): TournamentS
     }
     
     set({ tournaments: [...get().tournaments, newTournament] });
+    
+    // Cloud sync
+    saveTournamentToCloud(newTournament).catch(console.error);
+    
     return id;
   },
   
   updateTournament: (id: string, patch: Partial<Tournament>): void => {
-    set({
-      tournaments: get().tournaments.map((t: Tournament) =>
-        t.id === id ? { ...t, ...patch, updatedAt: new Date().toISOString() } : t
-      ),
-    });
+    const updatedTournaments = get().tournaments.map((t: Tournament) =>
+      t.id === id ? { ...t, ...patch, updatedAt: new Date().toISOString() } : t
+    );
+    set({ tournaments: updatedTournaments });
+    
+    // Cloud sync
+    const updated = updatedTournaments.find((t: Tournament) => t.id === id);
+    if (updated) {
+      saveTournamentToCloud(updated).catch(console.error);
+    }
   },
   
   deleteTournament: (id: string): void => {
     set({ tournaments: get().tournaments.filter((t: Tournament) => t.id !== id) });
+    
+    // Cloud sync
+    deleteTournamentFromCloud(id).catch(console.error);
   },
   
   // ============================================================================
@@ -188,6 +209,7 @@ export const createTournamentSlice = (set: SetState, get: GetState): TournamentS
         t.id === id ? { ...t, status: 'registration_open' as TournamentStatus, updatedAt: new Date().toISOString() } : t
       ),
     });
+    syncTournamentAfterChange(get, id);
     return true;
   },
   
@@ -200,6 +222,7 @@ export const createTournamentSlice = (set: SetState, get: GetState): TournamentS
         t.id === id ? { ...t, status: 'in_progress' as TournamentStatus, updatedAt: new Date().toISOString() } : t
       ),
     });
+    syncTournamentAfterChange(get, id);
     return true;
   },
   
@@ -216,6 +239,7 @@ export const createTournamentSlice = (set: SetState, get: GetState): TournamentS
         t.id === id ? { ...t, status: 'completed' as TournamentStatus, updatedAt: new Date().toISOString() } : t
       ),
     });
+    syncTournamentAfterChange(get, id);
     return true;
   },
   
@@ -228,6 +252,7 @@ export const createTournamentSlice = (set: SetState, get: GetState): TournamentS
         t.id === id ? { ...t, status: 'cancelled' as TournamentStatus, updatedAt: new Date().toISOString() } : t
       ),
     });
+    syncTournamentAfterChange(get, id);
     return true;
   },
   
@@ -295,6 +320,7 @@ export const createTournamentSlice = (set: SetState, get: GetState): TournamentS
           : t
       ),
     });
+    syncTournamentAfterChange(get, tournamentId);
     return newRegistration.id;
   },
   
@@ -312,6 +338,7 @@ export const createTournamentSlice = (set: SetState, get: GetState): TournamentS
           : t
       ),
     });
+    syncTournamentAfterChange(get, tournamentId);
   },
   
   removeRegistration: (tournamentId: string, registrationId: string): void => {
@@ -336,6 +363,7 @@ export const createTournamentSlice = (set: SetState, get: GetState): TournamentS
           : t
       ),
     });
+    syncTournamentAfterChange(get, tournamentId);
   },
   
   // Alias for removeRegistration (used by admin panel)
@@ -360,6 +388,7 @@ export const createTournamentSlice = (set: SetState, get: GetState): TournamentS
           : t
       ),
     });
+    syncTournamentAfterChange(get, tournamentId);
   },
   
   // Update payment status for a registration
@@ -381,6 +410,7 @@ export const createTournamentSlice = (set: SetState, get: GetState): TournamentS
           : t
       ),
     });
+    syncTournamentAfterChange(get, tournamentId);
   },
   
   // ============================================================================
@@ -398,6 +428,7 @@ export const createTournamentSlice = (set: SetState, get: GetState): TournamentS
           : t
       ),
     });
+    syncTournamentAfterChange(get, tournamentId);
     return id;
   },
   
@@ -415,6 +446,7 @@ export const createTournamentSlice = (set: SetState, get: GetState): TournamentS
           : t
       ),
     });
+    syncTournamentAfterChange(get, tournamentId);
   },
   
   removeDivision: (tournamentId: string, divisionId: string): void => {
@@ -429,6 +461,7 @@ export const createTournamentSlice = (set: SetState, get: GetState): TournamentS
           : t
       ),
     });
+    syncTournamentAfterChange(get, tournamentId);
   },
   
   // ============================================================================
@@ -446,6 +479,7 @@ export const createTournamentSlice = (set: SetState, get: GetState): TournamentS
           : t
       ),
     });
+    syncTournamentAfterChange(get, tournamentId);
     return id;
   },
   
@@ -463,6 +497,7 @@ export const createTournamentSlice = (set: SetState, get: GetState): TournamentS
           : t
       ),
     });
+    syncTournamentAfterChange(get, tournamentId);
   },
   
   removeTeeTime: (tournamentId: string, teeTimeId: string): void => {
@@ -477,6 +512,7 @@ export const createTournamentSlice = (set: SetState, get: GetState): TournamentS
           : t
       ),
     });
+    syncTournamentAfterChange(get, tournamentId);
   },
   
   generatePairings: (
@@ -530,6 +566,7 @@ export const createTournamentSlice = (set: SetState, get: GetState): TournamentS
           : t
       ),
     });
+    syncTournamentAfterChange(get, tournamentId);
     
     return true;
   },
@@ -578,6 +615,9 @@ export const createTournamentSlice = (set: SetState, get: GetState): TournamentS
     
     // Recalculate standings after score update
     get().recalculateStandings(tournamentId);
+    
+    // Cloud sync (standings recalculation also syncs, but ensure we capture score updates)
+    syncTournamentAfterChange(get, tournamentId);
   },
   
   completeRound: (tournamentId: string, roundNumber: number): boolean => {
@@ -606,6 +646,7 @@ export const createTournamentSlice = (set: SetState, get: GetState): TournamentS
           : t
       ),
     });
+    syncTournamentAfterChange(get, tournamentId);
     
     return true;
   },
@@ -688,6 +729,7 @@ export const createTournamentSlice = (set: SetState, get: GetState): TournamentS
           : t
       ),
     });
+    syncTournamentAfterChange(get, tournamentId);
   },
   
   // ============================================================================

@@ -178,6 +178,78 @@ const schema = a.schema({
     allow.publicApiKey(), // Allow API key for all operations (courses are public data)
     allow.authenticated(), // Authenticated users can do anything
   ]),
+
+  // Tournament (multi-round events with registrations)
+  Tournament: a.model({
+    name: a.string().required(),
+    description: a.string(),
+    
+    // Tournament type and format
+    format: a.string().default('stroke'), // stroke, match, stableford, bestball, scramble
+    visibility: a.string().default('private'), // public, private, unlisted
+    status: a.string().default('draft'), // draft, published, registration_open, registration_closed, in_progress, completed, cancelled
+    
+    // Dates
+    startDate: a.date().required(),
+    endDate: a.date(),
+    registrationDeadline: a.datetime(),
+    
+    // Course info
+    courseId: a.string(),
+    courseName: a.string(),
+    teeName: a.string(),
+    
+    // Owner
+    ownerProfileId: a.id().required(),
+    clubId: a.string(), // Optional club association
+    
+    // Configuration (stored as JSON for flexibility)
+    configJson: a.json(), // rounds, handicapAllowance, maxPlayers, entryFee, prizes, etc.
+    divisionsJson: a.json(), // TournamentDivision[]
+    teeTimesJson: a.json(), // TournamentTeeTime[]
+    registrationsJson: a.json(), // TournamentRegistration[]
+    roundsJson: a.json(), // TournamentRound[] with scorecards
+    standingsJson: a.json(), // TournamentStanding[]
+    
+    // Timestamps
+    publishedAt: a.datetime(),
+    completedAt: a.datetime(),
+  })
+  .authorization(allow => [
+    allow.owner(),
+    allow.authenticated(), // All authenticated users can read/update (for participants)
+  ]),
+
+  // Settlement (payment tracking between players)
+  Settlement: a.model({
+    eventId: a.string().required(),
+    eventName: a.string(),
+    
+    // Parties
+    fromProfileId: a.string().required(), // Who owes
+    fromProfileName: a.string(),
+    toProfileId: a.string().required(), // Who is owed
+    toProfileName: a.string(),
+    
+    // Amount
+    amount: a.float().required(),
+    currency: a.string().default('USD'),
+    
+    // Status
+    status: a.string().default('pending'), // pending, paid, forgiven, disputed
+    paidAt: a.datetime(),
+    paymentMethod: a.string(), // cash, venmo, zelle, other
+    
+    // Game breakdown (stored as JSON)
+    breakdownJson: a.json(), // { nassau: number, skins: number, pinky: number, greenie: number }
+    
+    // Notes
+    note: a.string(),
+  })
+  .authorization(allow => [
+    allow.owner(),
+    allow.authenticated(), // Participants can read/update their settlements
+  ]),
 });
 
 export type Schema = ClientSchema<typeof schema>;

@@ -5,6 +5,7 @@
 
 import { nanoid } from 'nanoid/non-secure';
 import { calculateEventPayouts } from '../../games/payouts';
+import { saveSettlementsToCloud, updateSettlementStatus } from '../../utils/walletSync';
 import type { 
   Settlement, 
   WalletTransaction, 
@@ -302,6 +303,11 @@ export const createWalletSlice = (
       };
     });
     
+    // Cloud sync settlements
+    if (settlements.length > 0) {
+      saveSettlementsToCloud(settlements).catch(console.error);
+    }
+    
     return settlements;
   },
   
@@ -313,6 +319,9 @@ export const createWalletSlice = (
           : s
       ),
     }));
+    
+    // Cloud sync
+    updateSettlementStatus(settlementId, 'paid', method).catch(console.error);
   },
   
   forgiveSettlement: (settlementId: string) => {
@@ -323,6 +332,9 @@ export const createWalletSlice = (
           : s
       ),
     }));
+    
+    // Cloud sync
+    updateSettlementStatus(settlementId, 'forgiven').catch(console.error);
   },
   
   getProfileWallet: (profileId: string): ProfileWallet => {
