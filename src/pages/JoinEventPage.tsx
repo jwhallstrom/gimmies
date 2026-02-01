@@ -67,6 +67,7 @@ const JoinEventPage: React.FC = () => {
   const [rawInput, setRawInput] = useState<string>(codeParam || '');
   const [codeStatus, setCodeStatus] = useState<'idle' | 'joining' | 'success' | 'error'>('idle');
   const [codeMessage, setCodeMessage] = useState<string>('');
+  const [autoJoinAttempted, setAutoJoinAttempted] = useState(false);
   const hiddenInputRef = useRef<HTMLInputElement | null>(null);
 
   const code = useMemo(() => extractJoinCode(rawInput), [rawInput]);
@@ -89,7 +90,26 @@ const JoinEventPage: React.FC = () => {
       setCodeMessage('One quick step: set up your profile, then we’ll join you automatically.');
     } else {
       setRawInput(extracted);
-      setCodeMessage('');
+      // Auto-join if we have a profile and haven't tried yet
+      if (!autoJoinAttempted) {
+        setAutoJoinAttempted(true);
+        setCodeStatus('joining');
+        setCodeMessage('Joining…');
+        (async () => {
+          const result = await joinEventByCode(extracted);
+          if (result?.success) {
+            setCodeStatus('success');
+            setCodeMessage('✓ Joined!');
+            if (result?.eventId) {
+              addToast?.('Joined event!', 'success', 2500);
+              setTimeout(() => navigate(`/event/${result.eventId}`), 250);
+            }
+          } else {
+            setCodeStatus('error');
+            setCodeMessage(result?.error || 'That code did not work. Ask the organizer to double-check it.');
+          }
+        })();
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [codeParam, currentProfile?.id]);

@@ -138,8 +138,6 @@ const EventSharing: React.FC<Props> = ({ eventId }) => {
                 )}
                 <div className="text-sm text-gray-700">
                   Share either the 6-digit code or the link with friends to let them join your event.
-                  <br />
-                  <span className="text-gray-600">Note: Share codes only work within the same browser. To share across devices, export your event data first.</span>
                 </div>
               </div>
             )}
