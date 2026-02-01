@@ -8,7 +8,7 @@
  * - Mobile-first with large tap targets
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useParams, Routes, Route, NavLink, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import useStore from '../state/store';
 import { useEventSync } from '../hooks/useEventSync';
@@ -34,6 +34,19 @@ const EventPage: React.FC = () => {
   const [showEventsDropdown, setShowEventsDropdown] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  
+  // Disable parent scroll container when EventPage is mounted (for fixed chat layout)
+  useEffect(() => {
+    const scrollContainer = document.getElementById('main-scroll-container');
+    if (scrollContainer) {
+      scrollContainer.style.overflow = 'hidden';
+    }
+    return () => {
+      if (scrollContainer) {
+        scrollContainer.style.overflow = 'auto';
+      }
+    };
+  }, []);
   
   // Auto-sync event from cloud every 30 seconds
   useEventSync(id, 30000);
@@ -147,9 +160,9 @@ const EventPage: React.FC = () => {
   const isOnTab = tabs.some(t => t.path === currentPath);
 
   return (
-    <div className="min-h-screen -mx-4 -mt-6 flex flex-col">
-      {/* Header - Compact & Sticky */}
-      <div className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 px-3 py-2 shadow-lg sticky top-0 z-30 flex-shrink-0">
+    <div className="h-full -mx-4 -mt-6 flex flex-col overflow-hidden">
+      {/* Header - Fixed at top, doesn't scroll */}
+      <div className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 px-3 py-2 shadow-lg z-30 flex-shrink-0">
         {/* Single Row: Event Info + Actions */}
         <div className="flex items-center gap-2">
           {/* Event Title - Takes remaining space */}
@@ -433,8 +446,8 @@ const EventPage: React.FC = () => {
         </>
       )}
       
-      {/* Content Area - Fills remaining height, scrolls internally */}
-      <div className="flex-1 overflow-auto px-4 py-2">
+      {/* Content Area - Fills remaining height, children handle scrolling */}
+      <div className="flex-1 overflow-hidden px-4 py-2 flex flex-col">
         <Routes>
           <Route index element={<ChatTab eventId={event.id} />} />
           <Route path="chat" element={<ChatTab eventId={event.id} />} />

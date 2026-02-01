@@ -269,9 +269,9 @@ const App: React.FC = () => {
         </Link>
         <UserMenu />
       </header>
-      <main className="flex-1 relative w-full">
-        <div className="absolute inset-0 overflow-y-auto">
-          <div className="px-4 pt-6 content-with-footer max-w-5xl w-full mx-auto">
+      <main className="flex-1 relative w-full overflow-hidden">
+        <div className="absolute inset-0 overflow-y-auto" id="main-scroll-container">
+          <div className="px-4 pt-6 content-with-footer max-w-5xl w-full mx-auto h-full">
             <Suspense fallback={<LoadingSpinner message="Loading page..." />}>
               <Routes>
                 <Route path="/" element={<Dashboard />} />
