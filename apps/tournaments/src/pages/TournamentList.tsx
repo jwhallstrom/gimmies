@@ -1,8 +1,30 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { loadPublicTournaments } from '@gimmies/shared/sync';
-import type { Tournament } from '@gimmies/shared/types';
-import { formatDateRange, formatCurrency } from '@gimmies/shared/utils';
+
+// Inline type definition (standalone from shared)
+interface Tournament {
+  id: string;
+  name: string;
+  courseName?: string;
+  status: 'draft' | 'registration_open' | 'in_progress' | 'completed' | 'cancelled';
+  dates: { start: string; end: string };
+  registrations: { id: string }[];
+  maxPlayers: number;
+  entryFeeEnabled: boolean;
+  entryFeeCents: number;
+  bannerImage?: string;
+}
+
+// Inline utilities (standalone from shared)
+const formatDateRange = (dates: { start: string; end: string }) => {
+  const start = new Date(dates.start).toLocaleDateString();
+  const end = new Date(dates.end).toLocaleDateString();
+  return start === end ? start : `${start} - ${end}`;
+};
+
+const formatCurrency = (cents: number) => {
+  return `$${(cents / 100).toFixed(0)}`;
+};
 
 export const TournamentList: React.FC = () => {
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
@@ -10,17 +32,9 @@ export const TournamentList: React.FC = () => {
   const [filter, setFilter] = useState<'all' | 'upcoming' | 'live'>('all');
 
   useEffect(() => {
-    const fetchTournaments = async () => {
-      try {
-        const data = await loadPublicTournaments();
-        setTournaments(data);
-      } catch (error) {
-        console.error('Failed to load tournaments:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchTournaments();
+    // Placeholder - will integrate with cloud data later
+    setIsLoading(false);
+    setTournaments([]);
   }, []);
 
   const filteredTournaments = tournaments.filter(t => {

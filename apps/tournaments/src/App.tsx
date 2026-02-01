@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
-import { getAuthenticatedUser } from '@gimmies/shared/auth';
+import { getCurrentUser } from 'aws-amplify/auth';
 import { LoginPage } from './components/LoginPage';
 import { TournamentList } from './pages/TournamentList';
 import { TournamentDetail } from './pages/TournamentDetail';
@@ -15,7 +15,7 @@ const App: React.FC = () => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const authUser = await getAuthenticatedUser();
+        const authUser = await getCurrentUser();
         setUser(authUser);
       } catch {
         setUser(null);

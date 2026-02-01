@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { signOutUser } from '@gimmies/shared/auth';
+import { signOut } from 'aws-amplify/auth';
 
 export const UserMenu: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
 
   const handleSignOut = async () => {
-    await signOutUser();
+    await signOut();
     window.location.reload();
   };
 
