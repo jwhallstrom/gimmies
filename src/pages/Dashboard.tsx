@@ -247,7 +247,6 @@ const Dashboard: React.FC = () => {
       const isTied = rows.filter((p: any) => typeof p.toPar === 'number' && typeof r.toPar === 'number' && p.toPar === r.toPar).length > 1;
       const rankLabel = `${isTied ? 'T' : ''}${rank}.`;
       const statusLabel = r.isFinal ? 'F' : `Thru ${r.thru || 0}`;
-      const onHoleLabel = r.isFinal || (r.thru || 0) === 0 ? '' : ` (${r.onHole || 1})`;
       return {
         id: `p-${r.golferId}`,
         type: 'player' as const,
@@ -257,7 +256,7 @@ const Dashboard: React.FC = () => {
           thru: r.thru,
           isFinal: !!r.isFinal,
         },
-        _status: `${statusLabel}${onHoleLabel}`,
+        _status: statusLabel,
       };
     });
 
@@ -1003,7 +1002,7 @@ const EventCard: React.FC<{ event: Event; profiles: any[]; status?: 'live' | 'up
               <>
                 <span className="text-gray-300">•</span>
                 <span className="text-red-600 font-medium">
-                  {formatThru(leader.thru, leader.isFinal)} {formatToPar(leader.toPar)} {formatPosition(leader.position, leader.isTied)}
+                  {formatThru(leader.thru, leader.isFinal)} {formatToPar(leader.toPar)}
                 </span>
               </>
             )}
