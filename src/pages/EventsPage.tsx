@@ -417,7 +417,7 @@ const EventCard: React.FC<{
               <>
                 <span className="text-gray-300">•</span>
                 <span className={status === 'live' ? 'text-red-600 font-medium' : 'text-green-700 font-medium'}>
-                  {formatThru(leader.thru, leader.isFinal)} {formatToPar(leader.toPar)} {formatPosition(leader.position, leader.isTied)}
+                  {formatThru(leader.thru, leader.isFinal)} {formatToPar(leader.toPar)}
                 </span>
               </>
             )}
