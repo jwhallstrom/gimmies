@@ -264,14 +264,14 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="h-screen h-dvh flex flex-col bg-gradient-to-b from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 text-gray-900 dark:text-slate-100 overflow-hidden">
-      <header className="bg-primary-900/85 backdrop-blur text-white px-4 py-3 pt-safe flex items-center justify-between shadow-md sticky top-0 z-40 border-b border-white/10">
+    <div className="fixed inset-0 flex flex-col bg-gradient-to-b from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 text-gray-900 dark:text-slate-100">
+      <header className="flex-shrink-0 bg-primary-900/85 backdrop-blur text-white px-4 py-3 pt-safe flex items-center justify-between shadow-md z-40 border-b border-white/10">
         <Link to="/">
           <img src="/gimmies-logo.png" alt="Gimmies" className="h-12 w-auto" />
         </Link>
         <UserMenu />
       </header>
-      <main className="flex-1 relative w-full">
+      <main className="flex-1 min-h-0 relative w-full">
         <div
           className={`absolute inset-0 ${
             isEventRoute
@@ -314,7 +314,7 @@ const App: React.FC = () => {
           </div>
         </div>
       </main>
-      <footer className="bottom-nav fixed bottom-0 inset-x-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg border-t border-gray-200 dark:border-white/10 flex items-center justify-around z-40 px-2">
+      <footer className="bottom-nav flex-shrink-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg border-t border-gray-200 dark:border-white/10 flex items-center justify-around z-40 px-2">
         <Link
           to="/"
           className={`flex flex-col items-center justify-center gap-0.5 min-w-[56px] min-h-[52px] py-1.5 rounded-xl transition-all ${
