@@ -1,12 +1,11 @@
 /**
- * Dashboard - Redesigned with Tournament-quality UX
+ * Dashboard - Grandma-Proof UX
  * 
  * Key improvements:
- * - Cleaner visual hierarchy
- * - Focused action areas
- * - Better card layouts
- * - Mobile-first with large tap targets
- * - Less clutter, more focus
+ * - ONE FAB button for all actions (Join, Create, etc.)
+ * - Clear event sections: Live, Upcoming, Recent
+ * - Large tap targets, minimal clutter
+ * - Status badges for quick scanning
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -28,6 +27,25 @@ const formatDateShort = (iso: string) =>
   new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
 const clamp = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
+
+// Count actual strokes entered (not just array slots)
+const countStrokesEntered = (event: Event): number => {
+  return event.scorecards.reduce((total, sc) => {
+    return total + (sc.scores?.filter((s: any) => s?.strokes != null).length || 0);
+  }, 0);
+};
+
+// Check if an event is "live" (has scores being entered but not completed)
+const isEventLive = (event: Event): boolean => {
+  if (event.isCompleted) return false;
+  return countStrokesEntered(event) > 0;
+};
+
+// Check if an event is "upcoming" (no scores entered yet)
+const isEventUpcoming = (event: Event): boolean => {
+  if (event.isCompleted) return false;
+  return countStrokesEntered(event) === 0;
+};
 
 type TickerItem = {
   id: string;
@@ -59,11 +77,13 @@ const Dashboard: React.FC = () => {
   const [showCreateGroupWizard, setShowCreateGroupWizard] = useState(false);
   const [showDiscoverGroups, setShowDiscoverGroups] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showFabMenu, setShowFabMenu] = useState(false);
   const homeDefaultTabPref = (currentProfile?.preferences as any)?.homeDefaultTab as Tab | undefined;
   const [tabTouched, setTabTouched] = useState(false);
   const [tab, setTab] = useState<Tab>(() => (homeDefaultTabPref === 'groups' ? 'groups' : 'events'));
   const [eventSearch, setEventSearch] = useState('');
   const [groupSearch, setGroupSearch] = useState('');
+  const [showRecentEvents, setShowRecentEvents] = useState(false);
 
   // Apply preferred default tab when profile loads (unless user already interacted)
   useEffect(() => {
@@ -110,9 +130,10 @@ const Dashboard: React.FC = () => {
     loadEventsFromCloud().catch(() => {});
   }, [currentProfile?.id]);
 
-  // Separate active events from groups
-  const { activeEvents, completedEvents, groups } = useMemo(() => {
-    const active: Event[] = [];
+  // Separate events into categories: live, upcoming, completed, groups
+  const { liveEvents, upcomingEvents, completedEvents, groups, activeEvents } = useMemo(() => {
+    const live: Event[] = [];
+    const upcoming: Event[] = [];
     const completed: Event[] = [];
     const groupList: Event[] = [];
     
@@ -121,24 +142,35 @@ const Dashboard: React.FC = () => {
         groupList.push(e);
       } else if (e.isCompleted) {
         completed.push(e);
+      } else if (isEventLive(e)) {
+        live.push(e);
       } else {
-        active.push(e);
+        upcoming.push(e);
       }
     });
     
-    // Sort by recent activity
-    active.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
+    // Sort by date/activity
+    live.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
+    upcoming.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()); // Soonest first
     completed.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
     groupList.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
     
-    return { activeEvents: active, completedEvents: completed, groups: groupList };
+    // activeEvents = all non-completed for backward compat
+    const active = [...live, ...upcoming];
+    
+    return { liveEvents: live, upcomingEvents: upcoming, completedEvents: completed, groups: groupList, activeEvents: active };
   }, [userEvents]);
 
-  const filteredActiveEvents = useMemo(() => {
+  // Filtered events for search
+  const { filteredLive, filteredUpcoming, filteredCompleted } = useMemo(() => {
     const q = eventSearch.trim().toLowerCase();
-    if (!q) return activeEvents;
-    return activeEvents.filter(e => (e.name || '').toLowerCase().includes(q));
-  }, [activeEvents, eventSearch]);
+    if (!q) return { filteredLive: liveEvents, filteredUpcoming: upcomingEvents, filteredCompleted: completedEvents };
+    return {
+      filteredLive: liveEvents.filter(e => (e.name || '').toLowerCase().includes(q)),
+      filteredUpcoming: upcomingEvents.filter(e => (e.name || '').toLowerCase().includes(q)),
+      filteredCompleted: completedEvents.filter(e => (e.name || '').toLowerCase().includes(q)),
+    };
+  }, [liveEvents, upcomingEvents, completedEvents, eventSearch]);
 
   const filteredGroups = useMemo(() => {
     const q = groupSearch.trim().toLowerCase();
@@ -532,62 +564,97 @@ const Dashboard: React.FC = () => {
         <div className="p-3">
             {tab === 'events' && (
             <>
-              {/* Primary actions (moved inside the Events tab) */}
-              <div className="flex gap-2 mb-3">
-                <button
-                  onClick={openEventWizard}
-                  className="flex-1 px-4 py-2.5 bg-white border-2 border-primary-200 text-primary-800 rounded-xl font-black text-sm hover:bg-primary-50 hover:border-primary-300 transition-colors shadow-sm"
-                >
-                  ⛳ Create
-                </button>
-                <button
-                  onClick={() => navigate('/join')}
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-accent to-orange-500 text-white rounded-xl font-black text-sm hover:from-orange-500 hover:to-accent transition-colors shadow-sm"
-                  title="Join an event with a code"
-                >
-                  <span className="inline-flex items-center justify-center gap-2">
-                    <span className="text-lg leading-none">+</span>
-                    <span>Join</span>
-                  </span>
-                </button>
-              </div>
-
-              {/* Search */}
-              <div className="mb-3">
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔎</span>
-                  <input
-                    value={eventSearch}
-                    onChange={(e) => setEventSearch(e.target.value)}
-                    placeholder="Search your events…"
-                    className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200"
-                  />
-                </div>
-              </div>
-
-              {filteredActiveEvents.length === 0 ? (
-                <div className="py-8 text-center">
-                  <div className="text-4xl mb-3">⛳</div>
-                  <div className="font-semibold text-gray-700 mb-1">
-                    {activeEvents.length === 0 ? 'No active events' : 'No matching events'}
+              {/* Search - minimal */}
+              {(liveEvents.length > 0 || upcomingEvents.length > 0 || completedEvents.length > 0) && (
+                <div className="mb-4">
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔎</span>
+                    <input
+                      value={eventSearch}
+                      onChange={(e) => setEventSearch(e.target.value)}
+                      placeholder="Search events…"
+                      className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200 text-sm"
+                    />
                   </div>
-                  <p className="text-sm text-gray-500">
-                    {activeEvents.length === 0 ? 'Create an event or join with a code' : 'Try a different search'}
+                </div>
+              )}
+
+              {/* Empty state */}
+              {liveEvents.length === 0 && upcomingEvents.length === 0 && completedEvents.length === 0 && (
+                <div className="py-10 text-center">
+                  <div className="text-5xl mb-4">⛳</div>
+                  <div className="font-bold text-gray-800 text-lg mb-2">No events yet</div>
+                  <p className="text-gray-500 mb-6">
+                    Tap the <span className="inline-flex items-center justify-center w-8 h-8 bg-accent rounded-full text-white font-bold text-lg align-middle mx-1">+</span> button to get started
                   </p>
                 </div>
-              ) : (
-                <div className="space-y-2">
-                  {filteredActiveEvents.slice(0, 5).map(event => (
-                    <EventCard key={event.id} event={event} profiles={profiles} />
-                  ))}
-                  
-                  {filteredActiveEvents.length > 5 && (
-                    <Link 
-                      to="/events" 
-                      className="block text-center py-2 text-sm font-medium text-primary-600 hover:text-primary-700"
+              )}
+
+              {/* 🔴 LIVE Section */}
+              {filteredLive.length > 0 && (
+                <div className="mb-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                    <h3 className="font-bold text-gray-800 text-sm uppercase tracking-wide">Live</h3>
+                    <span className="text-xs text-gray-500">({filteredLive.length})</span>
+                  </div>
+                  <div className="space-y-2">
+                    {filteredLive.map(event => (
+                      <EventCard key={event.id} event={event} profiles={profiles} status="live" />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* 📅 UPCOMING Section */}
+              {filteredUpcoming.length > 0 && (
+                <div className="mb-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-base">📅</span>
+                    <h3 className="font-bold text-gray-800 text-sm uppercase tracking-wide">Upcoming</h3>
+                    <span className="text-xs text-gray-500">({filteredUpcoming.length})</span>
+                  </div>
+                  <div className="space-y-2">
+                    {filteredUpcoming.map(event => (
+                      <EventCard key={event.id} event={event} profiles={profiles} status="upcoming" />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* ✅ RECENT Section (collapsible) */}
+              {filteredCompleted.length > 0 && (
+                <div className="mb-2">
+                  <button
+                    onClick={() => setShowRecentEvents(!showRecentEvents)}
+                    className="flex items-center gap-2 mb-2 w-full text-left"
+                  >
+                    <span className="text-base">✅</span>
+                    <h3 className="font-bold text-gray-600 text-sm uppercase tracking-wide">Recent</h3>
+                    <span className="text-xs text-gray-500">({filteredCompleted.length})</span>
+                    <svg 
+                      className={`w-4 h-4 text-gray-400 ml-auto transition-transform ${showRecentEvents ? 'rotate-180' : ''}`} 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
                     >
-                      View all {filteredActiveEvents.length} events →
-                    </Link>
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {showRecentEvents && (
+                    <div className="space-y-2">
+                      {filteredCompleted.slice(0, 5).map(event => (
+                        <EventCard key={event.id} event={event} profiles={profiles} status="completed" />
+                      ))}
+                      {filteredCompleted.length > 5 && (
+                        <Link 
+                          to="/events" 
+                          className="block text-center py-2 text-sm font-medium text-primary-600 hover:text-primary-700"
+                        >
+                          View all {filteredCompleted.length} completed →
+                        </Link>
+                      )}
+                    </div>
                   )}
                 </div>
               )}
@@ -596,44 +663,27 @@ const Dashboard: React.FC = () => {
 
           {tab === 'groups' && (
             <>
-              {/* Primary actions (moved to the top of the Groups tab) */}
-              <div className="flex gap-2 mb-3">
-                <button
-                  onClick={openGroupWizard}
-                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl font-bold text-sm hover:from-purple-700 hover:to-purple-800 transition-colors shadow-sm"
-                >
-                  👥 Create
-                </button>
-                <button
-                  onClick={() => setShowDiscoverGroups(true)}
-                  className="px-4 py-2.5 bg-white border border-gray-300 text-gray-800 rounded-xl font-bold text-sm hover:bg-gray-50 transition-colors"
-                  title="Find groups to join"
-                >
-                  🔍 Find
-                </button>
-              </div>
-
-              {/* Search */}
-              <div className="mb-3">
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔎</span>
-                  <input
-                    value={groupSearch}
-                    onChange={(e) => setGroupSearch(e.target.value)}
-                    placeholder="Search your groups…"
-                    className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-200"
-                  />
+              {/* Search - minimal */}
+              {groups.length > 0 && (
+                <div className="mb-4">
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔎</span>
+                    <input
+                      value={groupSearch}
+                      onChange={(e) => setGroupSearch(e.target.value)}
+                      placeholder="Search groups…"
+                      className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-200 text-sm"
+                    />
+                  </div>
                 </div>
-              </div>
+              )}
 
               {filteredGroups.length === 0 ? (
-                <div className="py-8 text-center">
-                  <div className="text-4xl mb-3">👥</div>
-                  <div className="font-semibold text-gray-700 mb-1">
-                    {groups.length === 0 ? 'No groups yet' : 'No matching groups'}
-                  </div>
-                  <p className="text-sm text-gray-500">
-                    {groups.length === 0 ? 'Create a group or find one to join' : 'Try a different search'}
+                <div className="py-10 text-center">
+                  <div className="text-5xl mb-4">👥</div>
+                  <div className="font-bold text-gray-800 text-lg mb-2">No groups yet</div>
+                  <p className="text-gray-500 mb-6">
+                    Tap the <span className="inline-flex items-center justify-center w-8 h-8 bg-accent rounded-full text-white font-bold text-lg align-middle mx-1">+</span> button to create or join a group
                   </p>
                 </div>
               ) : (
@@ -702,6 +752,120 @@ const Dashboard: React.FC = () => {
         </button>
       </div>
 
+      {/* FAB - The ONE button to rule them all */}
+      <button
+        onClick={() => setShowFabMenu(true)}
+        className="fixed right-4 z-40 w-16 h-16 bg-gradient-to-br from-accent to-orange-600 rounded-full shadow-lg shadow-accent/40 flex items-center justify-center text-white text-3xl font-bold hover:scale-105 active:scale-95 transition-transform fab-position"
+        aria-label="Quick actions"
+      >
+        <span className={`transition-transform duration-200 ${showFabMenu ? 'rotate-45' : ''}`}>+</span>
+      </button>
+
+      {/* FAB Action Sheet */}
+      {showFabMenu && createPortal(
+        <div 
+          className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex items-end justify-center"
+          onClick={() => setShowFabMenu(false)}
+        >
+          <div 
+            className="w-full max-w-lg bg-white rounded-t-3xl shadow-2xl animate-slide-up pb-safe"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Handle bar */}
+            <div className="flex justify-center pt-3 pb-2">
+              <div className="w-10 h-1 bg-gray-300 rounded-full"></div>
+            </div>
+            
+            {/* Header */}
+            <div className="px-5 pb-3 text-center">
+              <h2 className="text-lg font-bold text-gray-900">What would you like to do?</h2>
+            </div>
+            
+            {/* Action buttons */}
+            <div className="px-4 pb-4 space-y-2">
+              {/* Join Event - Most prominent (grandma's #1) */}
+              <button
+                onClick={() => { setShowFabMenu(false); navigate('/join'); }}
+                className="w-full flex items-center gap-4 p-4 bg-gradient-to-r from-accent to-orange-500 rounded-2xl text-white hover:from-orange-500 hover:to-accent transition-all shadow-md"
+              >
+                <div className="w-14 h-14 rounded-xl bg-white/20 flex items-center justify-center text-2xl flex-shrink-0">
+                  🎫
+                </div>
+                <div className="text-left flex-1">
+                  <div className="font-bold text-lg">Join Event</div>
+                  <div className="text-orange-100 text-sm">Someone invited you? Enter their code</div>
+                </div>
+                <svg className="w-6 h-6 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+
+              {/* Create Event */}
+              <button
+                onClick={() => { setShowFabMenu(false); openEventWizard(); }}
+                className="w-full flex items-center gap-4 p-4 bg-primary-50 rounded-2xl hover:bg-primary-100 transition-colors border border-primary-200"
+              >
+                <div className="w-14 h-14 rounded-xl bg-primary-200 flex items-center justify-center text-2xl flex-shrink-0">
+                  ⛳
+                </div>
+                <div className="text-left flex-1">
+                  <div className="font-bold text-gray-900">Create Event</div>
+                  <div className="text-gray-500 text-sm">Start a round with your crew</div>
+                </div>
+                <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+
+              {/* Create Group */}
+              <button
+                onClick={() => { setShowFabMenu(false); openGroupWizard(); }}
+                className="w-full flex items-center gap-4 p-4 bg-purple-50 rounded-2xl hover:bg-purple-100 transition-colors border border-purple-200"
+              >
+                <div className="w-14 h-14 rounded-xl bg-purple-200 flex items-center justify-center text-2xl flex-shrink-0">
+                  👥
+                </div>
+                <div className="text-left flex-1">
+                  <div className="font-bold text-gray-900">Create Group</div>
+                  <div className="text-gray-500 text-sm">Gather your golf crew</div>
+                </div>
+                <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+
+              {/* Add Score */}
+              <button
+                onClick={() => { setShowFabMenu(false); navigate('/handicap'); }}
+                className="w-full flex items-center gap-4 p-4 bg-amber-50 rounded-2xl hover:bg-amber-100 transition-colors border border-amber-200"
+              >
+                <div className="w-14 h-14 rounded-xl bg-amber-200 flex items-center justify-center text-2xl flex-shrink-0">
+                  📝
+                </div>
+                <div className="text-left flex-1">
+                  <div className="font-bold text-gray-900">Add a Score</div>
+                  <div className="text-gray-500 text-sm">Log a round for your handicap</div>
+                </div>
+                <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Cancel button */}
+            <div className="px-4 pb-4">
+              <button
+                onClick={() => setShowFabMenu(false)}
+                className="w-full py-3.5 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* Modals */}
       <CreateEventWizard
         isOpen={showCreateWizard}
@@ -734,36 +898,119 @@ const Dashboard: React.FC = () => {
   );
 };
 
-// Event Card Component
-const EventCard: React.FC<{ event: Event; profiles: any[] }> = ({ event, profiles }) => {
+// Event Card Component - clean text-based design
+const EventCard: React.FC<{ event: Event; profiles: any[]; status?: 'live' | 'upcoming' | 'completed' }> = ({ event, profiles, status }) => {
   const navigate = useNavigate();
   
   const golferCount = event.golfers.length;
-  const scoringCount = event.scorecards.filter(sc => sc.scores.length > 0).length;
+  const courseId = event.course?.courseId;
+  const teeName = event.course?.teeName;
+  
+  // Calculate leaderboard with positions, scores, and thru
+  const leaderboard = useMemo(() => {
+    const rows = event.scorecards.map(sc => {
+      const scores = Array.isArray(sc?.scores) ? sc.scores : [];
+      const holesCompleted = scores.filter((s: any) => s?.strokes != null).length;
+      
+      // Calculate gross and par
+      const gross = scores.reduce((sum: number, s: any) => sum + (typeof s?.strokes === 'number' ? s.strokes : 0), 0);
+      const parSoFar = scores.reduce((sum: number, s: any) => {
+        if (s?.strokes == null) return sum;
+        const holeNo = Number(s.hole);
+        const hole = courseId ? getHole(courseId, holeNo, teeName) : undefined;
+        const par = typeof hole?.par === 'number' ? hole.par : 4;
+        return sum + par;
+      }, 0);
+      
+      const toPar = holesCompleted === 0 ? null : (courseId ? gross - parSoFar : null);
+      const isFinal = holesCompleted >= 18;
+      
+      // Get golfer name
+      const eventGolfer = (event.golfers || []).find((g: any) => g.profileId === sc.golferId || g.customName === sc.golferId);
+      const profile = eventGolfer?.profileId ? (profiles || []).find((p: any) => p.id === eventGolfer.profileId) : null;
+      const name = profile?.name || eventGolfer?.displayName || eventGolfer?.customName || 'Unknown';
+      
+      return { golferId: sc.golferId, name, toPar, thru: holesCompleted, isFinal };
+    });
+    
+    // Sort by score (lowest first), then by progress
+    rows.sort((a, b) => {
+      if (typeof a.toPar === 'number' && typeof b.toPar === 'number' && a.toPar !== b.toPar) return a.toPar - b.toPar;
+      if ((b.thru || 0) !== (a.thru || 0)) return (b.thru || 0) - (a.thru || 0);
+      return a.name.localeCompare(b.name);
+    });
+    
+    // Add positions with ties
+    return rows.map((row, idx) => {
+      const betterCount = rows.slice(0, idx).filter(r => typeof r.toPar === 'number' && typeof row.toPar === 'number' && r.toPar < row.toPar).length;
+      const position = betterCount + 1;
+      const isTied = rows.filter(r => typeof r.toPar === 'number' && typeof row.toPar === 'number' && r.toPar === row.toPar).length > 1;
+      return { ...row, position, isTied };
+    });
+  }, [event.scorecards, event.golfers, profiles, courseId, teeName]);
+  
+  const leader = leaderboard[0];
+  
+  // Format score to par
+  const formatToPar = (score: number | null) => {
+    if (score === null) return '';
+    if (score === 0) return 'E';
+    return score > 0 ? `+${score}` : `${score}`;
+  };
+  
+  // Format position with tie indicator
+  const formatPosition = (pos: number, isTied: boolean) => {
+    return isTied ? `T${pos}` : `${pos}`;
+  };
+  
+  // Format thru status
+  const formatThru = (thru: number, isFinal: boolean) => {
+    if (isFinal || thru >= 18) return 'F';
+    return `Thru ${thru}`;
+  };
+  
+  // Style variations based on status
+  const cardStyles = {
+    live: 'bg-red-50 hover:bg-red-100 border-l-4 border-l-red-500 border-y border-r border-red-200',
+    upcoming: 'bg-white hover:bg-primary-50 border border-gray-200 hover:border-primary-300',
+    completed: 'bg-gray-50 hover:bg-gray-100 border border-gray-200',
+  };
+  
+  const style = status ? cardStyles[status] : cardStyles.upcoming;
   
   return (
     <button
       onClick={() => navigate(`/event/${event.id}`)}
-      className="w-full text-left bg-gray-50 hover:bg-primary-50 rounded-xl p-4 border border-gray-200 hover:border-primary-300 transition-all group"
+      className={`w-full text-left rounded-xl p-4 transition-all group ${style}`}
     >
       <div className="flex items-center justify-between">
         <div className="min-w-0 flex-1">
-          <div className="font-semibold text-gray-900 group-hover:text-primary-700 truncate transition-colors">
-            {event.name || 'Untitled Event'}
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-gray-900 truncate">
+              {event.name || 'Untitled Event'}
+            </span>
+            {status === 'live' && (
+              <span className="flex-shrink-0 px-2 py-0.5 text-[10px] font-bold bg-red-500 text-white rounded-full uppercase">
+                Live
+              </span>
+            )}
           </div>
-          <div className="flex items-center gap-3 text-sm text-gray-500 mt-1">
+          <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
             <span>{formatDateShort(event.date)}</span>
-            <span>•</span>
+            <span className="text-gray-300">•</span>
             <span>{golferCount} golfer{golferCount !== 1 ? 's' : ''}</span>
-            {scoringCount > 0 && (
+            {status === 'live' && leader && leader.thru > 0 && (
               <>
-                <span>•</span>
-                <span className="text-green-600">{scoringCount} scoring</span>
+                <span className="text-gray-300">•</span>
+                <span className="text-red-600 font-medium">
+                  {formatThru(leader.thru, leader.isFinal)} {formatToPar(leader.toPar)} {formatPosition(leader.position, leader.isTied)}
+                </span>
               </>
             )}
           </div>
         </div>
-        <svg className="w-5 h-5 text-gray-400 group-hover:text-primary-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        
+        <svg className="w-5 h-5 text-gray-400 group-hover:text-primary-600 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
         </svg>
       </div>
