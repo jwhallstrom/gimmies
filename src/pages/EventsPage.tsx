@@ -1,9 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import useStore from '../state/store';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { getCourseById } from '../data/cloudCourses';
+import { getCourseById, getHole } from '../data/cloudCourses';
 import { CreateEventWizard } from '../components/CreateEventWizard';
 import { useAuthMode } from '../hooks/useAuthMode';
+import type { Event } from '../state/types';
+
+// Format date short
+const formatDateShort = (iso: string) =>
+  new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+// Count actual strokes entered
+const countStrokesEntered = (event: Event): number => {
+  return event.scorecards.reduce((total, sc) => {
+    return total + (sc.scores?.filter((s: any) => s?.strokes != null).length || 0);
+  }, 0);
+};
+
+// Check if event is live (has scores being entered)
+const isEventLive = (event: Event): boolean => {
+  if (event.isCompleted) return false;
+  return countStrokesEntered(event) > 0;
+};
 
 const EventsPage: React.FC = () => {
   const { events, completedEvents, currentProfile, profiles, deleteEvent, loadEventsFromCloud } = useStore();
@@ -40,7 +58,7 @@ const EventsPage: React.FC = () => {
     const params = new URLSearchParams(location.search);
     const shouldCreate = params.get('create') === 'true';
     if (shouldCreate && !isGuest) setIsWizardOpen(true);
-  }, [location.search]);
+  }, [location.search, isGuest]);
 
   // Auto-switch to history tab when a new event is completed
   useEffect(() => {
@@ -64,6 +82,26 @@ const EventsPage: React.FC = () => {
     !event.isCompleted && // Exclude events marked as completed
     !completedEventIds.has(event.id) // Also exclude if event ID exists in completedEvents
   );
+
+  // Split active events into Live vs Upcoming
+  const { liveEvents, upcomingEvents } = useMemo(() => {
+    const live: Event[] = [];
+    const upcoming: Event[] = [];
+    
+    userEvents.forEach(e => {
+      if (isEventLive(e)) {
+        live.push(e);
+      } else {
+        upcoming.push(e);
+      }
+    });
+    
+    // Sort live by recent activity, upcoming by date
+    live.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
+    upcoming.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    
+    return { liveEvents: live, upcomingEvents: upcoming };
+  }, [userEvents]);
 
   // Filter completed events to only show those the current user participated in
   const userCompletedEvents = completedEvents.filter(event =>
@@ -185,67 +223,61 @@ const EventsPage: React.FC = () => {
             </div>
           )}
           
-          {/* Active Events */}
-          {userEvents.length > 0 ? (
-            <div className="space-y-3">
-              {userEvents.map(event => {
-                const isOwner = currentProfile.id === event.ownerProfileId;
-                return (
-                  <div key={event.id} className="bg-white/90 backdrop-blur rounded-lg p-4 shadow-md border border-primary-900/5 relative">
-                    {/* Delete Button */}
-                    <button
-                      onClick={() => {
-                        if (window.confirm(`Are you sure you want to delete "${event.name || 'Untitled Event'}"? This will permanently delete the event, all scores, and chat messages from all devices. This action cannot be undone.`)) {
-                          deleteEvent(event.id);
-                        }
-                      }}
-                      className="absolute top-3 right-3 text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-50 transition-colors"
-                      title="Delete Event"
-                    >
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
-
-                    <div className="flex flex-col pr-8">
-                      <div className="font-semibold text-primary-800">{event.name || 'Untitled Event'}</div>
-                      <div className="text-sm text-gray-600">
-                        {event.date} • {event.golfers.length} players
-                        {event.course.courseId && ` • ${getCourseById(event.course.courseId)?.name || event.course.courseId}`}
-                      </div>
-                      <div className="flex gap-2 mt-1 flex-wrap">
-                        {isOwner && (
-                          <span className="text-xs bg-primary-100 text-primary-800 px-2 py-0.5 rounded">
-                            Owner
-                          </span>
-                        )}
-                        {getParentGroupName(event) && (
-                          <Link
-                            to={`/event/${event.parentGroupId}/chat`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded hover:bg-purple-200 transition-colors flex items-center gap-1"
-                          >
-                            <span>👥</span> {getParentGroupName(event)}
-                          </Link>
-                        )}
-                      </div>
-                    </div>
-                    <div className="mt-3">
-                      <Link
-                        to={`/event/${event.id}`}
-                        className="bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition-colors text-sm font-medium"
-                      >
-                        Open Event
-                      </Link>
-                    </div>
-                  </div>
-                );
-              })}
+          {/* Empty State */}
+          {userEvents.length === 0 && (
+            <div className="text-center py-12">
+              <div className="text-lg mb-2 text-gray-600">No active events</div>
+              <div className="text-sm text-gray-500">Create your first event to get started!</div>
             </div>
-          ) : (
-            <div className="text-center py-12 text-gray-500">
-              <div className="text-lg mb-2">No active events</div>
-              <div className="text-sm">Create your first event to get started!</div>
+          )}
+
+          {/* 🔴 LIVE Section */}
+          {liveEvents.length > 0 && (
+            <div className="mb-6">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+                <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wide">Live</h3>
+                <span className="text-xs text-gray-500">({liveEvents.length})</span>
+              </div>
+              <div className="space-y-3">
+                {liveEvents.map(event => (
+                  <EventCard 
+                    key={event.id} 
+                    event={event} 
+                    profiles={profiles}
+                    currentProfile={currentProfile}
+                    status="live"
+                    parentGroupId={event.parentGroupId}
+                    parentGroupName={getParentGroupName(event)}
+                    onDelete={deleteEvent}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* 📅 UPCOMING Section */}
+          {upcomingEvents.length > 0 && (
+            <div className="mb-6">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-base">📅</span>
+                <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wide">Upcoming</h3>
+                <span className="text-xs text-gray-500">({upcomingEvents.length})</span>
+              </div>
+              <div className="space-y-3">
+                {upcomingEvents.map(event => (
+                  <EventCard 
+                    key={event.id} 
+                    event={event} 
+                    profiles={profiles}
+                    currentProfile={currentProfile}
+                    status="upcoming"
+                    parentGroupId={event.parentGroupId}
+                    parentGroupName={getParentGroupName(event)}
+                    onDelete={deleteEvent}
+                  />
+                ))}
+              </div>
             </div>
           )}
         </>
@@ -256,67 +288,198 @@ const EventsPage: React.FC = () => {
           {/* Completed Events */}
           {userCompletedEvents.length > 0 ? (
             <div className="space-y-3">
-              {userCompletedEvents.map(event => {
-                const isOwner = currentProfile.id === event.ownerProfileId;
-                return (
-                  <div key={event.id} className="bg-green-50/90 backdrop-blur rounded-lg p-4 shadow-md border border-green-200 relative">
-                    {/* Completed Badge */}
-                    <div className="absolute top-3 right-3">
-                      <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full font-medium">
-                        ✓ Completed
-                      </span>
-                    </div>
-
-                    <div className="flex flex-col pr-8">
-                      <div className="font-semibold text-green-800">
-                        {event.name || 'Untitled Event'}
-                      </div>
-                      <div className="text-sm text-gray-600">
-                        {event.date} • {event.golfers.length} players
-                        {event.course.courseId && ` • ${getCourseById(event.course.courseId)?.name || event.course.courseId}`}
-                        {event.completedAt && ` • Completed ${new Date(event.completedAt).toLocaleDateString()}`}
-                      </div>
-                      <div className="flex gap-2 mt-1 flex-wrap">
-                        {isOwner && (
-                          <span className="text-xs bg-primary-100 text-primary-800 px-2 py-0.5 rounded">
-                            Owner
-                          </span>
-                        )}
-                        <span className="text-xs bg-green-100 text-green-800 px-2 py-0.5 rounded">
-                          Read-only
-                        </span>
-                        {getParentGroupName(event) && (
-                          <Link
-                            to={`/event/${event.parentGroupId}/chat`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded hover:bg-purple-200 transition-colors flex items-center gap-1"
-                          >
-                            <span>👥</span> {getParentGroupName(event)}
-                          </Link>
-                        )}
-                      </div>
-                    </div>
-                    <div className="mt-3">
-                      <Link
-                        to={`/event/${event.id}`}
-                        className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium"
-                      >
-                        View Results
-                      </Link>
-                    </div>
-                  </div>
-                );
-              })}
+              {userCompletedEvents.map(event => (
+                <EventCard 
+                  key={event.id} 
+                  event={event} 
+                  profiles={profiles}
+                  currentProfile={currentProfile}
+                  status="completed"
+                  parentGroupId={event.parentGroupId}
+                  parentGroupName={getParentGroupName(event)}
+                />
+              ))}
             </div>
           ) : (
-            <div className="text-center py-12 text-gray-500">
-              <div className="text-lg mb-2">No completed events</div>
-              <div className="text-sm">Completed events will appear here after you finish them.</div>
+            <div className="text-center py-12">
+              <div className="text-lg mb-2 text-gray-600">No completed events</div>
+              <div className="text-sm text-gray-500">Completed events will appear here after you finish them.</div>
             </div>
           )}
         </>
       )}
     </div>
+  );
+};
+
+// Event Card Component with leader stats
+const EventCard: React.FC<{
+  event: Event;
+  profiles: any[];
+  currentProfile: any;
+  status: 'live' | 'upcoming' | 'completed';
+  parentGroupId?: string | null;
+  parentGroupName?: string | null;
+  onDelete?: (id: string) => void;
+}> = ({ event, profiles, currentProfile, status, parentGroupId, parentGroupName, onDelete }) => {
+  const navigate = useNavigate();
+  
+  const golferCount = event.golfers.length;
+  const courseId = event.course?.courseId;
+  const teeName = event.course?.teeName;
+  const isOwner = currentProfile?.id === event.ownerProfileId;
+  
+  // Calculate leaderboard with positions, scores, and thru
+  const leaderboard = useMemo(() => {
+    const rows = event.scorecards.map(sc => {
+      const scores = Array.isArray(sc?.scores) ? sc.scores : [];
+      const holesCompleted = scores.filter((s: any) => s?.strokes != null).length;
+      
+      // Calculate gross and par
+      const gross = scores.reduce((sum: number, s: any) => sum + (typeof s?.strokes === 'number' ? s.strokes : 0), 0);
+      const parSoFar = scores.reduce((sum: number, s: any) => {
+        if (s?.strokes == null) return sum;
+        const holeNo = Number(s.hole);
+        const hole = courseId ? getHole(courseId, holeNo, teeName) : undefined;
+        const par = typeof hole?.par === 'number' ? hole.par : 4;
+        return sum + par;
+      }, 0);
+      
+      const toPar = holesCompleted === 0 ? null : (courseId ? gross - parSoFar : null);
+      const isFinal = holesCompleted >= 18;
+      
+      // Get golfer name
+      const eventGolfer = (event.golfers || []).find((g: any) => g.profileId === sc.golferId || g.customName === sc.golferId);
+      const profile = eventGolfer?.profileId ? (profiles || []).find((p: any) => p.id === eventGolfer.profileId) : null;
+      const name = profile?.name || eventGolfer?.displayName || eventGolfer?.customName || 'Unknown';
+      
+      return { golferId: sc.golferId, name, toPar, thru: holesCompleted, isFinal };
+    });
+    
+    // Sort by score (lowest first), then by progress
+    rows.sort((a, b) => {
+      if (typeof a.toPar === 'number' && typeof b.toPar === 'number' && a.toPar !== b.toPar) return a.toPar - b.toPar;
+      if ((b.thru || 0) !== (a.thru || 0)) return (b.thru || 0) - (a.thru || 0);
+      return a.name.localeCompare(b.name);
+    });
+    
+    // Add positions with ties
+    return rows.map((row, idx) => {
+      const betterCount = rows.slice(0, idx).filter(r => typeof r.toPar === 'number' && typeof row.toPar === 'number' && r.toPar < row.toPar).length;
+      const position = betterCount + 1;
+      const isTied = rows.filter(r => typeof r.toPar === 'number' && typeof row.toPar === 'number' && r.toPar === row.toPar).length > 1;
+      return { ...row, position, isTied };
+    });
+  }, [event.scorecards, event.golfers, profiles, courseId, teeName]);
+  
+  const leader = leaderboard[0];
+  
+  // Format score to par
+  const formatToPar = (score: number | null) => {
+    if (score === null) return '';
+    if (score === 0) return 'E';
+    return score > 0 ? `+${score}` : `${score}`;
+  };
+  
+  // Format position with tie indicator
+  const formatPosition = (pos: number, isTied: boolean) => {
+    return isTied ? `T${pos}` : `${pos}`;
+  };
+  
+  // Format thru status
+  const formatThru = (thru: number, isFinal: boolean) => {
+    if (isFinal || thru >= 18) return 'F';
+    return `Thru ${thru}`;
+  };
+  
+  // Style variations based on status
+  const cardStyles = {
+    live: 'bg-red-50 hover:bg-red-100 border-l-4 border-l-red-500 border-y border-r border-red-200',
+    upcoming: 'bg-white hover:bg-primary-50 border border-gray-200 hover:border-primary-300',
+    completed: 'bg-gray-50 hover:bg-gray-100 border border-gray-200',
+  };
+  
+  const style = cardStyles[status];
+  
+  return (
+    <button
+      onClick={() => navigate(`/event/${event.id}`)}
+      className={`w-full text-left rounded-xl p-4 transition-all group ${style} relative`}
+    >
+      {/* Delete button for active events */}
+      {onDelete && status !== 'completed' && (
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            if (window.confirm(`Are you sure you want to delete "${event.name || 'Untitled Event'}"? This will permanently delete the event, all scores, and chat messages from all devices. This action cannot be undone.`)) {
+              onDelete(event.id);
+            }
+          }}
+          className="absolute top-3 right-3 text-red-400 hover:text-red-600 p-1.5 rounded-full hover:bg-red-100 transition-colors z-10"
+          title="Delete Event"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          </svg>
+        </button>
+      )}
+      
+      <div className="flex items-center justify-between pr-8">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-gray-900 truncate">
+              {event.name || 'Untitled Event'}
+            </span>
+            {status === 'live' && (
+              <span className="flex-shrink-0 px-2 py-0.5 text-[10px] font-bold bg-red-500 text-white rounded-full uppercase">
+                Live
+              </span>
+            )}
+            {status === 'completed' && (
+              <span className="flex-shrink-0 px-2 py-0.5 text-[10px] font-bold bg-green-500 text-white rounded-full uppercase">
+                Final
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2 text-sm text-gray-500 mt-1 flex-wrap">
+            <span>{formatDateShort(event.date)}</span>
+            <span className="text-gray-300">•</span>
+            <span>{golferCount} golfer{golferCount !== 1 ? 's' : ''}</span>
+            {parentGroupId && parentGroupName && (
+              <>
+                <span className="text-gray-300">•</span>
+                <Link
+                  to={`/event/${parentGroupId}/chat`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="inline-flex items-center gap-1 text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded hover:bg-purple-200 transition-colors"
+                >
+                  <span>👥</span>
+                  <span className="truncate max-w-[140px]">{parentGroupName}</span>
+                </Link>
+              </>
+            )}
+            {(status === 'live' || status === 'completed') && leader && leader.thru > 0 && (
+              <>
+                <span className="text-gray-300">•</span>
+                <span className={status === 'live' ? 'text-red-600 font-medium' : 'text-green-700 font-medium'}>
+                  {formatThru(leader.thru, leader.isFinal)} {formatToPar(leader.toPar)} {formatPosition(leader.position, leader.isTied)}
+                </span>
+              </>
+            )}
+            {isOwner && (
+              <>
+                <span className="text-gray-300">•</span>
+                <span className="text-primary-600 text-xs">Owner</span>
+              </>
+            )}
+          </div>
+        </div>
+        
+        <svg className="w-5 h-5 text-gray-400 group-hover:text-primary-600 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+        </svg>
+      </div>
+    </button>
   );
 };
 
