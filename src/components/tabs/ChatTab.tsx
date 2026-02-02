@@ -1,10 +1,26 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { useEventChatAdapter } from '../../adapters';
 
 interface ChatTabProps { 
   eventId: string;
   onCreateEvent?: () => void;
 }
+
+// Hide bottom nav when chat input is focused (mobile keyboard)
+const useHideBottomNavOnFocus = () => {
+  const handleFocus = useCallback(() => {
+    document.body.classList.add('chat-input-focused');
+  }, []);
+  
+  const handleBlur = useCallback(() => {
+    // Small delay to prevent flicker when tapping send button
+    setTimeout(() => {
+      document.body.classList.remove('chat-input-focused');
+    }, 100);
+  }, []);
+  
+  return { handleFocus, handleBlur };
+};
 
 // Simple relative time helper
 const timeAgo = (iso: string) => {
@@ -24,6 +40,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent }) => {
   const { event, currentProfile, messages, profilesById, send } = useEventChatAdapter(eventId);
   const [text, setText] = useState('');
   const bottomRef = useRef<HTMLDivElement | null>(null);
+  const { handleFocus, handleBlur } = useHideBottomNavOnFocus();
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -64,10 +81,10 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent }) => {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-280px)] max-h-[480px] bg-white/90 backdrop-blur rounded-xl shadow-lg shadow-slate-200/50 border border-slate-200/80 overflow-hidden">
-      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-2 text-[13px]">
+    <div className="flex flex-col h-full min-h-0 bg-white/95 backdrop-blur rounded-t-xl rounded-b-none shadow-lg shadow-slate-200/50 border border-slate-200/80 border-b-0 overflow-hidden -mx-4">
+      <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-2 text-[13px] scroll-smooth">
         {messages.length === 0 && (
-          <div className="text-center text-gray-400 text-xs mt-8">No messages yet. Start the conversation!</div>
+          <div className="text-center text-gray-500 text-sm mt-8">No messages yet. Start the conversation!</div>
         )}
         {messages.map(m => {
           const sender = m.profileId ? profilesById.get(m.profileId) : undefined;
@@ -79,7 +96,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent }) => {
           if (isBot) {
             return (
               <div key={m.id} className="flex justify-center">
-                <div className="max-w-[85%] rounded-xl px-3 py-2 shadow-sm border text-[12px] leading-snug bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200 text-amber-900">
+                <div className="max-w-[85%] rounded-xl px-3 py-2 shadow-sm border text-[13px] leading-snug bg-gradient-to-r from-amber-50 to-orange-50 border-amber-200 text-amber-900">
                   <div className="flex items-center gap-2 mb-0.5">
                     <span className="font-bold text-amber-700">🎯 Gimmies Alert</span>
                     <span className="text-[10px] uppercase tracking-wide text-amber-600">{timeAgo(m.createdAt)}</span>
@@ -95,30 +112,30 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent }) => {
               {/* Avatar for others (left side) */}
               {!mine && (
                 senderAvatar ? (
-                  <img src={senderAvatar} alt={senderDisplayName} className="w-7 h-7 rounded-full object-cover flex-shrink-0 shadow-sm" />
+                  <img src={senderAvatar} alt={senderDisplayName} className="w-8 h-8 rounded-full object-cover flex-shrink-0 shadow-sm" />
                 ) : (
-                  <span className="w-7 h-7 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0 shadow-sm">
+                  <span className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-purple-600 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 shadow-sm">
                     {senderDisplayName.charAt(0).toUpperCase()}
                   </span>
                 )
               )}
               
-              <div className={`max-w-[70%] rounded-2xl px-3 py-2 shadow-sm text-[12px] leading-snug ${mine ? 'bg-primary-600 text-white rounded-br-md' : 'bg-white border border-slate-200 text-gray-900 rounded-bl-md'}`}>
+              <div className={`max-w-[70%] rounded-2xl px-3 py-2 shadow-sm text-[13px] leading-snug ${mine ? 'bg-primary-600 text-white rounded-br-md' : 'bg-white border border-slate-200 text-gray-900 rounded-bl-md'}`}>
                 {!mine && (
                   <div className="flex items-center gap-2 mb-0.5">
-                    <span className="font-bold text-primary-700 text-[11px]">{senderDisplayName}</span>
+                    <span className="font-bold text-primary-700 text-xs">{senderDisplayName}</span>
                   </div>
                 )}
                 <div className="whitespace-pre-wrap break-words">{m.text}</div>
-                <div className={`text-[10px] mt-1 ${mine ? 'text-primary-200' : 'text-gray-400'}`}>{timeAgo(m.createdAt)}</div>
+                <div className={`text-[10px] mt-1 ${mine ? 'text-primary-200' : 'text-gray-500'}`}>{timeAgo(m.createdAt)}</div>
               </div>
               
               {/* Avatar for self (right side) */}
               {mine && (
                 currentProfile?.avatar ? (
-                  <img src={currentProfile.avatar} alt={senderDisplayName} className="w-7 h-7 rounded-full object-cover flex-shrink-0 shadow-sm" />
+                  <img src={currentProfile.avatar} alt={senderDisplayName} className="w-8 h-8 rounded-full object-cover flex-shrink-0 shadow-sm" />
                 ) : (
-                  <span className="w-7 h-7 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-[10px] font-bold flex items-center justify-center flex-shrink-0 shadow-sm">
+                  <span className="w-8 h-8 rounded-full bg-gradient-to-br from-primary-500 to-primary-700 text-white text-xs font-bold flex items-center justify-center flex-shrink-0 shadow-sm">
                     {senderDisplayName.charAt(0).toUpperCase()}
                   </span>
                 )
@@ -128,25 +145,35 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent }) => {
         })}
         <div ref={bottomRef} />
       </div>
-      <div className="border-t border-primary-900/10 p-3 space-y-2 bg-white/70 rounded-b-xl">
-        <textarea
-          value={text}
-          onChange={e => setText(e.target.value)}
-          onKeyDown={handleKey}
-          placeholder={currentProfile ? 'Type a message (Enter to send, Shift+Enter for newline)' : 'Create a profile to chat'}
-          disabled={!currentProfile}
-          rows={2}
-          className="w-full resize-none rounded-md border border-primary-300 focus:border-primary-500 focus:ring-1 focus:ring-primary-500 px-3 py-2 text-sm bg-white/90 disabled:opacity-50"
-        />
-        <div className="flex items-center justify-between text-[11px]">
-          <span className="text-primary-500">{text.length}/2000</span>
+      {/* Input area - sticky at bottom with better mobile handling */}
+      <div className="border-t border-gray-200 p-3 pb-safe bg-white flex-shrink-0">
+        <div className="flex items-end gap-2">
+          <textarea
+            value={text}
+            onChange={e => setText(e.target.value)}
+            onKeyDown={handleKey}
+            onFocus={handleFocus}
+            onBlur={handleBlur}
+            placeholder={currentProfile ? 'Type a message...' : 'Create a profile to chat'}
+            disabled={!currentProfile}
+            rows={1}
+            className="flex-1 resize-none rounded-xl border border-gray-300 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 px-4 py-2.5 text-base bg-white text-gray-900 placeholder-gray-400 disabled:opacity-50"
+            style={{ minHeight: '44px', maxHeight: '100px' }}
+          />
           <button
             onClick={handleSend}
             disabled={!text.trim() || !currentProfile}
-            className="bg-primary-600 hover:bg-primary-700 disabled:opacity-40 disabled:hover:bg-primary-600 text-white px-4 py-1.5 rounded-md text-xs font-semibold tracking-wide shadow-sm"
+            className="bg-primary-600 hover:bg-primary-700 disabled:opacity-40 disabled:hover:bg-primary-600 text-white p-3 rounded-xl shadow-sm flex-shrink-0 min-w-[48px] min-h-[48px] flex items-center justify-center"
+            aria-label="Send message"
           >
-            Send
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
           </button>
+        </div>
+        <div className="flex items-center justify-between mt-1.5 px-1">
+          <span className="text-xs text-gray-500">{text.length}/2000</span>
+          <span className="text-[10px] text-gray-400">Enter to send</span>
         </div>
       </div>
     </div>

@@ -10,10 +10,13 @@
  */
 
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthMode } from '../hooks/useAuthMode';
 import { CreateEventWizard } from '../components/CreateEventWizard';
 import { CreateGroupWizard } from '../components/CreateGroupWizard';
+import { DiscoverGroupsModal } from '../components/DiscoverGroupsModal';
+import SettingsPanel from '../components/SettingsPanel';
 import { useEventsAdapter, useWalletAdapter } from '../adapters';
 import type { Event } from '../state/types';
 import useStore from '../state/store';
@@ -38,6 +41,8 @@ type TickerItem = {
   };
 };
 
+const ONBOARDING_DISMISSED_KEY = 'gimmies_onboarding_dismissed';
+
 const Dashboard: React.FC = () => {
   const {
     events,
@@ -52,7 +57,52 @@ const Dashboard: React.FC = () => {
 
   const [showCreateWizard, setShowCreateWizard] = useState(false);
   const [showCreateGroupWizard, setShowCreateGroupWizard] = useState(false);
-  const [tab, setTab] = useState<Tab>('events');
+  const [showDiscoverGroups, setShowDiscoverGroups] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const homeDefaultTabPref = (currentProfile?.preferences as any)?.homeDefaultTab as Tab | undefined;
+  const [tabTouched, setTabTouched] = useState(false);
+  const [tab, setTab] = useState<Tab>(() => (homeDefaultTabPref === 'groups' ? 'groups' : 'events'));
+  const [eventSearch, setEventSearch] = useState('');
+  const [groupSearch, setGroupSearch] = useState('');
+
+  // Apply preferred default tab when profile loads (unless user already interacted)
+  useEffect(() => {
+    if (tabTouched) return;
+    setTab(homeDefaultTabPref === 'groups' ? 'groups' : 'events');
+  }, [homeDefaultTabPref, tabTouched]);
+  
+  // Prevent multiple wizards from opening simultaneously
+  const openEventWizard = () => {
+    setShowCreateGroupWizard(false);
+    setShowDiscoverGroups(false);
+    setShowCreateWizard(true);
+  };
+  
+  const openGroupWizard = () => {
+    setShowCreateWizard(false);
+    setShowDiscoverGroups(false);
+    setShowCreateGroupWizard(true);
+  };
+  
+  // Onboarding state - check localStorage
+  const [showOnboarding, setShowOnboarding] = useState(() => {
+    try {
+      return localStorage.getItem(ONBOARDING_DISMISSED_KEY) !== 'true';
+    } catch {
+      return true;
+    }
+  });
+
+  const dismissOnboarding = (permanent: boolean) => {
+    setShowOnboarding(false);
+    if (permanent) {
+      try {
+        localStorage.setItem(ONBOARDING_DISMISSED_KEY, 'true');
+      } catch {
+        // localStorage not available
+      }
+    }
+  };
 
   // Load events on mount
   useEffect(() => {
@@ -83,6 +133,18 @@ const Dashboard: React.FC = () => {
     
     return { activeEvents: active, completedEvents: completed, groups: groupList };
   }, [userEvents]);
+
+  const filteredActiveEvents = useMemo(() => {
+    const q = eventSearch.trim().toLowerCase();
+    if (!q) return activeEvents;
+    return activeEvents.filter(e => (e.name || '').toLowerCase().includes(q));
+  }, [activeEvents, eventSearch]);
+
+  const filteredGroups = useMemo(() => {
+    const q = groupSearch.trim().toLowerCase();
+    if (!q) return groups;
+    return groups.filter(g => (g.name || '').toLowerCase().includes(q));
+  }, [groups, groupSearch]);
 
   // Quick stats
   const stats = useMemo(() => {
@@ -259,138 +321,272 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-5 pb-32">
-      {/* Header */}
-      <header className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 -mx-4 -mt-6 px-4 pt-8 pb-6 shadow-lg">
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-3">
-            {/* Avatar */}
-            <Link to="/profile" className="block">
-              <div className="w-14 h-14 rounded-full bg-white/20 flex items-center justify-center text-xl font-bold text-white border-2 border-white/30">
-                {currentProfile.avatar ? (
-                  <img src={currentProfile.avatar} alt="" className="w-full h-full rounded-full object-cover" />
-                ) : (
-                  currentProfile.name?.charAt(0)?.toUpperCase() || '?'
-                )}
-              </div>
-            </Link>
-            <div>
-              <h1 className="text-xl font-bold text-white">
-                {currentProfile.name || 'Golfer'}
-              </h1>
-              <p className="text-primary-200 text-sm">
-                {homeCourse ? `⛳ ${homeCourse}` : 'Tap profile to set home course'}
-              </p>
+      {/* Compact Header - Avatar + Name + Quick Stats in one row */}
+      <header className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 -mx-4 -mt-6 px-4 pt-6 pb-4 shadow-lg">
+        <div className="flex items-center gap-3">
+          {/* Avatar - Opens Settings */}
+          <button 
+            onClick={() => setShowSettings(true)}
+            className="flex-shrink-0"
+          >
+            <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center text-lg font-bold text-white border-2 border-white/30 hover:bg-white/30 transition-colors">
+              {currentProfile.avatar ? (
+                <img src={currentProfile.avatar} alt="" className="w-full h-full rounded-full object-cover" />
+              ) : (
+                currentProfile.name?.charAt(0)?.toUpperCase() || '?'
+              )}
             </div>
+          </button>
+          
+          {/* Name + Course */}
+          <div className="flex-1 min-w-0">
+            <h1 className="text-lg font-bold text-white truncate">
+              {currentProfile.name || 'Golfer'}
+            </h1>
+            <p className="text-primary-200 text-xs truncate">
+              {homeCourse ? `⛳ ${homeCourse}` : 'Tap avatar for settings'}
+            </p>
           </div>
           
-          {/* Settings */}
-          <Link
-            to="/profile"
-            className="p-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </Link>
-        </div>
-
-        {/* Quick Stats - Only Handicap and Wallet */}
-        <div className="grid grid-cols-2 gap-3">
-          <Link to="/handicap" className="bg-white/10 hover:bg-white/15 rounded-xl p-3 text-center transition-colors">
-            <div className="text-2xl font-bold text-white">
-              {stats.handicap != null ? stats.handicap.toFixed(1) : '—'}
-            </div>
-            <div className="text-[10px] text-primary-200 font-medium uppercase tracking-wide">Handicap</div>
-          </Link>
-          <Link to="/wallet" className="bg-white/10 hover:bg-white/15 rounded-xl p-3 text-center transition-colors">
-            <div className="text-2xl font-bold text-white">
-              ${(stats.netBalance / 100).toFixed(0)}
-            </div>
-            <div className="text-[10px] text-primary-200 font-medium uppercase tracking-wide">Wallet</div>
-          </Link>
+          {/* Compact Stats - Handicap & Wallet */}
+          <div className="flex gap-2 flex-shrink-0">
+            <Link 
+              to="/handicap" 
+              className="bg-white/10 hover:bg-white/15 rounded-lg px-3 py-2 text-center transition-colors min-w-[60px]"
+            >
+              <div className="text-lg font-bold text-white leading-tight">
+                {stats.handicap != null ? stats.handicap.toFixed(1) : '—'}
+              </div>
+              <div className="text-[9px] text-primary-200 font-medium uppercase tracking-wide">HCP</div>
+            </Link>
+            <Link 
+              to="/wallet" 
+              className="bg-white/10 hover:bg-white/15 rounded-lg px-3 py-2 text-center transition-colors min-w-[60px]"
+            >
+              <div className="text-lg font-bold text-white leading-tight">
+                ${(stats.netBalance / 100).toFixed(0)}
+              </div>
+              <div className="text-[9px] text-primary-200 font-medium uppercase tracking-wide">Wallet</div>
+            </Link>
+          </div>
         </div>
       </header>
 
-      {/* Quick Actions - Compact Buttons */}
-      <section className="flex gap-3">
-        <button
-          onClick={() => setShowCreateWizard(true)}
-          className="flex-1 bg-gradient-to-r from-primary-600 to-primary-700 rounded-xl py-3 px-4 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2"
+      {/* Getting Started - Onboarding Modal */}
+      {showOnboarding && createPortal(
+        <div 
+          className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          onClick={() => dismissOnboarding(false)}
         >
-          <span>⛳</span>
-          <span>Create Event</span>
-        </button>
-        
-        <button
-          onClick={() => navigate('/join')}
-          className="flex-1 bg-white rounded-xl py-3 px-4 border border-gray-200 font-bold text-sm text-gray-900 shadow-sm hover:shadow-md hover:border-primary-300 transition-all flex items-center justify-center gap-2"
-        >
-          <span>🎫</span>
-          <span>Join Event</span>
-        </button>
-      </section>
+          <div 
+            className="bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[85vh] overflow-y-auto animate-slide-up"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="relative bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 px-6 pt-8 pb-6 rounded-t-3xl text-center">
+              <button
+                onClick={() => dismissOnboarding(false)}
+                className="absolute top-4 right-4 p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                aria-label="Close"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              <div className="text-5xl mb-3">⛳</div>
+              <h2 className="text-2xl font-bold text-white mb-1">Welcome to Gimmies!</h2>
+              <p className="text-primary-100 text-sm">Your golf crew's command center</p>
+            </div>
+            
+            {/* Feature highlights */}
+            <div className="px-5 py-5 space-y-3">
+              {/* Groups */}
+              <button 
+                className="w-full flex items-start gap-3 p-4 bg-purple-50 rounded-xl border border-purple-100 hover:bg-purple-100 transition-colors text-left"
+                onClick={() => { setTabTouched(true); setTab('groups'); dismissOnboarding(false); }}
+              >
+                <div className="w-12 h-12 rounded-full bg-purple-200 flex items-center justify-center flex-shrink-0">
+                  <span className="text-2xl">👥</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-gray-900">Create a Group</div>
+                  <p className="text-sm text-gray-600 mt-0.5">
+                    Your golf crew's home base. Chat, share photos, and schedule tee times together.
+                  </p>
+                </div>
+                <span className="text-purple-400 self-center text-lg">→</span>
+              </button>
 
-      {/* Events & Groups */}
-      <section className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden">
-        {/* Tabs */}
-        <div className="flex border-b border-gray-100">
+              {/* Events */}
+              <button 
+                className="w-full flex items-start gap-3 p-4 bg-primary-50 rounded-xl border border-primary-100 hover:bg-primary-100 transition-colors text-left"
+                onClick={(e) => { e.stopPropagation(); openEventWizard(); dismissOnboarding(false); }}
+              >
+                <div className="w-12 h-12 rounded-full bg-primary-200 flex items-center justify-center flex-shrink-0">
+                  <span className="text-2xl">⛳</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-gray-900">Create an Event</div>
+                  <p className="text-sm text-gray-600 mt-0.5">
+                    Score a round, run Nassau/skins, track bets, and see the live leaderboard.
+                  </p>
+                </div>
+                <span className="text-primary-400 self-center text-lg">→</span>
+              </button>
+
+              {/* Handicap */}
+              <button 
+                className="w-full flex items-start gap-3 p-4 bg-amber-50 rounded-xl border border-amber-100 hover:bg-amber-100 transition-colors text-left"
+                onClick={() => { navigate('/handicap'); dismissOnboarding(false); }}
+              >
+                <div className="w-12 h-12 rounded-full bg-amber-200 flex items-center justify-center flex-shrink-0">
+                  <span className="text-2xl">📊</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-bold text-gray-900">Track Your Handicap</div>
+                  <p className="text-sm text-gray-600 mt-0.5">
+                    Add rounds manually or score through events. We calculate your index automatically.
+                  </p>
+                </div>
+                <span className="text-amber-500 self-center text-lg">→</span>
+              </button>
+            </div>
+
+            {/* Quick start CTA */}
+            <div className="px-5 pb-6 pt-2 border-t border-gray-100">
+              <div className="flex gap-3">
+                <button
+                  onClick={(e) => { e.stopPropagation(); openGroupWizard(); dismissOnboarding(false); }}
+                  className="flex-1 py-3.5 bg-purple-600 text-white rounded-xl font-bold text-sm hover:bg-purple-700 transition-colors flex items-center justify-center gap-2 shadow-md"
+                >
+                  <span>👥</span> Start a Group
+                </button>
+                <button
+                  onClick={() => { navigate('/join'); dismissOnboarding(false); }}
+                  className="flex-1 py-3.5 bg-gray-100 text-gray-700 rounded-xl font-bold text-sm hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
+                >
+                  <span>🎫</span> Join with Code
+                </button>
+              </div>
+              
+              {/* Don't show again */}
+              <button
+                onClick={() => dismissOnboarding(true)}
+                className="w-full mt-4 text-sm text-gray-400 hover:text-gray-600 transition-colors py-2"
+              >
+                Don't show this again
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Events & Groups - Segmented Control Style */}
+      <section className="-mx-4 sm:mx-0 rounded-none sm:rounded-2xl overflow-hidden border-y border-x-0 sm:border-2 border-slate-200 shadow-md bg-white">
+        {/* Tab Bar - Pill Style with Colored Backgrounds */}
+        <div className="flex gap-2 p-1.5 bg-slate-100 border-b border-slate-200">
           <button
-            onClick={() => setTab('events')}
-            className={`flex-1 py-3.5 text-sm font-semibold transition-colors relative ${
-              tab === 'events' ? 'text-primary-700' : 'text-gray-500 hover:text-gray-700'
+            onClick={() => { setTabTouched(true); setTab('events'); }}
+            className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+              tab === 'events' 
+                ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-md' 
+                : 'bg-transparent text-gray-600 hover:bg-white/50'
             }`}
           >
-            Events
+            <span className="text-base">⛳</span>
+            <span>Events</span>
             {activeEvents.length > 0 && (
-              <span className="ml-1.5 px-1.5 py-0.5 text-[10px] font-bold bg-primary-100 text-primary-700 rounded-full">
+              <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${
+                tab === 'events' 
+                  ? 'bg-white/25 text-white' 
+                  : 'bg-primary-100 text-primary-700'
+              }`}>
                 {activeEvents.length}
               </span>
             )}
-            {tab === 'events' && (
-              <span className="absolute bottom-0 left-4 right-4 h-0.5 bg-primary-600 rounded-full" />
-            )}
           </button>
           <button
-            onClick={() => setTab('groups')}
-            className={`flex-1 py-3.5 text-sm font-semibold transition-colors relative ${
-              tab === 'groups' ? 'text-primary-700' : 'text-gray-500 hover:text-gray-700'
+            onClick={() => { setTabTouched(true); setTab('groups'); }}
+            className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+              tab === 'groups' 
+                ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-md' 
+                : 'bg-transparent text-gray-600 hover:bg-white/50'
             }`}
           >
-            Groups
+            <span className="text-base">👥</span>
+            <span>Groups</span>
             {groups.length > 0 && (
-              <span className="ml-1.5 px-1.5 py-0.5 text-[10px] font-bold bg-gray-100 text-gray-600 rounded-full">
+              <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${
+                tab === 'groups' 
+                  ? 'bg-white/25 text-white' 
+                  : 'bg-purple-100 text-purple-700'
+              }`}>
                 {groups.length}
               </span>
             )}
-            {tab === 'groups' && (
-              <span className="absolute bottom-0 left-4 right-4 h-0.5 bg-primary-600 rounded-full" />
-            )}
           </button>
         </div>
-
-        {/* Content */}
+        
+        {/* Content Area */}
         <div className="p-3">
-          {tab === 'events' && (
+            {tab === 'events' && (
             <>
-              {activeEvents.length === 0 ? (
+              {/* Primary actions (moved inside the Events tab) */}
+              <div className="flex gap-2 mb-3">
+                <button
+                  onClick={openEventWizard}
+                  className="flex-1 px-4 py-2.5 bg-white border-2 border-primary-200 text-primary-800 rounded-xl font-black text-sm hover:bg-primary-50 hover:border-primary-300 transition-colors shadow-sm"
+                >
+                  ⛳ Create
+                </button>
+                <button
+                  onClick={() => navigate('/join')}
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-accent to-orange-500 text-white rounded-xl font-black text-sm hover:from-orange-500 hover:to-accent transition-colors shadow-sm"
+                  title="Join an event with a code"
+                >
+                  <span className="inline-flex items-center justify-center gap-2">
+                    <span className="text-lg leading-none">+</span>
+                    <span>Join</span>
+                  </span>
+                </button>
+              </div>
+
+              {/* Search */}
+              <div className="mb-3">
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔎</span>
+                  <input
+                    value={eventSearch}
+                    onChange={(e) => setEventSearch(e.target.value)}
+                    placeholder="Search your events…"
+                    className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200"
+                  />
+                </div>
+              </div>
+
+              {filteredActiveEvents.length === 0 ? (
                 <div className="py-8 text-center">
                   <div className="text-4xl mb-3">⛳</div>
-                  <div className="font-semibold text-gray-700 mb-1">No active events</div>
-                  <p className="text-sm text-gray-500 mb-4">Create or join an event to get started</p>
+                  <div className="font-semibold text-gray-700 mb-1">
+                    {activeEvents.length === 0 ? 'No active events' : 'No matching events'}
+                  </div>
+                  <p className="text-sm text-gray-500">
+                    {activeEvents.length === 0 ? 'Create an event or join with a code' : 'Try a different search'}
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {activeEvents.slice(0, 5).map(event => (
+                  {filteredActiveEvents.slice(0, 5).map(event => (
                     <EventCard key={event.id} event={event} profiles={profiles} />
                   ))}
                   
-                  {activeEvents.length > 5 && (
+                  {filteredActiveEvents.length > 5 && (
                     <Link 
                       to="/events" 
                       className="block text-center py-2 text-sm font-medium text-primary-600 hover:text-primary-700"
                     >
-                      View all {activeEvents.length} events →
+                      View all {filteredActiveEvents.length} events →
                     </Link>
                   )}
                 </div>
@@ -400,30 +596,51 @@ const Dashboard: React.FC = () => {
 
           {tab === 'groups' && (
             <>
-              {groups.length === 0 ? (
+              {/* Primary actions (moved to the top of the Groups tab) */}
+              <div className="flex gap-2 mb-3">
+                <button
+                  onClick={openGroupWizard}
+                  className="flex-1 px-4 py-2.5 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-xl font-bold text-sm hover:from-purple-700 hover:to-purple-800 transition-colors shadow-sm"
+                >
+                  👥 Create
+                </button>
+                <button
+                  onClick={() => setShowDiscoverGroups(true)}
+                  className="px-4 py-2.5 bg-white border border-gray-300 text-gray-800 rounded-xl font-bold text-sm hover:bg-gray-50 transition-colors"
+                  title="Find groups to join"
+                >
+                  🔍 Find
+                </button>
+              </div>
+
+              {/* Search */}
+              <div className="mb-3">
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">🔎</span>
+                  <input
+                    value={groupSearch}
+                    onChange={(e) => setGroupSearch(e.target.value)}
+                    placeholder="Search your groups…"
+                    className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-200"
+                  />
+                </div>
+              </div>
+
+              {filteredGroups.length === 0 ? (
                 <div className="py-8 text-center">
                   <div className="text-4xl mb-3">👥</div>
-                  <div className="font-semibold text-gray-700 mb-1">No groups yet</div>
-                  <p className="text-sm text-gray-500 mb-4">Create a group to chat with your golf crew</p>
-                  <button
-                    onClick={() => setShowCreateGroupWizard(true)}
-                    className="px-5 py-2.5 bg-primary-600 text-white rounded-xl font-semibold text-sm hover:bg-primary-700 transition-colors"
-                  >
-                    Create Group
-                  </button>
+                  <div className="font-semibold text-gray-700 mb-1">
+                    {groups.length === 0 ? 'No groups yet' : 'No matching groups'}
+                  </div>
+                  <p className="text-sm text-gray-500">
+                    {groups.length === 0 ? 'Create a group or find one to join' : 'Try a different search'}
+                  </p>
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {groups.map(group => (
+                  {filteredGroups.map(group => (
                     <GroupCard key={group.id} group={group} />
                   ))}
-                  
-                  <button
-                    onClick={() => setShowCreateGroupWizard(true)}
-                    className="w-full py-3 border-2 border-dashed border-gray-300 rounded-xl text-sm font-medium text-gray-500 hover:border-primary-300 hover:text-primary-600 transition-colors"
-                  >
-                    + Create New Group
-                  </button>
                 </div>
               )}
             </>
@@ -431,11 +648,11 @@ const Dashboard: React.FC = () => {
         </div>
       </section>
 
-      {/* Score Ticker - Fixed at bottom */}
-      <div className="fixed left-4 right-4 bottom-[5.25rem] z-30">
+      {/* Score Ticker - Fixed at bottom, full width on mobile, above footer with safe area */}
+      <div className="fixed left-0 right-0 sm:left-4 sm:right-4 ticker-above-footer z-30 px-0 sm:px-0">
         <button
           onClick={() => tickerEvent ? navigate(`/event/${tickerEvent.id}`) : navigate('/events')}
-          className="w-full gimmies-ticker rounded-xl bg-[#1561AE] border border-white/10 px-3 py-2.5 shadow-lg shadow-primary-900/25"
+          className="w-full gimmies-ticker rounded-none sm:rounded-xl bg-[#1561AE] border-y sm:border border-white/10 px-4 py-2.5 shadow-lg shadow-primary-900/25"
           aria-label="Activity ticker"
           style={{ ['--gimmies-ticker-duration' as any]: `${tickerDurationSeconds}s` }}
         >
@@ -502,6 +719,16 @@ const Dashboard: React.FC = () => {
           setShowCreateGroupWizard(false);
           navigate(`/event/${groupId}/chat`);
         }}
+      />
+
+      <DiscoverGroupsModal
+        isOpen={showDiscoverGroups}
+        onClose={() => setShowDiscoverGroups(false)}
+      />
+      
+      <SettingsPanel
+        isOpen={showSettings}
+        onClose={() => setShowSettings(false)}
       />
     </div>
   );

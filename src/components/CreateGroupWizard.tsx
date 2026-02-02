@@ -50,7 +50,10 @@ export const CreateGroupWizard: React.FC<Props> = ({ isOpen, onClose, onCreated 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
+      <div
+        className="bg-white text-gray-900 rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col"
+        style={{ colorScheme: 'light' }}
+      >
         <div className="bg-purple-600 p-4 text-white flex justify-between items-center">
           <h2 className="text-lg font-bold">New Group</h2>
           <button onClick={onClose} className="text-white/80 hover:text-white" aria-label="Close">
@@ -60,7 +63,7 @@ export const CreateGroupWizard: React.FC<Props> = ({ isOpen, onClose, onCreated 
           </button>
         </div>
 
-        <div className="p-6 space-y-3">
+        <div className="p-6 space-y-3 text-gray-900">
           <div className="text-sm text-gray-600">
             A group is just a chat crew. You can create events from it later.
           </div>
@@ -71,14 +74,14 @@ export const CreateGroupWizard: React.FC<Props> = ({ isOpen, onClose, onCreated 
               value={name}
               onChange={(e) => setName(e.target.value)}
               onFocus={(e) => e.currentTarget.select()}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+              className="w-full bg-white text-gray-900 placeholder:text-gray-400 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
               placeholder="e.g. Saturday Crew"
               autoFocus
             />
           </div>
         </div>
 
-        <div className="p-4 border-t bg-gray-50 flex justify-end">
+        <div className="p-4 border-t bg-gray-50 flex justify-end text-gray-900">
           <button
             onClick={handleCreate}
             disabled={isCreating || !name.trim()}

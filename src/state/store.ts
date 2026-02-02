@@ -10,7 +10,9 @@ import { nanoid } from 'nanoid/non-secure';
 import { getCourseById, getHole } from '../data/cloudCourses';
 import { distributeHandicapStrokes, applyESCAdjustment, calculateScoreDifferential } from '../utils/handicap';
 import { calculateEventPayouts } from '../games/payouts';
+import { generateRoundRecap, generateRecapPushMessage } from '../utils/roundRecap';
 import { ScoreEntry as HandicapScoreEntry } from '../types/handicap';
+import { checkEventVerification, calculateNewStatus } from '../utils/verifiedStatus';
 
 // Import types from centralized types file
 import type {
@@ -62,8 +64,19 @@ interface State {
   completedRounds: CompletedRound[];
   isLoadingEventsFromCloud: boolean;
   
+  // Verified status level-up tracking
+  pendingLevelUp: {
+    profileId: string;
+    profileName: string;
+    oldLevel: number;
+    newLevel: number;
+    verifiedRounds: number;
+  } | null;
+  clearPendingLevelUp: () => void;
+  
   // UI slice state
   toasts: Toast[];
+  notificationReadAt: Record<string, string>;
   
   // Wallet slice state
   settlements: Settlement[];
@@ -134,6 +147,9 @@ interface State {
   // UI actions
   addToast: UISliceActions['addToast'];
   removeToast: UISliceActions['removeToast'];
+  markNotificationRead: UISliceActions['markNotificationRead'];
+  markNotificationsRead: UISliceActions['markNotificationsRead'];
+  clearNotificationReads: UISliceActions['clearNotificationReads'];
   
   // Wallet actions
   createSettlements: WalletSliceActions['createSettlements'];
@@ -185,6 +201,10 @@ export const useStore = create<State>()(
       ...initialUIState,
       ...initialWalletState,
       ...initialTournamentState,
+      pendingLevelUp: null,
+      
+      // Verified status actions
+      clearPendingLevelUp: () => set({ pendingLevelUp: null }),
       
       // Compose slice actions
       ...createUserSlice(set, get),
@@ -567,6 +587,106 @@ export const useStore = create<State>()(
           }, 0);
         }
         
+        // ========================================================================
+        // VERIFIED STATUS: Check if this event qualifies as a verified round
+        // ========================================================================
+        const verification = checkEventVerification(completedEvent, get().profiles);
+        
+        if (verification.isVerified) {
+          console.log('✅ Event qualifies as verified round:', verification.reason);
+          
+          // Update verified status for each participant with a profile
+          let firstLevelUp: { profileId: string; profileName: string; oldLevel: number; newLevel: number; verifiedRounds: number } | null = null;
+          
+          completedEvent.golfers.forEach(golfer => {
+            if (!golfer.profileId) return;
+            
+            const profile = get().profiles.find(p => p.id === golfer.profileId);
+            if (!profile) return;
+            
+            const currentStatus = profile.verifiedStatus || {
+              verifiedRounds: 0,
+              statusLevel: 0,
+              badges: [],
+              lastVerifiedDate: undefined,
+            };
+            
+            // Calculate new status after this verified round
+            const newStatus = calculateNewStatus(currentStatus, completedEvent.id);
+            
+            // Check for level up
+            const leveledUp = newStatus.statusLevel > currentStatus.statusLevel;
+            
+            if (leveledUp && !firstLevelUp) {
+              // Only show modal for first person who levels up (typically current user)
+              firstLevelUp = {
+                profileId: profile.id,
+                profileName: profile.name,
+                oldLevel: currentStatus.statusLevel,
+                newLevel: newStatus.statusLevel,
+                verifiedRounds: newStatus.verifiedRounds,
+              };
+            }
+            
+            // Update profile with new verified status
+            set((state: any) => ({
+              profiles: state.profiles.map((p: GolferProfile) => 
+                p.id === profile.id 
+                  ? { ...p, verifiedStatus: newStatus, lastActive: new Date().toISOString() }
+                  : p
+              ),
+              currentProfile: state.currentProfile?.id === profile.id
+                ? { ...state.currentProfile, verifiedStatus: newStatus, lastActive: new Date().toISOString() }
+                : state.currentProfile
+            }));
+            
+            console.log(`📊 Updated verified status for ${profile.name}: Level ${currentStatus.statusLevel} → ${newStatus.statusLevel}, Rounds: ${newStatus.verifiedRounds}`);
+          });
+          
+          // Set pending level up for UI to display modal (prioritize current user)
+          const currentProfile = get().currentProfile;
+          if (firstLevelUp) {
+            // If current user leveled up, show their modal
+            const currentUserLevelUp = completedEvent.golfers.some(g => 
+              g.profileId === currentProfile?.id
+            );
+            
+            if (currentUserLevelUp) {
+              const currentStatus = currentProfile?.verifiedStatus || { verifiedRounds: 0, statusLevel: 0 };
+              const newStatus = calculateNewStatus(currentStatus as any, completedEvent.id);
+              if (newStatus.statusLevel > (currentStatus.statusLevel || 0)) {
+                set({
+                  pendingLevelUp: {
+                    profileId: currentProfile!.id,
+                    profileName: currentProfile!.name,
+                    oldLevel: currentStatus.statusLevel || 0,
+                    newLevel: newStatus.statusLevel,
+                    verifiedRounds: newStatus.verifiedRounds,
+                  }
+                });
+              } else {
+                set({ pendingLevelUp: firstLevelUp });
+              }
+            } else {
+              set({ pendingLevelUp: firstLevelUp });
+            }
+            
+            // Also show a toast notification
+            get().addToast(`🎉 Level Up! ${firstLevelUp.profileName} reached a new status tier!`, 'achievement', 5000);
+          }
+          
+          // Mark event as verified for future reference
+          set((state: any) => ({
+            completedEvents: state.completedEvents.map((e: Event) =>
+              e.id === eventId 
+                ? { ...e, isVerifiedRound: true, verificationNote: verification.reason }
+                : e
+            )
+          }));
+        } else {
+          console.log('ℹ️ Event does not qualify as verified:', verification.reason);
+        }
+        
         // Sync to cloud
         if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true' && newCompletedRounds.length > 0) {
           import('../utils/completedRoundSync').then(({ batchSaveCompletedRoundsToCloud }) => {
@@ -580,6 +700,49 @@ export const useStore = create<State>()(
             import('../utils/eventSync').then(({ saveEventToCloud }) => {
               saveEventToCloud(completedEvent, currentProfile.id).catch(console.error);
             });
+          }
+        }
+        
+        // ========================================================================
+        // AUTO-SEND RECAP: Post recap to event chat (unless disabled)
+        // ========================================================================
+        const autoRecapDisabled = completedEvent.settings?.disableAutoRecap === true;
+        if (!autoRecapDisabled) {
+          try {
+            const recap = generateRoundRecap(completedEvent);
+            const recapMsg = generateRecapPushMessage(recap);
+            
+            // Build a nice recap message for chat
+            const recapLines = [
+              `🏆 **Event Complete!** 🏆`,
+              ``,
+              recapMsg.body,
+              ``,
+              ...recap.highlights.slice(0, 5).map(h => `${h.emoji} ${h.title}: ${h.description}`),
+              ``,
+              `📊 Check the Games tab for full payout details.`
+            ];
+            
+            // Add recap as bot message to chat
+            const recapChatMessage: ChatMessage = {
+              id: nanoid(12),
+              senderId: 'gimmies-bot',
+              senderName: 'Gimmies Bot',
+              text: recapLines.join('\n'),
+              createdAt: new Date().toISOString(),
+            };
+            
+            set((state: any) => ({
+              completedEvents: state.completedEvents.map((e: Event) =>
+                e.id === eventId 
+                  ? { ...e, chat: [...(e.chat || []), recapChatMessage] }
+                  : e
+              )
+            }));
+            
+            console.log('📤 Auto-sent event recap to chat');
+          } catch (e) {
+            console.error('Failed to send auto-recap:', e);
           }
         }
         

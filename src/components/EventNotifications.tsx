@@ -12,6 +12,7 @@
 import React, { useState, useMemo } from 'react';
 import type { Event } from '../state/types';
 import { generateRoundRecap, generateRecapPushMessage } from '../utils/roundRecap';
+import useStore from '../state/store';
 
 interface Props {
   event: Event;
@@ -26,6 +27,18 @@ const EventNotifications: React.FC<Props> = ({ event, onClose }) => {
   const [teeTime, setTeeTime] = useState('08:00');
   const [isSending, setIsSending] = useState(false);
   const [sent, setSent] = useState(false);
+  
+  const updateEvent = useStore(s => s.updateEvent);
+  const autoRecapDisabled = event.settings?.disableAutoRecap ?? false;
+  
+  const handleToggleAutoRecap = () => {
+    updateEvent(event.id, {
+      settings: {
+        ...event.settings,
+        disableAutoRecap: !autoRecapDisabled
+      }
+    });
+  };
   
   const golferCount = event.golfers.length;
   
@@ -185,6 +198,29 @@ const EventNotifications: React.FC<Props> = ({ event, onClose }) => {
                   </div>
                 </div>
               </button>
+              
+              {/* Auto-Recap Setting */}
+              <div className="mt-6 pt-4 border-t border-gray-200">
+                <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-3">Settings</div>
+                <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                  <div className="flex-1">
+                    <div className="font-medium text-gray-900 text-sm">Auto-send Recap</div>
+                    <div className="text-xs text-gray-500">
+                      Post recap to chat when event completes
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleToggleAutoRecap}
+                    className={`relative w-12 h-7 rounded-full transition-colors ${
+                      !autoRecapDisabled ? 'bg-green-500' : 'bg-gray-300'
+                    }`}
+                  >
+                    <div className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                      !autoRecapDisabled ? 'translate-x-6' : 'translate-x-1'
+                    }`} />
+                  </button>
+                </div>
+              </div>
             </>
           )}
           

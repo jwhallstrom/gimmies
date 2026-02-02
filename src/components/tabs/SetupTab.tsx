@@ -14,97 +14,254 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
   );
   const { currentProfile, profiles } = useStore();
   const { courses } = useCourses();
-  // Legacy: this tab previously tried to present "Group settings" vs "Event settings".
-  // In the current UX, this is always Event Settings.
   
   if (!event) return null;
 
   const isGroupHub = event.hubType === 'group';
-  
-  // Check if current user is the owner/admin
   const isOwner = currentProfile && event.ownerProfileId === currentProfile.id;
-  
-  // Get profiles map for member display
-  const profilesById = new Map(profiles.map((p: any) => [p.id, p]));
   
   // Get course and tee data
   const selectedCourse = courses.find(c => c.courseId === event.course.courseId);
   const teeDetails = selectedCourse?.tees.find(t => t.name === event.course.teeName);
   const teesForCourse = selectedCourse?.tees || [];
 
+  // Default group settings
+  const groupSettings = event.groupSettings || {
+    visibility: 'private' as const,
+    joinPolicy: 'open' as const,
+    membersCanInvite: true,
+    description: '',
+    location: '',
+  };
+
+  const updateGroupSettings = (updates: any) => {
+    useStore.getState().updateEvent(eventId, {
+      groupSettings: { ...groupSettings, ...updates }
+    } as any);
+  };
+
+  // GROUP SETTINGS
   if (isGroupHub) {
     return (
       <form className="space-y-5 max-w-xl" onSubmit={(e) => e.preventDefault()}>
+        {/* Group Info */}
         <div className="bg-gradient-to-r from-purple-50 to-white border border-purple-200 rounded-2xl p-4">
           <div className="flex items-center gap-2 mb-3">
             <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded uppercase tracking-wider">
-              Group Settings
+              Group Info
             </span>
           </div>
 
-          <div className="text-xs text-gray-600 mb-3">
-            This is your crew chat. Create an event when you’re ready to play.
-          </div>
-
-          <div className="flex flex-wrap gap-4 items-end">
-            <div className="flex-1 min-w-[180px]">
-              <label className="block text-xs font-semibold text-gray-600 mb-1">Group name</label>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Group Name</label>
               <input
-                className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+                className="w-full bg-white text-gray-900 placeholder:text-gray-500 disabled:text-gray-700 disabled:bg-gray-50 disabled:opacity-100 border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
                 value={event.name}
                 onChange={(e) => useStore.getState().updateEvent(eventId, { name: e.target.value })}
-                placeholder="Group name"
+                placeholder="e.g., Saturday Crew"
+                disabled={!isOwner}
+              />
+            </div>
+            
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Description (optional)</label>
+              <textarea
+                className="w-full bg-white text-gray-900 placeholder:text-gray-500 disabled:text-gray-700 disabled:bg-gray-50 disabled:opacity-100 border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 resize-none"
+                rows={2}
+                value={groupSettings.description || ''}
+                onChange={(e) => updateGroupSettings({ description: e.target.value })}
+                placeholder="What's this group about?"
+                disabled={!isOwner}
+              />
+            </div>
+            
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 mb-1">Location (optional)</label>
+              <input
+                className="w-full bg-white text-gray-900 placeholder:text-gray-500 disabled:text-gray-700 disabled:bg-gray-50 disabled:opacity-100 border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20"
+                value={groupSettings.location || ''}
+                onChange={(e) => updateGroupSettings({ location: e.target.value })}
+                placeholder="e.g., Chicago, IL"
                 disabled={!isOwner}
               />
             </div>
           </div>
         </div>
 
+        {/* Privacy & Access */}
+        {isOwner && (
+          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+              <h3 className="text-sm font-bold text-gray-900">Privacy & Access</h3>
+            </div>
+            
+            {/* Visibility */}
+            <div className="mb-4">
+              <label className="block text-xs font-semibold text-gray-700 mb-2">Group Visibility</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => updateGroupSettings({ visibility: 'private' })}
+                  className={`p-3 rounded-xl border-2 text-left transition-all ${
+                    groupSettings.visibility === 'private'
+                      ? 'border-purple-500 bg-purple-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span>🔒</span>
+                    <span className="font-semibold text-sm text-gray-900">Private</span>
+                  </div>
+                  <p className="text-xs text-gray-600">Only members can see</p>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateGroupSettings({ visibility: 'public' })}
+                  className={`p-3 rounded-xl border-2 text-left transition-all ${
+                    groupSettings.visibility === 'public'
+                      ? 'border-purple-500 bg-purple-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span>🌐</span>
+                    <span className="font-semibold text-sm text-gray-900">Public</span>
+                  </div>
+                  <p className="text-xs text-gray-600">Anyone can find it</p>
+                </button>
+              </div>
+            </div>
+            
+            {/* Join Policy */}
+            <div className="mb-4">
+              <label className="block text-xs font-semibold text-gray-700 mb-2">How People Join</label>
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  onClick={() => updateGroupSettings({ joinPolicy: 'open', membersCanInvite: true })}
+                  className={`w-full p-3 rounded-xl border-2 text-left transition-all ${
+                    groupSettings.joinPolicy === 'open'
+                      ? 'border-purple-500 bg-purple-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span>✨</span>
+                    <span className="font-semibold text-sm text-gray-900">Open</span>
+                    <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">Recommended</span>
+                  </div>
+                  <p className="text-xs text-gray-600">Anyone with the link can join instantly</p>
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={() => updateGroupSettings({ joinPolicy: 'request' })}
+                  className={`w-full p-3 rounded-xl border-2 text-left transition-all ${
+                    groupSettings.joinPolicy === 'request'
+                      ? 'border-purple-500 bg-purple-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span>✋</span>
+                    <span className="font-semibold text-sm text-gray-900">Request to Join</span>
+                  </div>
+                  <p className="text-xs text-gray-600">People request, you approve</p>
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={() => updateGroupSettings({ joinPolicy: 'invite_only', membersCanInvite: false })}
+                  className={`w-full p-3 rounded-xl border-2 text-left transition-all ${
+                    groupSettings.joinPolicy === 'invite_only'
+                      ? 'border-purple-500 bg-purple-50'
+                      : 'border-gray-200 hover:border-gray-300'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <span>🔐</span>
+                    <span className="font-semibold text-sm text-gray-900">Invite Only</span>
+                  </div>
+                  <p className="text-xs text-gray-600">Only you can add members</p>
+                </button>
+              </div>
+            </div>
+            
+            {/* Members Can Invite Toggle */}
+            {groupSettings.joinPolicy !== 'invite_only' && (
+              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                <div>
+                  <div className="text-sm font-medium text-gray-900">Members can share invites</div>
+                  <p className="text-xs text-gray-600">Let everyone invite friends</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => updateGroupSettings({ membersCanInvite: !groupSettings.membersCanInvite })}
+                  className={`relative w-11 h-6 rounded-full transition-colors ${
+                    groupSettings.membersCanInvite ? 'bg-purple-600' : 'bg-gray-300'
+                  }`}
+                >
+                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                    groupSettings.membersCanInvite ? 'translate-x-5' : ''
+                  }`} />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Create Event */}
         <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-sm font-bold text-gray-900">Create an event</div>
-              <div className="text-xs text-gray-500">This opens the normal event setup flow.</div>
+              <div className="text-sm font-bold text-gray-900">Create an Event</div>
+              <div className="text-xs text-gray-600">Schedule a round for this group</div>
             </div>
             <button
               type="button"
               onClick={() => navigate(`/events?create=true&returnTo=group&groupId=${encodeURIComponent(eventId)}`)}
               className="text-xs px-4 py-2 rounded-xl font-bold bg-primary-600 text-white hover:bg-primary-700 shadow-sm"
             >
-              + Create event
+              + Create Event
             </button>
           </div>
         </div>
 
+        {/* Members */}
         <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div>
               <div className="text-sm font-bold text-gray-900">Members</div>
-              <div className="text-xs text-gray-500">{event.golfers?.length || 0} members in this group</div>
+              <div className="text-xs text-gray-600">{event.golfers?.length || 0} members</div>
             </div>
             <button
               type="button"
               onClick={() => navigate(`/event/${eventId}/golfers`)}
               className="text-xs px-4 py-2 rounded-xl font-bold bg-purple-600 text-white hover:bg-purple-700 shadow-sm"
             >
-              Manage members
+              Manage Members
             </button>
           </div>
         </div>
 
+        {/* Danger Zone */}
         {isOwner && (
           <div className="border-t border-red-200 pt-6 mt-4">
             <h3 className="text-sm font-semibold mb-2 text-red-800">Danger Zone</h3>
             <button
               type="button"
               onClick={async () => {
-                if (window.confirm(`Delete "${event.name || 'this group'}"?`)) {
+                if (window.confirm(`Delete "${event.name || 'this group'}"? This cannot be undone.`)) {
                   await useStore.getState().deleteEvent(eventId);
                   useStore.getState().addToast('Group deleted', 'success');
                   navigate('/');
                 }
               }}
-              className="w-full py-2 px-4 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm font-medium hover:bg-red-100 transition-colors flex items-center justify-center gap-2"
+              className="w-full py-2.5 px-4 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm font-medium hover:bg-red-100 transition-colors flex items-center justify-center gap-2"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -134,26 +291,47 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
           </div>
         )}
         
-        <div className="flex flex-wrap gap-4 items-end">
-          <div className="flex-1 min-w-[180px]">
-            <label className="block text-xs font-semibold text-gray-600 mb-1">Event Name</label>
+        <div className="space-y-3">
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Event Name</label>
             <input
-              className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+              className="w-full bg-white text-gray-900 placeholder:text-gray-500 disabled:text-gray-700 disabled:bg-gray-50 disabled:opacity-100 border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
               value={event.name}
               onChange={e => useStore.getState().updateEvent(eventId, { name: e.target.value })}
               placeholder="Event name"
               disabled={event.isCompleted || !isOwner}
             />
           </div>
-          <div className="w-40">
-            <label className="block text-xs font-semibold text-gray-600 mb-1">Date</label>
-            <input
-              type="date"
-              className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
-              value={event.date}
-              onChange={e => useStore.getState().updateEvent(eventId, { date: e.target.value })}
-              disabled={event.isCompleted || !isOwner}
-            />
+          <div>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Date</label>
+            <div className="relative">
+              <input
+                type="date"
+                className="absolute inset-0 opacity-0 w-full h-full cursor-pointer disabled:cursor-not-allowed"
+                value={event.date}
+                onChange={e => useStore.getState().updateEvent(eventId, { date: e.target.value })}
+                disabled={event.isCompleted || !isOwner}
+              />
+              <div className={`w-full border rounded-xl px-3 py-2.5 text-sm flex items-center justify-between ${
+                event.isCompleted || !isOwner 
+                  ? 'bg-gray-50 border-gray-200 text-gray-700' 
+                  : 'bg-white border-gray-300 text-gray-900'
+              }`}>
+                <span>
+                  {event.date 
+                    ? new Date(event.date + 'T00:00:00').toLocaleDateString('en-US', { 
+                        month: 'short', 
+                        day: 'numeric', 
+                        year: 'numeric' 
+                      })
+                    : 'Select date'
+                  }
+                </span>
+                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -162,7 +340,7 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
         <h3 className="text-sm font-bold text-gray-900 mb-3">Course & Tee</h3>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">Course</label>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Course</label>
             <CourseSearch
               selectedCourseId={event.course.courseId}
               onSelect={(courseId) => {
@@ -172,9 +350,9 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1">Tee</label>
+            <label className="block text-xs font-semibold text-gray-700 mb-1">Tee</label>
             <select
-              className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
+              className="w-full bg-white text-gray-900 disabled:text-gray-700 disabled:bg-gray-50 disabled:opacity-100 border border-gray-300 rounded-xl px-3 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
               value={event.course.teeName || ''}
               onChange={e => useStore.getState().setEventTee(eventId, e.target.value)}
               disabled={!event.course.courseId || event.isCompleted || !isOwner}
@@ -196,11 +374,81 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
         )}
       </div>
       
+      {/* Privacy & Access - Events (similar to groups) */}
+      {isOwner && !event.isCompleted && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+            <h3 className="text-sm font-bold text-gray-900">Privacy & Access</h3>
+          </div>
+          
+          {/* Visibility */}
+          <div className="mb-4">
+            <label className="block text-xs font-semibold text-gray-600 mb-2">Event Visibility</label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => useStore.getState().updateEvent(eventId, { isPublic: false } as any)}
+                className={`p-3 rounded-xl border-2 text-left transition-all ${
+                  !event.isPublic
+                    ? 'border-primary-500 bg-primary-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span>🔒</span>
+                  <span className="font-semibold text-sm text-gray-900">Private</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Invite only</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => useStore.getState().updateEvent(eventId, { isPublic: true } as any)}
+                className={`p-3 rounded-xl border-2 text-left transition-all ${
+                  event.isPublic
+                    ? 'border-primary-500 bg-primary-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span>🌐</span>
+                  <span className="font-semibold text-sm text-gray-900">Public</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Anyone can find it</p>
+              </button>
+            </div>
+          </div>
+          
+          {/* Members can invite toggle */}
+          <div className="flex items-center justify-between py-3 border-t border-gray-100">
+            <div>
+              <div className="text-sm font-semibold text-gray-900">Players can share invites</div>
+              <div className="text-xs text-gray-500">Let players invite friends</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => useStore.getState().updateEvent(eventId, { 
+                groupSettings: { ...groupSettings, membersCanInvite: !groupSettings.membersCanInvite }
+              } as any)}
+              className={`relative w-11 h-6 rounded-full transition-colors ${
+                groupSettings.membersCanInvite ? 'bg-primary-600' : 'bg-gray-300'
+              }`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                groupSettings.membersCanInvite ? 'translate-x-5' : ''
+              }`} />
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
         <div className="flex items-center justify-between">
           <div>
             <div className="text-sm font-bold text-gray-900">Golfers</div>
-            <div className="text-xs text-gray-500">{event.golfers?.length || 0} players in this event</div>
+              <div className="text-xs text-gray-600">{event.golfers?.length || 0} players in this event</div>
           </div>
           <button
             type="button"
@@ -211,6 +459,105 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
           </button>
         </div>
       </div>
+
+      {/* Event Actions - Start & Complete */}
+      {isOwner && !isGroupHub && (
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-4">
+          <div className="text-sm font-bold text-gray-900">Event Actions</div>
+          
+          {/* Event not started yet */}
+          {event.status !== 'started' && event.status !== 'completed' && !event.isCompleted && (
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <span className="text-xl">🏌️</span>
+                <div className="flex-1">
+                  <div className="font-semibold text-blue-900">Ready to Play?</div>
+                  <p className="text-sm text-blue-700 mt-1">Start the event when everyone is ready. This locks in the players.</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      useStore.getState().updateEvent(eventId, { status: 'started' });
+                      useStore.getState().addToast('Event started! Good luck!', 'success');
+                    }}
+                    className="mt-3 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-bold text-sm hover:from-blue-700 hover:to-blue-800 shadow-md"
+                  >
+                    🚀 Start Event
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Event started but not completed */}
+          {(event.status === 'started' || (event.status !== 'completed' && !event.isCompleted && event.scorecards?.some((sc: any) => sc.scores?.some((s: any) => s.strokes != null)))) && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <span className="text-xl">🏁</span>
+                <div className="flex-1">
+                  <div className="font-semibold text-amber-900">Ready to Complete?</div>
+                  <p className="text-sm text-amber-800 mt-1 mb-2">Completing the event will:</p>
+                  <ul className="text-sm text-amber-700 space-y-1 mb-3">
+                    <li className="flex items-start gap-2">
+                      <span>📊</span>
+                      <span>Add scores to each player's handicap</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span>💰</span>
+                      <span>Finalize all payouts (cannot be changed)</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span>📁</span>
+                      <span>Move event to history</span>
+                    </li>
+                    <li className="flex items-start gap-2">
+                      <span>🔒</span>
+                      <span>Lock all scores (no more edits)</span>
+                    </li>
+                  </ul>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const allComplete = event.scorecards?.every((sc: any) => 
+                        sc.scores?.every((s: any) => s.strokes != null)
+                      );
+                      let confirmMsg = 'Are you sure you want to complete this event?\n\n';
+                      confirmMsg += '• All scores will be added to handicaps\n';
+                      confirmMsg += '• Payouts will be finalized\n';
+                      confirmMsg += '• Scores cannot be edited after completion';
+                      if (!allComplete) {
+                        confirmMsg = 'WARNING: Not all scores are entered!\n\n' + confirmMsg;
+                      }
+                      if (!window.confirm(confirmMsg)) return;
+                      
+                      const success = useStore.getState().completeEvent(eventId);
+                      if (success) {
+                        useStore.getState().addToast('Event completed! Scores added to handicaps.', 'success');
+                        navigate(`/event/${eventId}/payout`);
+                      } else {
+                        useStore.getState().addToast('Could not complete event - ensure all scores are entered', 'error');
+                      }
+                    }}
+                    className="mt-2 px-5 py-2.5 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl font-bold text-sm hover:from-green-700 hover:to-green-800 shadow-md"
+                  >
+                    ✓ Complete Event
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {/* Event already completed */}
+          {event.isCompleted && (
+            <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 flex items-center gap-3">
+              <span className="text-xl">🏆</span>
+              <div>
+                <div className="font-semibold text-gray-900">Event Completed</div>
+                <p className="text-sm text-gray-600">This event has been finalized.</p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       
       {/* Danger Zone */}
       {isOwner && !event.isCompleted && (

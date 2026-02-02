@@ -1,0 +1,39 @@
+---
+description: Prevent multi-agent work being done outside the canonical git repo or left unpushed
+alwaysApply: true
+---
+
+# Git “single source of truth” (multi-agent safety)
+
+This repo must be treated as **one canonical working directory**. Multi-agent work must never be done in “shadow copies” (e.g., OneDrive mirrors, `*-master` folders, zip extracts) because changes can appear locally but never reach the real git repo/remote.
+
+## Hard requirements (do these first)
+
+- **Repo root**: Before *any* edits, run:
+  - `git rev-parse --show-toplevel`
+  - `git remote get-url origin`
+  - `git status -sb`
+- **Must match**:
+  - top-level path equals the actual repo root (where `.git/` lives)
+  - origin equals `https://github.com/jwhallstrom/gimmies.git`
+- If any check fails: **stop** and fix the working directory/remote before proceeding.
+
+## Never edit outside the repo root
+
+- Only read/edit files under the directory returned by `git rev-parse --show-toplevel`.
+- If the user references a path that is not under the repo root, treat it as **non-canonical** and do not apply changes there.
+
+## Branching + merge (recommended for multiple agents)
+
+- Each agent works on its own branch: `agent/<name>-<topic>`.
+- Prefer PRs into `main` rather than direct pushes when multiple agents are active.
+
+## Before handing off work (definition of done)
+
+- `git status -sb` shows clean working tree.
+- Commits exist for all changes: `git log -5 --oneline`.
+- Local branch is pushed: `git push -u origin HEAD` (or merged via PR).
+
+## Windows/PowerShell note
+
+- Use separate commands rather than `&&`/heredocs if the shell parser rejects them.

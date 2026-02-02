@@ -49,8 +49,8 @@ const RoundDetailPage: React.FC = () => {
     if (diff <= -3) return 'bg-fuchsia-600 text-white font-semibold'; // Albatross or better
     if (diff === -2) return 'bg-amber-500 text-black font-semibold'; // Eagle
     if (diff === -1) return 'bg-green-500 text-white font-semibold'; // Birdie
-    if (diff === 0) return 'bg-neutral-50'; // Par
-    if (diff === 1) return 'bg-orange-200'; // Bogey
+    if (diff === 0) return 'bg-neutral-50 text-gray-900 font-semibold'; // Par
+    if (diff === 1) return 'bg-orange-200 text-gray-900 font-semibold'; // Bogey
     if (diff === 2) return 'bg-red-300 text-red-900 font-semibold'; // Double bogey
     return 'bg-red-600 text-white font-semibold'; // Triple or worse
   };
@@ -127,7 +127,9 @@ const RoundDetailPage: React.FC = () => {
         </Link>
         <div className="flex-1">
           <h1 className="text-2xl font-bold text-white">{round.courseName}</h1>
-          <p className="text-gray-800 font-medium">{formatDate(round.date)} • <span className="text-primary-700 font-semibold">{round.teeName}</span></p>
+          <p className="text-primary-200 font-medium">
+            {formatDate(round.date)} • <span className="text-primary-100 font-semibold">{round.teeName}</span>
+          </p>
         </div>
         {round.type === 'individual' && (
           <button
@@ -206,19 +208,19 @@ const RoundDetailPage: React.FC = () => {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
               <div>
                 <span className="text-gray-600">Yardage:</span>
-                <span className="ml-2 font-medium">{teeInfo.yardage}y</span>
+                <span className="ml-2 font-semibold text-gray-900">{teeInfo.yardage}y</span>
               </div>
               <div>
                 <span className="text-gray-600">Par:</span>
-                <span className="ml-2 font-medium">{teeInfo.par}</span>
+                <span className="ml-2 font-semibold text-gray-900">{teeInfo.par}</span>
               </div>
               <div>
                 <span className="text-gray-600">Course Rating:</span>
-                <span className="ml-2 font-medium">{teeInfo.courseRating}</span>
+                <span className="ml-2 font-semibold text-gray-900">{teeInfo.courseRating}</span>
               </div>
               <div>
                 <span className="text-gray-600">Slope Rating:</span>
-                <span className="ml-2 font-medium">{teeInfo.slopeRating}</span>
+                <span className="ml-2 font-semibold text-gray-900">{teeInfo.slopeRating}</span>
               </div>
             </div>
           </div>
@@ -272,24 +274,24 @@ const RoundDetailPage: React.FC = () => {
               </thead>
               <tbody>
                 <tr className="border-t">
-                  <td className="py-2 px-2 font-medium">Par</td>
+                  <td className="py-2 px-2 font-semibold text-gray-900">Par</td>
                   {front9.map((score, i) => (
-                    <td key={i} className="text-center py-2 px-2 bg-gray-100">{score.par}</td>
+                    <td key={i} className="text-center py-2 px-2 bg-gray-100 text-gray-900 font-semibold">{score.par}</td>
                   ))}
-                  <td className="text-center py-2 px-2 bg-gray-200 font-semibold">{front9Par}</td>
+                  <td className="text-center py-2 px-2 bg-gray-200 text-gray-900 font-bold">{front9Par}</td>
                 </tr>
                 <tr className="border-t">
-                  <td className="py-2 px-2 font-medium">Score</td>
+                  <td className="py-2 px-2 font-semibold text-gray-900">Score</td>
                   {front9.map((score, i) => (
                     <td key={i} className="text-center py-2 px-2">
                       <div className={`inline-flex items-center justify-center w-7 h-7 rounded text-xs font-medium ${
-                        score.strokes ? getScoreBadgeColor(score.strokes, score.par) : 'bg-gray-100'
+                        score.strokes ? getScoreBadgeColor(score.strokes, score.par) : 'bg-gray-100 text-gray-700 font-semibold'
                       }`}>
                         {score.strokes || '-'}
                       </div>
                     </td>
                   ))}
-                  <td className="text-center py-2 px-2 bg-gray-100 font-semibold">{front9Score}</td>
+                  <td className="text-center py-2 px-2 bg-gray-100 text-gray-900 font-bold">{front9Score}</td>
                 </tr>
                 {round.type === 'individual' && (
                   <tr className="border-t">
@@ -326,26 +328,26 @@ const RoundDetailPage: React.FC = () => {
               </thead>
               <tbody>
                 <tr className="border-t">
-                  <td className="py-2 px-2 font-medium">Par</td>
+                  <td className="py-2 px-2 font-semibold text-gray-900">Par</td>
                   {back9.map((score, i) => (
-                    <td key={i} className="text-center py-2 px-2 bg-gray-100">{score.par}</td>
+                    <td key={i} className="text-center py-2 px-2 bg-gray-100 text-gray-900 font-semibold">{score.par}</td>
                   ))}
-                  <td className="text-center py-2 px-2 bg-gray-200 font-semibold">{back9Par}</td>
-                  <td className="text-center py-2 px-2 bg-gray-300 font-semibold">{totalPar}</td>
+                  <td className="text-center py-2 px-2 bg-gray-200 text-gray-900 font-bold">{back9Par}</td>
+                  <td className="text-center py-2 px-2 bg-gray-300 text-gray-900 font-bold">{totalPar}</td>
                 </tr>
                 <tr className="border-t">
-                  <td className="py-2 px-2 font-medium">Score</td>
+                  <td className="py-2 px-2 font-semibold text-gray-900">Score</td>
                   {back9.map((score, i) => (
                     <td key={i} className="text-center py-2 px-2">
                       <div className={`inline-flex items-center justify-center w-7 h-7 rounded text-xs font-medium ${
-                        score.strokes ? getScoreBadgeColor(score.strokes, score.par) : 'bg-gray-100'
+                        score.strokes ? getScoreBadgeColor(score.strokes, score.par) : 'bg-gray-100 text-gray-700 font-semibold'
                       }`}>
                         {score.strokes || '-'}
                       </div>
                     </td>
                   ))}
-                  <td className="text-center py-2 px-2 bg-gray-100 font-semibold">{back9Score}</td>
-                  <td className="text-center py-2 px-2 bg-gray-200 font-semibold">{round.grossScore}</td>
+                  <td className="text-center py-2 px-2 bg-gray-100 text-gray-900 font-bold">{back9Score}</td>
+                  <td className="text-center py-2 px-2 bg-gray-200 text-gray-900 font-bold">{round.grossScore}</td>
                 </tr>
                 {round.type === 'individual' && (
                   <tr className="border-t">
