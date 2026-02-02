@@ -279,7 +279,15 @@ const App: React.FC = () => {
               : 'overflow-y-auto'
           }`}
         >
-          <div className={isEventRoute ? 'h-full w-full' : 'px-4 pt-6 content-with-footer max-w-5xl w-full mx-auto'}>
+          <div
+            className={
+              isEventRoute
+                ? (isEventChatRoute
+                    ? 'px-4 pt-6 h-full max-w-5xl w-full mx-auto'
+                    : 'px-4 pt-6 content-with-footer max-w-5xl w-full mx-auto')
+                : 'px-4 pt-6 content-with-footer max-w-5xl w-full mx-auto'
+            }
+          >
             <Suspense fallback={<LoadingSpinner message="Loading page..." />}>
               <Routes>
                 <Route path="/" element={<Dashboard />} />
