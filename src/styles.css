@@ -31,21 +31,16 @@ html {
 
 /* Header - safe area padding for notch/Dynamic Island */
 header {
-  /* Fallback padding-top for iOS safe area */
-  padding-top: 50px;
-  padding-top: env(safe-area-inset-top, 50px);
+  /* Only use safe area inset, no extra fallback padding */
+  padding-top: env(safe-area-inset-top, 0px);
 }
 
 /* Fixed footer - extends into home indicator area with fallback */
 footer {
-  /* Fallback for browsers that don't support env() - 34px for home indicator */
-  padding-bottom: 34px;
-  /* Real value for iOS - overrides fallback when env() works */
-  padding-bottom: env(safe-area-inset-bottom, 34px);
-  /* Fallback min-height */
-  min-height: 102px;
-  /* Real min-height with safe area */
-  min-height: calc(68px + env(safe-area-inset-bottom, 34px));
+  /* Only use safe area inset for bottom padding, minimal fallback */
+  padding-bottom: env(safe-area-inset-bottom, 8px);
+  /* Base height for navigation icons without excessive padding */
+  min-height: calc(68px + env(safe-area-inset-bottom, 8px));
   background-color: inherit;
 }
 
@@ -147,23 +142,23 @@ a:active,
 
 /* Ticker positioning - sits directly above the fixed bottom nav */
 .ticker-above-footer {
-  /* Fallback: 110px (68px footer + 34px safe + 8px buffer) */
-  bottom: 110px;
-  bottom: calc(68px + env(safe-area-inset-bottom, 34px) + 8px);
+  /* Adjusted: 84px (68px footer + 8px safe fallback + 8px buffer) */
+  bottom: 84px;
+  bottom: calc(68px + env(safe-area-inset-bottom, 8px) + 8px);
 }
 
 /* FAB positioning - sits above ticker and bottom nav */
 .fab-position {
-  /* Fallback: 154px (120px + 34px safe area) */
-  bottom: 154px;
-  bottom: calc(120px + env(safe-area-inset-bottom, 34px));
+  /* Adjusted: 128px (120px + 8px safe area) */
+  bottom: 128px;
+  bottom: calc(120px + env(safe-area-inset-bottom, 8px));
 }
 
 /* Content padding - bottom space for scrollable content to clear fixed footer */
 .content-with-footer {
-  /* Fallback: 118px (84px + 34px safe area) */
-  padding-bottom: 118px;
-  padding-bottom: calc(84px + env(safe-area-inset-bottom, 34px));
+  /* Adjusted: 92px (84px + 8px safe area) */
+  padding-bottom: 92px;
+  padding-bottom: calc(84px + env(safe-area-inset-bottom, 8px));
 }
 
 /* PWA Safe Area Support - standalone detection (WebKit + others) */
