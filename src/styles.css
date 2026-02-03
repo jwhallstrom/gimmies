@@ -29,16 +29,29 @@ html {
   overflow: hidden;
 }
 
-/* Fixed header - uses env() for Dynamic Island/notch */
+/* Fixed header - uses env() for Dynamic Island/notch with fallback */
 header {
-  padding-top: env(safe-area-inset-top);
+  /* Fallback for browsers that don't support env() - 50px covers Dynamic Island */
+  padding-top: 50px;
+  /* Real value for iOS - overrides fallback when env() works */
+  padding-top: env(safe-area-inset-top, 50px);
+  /* Force minimum height so content doesn't collapse behind Dynamic Island */
+  min-height: 60px;
+  min-height: calc(60px + env(safe-area-inset-top, 50px));
+  display: flex;
+  align-items: center;
 }
 
-/* Fixed footer - extends into home indicator area */
+/* Fixed footer - extends into home indicator area with fallback */
 footer {
-  padding-bottom: env(safe-area-inset-bottom);
-  /* Height = base nav height + safe area */
-  min-height: calc(68px + env(safe-area-inset-bottom));
+  /* Fallback for browsers that don't support env() - 34px for home indicator */
+  padding-bottom: 34px;
+  /* Real value for iOS - overrides fallback when env() works */
+  padding-bottom: env(safe-area-inset-bottom, 34px);
+  /* Fallback min-height */
+  min-height: 102px;
+  /* Real min-height with safe area */
+  min-height: calc(68px + env(safe-area-inset-bottom, 34px));
   background-color: inherit;
 }
 
@@ -140,20 +153,23 @@ a:active,
 
 /* Ticker positioning - sits directly above the fixed bottom nav */
 .ticker-above-footer {
-  /* Footer height (68px + safe area) + buffer */
-  bottom: calc(68px + env(safe-area-inset-bottom) + 8px);
+  /* Fallback: 110px (68px footer + 34px safe + 8px buffer) */
+  bottom: 110px;
+  bottom: calc(68px + env(safe-area-inset-bottom, 34px) + 8px);
 }
 
 /* FAB positioning - sits above ticker and bottom nav */
 .fab-position {
-  /* Ticker (~44px) + footer (68px + safe area) + spacing */
-  bottom: calc(120px + env(safe-area-inset-bottom));
+  /* Fallback: 154px (120px + 34px safe area) */
+  bottom: 154px;
+  bottom: calc(120px + env(safe-area-inset-bottom, 34px));
 }
 
 /* Content padding - bottom space for scrollable content to clear fixed footer */
 .content-with-footer {
-  /* Footer (68px + safe area) + buffer */
-  padding-bottom: calc(84px + env(safe-area-inset-bottom));
+  /* Fallback: 118px (84px + 34px safe area) */
+  padding-bottom: 118px;
+  padding-bottom: calc(84px + env(safe-area-inset-bottom, 34px));
 }
 
 /* PWA Safe Area Support - standalone detection (WebKit + others) */

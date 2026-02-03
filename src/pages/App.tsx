@@ -272,8 +272,8 @@ const App: React.FC = () => {
         </Link>
         <UserMenu />
       </header>
-      {/* Main content - padding-top accounts for fixed header height */}
-      <main className="flex-1 min-h-0 overflow-hidden relative w-full" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 60px)' }}>
+      {/* Main content - padding-top accounts for fixed header height (110px fallback = 50px safe area + 60px header) */}
+      <main className="flex-1 min-h-0 overflow-hidden relative w-full" style={{ paddingTop: 'calc(60px + env(safe-area-inset-top, 50px))' }}>
         <div
           className={`absolute inset-0 ${
             isEventRoute
