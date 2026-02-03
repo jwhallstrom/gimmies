@@ -37,7 +37,7 @@ const EventsPage: React.FC = () => {
 
   // Helper to get parent group name for group child events
   const getParentGroupName = (event: any) => {
-    if (!event.parentGroupId) return null;
+    if (!event.parentGroupId) return undefined;
     const parentGroup = events.find((e: any) => e.id === event.parentGroupId && e.hubType === 'group');
     return parentGroup?.name || 'Group';
   };
