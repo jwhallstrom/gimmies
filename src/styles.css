@@ -4,17 +4,15 @@
 
 /* ==========================================================================
    Root Layout - iOS PWA Safe Area & Dynamic Viewport
-   iOS 26.2.1: env() broken - HARD-CODED values for reliability
-   59px top (Dynamic Island), 34px bottom (home indicator)
+   Using env() variables for dynamic safe area handling
    ========================================================================== */
 
-html, body, #root {
-  min-height: 100dvh;
-  height: 100dvh;
+html, body {
+  height: 100%;
   margin: 0;
   padding: 0;
   overflow: hidden;
-  /* Dark theme background - prevents white bleed */
+  /* Dark background prevents white bleed in safe areas */
   background-color: #09243F;
 }
 
@@ -22,30 +20,25 @@ html {
   overscroll-behavior-y: none;
 }
 
-body { 
-  font-family: ui-sans-serif, system-ui, sans-serif;
-  /* HARD-CODED safe areas since env() returns 0px on iOS 26.2.1 */
-  padding-top: 0;           /* Header handles top */
-  padding-bottom: 34px;     /* Hard-coded home indicator height */
-  padding-left: 0;
-  padding-right: 0;
-  position: fixed;
-  inset: 0;
-  box-sizing: border-box;
-}
-
 #root {
-  height: 100%;
-  width: 100%;
+  /* Dynamic viewport height handles home indicator bar */
+  height: 100dvh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-/* Footer - HARD-CODED for iOS 26.2.1 */
+/* Fixed header - uses env() for Dynamic Island/notch */
+header {
+  padding-top: env(safe-area-inset-top);
+}
+
+/* Fixed footer - extends into home indicator area */
 footer {
-  padding-bottom: 34px;           /* Home indicator */
-  min-height: 102px;              /* 68px nav + 34px indicator */
+  padding-bottom: env(safe-area-inset-bottom);
+  /* Height = base nav height + safe area */
+  min-height: calc(68px + env(safe-area-inset-bottom));
   background-color: inherit;
 }
 
@@ -147,20 +140,20 @@ a:active,
 
 /* Ticker positioning - sits directly above the fixed bottom nav */
 .ticker-above-footer {
-  /* Footer 102px (68px nav + 34px indicator) + 8px buffer = 110px */
-  bottom: 110px;
+  /* Footer height (68px + safe area) + buffer */
+  bottom: calc(68px + env(safe-area-inset-bottom) + 8px);
 }
 
 /* FAB positioning - sits above ticker and bottom nav */
 .fab-position {
-  /* Ticker (~44px) + footer (102px) + spacing (16px) = 162px */
-  bottom: 162px;
+  /* Ticker (~44px) + footer (68px + safe area) + spacing */
+  bottom: calc(120px + env(safe-area-inset-bottom));
 }
 
 /* Content padding - bottom space for scrollable content to clear fixed footer */
 .content-with-footer {
-  /* Footer (102px) + buffer (16px) = 118px */
-  padding-bottom: 118px;
+  /* Footer (68px + safe area) + buffer */
+  padding-bottom: calc(84px + env(safe-area-inset-bottom));
 }
 
 /* PWA Safe Area Support - standalone detection (WebKit + others) */
