@@ -314,7 +314,7 @@ const App: React.FC = () => {
           </div>
         </div>
       </main>
-      <footer className="bottom-nav flex-shrink-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg border-t border-gray-200 dark:border-white/10 flex items-center justify-around z-40 px-2">
+      <footer className="bottom-nav flex-shrink-0 bg-white dark:bg-[#09243F] border-t border-gray-200 dark:border-white/10 flex items-center justify-around z-40 px-2">
         <Link
           to="/"
           className={`flex flex-col items-center justify-center gap-0.5 min-w-[56px] min-h-[52px] py-1.5 rounded-xl transition-all ${

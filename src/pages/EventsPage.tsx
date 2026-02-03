@@ -136,28 +136,18 @@ const EventsPage: React.FC = () => {
       />
 
       <div className="bg-white/90 backdrop-blur rounded-xl shadow-md p-6 border border-primary-900/5">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold text-primary-800">My Events</h1>
-            <p className="text-gray-600 mt-1">
-          {userEvents.length > 0 && userCompletedEvents.length > 0 
-            ? `${userEvents.length} active, ${userCompletedEvents.length} completed`
-            : userEvents.length > 0 
-              ? `${userEvents.length} active event${userEvents.length !== 1 ? 's' : ''}`
-              : userCompletedEvents.length > 0
-                ? `${userCompletedEvents.length} completed event${userCompletedEvents.length !== 1 ? 's' : ''}`
-                : 'Events you\'re participating in'
-          }
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => navigate('/join')}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-accent to-orange-500 hover:from-orange-500 hover:to-accent text-white font-extrabold shadow-md"
-            title="Join an event with a code"
-          >
-            Join Event
-          </button>
+        <div>
+          <h1 className="text-2xl font-bold text-primary-800">My Events</h1>
+          <p className="text-gray-600 mt-1">
+            {userEvents.length > 0 && userCompletedEvents.length > 0 
+              ? `${userEvents.length} active, ${userCompletedEvents.length} completed`
+              : userEvents.length > 0 
+                ? `${userEvents.length} active event${userEvents.length !== 1 ? 's' : ''}`
+                : userCompletedEvents.length > 0
+                  ? `${userCompletedEvents.length} completed event${userCompletedEvents.length !== 1 ? 's' : ''}`
+                  : 'Events you\'re participating in'
+            }
+          </p>
         </div>
         
         {/* Tab Navigation */}

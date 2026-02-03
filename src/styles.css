@@ -140,12 +140,30 @@ a:active,
 .pl-safe-base-0 { --pl-safe-base: 0; }
 .pr-safe-base-0 { --pr-safe-base: 0; }
 
-/* Bottom navigation - must fill to safe area on iOS */
+/* Bottom navigation - must fill to safe area on iOS with NO white gaps */
 .bottom-nav {
   padding: 0.5rem 0.25rem;
   padding-bottom: 0.5rem;
   /* iOS safe area padding */
   padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
+  /* Ensure nav extends to absolute bottom - prevent white gap on iOS */
+  position: relative;
+}
+
+/* Pseudo-element fills safe area with nav's background color - prevents white gap on iOS home indicator */
+.bottom-nav::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* Extend below the nav to cover any potential gap */
+  height: env(safe-area-inset-bottom, 0px);
+  /* Match the light/dark background - use CSS custom property */
+  background: inherit;
+  /* Transform to push it below the nav */
+  transform: translateY(100%);
+  pointer-events: none;
 }
 
 /* Ticker positioning - sits directly above the bottom nav 
