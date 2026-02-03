@@ -52,11 +52,11 @@ body {
   overflow: hidden;
 }
 
-/* Footer - minimal padding for home indicator coverage */
+/* Footer - padding for home indicator coverage */
 footer {
-  /* 34px covers home indicator with minimal extra space */
+  /* 34px fallback if env() returns 0px */
   padding-bottom: max(env(safe-area-inset-bottom, 0px), 34px);
-  min-height: calc(68px + 34px); /* 102px total */
+  min-height: calc(68px + max(env(safe-area-inset-bottom, 0px), 34px));
   background-color: inherit;
 }
 
@@ -158,20 +158,20 @@ a:active,
 
 /* Ticker positioning - sits directly above the fixed bottom nav */
 .ticker-above-footer {
-  /* Footer min-height is 102px (68px nav + 34px padding) */
-  bottom: 102px;
+  /* Footer: 68px nav + env(safe-area-inset-bottom) + 8px buffer */
+  bottom: calc(68px + env(safe-area-inset-bottom, 0px) + 8px);
 }
 
 /* FAB positioning - sits above ticker and bottom nav */
 .fab-position {
-  /* Ticker (~44px) + footer (102px) + spacing (16px) = ~162px */
-  bottom: 162px;
+  /* Ticker (~44px) + nav (68px) + safe area + spacing */
+  bottom: calc(120px + env(safe-area-inset-bottom, 0px));
 }
 
 /* Content padding - bottom space for scrollable content to clear fixed footer */
 .content-with-footer {
-  /* Footer (102px) + extra buffer (16px) = 118px */
-  padding-bottom: 118px;
+  /* Nav (68px) + safe area + buffer (16px) */
+  padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
 }
 
 /* PWA Safe Area Support - standalone detection (WebKit + others) */

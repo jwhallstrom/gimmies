@@ -265,7 +265,7 @@ const App: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col bg-gradient-to-b from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 text-gray-900 dark:text-slate-100">
-      <header className="flex-shrink-0 bg-primary-900/85 backdrop-blur text-white px-4 py-2.5 flex items-center justify-between shadow-md z-40 border-b border-white/10" style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 44px)' }}>
+      <header className="flex-shrink-0 bg-primary-900/85 backdrop-blur text-white px-4 py-2.5 flex items-center justify-between shadow-md z-40 border-b border-white/10" style={{ paddingTop: 'max(env(safe-area-inset-top, 0px), 59px)' }}>
         <Link to="/">
           <img src="/gimmies-logo.png" alt="Gimmies" className="h-10 w-auto" />
         </Link>
