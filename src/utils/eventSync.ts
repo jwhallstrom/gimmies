@@ -114,8 +114,8 @@ export async function saveEventToCloud(event: Event, currentProfileId: string): 
       isCompleted: event.isCompleted || false,
       shareCode,
       scorecardView: event.scorecardView || 'individual',
-      // Event lifecycle status
-      status: event.status || 'setup',
+      // Event lifecycle status - preserve undefined/null to maintain data integrity
+      status: event.status || null,
       // Hub type: 'event' (default) or 'group' (chat crew)
       hubType: event.hubType || 'event',
       // Parent group ID - links events created from groups
