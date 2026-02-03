@@ -4,72 +4,66 @@
 
 /* ==========================================================================
    Root Layout - iOS PWA Safe Area & Dynamic Viewport
-   iOS 26.1 breaks PWA env() (returns 0px); fixed in 26.2+
-   Using stronger max() fallbacks for notch/status bar and home indicator
+   iOS 26.1-26.2.1: env() returns 0px intermittently after nav/reopen
+   Using aggressive !important fallbacks to force coverage
    ========================================================================== */
 
 html, body, #root {
-  /* Force dynamic viewport height - handles iOS toolbar/keyboard */
-  min-height: 100dvh;
-  height: 100dvh;
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-  /* Dark theme background - any bleed shows dark, not white */
-  background-color: #09243F;
+  /* Force dynamic viewport height with !important to override any conflicts */
+  min-height: 100dvh !important;
+  height: 100dvh !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  /* Dark theme background - force dark bleed, no white flash */
+  background-color: #09243F !important;
 }
 
 html {
   /* Prevent pull-to-refresh and overscroll bounce in PWA mode */
-  overscroll-behavior-y: none;
+  overscroll-behavior-y: none !important;
 }
 
 body { 
   font-family: ui-sans-serif, system-ui, sans-serif;
-  /* Top safe area - handled by body padding so header doesn't get clipped by notch */
-  padding-top: max(env(safe-area-inset-top, 0px), 44px);
-  /* Bottom safe area - handled by footer, not body */
-  padding-bottom: 0;
+  /* Top safe area - 59px covers Dynamic Island on all iPhones */
+  padding-top: max(env(safe-area-inset-top, 0px), 59px) !important;
+  /* Bottom safe area - 48px hard fallback for home indicator */
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 48px) !important;
   padding-left: env(safe-area-inset-left, 0px);
   padding-right: env(safe-area-inset-right, 0px);
   /* Use fixed positioning to ensure full viewport coverage */
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  position: fixed !important;
+  inset: 0 !important;
   box-sizing: border-box;
 }
 
-/* Standalone PWA mode - higher fallback for Dynamic Island */
+/* Standalone PWA mode - hard fallback if env() resets to 0px */
 @media (display-mode: standalone) {
   body {
-    /* Dynamic Island needs ~59px */
-    padding-top: max(env(safe-area-inset-top, 0px), 59px);
+    /* Force 48px bottom even if env() returns 0px after navigation/reopen */
+    padding-bottom: 48px !important;
+    padding-top: 59px !important;
   }
 }
 
 #root {
-  /* Fill remaining space after top safe area padding */
-  height: 100%;
-  width: 100%;
+  /* Fill remaining space after safe area padding */
+  height: 100% !important;
+  width: 100% !important;
   /* Flex container for app layout */
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-/* Fixed footer must extend into home indicator area with explicit padding */
+/* Fixed footer - aggressive coverage for home indicator */
 footer {
-  /* Explicit padding-bottom to cover home indicator in iOS PWA */
-  padding-bottom: max(env(safe-area-inset-bottom, 0px), 34px) !important;
-}
-
-@media (display-mode: standalone) {
-  footer {
-    /* Higher fallback for standalone PWA mode */
-    padding-bottom: max(env(safe-area-inset-bottom, 0px), 48px) !important;
-  }
+  /* Hard 48px padding to cover home indicator regardless of env() */
+  padding-bottom: 48px !important;
+  /* Min height = nav icons (~68px) + home indicator padding (48px) */
+  min-height: calc(68px + 48px) !important;
+  background-color: inherit;
 }
 
 /* ==========================================================================
@@ -170,20 +164,20 @@ a:active,
 
 /* Ticker positioning - sits directly above the fixed bottom nav */
 .ticker-above-footer {
-  /* Footer height (~70px) + safe area with 48px fallback */
-  bottom: calc(70px + max(env(safe-area-inset-bottom, 0px), 48px));
+  /* Footer min-height is 116px (68px nav + 48px padding) */
+  bottom: 116px !important;
 }
 
 /* FAB positioning - sits above ticker and bottom nav */
 .fab-position {
-  /* Ticker (~44px) + footer (~70px) + spacing + safe area with fallback */
-  bottom: calc(130px + max(env(safe-area-inset-bottom, 0px), 48px));
+  /* Ticker (~44px) + footer (116px) + spacing (16px) = ~176px */
+  bottom: 176px !important;
 }
 
 /* Content padding - bottom space for scrollable content to clear fixed footer */
 .content-with-footer {
-  /* Footer height (~70px) + safe area fallback (~48px) + extra buffer */
-  padding-bottom: calc(70px + max(env(safe-area-inset-bottom, 0px), 48px));
+  /* Footer (116px) + extra buffer (16px) = 132px */
+  padding-bottom: 132px !important;
 }
 
 /* PWA Safe Area Support - standalone detection (WebKit + others) */
