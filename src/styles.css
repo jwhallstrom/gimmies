@@ -29,17 +29,11 @@ html {
   overflow: hidden;
 }
 
-/* Fixed header - uses env() for Dynamic Island/notch with fallback */
+/* Header - safe area padding for notch/Dynamic Island */
 header {
-  /* Fallback for browsers that don't support env() - 50px covers Dynamic Island */
+  /* Fallback padding-top for iOS safe area */
   padding-top: 50px;
-  /* Real value for iOS - overrides fallback when env() works */
   padding-top: env(safe-area-inset-top, 50px);
-  /* Force minimum height so content doesn't collapse behind Dynamic Island */
-  min-height: 60px;
-  min-height: calc(60px + env(safe-area-inset-top, 50px));
-  display: flex;
-  align-items: center;
 }
 
 /* Fixed footer - extends into home indicator area with fallback */
