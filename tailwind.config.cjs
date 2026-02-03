@@ -25,6 +25,22 @@ module.exports = {
           800: '#0D3762',
           900: '#09243F'
         }
+      },
+      // iOS Safe Area utilities for PWA
+      padding: {
+        'safe-bottom': 'env(safe-area-inset-bottom, 0px)',
+        'safe-top': 'env(safe-area-inset-top, 0px)',
+      },
+      height: {
+        // Nav base height (68px) + safe area inset for iOS home indicator
+        'safe-nav': 'calc(68px + env(safe-area-inset-bottom, 0px))',
+      },
+      spacing: {
+        'safe-bottom': 'env(safe-area-inset-bottom, 0px)',
+        'safe-top': 'env(safe-area-inset-top, 0px)',
+      },
+      minHeight: {
+        'safe-nav': 'calc(68px + env(safe-area-inset-bottom, 0px))',
       }
     }
   },

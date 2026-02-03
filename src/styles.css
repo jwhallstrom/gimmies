@@ -73,7 +73,7 @@ button, a, [role="button"], .no-select {
 }
 
 /* Hide bottom nav when chat input is focused (mobile keyboard visible) */
-body.chat-input-focused .bottom-nav {
+body.chat-input-focused footer {
   display: none !important;
 }
 
@@ -140,72 +140,22 @@ a:active,
 .pl-safe-base-0 { --pl-safe-base: 0; }
 .pr-safe-base-0 { --pr-safe-base: 0; }
 
-/* Bottom navigation - must fill to safe area on iOS with NO white gaps */
-.bottom-nav {
-  padding: 0.5rem 0.25rem;
-  /* Standard padding for nav items */
-  padding-bottom: 0.5rem;
-}
-
-/* Safe area filler - sits below the nav and fills the iOS home indicator area */
-.safe-area-bottom-fill {
-  flex-shrink: 0;
-  /* Height equals the safe area inset - fills the home indicator region */
-  height: env(safe-area-inset-bottom, 0px);
-  /* Minimum height for non-notched devices = 0, max for notched = safe area */
-  min-height: 0;
-  /* Background matches the nav - inherit from parent container */
-  background-color: inherit;
-  /* Ensure it's visible and not collapsed */
-  width: 100%;
-}
-
-/* Explicit colors for safe area filler in case inherit doesn't work */
-@supports (height: env(safe-area-inset-bottom)) {
-  .safe-area-bottom-fill {
-    /* Light mode: white */
-    background-color: white;
-  }
-  
-  .dark .safe-area-bottom-fill {
-    /* Dark mode: match primary-900 */
-    background-color: #09243F;
-  }
-}
-
-/* Ticker positioning - sits directly above the bottom nav 
-   Note: with flex layout footer, this positioning is relative to viewport bottom
-   since footer is part of the layout, not fixed */
+/* Ticker positioning - sits directly above the fixed bottom nav */
 .ticker-above-footer {
-  /* Base: footer height (~68px including safe area padding) */
-  bottom: 4.5rem;
-  /* Add safe area inset on iOS */
-  bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+  /* Footer base height (68px) + safe area = h-safe-nav in tailwind */
+  bottom: calc(68px + env(safe-area-inset-bottom, 0px));
 }
 
 /* FAB positioning - sits above ticker and bottom nav */
 .fab-position {
-  /* Base: ticker height (~44px) + footer height (~68px) + spacing */
-  bottom: 8rem;
-  /* Add safe area inset on iOS */
-  bottom: calc(8rem + env(safe-area-inset-bottom, 0px));
+  /* Ticker (~44px) + footer (68px) + spacing (16px) + safe area */
+  bottom: calc(128px + env(safe-area-inset-bottom, 0px));
 }
 
-/* Content padding - bottom space for scrollable content to clear any floating elements */
+/* Content padding - bottom space for scrollable content to clear fixed footer */
 .content-with-footer {
-  padding-bottom: 5rem;
-}
-
-@supports (padding-bottom: env(safe-area-inset-bottom)) {
-  .content-with-footer {
-    padding-bottom: calc(5rem + env(safe-area-inset-bottom));
-  }
-}
-
-@supports (padding-bottom: constant(safe-area-inset-bottom)) {
-  .content-with-footer {
-    padding-bottom: calc(5rem + constant(safe-area-inset-bottom));
-  }
+  /* Footer height (68px) + safe area + extra buffer (16px) */
+  padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
 }
 
 /* PWA Safe Area Support - standalone detection (WebKit + others) */
@@ -317,7 +267,7 @@ body, html {
   height: 100dvh;
 }
 
-/* Note: Footer safe area is handled by .bottom-nav class above */
+/* Note: Footer uses Tailwind h-safe-nav and pb-safe-bottom utilities */
 /* Main content padding is handled by .content-with-footer class */
 
 /* Sticky header top position - stick to top of scroll container */
