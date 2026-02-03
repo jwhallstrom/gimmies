@@ -265,13 +265,15 @@ const App: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col bg-gradient-to-b from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 text-gray-900 dark:text-slate-100">
-      <header className="flex-shrink-0 bg-primary-900/85 backdrop-blur text-white px-4 py-2.5 flex items-center justify-between shadow-md z-40 border-b border-white/10">
+      {/* Fixed header at top: 0 - background extends into notch, padding pushes content down */}
+      <header className="fixed top-0 left-0 right-0 bg-primary-900/85 backdrop-blur text-white px-4 py-2.5 flex items-center justify-between shadow-md z-40 border-b border-white/10">
         <Link to="/">
           <img src="/gimmies-logo.png" alt="Gimmies" className="h-10 w-auto" />
         </Link>
         <UserMenu />
       </header>
-      <main className="flex-1 min-h-0 overflow-hidden relative w-full">
+      {/* Main content - padding-top accounts for fixed header height */}
+      <main className="flex-1 min-h-0 overflow-hidden relative w-full" style={{ paddingTop: 'calc(env(safe-area-inset-top) + 60px)' }}>
         <div
           className={`absolute inset-0 ${
             isEventRoute
