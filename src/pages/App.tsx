@@ -264,18 +264,18 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-gradient-to-b from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 text-gray-900 dark:text-slate-100">
-      <header className="flex-shrink-0 bg-primary-900/85 backdrop-blur text-white px-4 py-3 pt-safe flex items-center justify-between shadow-md z-40 border-b border-white/10">
+    <div className="h-full flex flex-col bg-gradient-to-b from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 text-gray-900 dark:text-slate-100">
+      <header className="flex-shrink-0 bg-primary-900/85 backdrop-blur text-white px-4 py-3 flex items-center justify-between shadow-md z-40 border-b border-white/10">
         <Link to="/">
           <img src="/gimmies-logo.png" alt="Gimmies" className="h-12 w-auto" />
         </Link>
         <UserMenu />
       </header>
-      <main className="flex-1 min-h-0 relative w-full">
+      <main className="flex-1 min-h-0 overflow-hidden relative w-full">
         <div
           className={`absolute inset-0 ${
             isEventRoute
-              ? `${isEventChatRoute ? 'overflow-hidden' : 'overflow-y-auto'} app-scroll-with-bottom-nav`
+              ? `${isEventChatRoute ? 'overflow-hidden' : 'overflow-y-auto'}`
               : 'overflow-y-auto'
           }`}
         >
@@ -314,8 +314,8 @@ const App: React.FC = () => {
           </div>
         </div>
       </main>
-      {/* Fixed bottom nav - h-safe-nav extends background into iOS safe area, pb-safe-bottom pushes content above home indicator */}
-      <footer className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-[#09243F] border-t border-gray-200 dark:border-white/10 h-safe-nav pb-safe-bottom flex items-start justify-around px-2 pt-2">
+      {/* Fixed bottom nav - min-h-safe-nav extends background into iOS safe area, pb-safe-bottom pushes content above home indicator */}
+      <footer className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-[#09243F] border-t border-gray-200 dark:border-white/10 min-h-safe-nav pb-safe-bottom flex items-start justify-around px-2 pt-2">
         <Link
           to="/"
           className={`flex flex-col items-center justify-center gap-0.5 min-w-[56px] min-h-[52px] py-1.5 rounded-xl transition-all ${
