@@ -143,27 +143,34 @@ a:active,
 /* Bottom navigation - must fill to safe area on iOS with NO white gaps */
 .bottom-nav {
   padding: 0.5rem 0.25rem;
+  /* Standard padding for nav items */
   padding-bottom: 0.5rem;
-  /* iOS safe area padding */
-  padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
-  /* Ensure nav extends to absolute bottom - prevent white gap on iOS */
-  position: relative;
 }
 
-/* Pseudo-element fills safe area with nav's background color - prevents white gap on iOS home indicator */
-.bottom-nav::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  /* Extend below the nav to cover any potential gap */
+/* Safe area filler - sits below the nav and fills the iOS home indicator area */
+.safe-area-bottom-fill {
+  flex-shrink: 0;
+  /* Height equals the safe area inset - fills the home indicator region */
   height: env(safe-area-inset-bottom, 0px);
-  /* Match the light/dark background - use CSS custom property */
-  background: inherit;
-  /* Transform to push it below the nav */
-  transform: translateY(100%);
-  pointer-events: none;
+  /* Minimum height for non-notched devices = 0, max for notched = safe area */
+  min-height: 0;
+  /* Background matches the nav - inherit from parent container */
+  background-color: inherit;
+  /* Ensure it's visible and not collapsed */
+  width: 100%;
+}
+
+/* Explicit colors for safe area filler in case inherit doesn't work */
+@supports (height: env(safe-area-inset-bottom)) {
+  .safe-area-bottom-fill {
+    /* Light mode: white */
+    background-color: white;
+  }
+  
+  .dark .safe-area-bottom-fill {
+    /* Dark mode: match primary-900 */
+    background-color: #09243F;
+  }
 }
 
 /* Ticker positioning - sits directly above the bottom nav 
