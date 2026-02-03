@@ -4,65 +4,59 @@
 
 /* ==========================================================================
    Root Layout - iOS PWA Safe Area & Dynamic Viewport
-   iOS 26.1-26.2.1: env() returns 0px intermittently after nav/reopen
-   Using aggressive !important fallbacks to force coverage
+   iOS 26.2.1: Scaled-back fallbacks (34-40px) for balance
+   Header handles top inset, footer handles bottom inset
    ========================================================================== */
 
 html, body, #root {
-  /* Force dynamic viewport height with !important to override any conflicts */
-  min-height: 100dvh !important;
-  height: 100dvh !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  overflow: hidden !important;
-  /* Dark theme background - force dark bleed, no white flash */
-  background-color: #09243F !important;
+  min-height: 100dvh;
+  height: 100dvh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  /* Dark theme background - dark bleed prevents white flash */
+  background-color: #09243F;
 }
 
 html {
   /* Prevent pull-to-refresh and overscroll bounce in PWA mode */
-  overscroll-behavior-y: none !important;
+  overscroll-behavior-y: none;
 }
 
 body { 
   font-family: ui-sans-serif, system-ui, sans-serif;
-  /* Top safe area - 59px covers Dynamic Island on all iPhones */
-  padding-top: max(env(safe-area-inset-top, 0px), 59px) !important;
-  /* Bottom safe area - 48px hard fallback for home indicator */
-  padding-bottom: max(env(safe-area-inset-bottom, 0px), 48px) !important;
+  /* Top safe area handled by header component (see App.tsx) */
+  padding-top: 0;
+  /* Bottom safe area handled by footer + body fallback */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
   padding-left: env(safe-area-inset-left, 0px);
   padding-right: env(safe-area-inset-right, 0px);
-  /* Use fixed positioning to ensure full viewport coverage */
-  position: fixed !important;
-  inset: 0 !important;
+  position: fixed;
+  inset: 0;
   box-sizing: border-box;
 }
 
-/* Standalone PWA mode - hard fallback if env() resets to 0px */
+/* Standalone PWA mode - fallback for iOS 26.x env() resets */
 @media (display-mode: standalone) {
   body {
-    /* Force 48px bottom even if env() returns 0px after navigation/reopen */
-    padding-bottom: 48px !important;
-    padding-top: 59px !important;
+    /* 34px bottom for home indicator fallback */
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 34px);
   }
 }
 
 #root {
-  /* Fill remaining space after safe area padding */
-  height: 100% !important;
-  width: 100% !important;
-  /* Flex container for app layout */
+  height: 100%;
+  width: 100%;
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-/* Fixed footer - aggressive coverage for home indicator */
+/* Footer - minimal padding for home indicator coverage */
 footer {
-  /* Hard 48px padding to cover home indicator regardless of env() */
-  padding-bottom: 48px !important;
-  /* Min height = nav icons (~68px) + home indicator padding (48px) */
-  min-height: calc(68px + 48px) !important;
+  /* 34px covers home indicator with minimal extra space */
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 34px);
+  min-height: calc(68px + 34px); /* 102px total */
   background-color: inherit;
 }
 
@@ -164,20 +158,20 @@ a:active,
 
 /* Ticker positioning - sits directly above the fixed bottom nav */
 .ticker-above-footer {
-  /* Footer min-height is 116px (68px nav + 48px padding) */
-  bottom: 116px !important;
+  /* Footer min-height is 102px (68px nav + 34px padding) */
+  bottom: 102px;
 }
 
 /* FAB positioning - sits above ticker and bottom nav */
 .fab-position {
-  /* Ticker (~44px) + footer (116px) + spacing (16px) = ~176px */
-  bottom: 176px !important;
+  /* Ticker (~44px) + footer (102px) + spacing (16px) = ~162px */
+  bottom: 162px;
 }
 
 /* Content padding - bottom space for scrollable content to clear fixed footer */
 .content-with-footer {
-  /* Footer (116px) + extra buffer (16px) = 132px */
-  padding-bottom: 132px !important;
+  /* Footer (102px) + extra buffer (16px) = 118px */
+  padding-bottom: 118px;
 }
 
 /* PWA Safe Area Support - standalone detection (WebKit + others) */
