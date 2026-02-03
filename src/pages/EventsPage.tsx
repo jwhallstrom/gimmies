@@ -33,6 +33,7 @@ const EventsPage: React.FC = () => {
   const [previousCompletedCount, setPreviousCompletedCount] = useState(0);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const [isWizardOpen, setIsWizardOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Helper to get parent group name for group child events
   const getParentGroupName = (event: any) => {
@@ -108,6 +109,25 @@ const EventsPage: React.FC = () => {
     currentProfile && event.golfers.some(golfer => golfer.profileId === currentProfile.id) && event.hubType !== 'group'
   );
 
+  // Filter events by search query
+  const filteredLiveEvents = useMemo(() => {
+    if (!searchQuery.trim()) return liveEvents;
+    const q = searchQuery.toLowerCase();
+    return liveEvents.filter(e => (e.name || '').toLowerCase().includes(q));
+  }, [liveEvents, searchQuery]);
+
+  const filteredUpcomingEvents = useMemo(() => {
+    if (!searchQuery.trim()) return upcomingEvents;
+    const q = searchQuery.toLowerCase();
+    return upcomingEvents.filter(e => (e.name || '').toLowerCase().includes(q));
+  }, [upcomingEvents, searchQuery]);
+
+  const filteredCompletedEvents = useMemo(() => {
+    if (!searchQuery.trim()) return userCompletedEvents;
+    const q = searchQuery.toLowerCase();
+    return userCompletedEvents.filter(e => (e.name || '').toLowerCase().includes(q));
+  }, [userCompletedEvents, searchQuery]);
+
   if (!currentProfile) {
     return <div>Please log in to view your events.</div>;
   }
@@ -152,19 +172,19 @@ const EventsPage: React.FC = () => {
         }}
       />
 
-      <div className="bg-white/90 backdrop-blur rounded-xl shadow-md p-6 border border-primary-900/5">
+      <div className="bg-white/90 backdrop-blur rounded-xl shadow-md p-4 border border-primary-900/5">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-primary-800">My Events</h1>
-            <p className="text-gray-600 mt-1">
-          {userEvents.length > 0 && userCompletedEvents.length > 0 
-            ? `${userEvents.length} active, ${userCompletedEvents.length} completed`
-            : userEvents.length > 0 
-              ? `${userEvents.length} active event${userEvents.length !== 1 ? 's' : ''}`
-              : userCompletedEvents.length > 0
-                ? `${userCompletedEvents.length} completed event${userCompletedEvents.length !== 1 ? 's' : ''}`
-                : 'Events you\'re participating in'
-          }
+            <h1 className="text-xl font-bold text-primary-800">My Events</h1>
+            <p className="text-gray-600 text-sm mt-0.5">
+              {userEvents.length > 0 && userCompletedEvents.length > 0 
+                ? `${userEvents.length} active, ${userCompletedEvents.length} completed`
+                : userEvents.length > 0 
+                  ? `${userEvents.length} active event${userEvents.length !== 1 ? 's' : ''}`
+                  : userCompletedEvents.length > 0
+                    ? `${userCompletedEvents.length} completed event${userCompletedEvents.length !== 1 ? 's' : ''}`
+                    : 'Events you\'re participating in'
+              }
             </p>
           </div>
           <button
@@ -184,8 +204,36 @@ const EventsPage: React.FC = () => {
           </button>
         </div>
         
+        {/* Search Bar */}
+        {(userEvents.length > 0 || userCompletedEvents.length > 0) && (
+          <div className="mt-3">
+            <div className="relative">
+              <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search events..."
+                className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+        
         {/* Tab Navigation */}
-        <div className="flex gap-1 mt-4 bg-gray-100 rounded-lg p-1">
+        <div className="flex gap-1 mt-3 bg-gray-100 rounded-lg p-1">
           <button
             onClick={() => setActiveTab('active')}
             className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
@@ -226,30 +274,37 @@ const EventsPage: React.FC = () => {
           {/* Empty State */}
           {userEvents.length === 0 && (
             <div className="text-center py-12">
-              <div className="text-lg mb-2 text-gray-600">No active events</div>
-              <div className="text-sm text-gray-500">Create your first event to get started!</div>
+              <div className="text-lg mb-2 text-white">No active events</div>
+              <div className="text-sm text-gray-400">Create your first event to get started!</div>
+            </div>
+          )}
+
+          {/* No Search Results */}
+          {userEvents.length > 0 && searchQuery && filteredLiveEvents.length === 0 && filteredUpcomingEvents.length === 0 && (
+            <div className="text-center py-8">
+              <div className="text-gray-500">No events match "{searchQuery}"</div>
             </div>
           )}
 
           {/* 🔴 LIVE Section */}
-          {liveEvents.length > 0 && (
-            <div className="mb-6">
-              <div className="flex items-center gap-2 mb-3">
+          {filteredLiveEvents.length > 0 && (
+            <div className="mb-4">
+              <div className="flex items-center gap-2 mb-2">
                 <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-                <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wide">Live</h3>
-                <span className="text-xs text-gray-500">({liveEvents.length})</span>
+                <h3 className="font-bold text-white text-sm uppercase tracking-wide">Live</h3>
+                <span className="text-xs text-gray-400">({filteredLiveEvents.length})</span>
               </div>
-              <div className="space-y-3">
-                {liveEvents.map(event => (
+              <div className="space-y-2">
+                {filteredLiveEvents.map(event => (
                   <EventCard 
                     key={event.id} 
                     event={event} 
                     profiles={profiles}
                     currentProfile={currentProfile}
                     status="live"
-                    parentGroupId={event.parentGroupId}
-                    parentGroupName={getParentGroupName(event)}
                     onDelete={deleteEvent}
+                    parentGroupId={(event as any).parentGroupId}
+                    parentGroupName={getParentGroupName(event)}
                   />
                 ))}
               </div>
@@ -257,24 +312,24 @@ const EventsPage: React.FC = () => {
           )}
 
           {/* 📅 UPCOMING Section */}
-          {upcomingEvents.length > 0 && (
-            <div className="mb-6">
-              <div className="flex items-center gap-2 mb-3">
+          {filteredUpcomingEvents.length > 0 && (
+            <div className="mb-4">
+              <div className="flex items-center gap-2 mb-2">
                 <span className="text-base">📅</span>
-                <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wide">Upcoming</h3>
-                <span className="text-xs text-gray-500">({upcomingEvents.length})</span>
+                <h3 className="font-bold text-white text-sm uppercase tracking-wide">Upcoming</h3>
+                <span className="text-xs text-gray-400">({filteredUpcomingEvents.length})</span>
               </div>
-              <div className="space-y-3">
-                {upcomingEvents.map(event => (
+              <div className="space-y-2">
+                {filteredUpcomingEvents.map(event => (
                   <EventCard 
                     key={event.id} 
                     event={event} 
                     profiles={profiles}
                     currentProfile={currentProfile}
                     status="upcoming"
-                    parentGroupId={event.parentGroupId}
-                    parentGroupName={getParentGroupName(event)}
                     onDelete={deleteEvent}
+                    parentGroupId={(event as any).parentGroupId}
+                    parentGroupName={getParentGroupName(event)}
                   />
                 ))}
               </div>
@@ -285,25 +340,32 @@ const EventsPage: React.FC = () => {
 
       {activeTab === 'history' && (
         <>
+          {/* No Search Results */}
+          {userCompletedEvents.length > 0 && searchQuery && filteredCompletedEvents.length === 0 && (
+            <div className="text-center py-8">
+              <div className="text-gray-500">No events match "{searchQuery}"</div>
+            </div>
+          )}
+          
           {/* Completed Events */}
-          {userCompletedEvents.length > 0 ? (
-            <div className="space-y-3">
-              {userCompletedEvents.map(event => (
+          {filteredCompletedEvents.length > 0 ? (
+            <div className="space-y-2">
+              {filteredCompletedEvents.map(event => (
                 <EventCard 
                   key={event.id} 
                   event={event} 
                   profiles={profiles}
                   currentProfile={currentProfile}
                   status="completed"
-                  parentGroupId={event.parentGroupId}
+                  parentGroupId={(event as any).parentGroupId}
                   parentGroupName={getParentGroupName(event)}
                 />
               ))}
             </div>
-          ) : (
+          ) : !searchQuery && (
             <div className="text-center py-12">
-              <div className="text-lg mb-2 text-gray-600">No completed events</div>
-              <div className="text-sm text-gray-500">Completed events will appear here after you finish them.</div>
+              <div className="text-lg mb-2 text-white">No completed events</div>
+              <div className="text-sm text-gray-400">Completed events will appear here after you finish them.</div>
             </div>
           )}
         </>
@@ -318,10 +380,10 @@ const EventCard: React.FC<{
   profiles: any[];
   currentProfile: any;
   status: 'live' | 'upcoming' | 'completed';
-  parentGroupId?: string | null;
-  parentGroupName?: string | null;
   onDelete?: (id: string) => void;
-}> = ({ event, profiles, currentProfile, status, parentGroupId, parentGroupName, onDelete }) => {
+  parentGroupId?: string;
+  parentGroupName?: string;
+}> = ({ event, profiles, currentProfile, status, onDelete, parentGroupId, parentGroupName }) => {
   const navigate = useNavigate();
   
   const golferCount = event.golfers.length;
@@ -430,6 +492,16 @@ const EventCard: React.FC<{
             <span className="font-semibold text-gray-900 truncate">
               {event.name || 'Untitled Event'}
             </span>
+            {parentGroupId && parentGroupName && (
+              <Link
+                to={`/event/${parentGroupId}`}
+                onClick={(e) => e.stopPropagation()}
+                className="flex-shrink-0 px-2 py-0.5 text-[10px] font-bold bg-purple-500 hover:bg-purple-600 text-white rounded-full uppercase transition-colors"
+                title={`Part of group: ${parentGroupName}`}
+              >
+                {parentGroupName.slice(0, 12)}{parentGroupName.length > 12 ? '…' : ''}
+              </Link>
+            )}
             {status === 'live' && (
               <span className="flex-shrink-0 px-2 py-0.5 text-[10px] font-bold bg-red-500 text-white rounded-full uppercase">
                 Live
@@ -445,19 +517,6 @@ const EventCard: React.FC<{
             <span>{formatDateShort(event.date)}</span>
             <span className="text-gray-300">•</span>
             <span>{golferCount} golfer{golferCount !== 1 ? 's' : ''}</span>
-            {parentGroupId && parentGroupName && (
-              <>
-                <span className="text-gray-300">•</span>
-                <Link
-                  to={`/event/${parentGroupId}/chat`}
-                  onClick={(e) => e.stopPropagation()}
-                  className="inline-flex items-center gap-1 text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded hover:bg-purple-200 transition-colors"
-                >
-                  <span>👥</span>
-                  <span className="truncate max-w-[140px]">{parentGroupName}</span>
-                </Link>
-              </>
-            )}
             {(status === 'live' || status === 'completed') && leader && leader.thru > 0 && (
               <>
                 <span className="text-gray-300">•</span>

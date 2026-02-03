@@ -25,6 +25,29 @@ module.exports = {
           800: '#0D3762',
           900: '#09243F'
         }
+      },
+      // iOS Safe Area & Dynamic Viewport utilities for PWA
+      padding: {
+        'safe-bottom': 'env(safe-area-inset-bottom, 0px)',
+        'safe-top': 'env(safe-area-inset-top, 0px)',
+      },
+      height: {
+        // Dynamic viewport height - handles iOS toolbar/keyboard changes
+        'screen-d': '100dvh',
+        // Nav base height (68px) + safe area inset for iOS home indicator
+        'safe-nav': 'calc(68px + env(safe-area-inset-bottom, 0px))',
+      },
+      spacing: {
+        'safe-bottom': 'env(safe-area-inset-bottom, 0px)',
+        'safe-top': 'env(safe-area-inset-top, 0px)',
+      },
+      minHeight: {
+        // Dynamic viewport height
+        'screen-d': '100dvh',
+        'safe-nav': 'calc(68px + env(safe-area-inset-bottom, 0px))',
+      },
+      maxHeight: {
+        'screen-d': '100dvh',
       }
     }
   },

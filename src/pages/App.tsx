@@ -264,18 +264,20 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-gradient-to-b from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 text-gray-900 dark:text-slate-100">
-      <header className="flex-shrink-0 bg-primary-900/85 backdrop-blur text-white px-4 py-3 pt-safe flex items-center justify-between shadow-md z-40 border-b border-white/10">
+    <div className="h-full flex flex-col bg-gradient-to-b from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 text-gray-900 dark:text-slate-100">
+      {/* Header - flex child, CSS handles safe area padding */}
+      <header className="flex-shrink-0 bg-primary-900/85 backdrop-blur text-white px-4 py-2.5 flex items-center justify-between shadow-md z-40 border-b border-white/10">
         <Link to="/">
-          <img src="/gimmies-logo.png" alt="Gimmies" className="h-12 w-auto" />
+          <img src="/gimmies-logo.png" alt="Gimmies" className="h-10 w-auto" />
         </Link>
         <UserMenu />
       </header>
-      <main className="flex-1 min-h-0 relative w-full">
+      {/* Main content area */}
+      <main className="flex-1 min-h-0 overflow-hidden relative w-full">
         <div
           className={`absolute inset-0 ${
             isEventRoute
-              ? `${isEventChatRoute ? 'overflow-hidden' : 'overflow-y-auto'} app-scroll-with-bottom-nav`
+              ? `${isEventChatRoute ? 'overflow-hidden' : 'overflow-y-auto'}`
               : 'overflow-y-auto'
           }`}
         >
@@ -283,9 +285,9 @@ const App: React.FC = () => {
             className={
               isEventRoute
                 ? (isEventChatRoute
-                    ? 'px-4 pt-6 h-full max-w-5xl w-full mx-auto'
-                    : 'px-4 pt-6 content-with-footer max-w-5xl w-full mx-auto')
-                : 'px-4 pt-6 content-with-footer max-w-5xl w-full mx-auto'
+                    ? 'px-4 pt-4 h-full max-w-5xl w-full mx-auto'
+                    : 'px-4 pt-4 content-with-footer max-w-5xl w-full mx-auto')
+                : 'px-4 pt-4 content-with-footer max-w-5xl w-full mx-auto'
             }
           >
             <Suspense fallback={<LoadingSpinner message="Loading page..." />}>
@@ -314,7 +316,8 @@ const App: React.FC = () => {
           </div>
         </div>
       </main>
-      <footer className="bottom-nav flex-shrink-0 bg-white/95 dark:bg-slate-900/95 backdrop-blur-lg border-t border-gray-200 dark:border-white/10 flex items-center justify-around z-40 px-2">
+      {/* Fixed bottom nav - CSS handles padding-bottom for iOS home indicator safe area */}
+      <footer className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-[#09243F] border-t border-gray-200 dark:border-white/10 flex items-center justify-around px-2 pt-2">
         <Link
           to="/"
           className={`flex flex-col items-center justify-center gap-0.5 min-w-[56px] min-h-[52px] py-1.5 rounded-xl transition-all ${
@@ -398,8 +401,8 @@ const App: React.FC = () => {
         <LevelUpModal
           isOpen={true}
           onClose={clearPendingLevelUp}
-          oldTier={pendingLevelUp.oldTier}
-          newTier={pendingLevelUp.newTier}
+          oldLevel={pendingLevelUp.oldLevel}
+          newLevel={pendingLevelUp.newLevel}
           verifiedRounds={pendingLevelUp.verifiedRounds}
         />
       )}

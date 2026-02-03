@@ -2,43 +2,51 @@
 @tailwind components;
 @tailwind utilities;
 
-html { 
-  height: 100%;
-  height: 100dvh;
-  /* Prevent iOS "white gap" during rubber-band / dynamic viewport */
-  background-color: #09243F;
-  /* Ensure layout is stable on initial load */
-  overflow: hidden;
-}
+/* ==========================================================================
+   Root Layout - iOS PWA Safe Area & Dynamic Viewport
+   Using env() variables for dynamic safe area handling
+   ========================================================================== */
 
-body { 
-  font-family: ui-sans-serif, system-ui, sans-serif;
+html, body {
   height: 100%;
-  height: 100dvh;
   margin: 0;
   padding: 0;
-  /* Prevent iOS "white gap" during rubber-band / dynamic viewport */
-  background-color: #09243F;
-  /* Prevent body from scrolling - let inner containers handle it */
   overflow: hidden;
-  /* Force layout to be fixed size immediately */
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  /* Dark background prevents white bleed in safe areas */
+  background-color: #09243F;
+}
+
+html {
+  overscroll-behavior-y: none;
 }
 
 #root {
-  height: 100%;
-  width: 100%;
-  background-color: #09243F;
-  /* Ensure root fills the fixed body */
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  /* Dynamic viewport height handles home indicator bar */
+  height: 100dvh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Header - safe area padding for notch/Dynamic Island */
+header {
+  /* Fallback padding-top for iOS safe area */
+  padding-top: 50px;
+  padding-top: env(safe-area-inset-top, 50px);
+}
+
+/* Fixed footer - extends into home indicator area with fallback */
+footer {
+  /* Fallback for browsers that don't support env() - 34px for home indicator */
+  padding-bottom: 34px;
+  /* Real value for iOS - overrides fallback when env() works */
+  padding-bottom: env(safe-area-inset-bottom, 34px);
+  /* Fallback min-height */
+  min-height: 102px;
+  /* Real min-height with safe area */
+  min-height: calc(68px + env(safe-area-inset-bottom, 34px));
+  background-color: inherit;
 }
 
 /* ==========================================================================
@@ -50,10 +58,7 @@ button, a, [role="button"], input, select, textarea {
   touch-action: manipulation;
 }
 
-/* Prevent pull-to-refresh in PWA mode (allows internal scrolling) */
-html {
-  overscroll-behavior-y: contain;
-}
+/* overscroll-behavior-y: contain is now set in the root html rule above */
 
 /* Minimum 44px touch targets for accessibility */
 .touch-target {
@@ -73,7 +78,7 @@ button, a, [role="button"], .no-select {
 }
 
 /* Hide bottom nav when chat input is focused (mobile keyboard visible) */
-body.chat-input-focused .bottom-nav {
+body.chat-input-focused footer {
   display: none !important;
 }
 
@@ -140,47 +145,25 @@ a:active,
 .pl-safe-base-0 { --pl-safe-base: 0; }
 .pr-safe-base-0 { --pr-safe-base: 0; }
 
-/* Bottom navigation - must fill to safe area on iOS */
-.bottom-nav {
-  padding: 0.5rem 0.25rem;
-  padding-bottom: 0.5rem;
-  /* iOS safe area padding */
-  padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
-}
-
-/* Ticker positioning - sits directly above the bottom nav 
-   Note: with flex layout footer, this positioning is relative to viewport bottom
-   since footer is part of the layout, not fixed */
+/* Ticker positioning - sits directly above the fixed bottom nav */
 .ticker-above-footer {
-  /* Base: footer height (~68px including safe area padding) */
-  bottom: 4.5rem;
-  /* Add safe area inset on iOS */
-  bottom: calc(4.5rem + env(safe-area-inset-bottom, 0px));
+  /* Fallback: 110px (68px footer + 34px safe + 8px buffer) */
+  bottom: 110px;
+  bottom: calc(68px + env(safe-area-inset-bottom, 34px) + 8px);
 }
 
 /* FAB positioning - sits above ticker and bottom nav */
 .fab-position {
-  /* Base: ticker height (~44px) + footer height (~68px) + spacing */
-  bottom: 8rem;
-  /* Add safe area inset on iOS */
-  bottom: calc(8rem + env(safe-area-inset-bottom, 0px));
+  /* Fallback: 154px (120px + 34px safe area) */
+  bottom: 154px;
+  bottom: calc(120px + env(safe-area-inset-bottom, 34px));
 }
 
-/* Content padding - bottom space for scrollable content to clear any floating elements */
+/* Content padding - bottom space for scrollable content to clear fixed footer */
 .content-with-footer {
-  padding-bottom: 5rem;
-}
-
-@supports (padding-bottom: env(safe-area-inset-bottom)) {
-  .content-with-footer {
-    padding-bottom: calc(5rem + env(safe-area-inset-bottom));
-  }
-}
-
-@supports (padding-bottom: constant(safe-area-inset-bottom)) {
-  .content-with-footer {
-    padding-bottom: calc(5rem + constant(safe-area-inset-bottom));
-  }
+  /* Fallback: 118px (84px + 34px safe area) */
+  padding-bottom: 118px;
+  padding-bottom: calc(84px + env(safe-area-inset-bottom, 34px));
 }
 
 /* PWA Safe Area Support - standalone detection (WebKit + others) */
@@ -292,7 +275,7 @@ body, html {
   height: 100dvh;
 }
 
-/* Note: Footer safe area is handled by .bottom-nav class above */
+/* Note: Footer uses Tailwind h-safe-nav and pb-safe-bottom utilities */
 /* Main content padding is handled by .content-with-footer class */
 
 /* Sticky header top position - stick to top of scroll container */

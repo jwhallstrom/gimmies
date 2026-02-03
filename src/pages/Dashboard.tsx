@@ -84,8 +84,6 @@ const Dashboard: React.FC = () => {
   const homeDefaultTabPref = (currentProfile?.preferences as any)?.homeDefaultTab as Tab | undefined;
   const [tabTouched, setTabTouched] = useState(false);
   const [tab, setTab] = useState<Tab>(() => (homeDefaultTabPref === 'groups' ? 'groups' : 'events'));
-  const [eventSearch, setEventSearch] = useState('');
-  const [groupSearch, setGroupSearch] = useState('');
   const [showRecentEvents, setShowRecentEvents] = useState(false);
 
   // Apply preferred default tab when profile loads (unless user already interacted)
@@ -173,22 +171,6 @@ const Dashboard: React.FC = () => {
     return { liveEvents: live, upcomingEvents: upcoming, completedEvents: completed, groups: groupList, activeEvents: active };
   }, [userEvents]);
 
-  // Filtered events for search
-  const { filteredLive, filteredUpcoming, filteredCompleted } = useMemo(() => {
-    const q = eventSearch.trim().toLowerCase();
-    if (!q) return { filteredLive: liveEvents, filteredUpcoming: upcomingEvents, filteredCompleted: completedEvents };
-    return {
-      filteredLive: liveEvents.filter(e => (e.name || '').toLowerCase().includes(q)),
-      filteredUpcoming: upcomingEvents.filter(e => (e.name || '').toLowerCase().includes(q)),
-      filteredCompleted: completedEvents.filter(e => (e.name || '').toLowerCase().includes(q)),
-    };
-  }, [liveEvents, upcomingEvents, completedEvents, eventSearch]);
-
-  const filteredGroups = useMemo(() => {
-    const q = groupSearch.trim().toLowerCase();
-    if (!q) return groups;
-    return groups.filter(g => (g.name || '').toLowerCase().includes(q));
-  }, [groups, groupSearch]);
 
   // Quick stats
   const stats = useMemo(() => {
@@ -363,7 +345,7 @@ const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="space-y-5 pb-32">
+    <div className="space-y-4 pb-32">
       {isGuest && (
         <SignInRequired
           title="You're in Guest Mode"
@@ -379,7 +361,7 @@ const Dashboard: React.FC = () => {
         />
       )}
       {/* Compact Header - Avatar + Name + Quick Stats in one row */}
-      <header className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 -mx-4 -mt-6 px-4 pt-6 pb-4 shadow-lg">
+      <header className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 -mx-4 -mt-4 px-4 pt-4 pb-3 shadow-lg">
         <div className="flex items-center gap-3">
           {/* Avatar - Opens Settings */}
           <button 
@@ -547,30 +529,6 @@ const Dashboard: React.FC = () => {
         document.body
       )}
 
-      {/* Quick Actions - Compact Buttons */}
-      <section className="flex gap-3">
-        <button
-          onClick={openEventWizard}
-          className="flex-1 bg-gradient-to-r from-primary-600 to-primary-700 rounded-xl py-3 px-4 text-white font-bold text-sm shadow-lg hover:shadow-xl hover:scale-[1.02] transition-all flex items-center justify-center gap-2 border border-primary-500"
-        >
-          <span>⛳</span>
-          <span>Create Event</span>
-        </button>
-        
-        <button
-          onClick={() => {
-            if (isGuest) {
-              addToast?.('Sign in to join events', 'error', 2500);
-              return;
-            }
-            navigate('/join');
-          }}
-          className="flex-1 bg-white rounded-xl py-3 px-4 border-2 border-slate-200 font-bold text-sm text-slate-800 shadow-md hover:shadow-lg hover:border-primary-400 hover:scale-[1.02] transition-all flex items-center justify-center gap-2"
-        >
-          <span className="text-lg font-bold text-primary-600">+</span>
-          <span>Join Event</span>
-        </button>
-      </section>
       {/* Events & Groups - Segmented Control Style */}
       <section className="-mx-4 sm:mx-0 rounded-none sm:rounded-2xl overflow-hidden border-y border-x-0 sm:border-2 border-slate-200 shadow-md bg-white">
         {/* Tab Bar - Pill Style with Colored Backgrounds */}
@@ -621,21 +579,6 @@ const Dashboard: React.FC = () => {
         <div className="p-3">
             {tab === 'events' && (
             <>
-              {/* Search - minimal */}
-              {(liveEvents.length > 0 || upcomingEvents.length > 0 || completedEvents.length > 0) && (
-                <div className="mb-4">
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔎</span>
-                    <input
-                      value={eventSearch}
-                      onChange={(e) => setEventSearch(e.target.value)}
-                      placeholder="Search events…"
-                      className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200 text-sm"
-                    />
-                  </div>
-                </div>
-              )}
-
               {/* Empty state */}
               {liveEvents.length === 0 && upcomingEvents.length === 0 && completedEvents.length === 0 && (
                 <div className="py-10 text-center">
@@ -648,15 +591,15 @@ const Dashboard: React.FC = () => {
               )}
 
               {/* 🔴 LIVE Section */}
-              {filteredLive.length > 0 && (
-                <div className="mb-4">
-                  <div className="flex items-center gap-2 mb-2">
+              {liveEvents.length > 0 && (
+                <div className="mb-3">
+                  <div className="flex items-center gap-2 mb-1.5">
                     <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-                    <h3 className="font-bold text-gray-800 text-sm uppercase tracking-wide">Live</h3>
-                    <span className="text-xs text-gray-500">({filteredLive.length})</span>
+                    <h3 className="font-bold text-gray-800 text-xs uppercase tracking-wide">Live</h3>
+                    <span className="text-xs text-gray-500">({liveEvents.length})</span>
                   </div>
-                  <div className="space-y-2">
-                    {filteredLive.map(event => (
+                  <div className="space-y-1.5">
+                    {liveEvents.map(event => (
                       <EventCard key={event.id} event={event} profiles={profiles} status="live" />
                     ))}
                   </div>
@@ -664,15 +607,15 @@ const Dashboard: React.FC = () => {
               )}
 
               {/* 📅 UPCOMING Section */}
-              {filteredUpcoming.length > 0 && (
-                <div className="mb-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-base">📅</span>
-                    <h3 className="font-bold text-gray-800 text-sm uppercase tracking-wide">Upcoming</h3>
-                    <span className="text-xs text-gray-500">({filteredUpcoming.length})</span>
+              {upcomingEvents.length > 0 && (
+                <div className="mb-3">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="text-sm">📅</span>
+                    <h3 className="font-bold text-gray-800 text-xs uppercase tracking-wide">Upcoming</h3>
+                    <span className="text-xs text-gray-500">({upcomingEvents.length})</span>
                   </div>
-                  <div className="space-y-2">
-                    {filteredUpcoming.map(event => (
+                  <div className="space-y-1.5">
+                    {upcomingEvents.map(event => (
                       <EventCard key={event.id} event={event} profiles={profiles} status="upcoming" />
                     ))}
                   </div>
@@ -680,15 +623,15 @@ const Dashboard: React.FC = () => {
               )}
 
               {/* ✅ RECENT Section (collapsible) */}
-              {filteredCompleted.length > 0 && (
+              {completedEvents.length > 0 && (
                 <div className="mb-2">
                   <button
                     onClick={() => setShowRecentEvents(!showRecentEvents)}
-                    className="flex items-center gap-2 mb-2 w-full text-left"
+                    className="flex items-center gap-2 mb-1.5 w-full text-left"
                   >
-                    <span className="text-base">✅</span>
-                    <h3 className="font-bold text-gray-600 text-sm uppercase tracking-wide">Recent</h3>
-                    <span className="text-xs text-gray-500">({filteredCompleted.length})</span>
+                    <span className="text-sm">✅</span>
+                    <h3 className="font-bold text-gray-600 text-xs uppercase tracking-wide">Recent</h3>
+                    <span className="text-xs text-gray-500">({completedEvents.length})</span>
                     <svg 
                       className={`w-4 h-4 text-gray-400 ml-auto transition-transform ${showRecentEvents ? 'rotate-180' : ''}`} 
                       fill="none" 
@@ -699,16 +642,16 @@ const Dashboard: React.FC = () => {
                     </svg>
                   </button>
                   {showRecentEvents && (
-                    <div className="space-y-2">
-                      {filteredCompleted.slice(0, 5).map(event => (
+                    <div className="space-y-1.5">
+                      {completedEvents.slice(0, 5).map(event => (
                         <EventCard key={event.id} event={event} profiles={profiles} status="completed" />
                       ))}
-                      {filteredCompleted.length > 5 && (
+                      {completedEvents.length > 5 && (
                         <Link 
                           to="/events" 
                           className="block text-center py-2 text-sm font-medium text-primary-600 hover:text-primary-700"
                         >
-                          View all {filteredCompleted.length} completed →
+                          View all {completedEvents.length} completed →
                         </Link>
                       )}
                     </div>
@@ -720,22 +663,7 @@ const Dashboard: React.FC = () => {
 
           {tab === 'groups' && (
             <>
-              {/* Search - minimal */}
-              {groups.length > 0 && (
-                <div className="mb-4">
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔎</span>
-                    <input
-                      value={groupSearch}
-                      onChange={(e) => setGroupSearch(e.target.value)}
-                      placeholder="Search groups…"
-                      className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-gray-200 bg-gray-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-purple-200 text-sm"
-                    />
-                  </div>
-                </div>
-              )}
-
-              {filteredGroups.length === 0 ? (
+              {groups.length === 0 ? (
                 <div className="py-10 text-center">
                   <div className="text-5xl mb-4">👥</div>
                   <div className="font-bold text-gray-800 text-lg mb-2">No groups yet</div>
@@ -745,7 +673,7 @@ const Dashboard: React.FC = () => {
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {filteredGroups.map(group => (
+                  {groups.map(group => (
                     <GroupCard key={group.id} group={group} />
                   ))}
                 </div>
@@ -757,11 +685,11 @@ const Dashboard: React.FC = () => {
 
       {/* Score Ticker - Fixed at bottom, full width on mobile, above footer with safe area */}
       <div className="fixed left-0 right-0 sm:left-4 sm:right-4 ticker-above-footer z-30 px-0 sm:px-0">
-        <style>{`.gimmies-ticker{--gimmies-ticker-duration:${tickerDurationSeconds}s;}`}</style>
         <button
           onClick={() => tickerEvent ? navigate(`/event/${tickerEvent.id}`) : navigate('/events')}
           className="w-full gimmies-ticker rounded-none sm:rounded-xl bg-[#1561AE] border-y sm:border border-white/10 px-4 py-2.5 shadow-lg shadow-primary-900/25"
           aria-label="Activity ticker"
+          style={{ ['--gimmies-ticker-duration' as any]: `${tickerDurationSeconds}s` }}
         >
           <div className="gimmies-ticker__inner text-[11px] font-black text-white">
             <span className="gimmies-ticker__track">
@@ -842,7 +770,15 @@ const Dashboard: React.FC = () => {
             <div className="px-4 pb-4 space-y-2">
               {/* Join Event - Most prominent (grandma's #1) */}
               <button
-                onClick={() => { setShowFabMenu(false); navigate('/join'); }}
+                onClick={() => {
+                  if (isGuest) {
+                    addToast?.('Sign in to join events', 'error', 2500);
+                    setShowFabMenu(false);
+                    return;
+                  }
+                  setShowFabMenu(false);
+                  navigate('/join');
+                }}
                 className="w-full flex items-center gap-4 p-4 bg-gradient-to-r from-accent to-orange-500 rounded-2xl text-white hover:from-orange-500 hover:to-accent transition-all shadow-md"
               >
                 <div className="w-14 h-14 rounded-xl bg-white/20 flex items-center justify-center text-2xl flex-shrink-0">
@@ -1038,21 +974,21 @@ const EventCard: React.FC<{ event: Event; profiles: any[]; status?: 'live' | 'up
   return (
     <button
       onClick={() => navigate(`/event/${event.id}`)}
-      className={`w-full text-left rounded-xl p-4 transition-all group ${style}`}
+      className={`w-full text-left rounded-lg p-2.5 transition-all group ${style}`}
     >
       <div className="flex items-center justify-between">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-gray-900 truncate">
+          <div className="flex items-center gap-1.5">
+            <span className="font-semibold text-gray-900 truncate text-sm">
               {event.name || 'Untitled Event'}
             </span>
             {status === 'live' && (
-              <span className="flex-shrink-0 px-2 py-0.5 text-[10px] font-bold bg-red-500 text-white rounded-full uppercase">
+              <span className="flex-shrink-0 px-1.5 py-0.5 text-[9px] font-bold bg-red-500 text-white rounded-full uppercase">
                 Live
               </span>
             )}
           </div>
-          <div className="flex items-center gap-2 text-sm text-gray-500 mt-1">
+          <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-0.5">
             <span>{formatDateShort(event.date)}</span>
             <span className="text-gray-300">•</span>
             <span>{golferCount} golfer{golferCount !== 1 ? 's' : ''}</span>
@@ -1067,7 +1003,7 @@ const EventCard: React.FC<{ event: Event; profiles: any[]; status?: 'live' | 'up
           </div>
         </div>
         
-        <svg className="w-5 h-5 text-gray-400 group-hover:text-primary-600 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-4 h-4 text-gray-400 group-hover:text-primary-600 transition-colors flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
         </svg>
       </div>
@@ -1084,22 +1020,22 @@ const GroupCard: React.FC<{ group: Event }> = ({ group }) => {
   return (
     <button
       onClick={() => navigate(`/event/${group.id}/chat`)}
-      className="w-full text-left bg-purple-50 hover:bg-purple-100 rounded-xl p-4 border border-purple-200 hover:border-purple-300 transition-all group"
+      className="w-full text-left bg-purple-50 hover:bg-purple-100 rounded-lg p-2.5 border border-purple-200 hover:border-purple-300 transition-all group"
     >
       <div className="flex items-center justify-between">
         <div className="min-w-0 flex-1">
-          <div className="font-semibold text-gray-900 group-hover:text-purple-700 truncate transition-colors">
+          <div className="font-semibold text-gray-900 group-hover:text-purple-700 truncate transition-colors text-sm">
             {group.name || 'Untitled Group'}
           </div>
-          <div className="text-sm text-gray-500 mt-1 truncate">
+          <div className="text-xs text-gray-500 mt-0.5 truncate">
             {lastMessage ? `${lastMessage.senderName}: ${lastMessage.text}` : `${group.golfers.length} members`}
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="px-2 py-1 text-[10px] font-bold bg-purple-200 text-purple-700 rounded-full">
+        <div className="flex items-center gap-1.5">
+          <span className="px-1.5 py-0.5 text-[9px] font-bold bg-purple-200 text-purple-700 rounded-full">
             CHAT
           </span>
-          <svg className="w-5 h-5 text-gray-400 group-hover:text-purple-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-4 h-4 text-gray-400 group-hover:text-purple-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
           </svg>
         </div>
