@@ -4,51 +4,60 @@
 
 /* ==========================================================================
    Root Layout - iOS PWA Safe Area & Dynamic Viewport
+   iOS 26.x PWA quirks: env() can return 0px intermittently after nav/rotation
    ========================================================================== */
 
-html { 
+html, body, #root {
+  /* Force dynamic viewport height - handles iOS toolbar/keyboard */
+  min-height: 100dvh;
   height: 100dvh;
-  /* Fallback for older browsers */
-  height: 100%;
-  /* Prevent iOS "white gap" - use dark theme color */
-  background-color: #09243F;
-  /* Prevent body scroll, allow internal containers */
+  margin: 0;
+  padding: 0;
   overflow: hidden;
+  /* Dark theme background - any bleed shows dark, not white */
+  background-color: #09243F;
+}
+
+html {
   /* Prevent pull-to-refresh in PWA mode */
   overscroll-behavior-y: contain;
 }
 
 body { 
   font-family: ui-sans-serif, system-ui, sans-serif;
-  height: 100dvh;
-  /* Fallback */
-  height: 100%;
-  margin: 0;
-  /* Apply safe area insets to body - fills entire safe area with correct bg */
+  /* Safe area insets - fills entire safe area with correct bg */
   padding-top: env(safe-area-inset-top, 0px);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   padding-left: env(safe-area-inset-left, 0px);
   padding-right: env(safe-area-inset-right, 0px);
-  /* Match dark theme so any bleed is dark not white */
-  background-color: #09243F;
-  /* Prevent body from scrolling */
-  overflow: hidden;
-  /* Use fixed to ensure full viewport coverage */
+  /* Use fixed positioning to ensure full viewport coverage */
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  /* Box-sizing ensures padding doesn't break layout */
   box-sizing: border-box;
+}
+
+/* Fallback if env() not supported or returns 0px */
+@supports not (padding-bottom: env(safe-area-inset-bottom)) {
+  body {
+    padding-bottom: 34px; /* typical notched iPhone home indicator height */
+  }
+}
+
+/* iOS 26 PWA fallback - force minimum bottom padding when env() might be 0px */
+@media (display-mode: standalone) {
+  body {
+    /* Use max() to ensure at least 34px even if env() returns 0px */
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 34px);
+  }
 }
 
 #root {
   /* Fill remaining space after safe area padding */
   height: 100%;
   width: 100%;
-  /* Match dark theme background */
-  background-color: #09243F;
   /* Flex container for app layout */
   display: flex;
   flex-direction: column;

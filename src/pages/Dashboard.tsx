@@ -333,9 +333,9 @@ const Dashboard: React.FC = () => {
   }
 
   return (
-    <div className="space-y-5 pb-32">
+    <div className="space-y-4 pb-32">
       {/* Compact Header - Avatar + Name + Quick Stats in one row */}
-      <header className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 -mx-4 -mt-6 px-4 pt-6 pb-4 shadow-lg">
+      <header className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 -mx-4 -mt-4 px-4 pt-4 pb-3 shadow-lg">
         <div className="flex items-center gap-3">
           {/* Avatar - Opens Settings */}
           <button 

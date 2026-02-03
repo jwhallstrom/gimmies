@@ -265,9 +265,9 @@ const App: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col bg-gradient-to-b from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 text-gray-900 dark:text-slate-100">
-      <header className="flex-shrink-0 bg-primary-900/85 backdrop-blur text-white px-4 py-3 flex items-center justify-between shadow-md z-40 border-b border-white/10">
+      <header className="flex-shrink-0 bg-primary-900/85 backdrop-blur text-white px-4 py-2.5 flex items-center justify-between shadow-md z-40 border-b border-white/10">
         <Link to="/">
-          <img src="/gimmies-logo.png" alt="Gimmies" className="h-12 w-auto" />
+          <img src="/gimmies-logo.png" alt="Gimmies" className="h-10 w-auto" />
         </Link>
         <UserMenu />
       </header>
@@ -283,9 +283,9 @@ const App: React.FC = () => {
             className={
               isEventRoute
                 ? (isEventChatRoute
-                    ? 'px-4 pt-6 h-full max-w-5xl w-full mx-auto'
-                    : 'px-4 pt-6 content-with-footer max-w-5xl w-full mx-auto')
-                : 'px-4 pt-6 content-with-footer max-w-5xl w-full mx-auto'
+                    ? 'px-4 pt-4 h-full max-w-5xl w-full mx-auto'
+                    : 'px-4 pt-4 content-with-footer max-w-5xl w-full mx-auto')
+                : 'px-4 pt-4 content-with-footer max-w-5xl w-full mx-auto'
             }
           >
             <Suspense fallback={<LoadingSpinner message="Loading page..." />}>
@@ -315,7 +315,7 @@ const App: React.FC = () => {
         </div>
       </main>
       {/* Fixed bottom nav - min-h-safe-nav extends background into iOS safe area, pb-safe-bottom pushes content above home indicator */}
-      <footer className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-[#09243F] border-t border-gray-200 dark:border-white/10 min-h-safe-nav pb-safe-bottom flex items-start justify-around px-2 pt-2">
+      <footer className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-[#09243F] border-t border-gray-200 dark:border-white/10 min-h-safe-nav pb-safe-bottom flex items-center justify-around px-2">
         <Link
           to="/"
           className={`flex flex-col items-center justify-center gap-0.5 min-w-[56px] min-h-[52px] py-1.5 rounded-xl transition-all ${
