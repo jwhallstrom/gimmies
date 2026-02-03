@@ -464,47 +464,52 @@ Code: ${event.shareCode}`,
               </button>
             </div>
 
-            {/* Tabs - Groups get invite/manual, Events just manual */}
-            {isGroupHub && (
-              <div className="flex border-b border-gray-200 flex-shrink-0">
-                <button
-                  onClick={() => setAddModalTab('invite')}
-                  className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${
-                    addModalTab === 'invite' ? 'text-purple-700' : 'text-gray-500'
-                  }`}
-                >
-                  📲 Send Invite
-                  {addModalTab === 'invite' && (
-                    <span className="absolute bottom-0 left-4 right-4 h-0.5 bg-purple-600 rounded-full" />
-                  )}
-                </button>
-                <button
-                  onClick={() => setAddModalTab('manual')}
-                  className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${
-                    addModalTab === 'manual' ? 'text-purple-700' : 'text-gray-500'
-                  }`}
-                >
-                  ✏️ Add by Name
-                  {addModalTab === 'manual' && (
-                    <span className="absolute bottom-0 left-4 right-4 h-0.5 bg-purple-600 rounded-full" />
-                  )}
-                </button>
-              </div>
-            )}
+            {/* Tabs - Both groups and events get invite/manual tabs */}
+            <div className="flex border-b border-gray-200 flex-shrink-0">
+              <button
+                onClick={() => setAddModalTab('invite')}
+                className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${
+                  addModalTab === 'invite' ? (isGroupHub ? 'text-purple-700' : 'text-primary-700') : 'text-gray-500'
+                }`}
+              >
+                📲 Send Invite
+                {addModalTab === 'invite' && (
+                  <span className={`absolute bottom-0 left-4 right-4 h-0.5 ${isGroupHub ? 'bg-purple-600' : 'bg-primary-600'} rounded-full`} />
+                )}
+              </button>
+              <button
+                onClick={() => setAddModalTab('manual')}
+                className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${
+                  addModalTab === 'manual' ? (isGroupHub ? 'text-purple-700' : 'text-primary-700') : 'text-gray-500'
+                }`}
+              >
+                ✏️ Add by Name
+                {addModalTab === 'manual' && (
+                  <span className={`absolute bottom-0 left-4 right-4 h-0.5 ${isGroupHub ? 'bg-purple-600' : 'bg-primary-600'} rounded-full`} />
+                )}
+              </button>
+            </div>
             
             {/* Modal Content */}
             <div className="flex-1 overflow-y-auto">
-              {/* INVITE TAB - Groups only */}
-              {isGroupHub && addModalTab === 'invite' && (
+              {/* INVITE TAB - Both groups and events */}
+              {addModalTab === 'invite' && (
                 <div className="p-5 space-y-5">
                   {/* Hero section */}
                   <div className="text-center py-2">
-                    <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 ${
+                      isGroupHub ? 'bg-purple-100' : 'bg-primary-100'
+                    }`}>
                       <span className="text-3xl">📲</span>
                     </div>
-                    <h4 className="font-bold text-gray-900 mb-1">Invite friends to join</h4>
+                    <h4 className="font-bold text-gray-900 mb-1">
+                      {isGroupHub ? 'Invite friends to join' : 'Invite players to join'}
+                    </h4>
                     <p className="text-sm text-gray-500">
-                      Send a link - they'll get the app and join your group
+                      {isGroupHub 
+                        ? 'Send a link - they\'ll get the app and join your group'
+                        : 'Share a link so friends can join this event'
+                      }
                     </p>
                   </div>
 
@@ -513,7 +518,11 @@ Code: ${event.shareCode}`,
                     <button
                       onClick={handleTextInvite}
                       disabled={isGeneratingCode}
-                      className="flex flex-col items-center gap-2 p-4 bg-green-50 hover:bg-green-100 rounded-xl border border-green-200 transition-colors disabled:opacity-60"
+                      className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors disabled:opacity-60 ${
+                        isGroupHub 
+                          ? 'bg-green-50 hover:bg-green-100 border-green-200'
+                          : 'bg-green-50 hover:bg-green-100 border-green-200'
+                      }`}
                     >
                       <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center">
                         <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -597,7 +606,8 @@ Code: ${event.shareCode}`,
               )}
 
               {/* MANUAL TAB - or default for events */}
-              {(!isGroupHub || addModalTab === 'manual') && (
+              {/* MANUAL TAB - Both groups and events */}
+              {addModalTab === 'manual' && (
                 <div className="p-4 space-y-4">
                   {/* Name */}
                   <div>
