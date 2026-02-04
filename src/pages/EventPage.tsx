@@ -1,26 +1,25 @@
 /**
- * EventPage - Redesigned with Tournament-quality UX
+ * EventPage - Instagram-style swipeable Event Hub
  * 
- * Key improvements:
- * - Cleaner gradient header with clear hierarchy
- * - Pill-style tab navigation (matches Tournament)
- * - Better visual feedback and flow
- * - Mobile-first with large tap targets
+ * Key features:
+ * - Horizontal swipe navigation between pages (scroll-snap)
+ * - Dot indicators showing current page
+ * - Tab order: Chat → Leaderboard → Games → Golfers → Settings
+ * - Message composer only visible on Chat page
+ * - Mobile-first with smooth native feel
  */
 
-import React, { useState, useMemo } from 'react';
-import { useParams, Routes, Route, NavLink, useNavigate, useLocation, Navigate } from 'react-router-dom';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import useStore from '../state/store';
 import { useEventSync } from '../hooks/useEventSync';
 import SetupTab from '../components/tabs/SetupTab';
 import ScoreHubTab from '../components/tabs/ScoreHubTab';
 import GolfersTab from '../components/tabs/GolfersTab';
 import GamesTab from '../components/tabs/GamesTab';
-import PayoutTab from '../components/tabs/PayoutTab';
 import ChatTab from '../components/tabs/ChatTab';
 import ShareModal from '../components/ShareModal';
 import EventNotifications from '../components/EventNotifications';
-import NassauTeamsPage from './NassauTeamsPage';
 import { getCourseById } from '../data/cloudCourses';
 
 const formatDateShort = (iso: string) =>
@@ -32,7 +31,6 @@ const EventPage: React.FC = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showEventsDropdown, setShowEventsDropdown] = useState(false);
-  const location = useLocation();
   const navigate = useNavigate();
   
   // Auto-sync event from cloud every 30 seconds
@@ -112,28 +110,56 @@ const EventPage: React.FC = () => {
     return { golferCount };
   }, [event.golfers.length]);
 
+  // Swipeable page index state
+  const [activePageIndex, setActivePageIndex] = useState(0);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  
   // Define tabs based on hub type
-  // Groups get Chat + Golfers (members), Events get full tabs
+  // ORDER: Chat → Leaderboard → Games/Payouts → Golfers → Settings (most used first)
   const tabs = isGroupHub
     ? [
-        { path: 'chat', label: 'Chat', icon: '💬' },
-        { path: 'golfers', label: 'Members', icon: '👥', badge: stats.golferCount },
-        { path: 'events', label: 'Events', icon: '🎯', badge: activeChildEvents.length || undefined },
+        { id: 'chat', label: 'Chat', icon: '💬' },
+        { id: 'golfers', label: 'Members', icon: '👥', badge: stats.golferCount },
+        { id: 'events', label: 'Events', icon: '🎯', badge: activeChildEvents.length || undefined, isModal: true },
         ...(isOwner ? [
-          { path: 'alerts', label: 'Alerts', icon: '🔔', ownerOnly: true },
-          { path: 'settings', label: 'Settings', icon: '⚙️', ownerOnly: true },
+          { id: 'alerts', label: 'Alerts', icon: '🔔', isModal: true },
+          { id: 'settings', label: 'Settings', icon: '⚙️' },
         ] : []),
       ]
     : [
-        { path: 'chat', label: 'Chat', icon: '💬' },
-        { path: 'golfers', label: 'Golfers', icon: '👥', badge: stats.golferCount },
-        { path: 'scorecard', label: 'Leaderboard', icon: '🏆' },
-        { path: 'games', label: 'Games', icon: '🎯' },
+        { id: 'chat', label: 'Chat', icon: '💬' },
+        { id: 'scorecard', label: 'Leaderboard', icon: '🏆' },
+        { id: 'games', label: 'Games', icon: '🎯' },
+        { id: 'golfers', label: 'Golfers', icon: '👥', badge: stats.golferCount },
         ...(isOwner ? [
-          { path: 'alerts', label: 'Alerts', icon: '🔔', ownerOnly: true },
-          { path: 'settings', label: 'Settings', icon: '⚙️', ownerOnly: true },
+          { id: 'alerts', label: 'Alerts', icon: '🔔', isModal: true },
+          { id: 'settings', label: 'Settings', icon: '⚙️' },
         ] : []),
       ];
+  
+  // Filter out modal-only tabs for swipeable pages
+  const swipeableTabs = tabs.filter(t => !t.isModal);
+  
+  // Handle scroll to update active page index
+  const handleScroll = useCallback(() => {
+    if (!scrollContainerRef.current) return;
+    const container = scrollContainerRef.current;
+    const scrollLeft = container.scrollLeft;
+    const pageWidth = container.clientWidth;
+    const newIndex = Math.round(scrollLeft / pageWidth);
+    if (newIndex !== activePageIndex && newIndex >= 0 && newIndex < swipeableTabs.length) {
+      setActivePageIndex(newIndex);
+    }
+  }, [activePageIndex, swipeableTabs.length]);
+  
+  // Scroll to page when tab is clicked
+  const scrollToPage = useCallback((index: number) => {
+    if (!scrollContainerRef.current) return;
+    const container = scrollContainerRef.current;
+    const pageWidth = container.clientWidth;
+    container.scrollTo({ left: index * pageWidth, behavior: 'smooth' });
+    setActivePageIndex(index);
+  }, []);
 
   const handleDelete = () => {
     if (window.confirm(`Delete "${event.name}"? This cannot be undone.`)) {
@@ -142,23 +168,16 @@ const EventPage: React.FC = () => {
     }
   };
 
-  // Determine current tab for highlighting
-  const currentPath = location.pathname.split('/').pop() || 'chat';
-  const isOnTab = tabs.some(t => t.path === currentPath);
-  const isChatLike = currentPath === 'chat' || !isOnTab;
+  // Determine if on chat page (for showing composer)
+  const isChatPage = activePageIndex === 0;
+  
   // Icon-only tabs (no labels): saves space and removes sideways scrolling.
   const tabPillClass =
-    'flex items-center justify-center w-11 h-11 rounded-xl font-semibold text-[11px] transition-all flex-shrink-0';
-  const tabBarClass = 'flex gap-1 px-3 pb-2 -mx-3 justify-center';
+    'flex items-center justify-center w-10 h-10 rounded-xl font-semibold text-[11px] transition-all flex-shrink-0';
+  const tabBarClass = 'flex gap-1.5 px-3 pb-1 -mx-3 justify-center';
 
   return (
-    <div
-      className={
-        isChatLike
-          ? 'h-full min-h-0 -mx-4 -mt-6 flex flex-col'
-          : 'min-h-screen -mx-4 -mt-6 flex flex-col'
-      }
-    >
+    <div className="h-full min-h-0 -mx-4 -mt-4 flex flex-col">
       {/* Header - Compact & Sticky */}
       <div className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 px-3 py-2 shadow-lg sticky top-0 z-30 flex-shrink-0">
         {/* Single Row: Event Info + Actions */}
@@ -183,32 +202,34 @@ const EventPage: React.FC = () => {
           </div>
         </div>
         
-        {/* Tab Navigation - Inline */}
+        {/* Tab Navigation - Icon buttons */}
         <div className={tabBarClass}>
-          {tabs.map((tab) => {
-            const isActive = currentPath === tab.path || (!isOnTab && tab.path === 'chat');
-            const badge = (tab as any).badge as number | undefined;
+          {tabs.map((tab, index) => {
+            // Find the swipeable index for this tab (or -1 if modal-only)
+            const swipeIndex = swipeableTabs.findIndex(t => t.id === tab.id);
+            const isActive = swipeIndex === activePageIndex;
+            const badge = tab.badge as number | undefined;
             
-            // Alerts tab opens modal instead of navigating
-            if (tab.path === 'alerts') {
+            // Alerts tab opens modal
+            if (tab.id === 'alerts') {
               return (
                 <button
-                  key={tab.path}
+                  key={tab.id}
                   onClick={() => setShowNotifications(true)}
                   aria-label={tab.label}
                   title={tab.label}
-                  className={`relative ${tabPillClass} ${isActive ? 'bg-white text-primary-800 shadow-sm' : 'bg-white/10 text-white/85 hover:bg-white/20 hover:text-white'}`}
+                  className={`relative ${tabPillClass} bg-white/10 text-white/85 hover:bg-white/20 hover:text-white`}
                 >
-                  <span className="text-lg leading-none" aria-hidden="true">{tab.icon}</span>
+                  <span className="text-base leading-none" aria-hidden="true">{tab.icon}</span>
                 </button>
               );
             }
             
-            // Events tab opens dropdown instead of navigating
-            if (tab.path === 'events') {
+            // Events tab (groups) opens dropdown
+            if (tab.id === 'events') {
               return (
                 <button
-                  key={tab.path}
+                  key={tab.id}
                   onClick={() => setShowEventsDropdown(!showEventsDropdown)}
                   aria-label={tab.label}
                   title={tab.label}
@@ -220,13 +241,9 @@ const EventPage: React.FC = () => {
                         : 'bg-white/10 text-white/85 hover:bg-white/20 hover:text-white'
                   }`}
                 >
-                  <span className="text-lg leading-none" aria-hidden="true">{tab.icon}</span>
+                  <span className="text-base leading-none" aria-hidden="true">{tab.icon}</span>
                   {typeof badge === 'number' && badge > 0 && (
-                    <span
-                      className={`absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-extrabold leading-none flex items-center justify-center ${
-                        showEventsDropdown ? 'bg-primary-100 text-primary-800' : 'bg-white/30 text-white'
-                      }`}
-                    >
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-0.5 rounded-full text-[8px] font-extrabold leading-none flex items-center justify-center bg-white/30 text-white">
                       {badge}
                     </span>
                   )}
@@ -234,10 +251,11 @@ const EventPage: React.FC = () => {
               );
             }
             
+            // Regular swipeable tab
             return (
-              <NavLink
-                key={tab.path}
-                to={tab.path}
+              <button
+                key={tab.id}
+                onClick={() => scrollToPage(swipeIndex)}
                 aria-label={tab.label}
                 title={tab.label}
                 className={`relative ${tabPillClass} ${
@@ -246,19 +264,33 @@ const EventPage: React.FC = () => {
                     : 'bg-white/10 text-white/85 hover:bg-white/20 hover:text-white'
                 }`}
               >
-                <span className="text-lg leading-none" aria-hidden="true">{tab.icon}</span>
+                <span className="text-base leading-none" aria-hidden="true">{tab.icon}</span>
                 {typeof badge === 'number' && (
-                  <span
-                    className={`absolute -top-1 -right-1 min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-extrabold leading-none flex items-center justify-center ${
-                      isActive ? 'bg-primary-100 text-primary-800' : 'bg-white/20 text-white'
-                    }`}
-                  >
+                  <span className={`absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-0.5 rounded-full text-[8px] font-extrabold leading-none flex items-center justify-center ${
+                    isActive ? 'bg-primary-100 text-primary-800' : 'bg-white/20 text-white'
+                  }`}>
                     {badge}
                   </span>
                 )}
-              </NavLink>
+              </button>
             );
           })}
+        </div>
+        
+        {/* Dot Indicators - Instagram style */}
+        <div className="flex justify-center gap-1.5 pb-2">
+          {swipeableTabs.map((tab, index) => (
+            <button
+              key={tab.id}
+              onClick={() => scrollToPage(index)}
+              className={`w-1.5 h-1.5 rounded-full transition-all ${
+                index === activePageIndex
+                  ? 'bg-white w-3'
+                  : 'bg-white/40 hover:bg-white/60'
+              }`}
+              aria-label={`Go to ${tab.label}`}
+            />
+          ))}
         </div>
       </div>
       
@@ -425,44 +457,31 @@ const EventPage: React.FC = () => {
         </>
       )}
       
-      {/* Content Area - Chat: fixed composer, messages scroll. Other tabs: page scroll. */}
-      <div className={isChatLike ? 'flex-1 min-h-0 overflow-hidden px-4 py-2' : 'px-4 py-2'}>
-        <Routes>
-          <Route index element={<ChatTab eventId={event.id} />} />
-          <Route path="chat" element={<ChatTab eventId={event.id} />} />
-          
-          {/* Golfers tab available for both groups (as Members) and events */}
-          <Route path="golfers" element={<GolfersTab eventId={event.id} />} />
-          
-          {/* Group-specific: Settings for owner */}
-          {isGroupHub && (
-            <Route 
-              path="settings" 
-              element={isOwner ? <SetupTab eventId={event.id} /> : <AccessDenied />} 
-            />
-          )}
-          
-          {/* Event-specific tabs */}
-          {!isGroupHub && (
-            <>
-              <Route path="scorecard" element={<ScoreHubTab eventId={event.id} />} />
-              {/* Games tab - accessible to all, admin controls shown only to owner */}
-              <Route path="games" element={<GamesTab eventId={event.id} />} />
-              {/* Legacy payout route - redirect to games */}
-              <Route path="payout" element={<Navigate to={`/event/${event.id}/games`} replace />} />
-              
-              {/* Owner-only routes */}
-              <Route 
-                path="settings" 
-                element={isOwner ? <SetupTab eventId={event.id} /> : <AccessDenied />} 
-              />
-              <Route 
-                path="games/nassau/:nassauId/teams" 
-                element={isOwner ? <NassauTeamsPage eventId={event.id} /> : <AccessDenied />} 
-              />
-            </>
-          )}
-        </Routes>
+      {/* Swipeable Content Area - Horizontal scroll-snap */}
+      <div 
+        ref={scrollContainerRef}
+        onScroll={handleScroll}
+        className="flex-1 min-h-0 overflow-x-auto overflow-y-hidden snap-x snap-mandatory flex"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}
+      >
+        {/* Hide scrollbar */}
+        <style>{`.snap-x::-webkit-scrollbar { display: none; }`}</style>
+        
+        {swipeableTabs.map((tab) => (
+          <div 
+            key={tab.id}
+            className="w-full flex-shrink-0 snap-center overflow-y-auto"
+            style={{ minWidth: '100%' }}
+          >
+            <div className="h-full px-4 py-2">
+              {tab.id === 'chat' && <ChatTab eventId={event.id} />}
+              {tab.id === 'scorecard' && <ScoreHubTab eventId={event.id} />}
+              {tab.id === 'games' && <GamesTab eventId={event.id} />}
+              {tab.id === 'golfers' && <GolfersTab eventId={event.id} />}
+              {tab.id === 'settings' && (isOwner ? <SetupTab eventId={event.id} /> : <AccessDenied />)}
+            </div>
+          </div>
+        ))}
       </div>
       
       {/* Modals */}
