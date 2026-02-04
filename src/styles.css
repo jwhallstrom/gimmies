@@ -39,8 +39,6 @@ header {
 footer {
   /* Only use safe area inset for bottom padding, minimal fallback */
   padding-bottom: env(safe-area-inset-bottom, 8px);
-  /* Base height for navigation icons without excessive padding */
-  min-height: calc(68px + env(safe-area-inset-bottom, 8px));
   background-color: inherit;
 }
 

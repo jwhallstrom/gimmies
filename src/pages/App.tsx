@@ -266,7 +266,7 @@ const App: React.FC = () => {
   return (
     <div className="h-full flex flex-col bg-gradient-to-b from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 text-gray-900 dark:text-slate-100">
       {/* Header - flex child, CSS handles safe area padding */}
-      <header className="flex-shrink-0 bg-primary-900/85 backdrop-blur text-white px-4 py-2.5 flex items-center justify-between shadow-md z-40 border-b border-white/10">
+      <header className="flex-shrink-0 bg-primary-900/85 backdrop-blur text-white px-4 pb-2.5 flex items-center justify-between shadow-md z-40 border-b border-white/10">
         <Link to="/">
           <img src="/gimmies-logo.png" alt="Gimmies" className="h-10 w-auto" />
         </Link>
