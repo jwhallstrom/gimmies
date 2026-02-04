@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import useStore from '../../state/store';
 import { strokesForHole, courseHandicap } from '../../games/handicap';
 import { useCourse } from '../../hooks/useCourse';
@@ -9,15 +9,41 @@ type Props = {
   focusGolferId?: string | null;
   /** Optional: choose initial entry mode (used by quick actions) */
   initialEntryMode?: 'cards' | 'team';
+  /** Callback when user is done editing and wants to exit */
+  onDone?: () => void;
 };
 
-const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMode }) => {
-  const { events, completedEvents, profiles, currentProfile, updateScore, canEditScore, setScorecardView } = useStore();
+const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMode, onDone }) => {
+  const { events, completedEvents, profiles, currentProfile, updateScore, canEditScore, setScorecardView, addToast } = useStore();
   const event = events.find((e: any) => e.id === eventId) || completedEvents.find((e: any) => e.id === eventId);
+  
+  // Track which cell just saved (for flash feedback)
+  const [savedCell, setSavedCell] = useState<string | null>(null);
+  const [hasEdited, setHasEdited] = useState(false);
+  
   if (!event) return null;
 
   // Load only the selected course from DynamoDB (faster than loading full catalog)
   const { course: selectedCourse, loading: coursesLoading } = useCourse(event.course.courseId);
+  
+  // Handle score update with visual feedback
+  const handleScoreUpdate = (golferId: string, hole: number, value: number | null) => {
+    updateScore(eventId, golferId, hole, value);
+    setHasEdited(true);
+    
+    // Flash the cell green briefly
+    const cellKey = `${golferId}-${hole}`;
+    setSavedCell(cellKey);
+    setTimeout(() => setSavedCell(null), 600);
+  };
+  
+  // Done handler with feedback
+  const handleDone = () => {
+    if (hasEdited) {
+      addToast?.('Scores saved!', 'success', 1500);
+    }
+    onDone?.();
+  };
 
   // Determine holes for rendering:
   // - Prefer the selected tee's holes from cloud data
@@ -147,6 +173,28 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
 
   return (
     <div className="overflow-x-auto rounded-lg shadow-inner bg-white/95 backdrop-blur border border-primary-900/10">
+      {/* Done header - sticky when editing */}
+      {onDone && !event.isCompleted && (
+        <div className="sticky top-0 z-20 bg-gradient-to-r from-green-500 to-emerald-600 px-3 py-2.5 flex items-center justify-between shadow-md">
+          <div className="flex items-center gap-2 text-white">
+            <span className="text-lg">⛳</span>
+            <div>
+              <div className="font-bold text-sm">Entering Scores</div>
+              <div className="text-[10px] text-white/80">Tap a cell to enter • Auto-saves</div>
+            </div>
+          </div>
+          <button
+            onClick={handleDone}
+            className="flex items-center gap-1.5 px-4 py-2 bg-white text-green-700 font-extrabold text-sm rounded-xl shadow-lg hover:bg-green-50 active:scale-95 transition-all"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+            </svg>
+            Done
+          </button>
+        </div>
+      )}
+      
       {event.isCompleted && (
         <div className="bg-green-50 border-b border-green-200 px-3 py-2">
           <div className="flex items-center gap-2 text-sm text-green-800">
@@ -282,10 +330,10 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
                       onChange={(e) => {
                         const raw = e.target.value;
                         const strokes = raw === '' ? null : Number(raw);
-                        updateScore(eventId, gid, teamHole, Number.isFinite(strokes as number) ? (strokes as number) : null);
+                        handleScoreUpdate(gid, teamHole, Number.isFinite(strokes as number) ? (strokes as number) : null);
                       }}
                       disabled={!canEdit}
-                      className="w-20 text-center text-lg font-black border border-slate-300 rounded-xl px-2 py-2 bg-white disabled:opacity-50"
+                      className={`w-20 text-center text-lg font-black border rounded-xl px-2 py-2 bg-white disabled:opacity-50 transition-all ${savedCell === `${gid}-${teamHole}` ? 'border-green-500 ring-2 ring-green-300' : 'border-slate-300'}`}
                       aria-label={`Score for ${name} on hole ${teamHole}`}
                       placeholder="—"
                     />
@@ -404,6 +452,9 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
                           else if (diff >= 3) colorClass = 'bg-red-600 text-white font-semibold';
                         }
                         
+                        const cellKey = `${golferId}-${s.hole}`;
+                        const isJustSaved = savedCell === cellKey;
+                        
                         return (
                           <div key={s.hole} className="w-7 sm:w-8 lg:w-10 xl:w-12 relative">
                             {hcpStrokes > 0 && (
@@ -413,8 +464,18 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
                                 ))}
                               </div>
                             )}
+                            {/* Save flash indicator */}
+                            {isJustSaved && (
+                              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+                                <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center animate-ping">
+                                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                </div>
+                              </div>
+                            )}
                             <input
-                              className={`w-full h-7 sm:h-8 lg:h-10 px-0.5 py-0 text-center text-[10px] sm:text-xs lg:text-sm outline-none focus:ring-2 focus:ring-primary-300 focus:bg-primary-50/70 transition rounded border border-slate-200 ${colorClass} ${hcpStrokes > 0 ? 'pl-2 sm:pl-3' : ''} ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
+                              className={`w-full h-7 sm:h-8 lg:h-10 px-0.5 py-0 text-center text-[10px] sm:text-xs lg:text-sm outline-none focus:ring-2 focus:ring-primary-300 focus:bg-primary-50/70 transition-all rounded border ${isJustSaved ? 'border-green-500 ring-2 ring-green-300' : 'border-slate-200'} ${colorClass} ${hcpStrokes > 0 ? 'pl-2 sm:pl-3' : ''} ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
                               value={gross ?? ''}
                               disabled={!canEdit}
                               inputMode="numeric"
@@ -432,7 +493,7 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
                                 const raw = e.target.value.replace(/[^0-9]/g, '');
                                 const val = raw === '' ? '' : raw;
                                 const numeric = val === '' ? null : parseInt(val, 10);
-                                updateScore(eventId, golferId, s.hole, numeric);
+                                handleScoreUpdate(golferId, s.hole, numeric);
                                 const shouldAdvance = (val.length === 1 && val !== '1') || val.length === 2;
                                 if (shouldAdvance) {
                                   const next = document.querySelector(`input[data-golfer='${golferId}'][data-hole='${s.hole + 1}']`) as HTMLInputElement | null;
@@ -536,6 +597,9 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
                           else if (diff >= 3) colorClass = 'bg-red-600 text-white font-semibold';
                         }
                         
+                        const cellKey = `${golferId}-${s.hole}`;
+                        const isJustSaved = savedCell === cellKey;
+                        
                         return (
                           <div key={s.hole} className="w-7 sm:w-8 lg:w-10 xl:w-12 relative">
                             {hcpStrokes > 0 && (
@@ -545,8 +609,18 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
                                 ))}
                               </div>
                             )}
+                            {/* Save flash indicator */}
+                            {isJustSaved && (
+                              <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-20">
+                                <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center animate-ping">
+                                  <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                  </svg>
+                                </div>
+                              </div>
+                            )}
                             <input
-                              className={`w-full h-7 sm:h-8 lg:h-10 px-0.5 py-0 text-center text-[10px] sm:text-xs lg:text-sm outline-none focus:ring-2 focus:ring-primary-300 focus:bg-primary-50/70 transition rounded border border-slate-200 ${colorClass} ${hcpStrokes > 0 ? 'pl-2 sm:pl-3' : ''} ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
+                              className={`w-full h-7 sm:h-8 lg:h-10 px-0.5 py-0 text-center text-[10px] sm:text-xs lg:text-sm outline-none focus:ring-2 focus:ring-primary-300 focus:bg-primary-50/70 transition-all rounded border ${isJustSaved ? 'border-green-500 ring-2 ring-green-300' : 'border-slate-200'} ${colorClass} ${hcpStrokes > 0 ? 'pl-2 sm:pl-3' : ''} ${!canEdit ? 'opacity-60 cursor-not-allowed' : ''}`}
                               value={gross ?? ''}
                               disabled={!canEdit}
                               inputMode="numeric"
@@ -564,7 +638,7 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
                                 const raw = e.target.value.replace(/[^0-9]/g, '');
                                 const val = raw === '' ? '' : raw;
                                 const numeric = val === '' ? null : parseInt(val, 10);
-                                updateScore(eventId, golferId, s.hole, numeric);
+                                handleScoreUpdate(golferId, s.hole, numeric);
                                 const shouldAdvance = (val.length === 1 && val !== '1') || val.length === 2;
                                 if (shouldAdvance) {
                                   const next = document.querySelector(`input[data-golfer='${golferId}'][data-hole='${s.hole + 1}']`) as HTMLInputElement | null;
