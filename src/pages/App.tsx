@@ -316,8 +316,8 @@ const App: React.FC = () => {
           </div>
         </div>
       </main>
-      {/* Fixed bottom nav - pb-safe-bottom handles iOS home indicator safe area */}
-      <footer className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-[#09243F] border-t border-gray-200 dark:border-white/10 flex items-center justify-around px-2 pt-2 pb-safe-bottom">
+      {/* Fixed bottom nav - min-h-safe-nav extends background into iOS safe area, pb-safe-bottom pushes content above home indicator */}
+      <footer className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-[#09243F] border-t border-gray-200 dark:border-white/10 min-h-safe-nav pb-safe-bottom flex items-start justify-around px-2 pt-2">
         <Link
           to="/"
           className={`flex flex-col items-center justify-center gap-0.5 min-w-[56px] min-h-[52px] py-1.5 rounded-xl transition-all ${
