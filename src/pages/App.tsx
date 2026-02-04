@@ -323,9 +323,6 @@ const App: React.FC = () => {
           - pt-1: Minimal padding (4px) prevents text cutoff
           See docs/IOS_PWA_LAYOUT_CRITICAL.md for full details */}
       <footer className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-[#09243F] border-t border-gray-200 dark:border-white/10 h-[68px] pb-safe-bottom -mb-4 flex items-start justify-around px-2 pt-1">
-          - pt-1: Minimal top padding for compact layout
-          Tested to match Instagram/major PWA positioning */}
-      <footer className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-[#09243F] border-t border-gray-200 dark:border-white/10 h-[68px] pb-safe-bottom -mb-5 flex items-start justify-around px-2 pt-1">
         <Link
           to="/"
           className={`flex flex-col items-center justify-center gap-0.5 min-w-[56px] min-h-[52px] py-1.5 rounded-xl transition-all ${
