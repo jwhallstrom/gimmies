@@ -124,37 +124,7 @@ const EventsPage: React.FC = () => {
 
   return (
     <div className="space-y-6 relative">
-      {/* Floating New Event Button */}
-      <button
-        onClick={() => setIsWizardOpen(true)}
-        className="fixed bottom-20 right-4 z-50 bg-primary-600 hover:bg-primary-700 text-white p-4 rounded-full shadow-lg transition-all duration-200 hover:scale-110"
-        title="Create New Event"
-      >
-        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-        </svg>
-      </button>
-
-      <CreateEventWizard
-        isOpen={isWizardOpen}
-        onClose={() => setIsWizardOpen(false)}
-        parentGroupId={new URLSearchParams(location.search).get('groupId') || undefined}
-        onCreated={(eventId) => {
-          const params = new URLSearchParams(location.search);
-          const returnTo = params.get('returnTo');
-          const groupId = params.get('groupId');
-          if (returnTo === 'group' && groupId) {
-            navigate(`/event/${groupId}/chat`);
-            return;
-          }
-          if (returnTo === 'chat') {
-            navigate(`/event/${eventId}/chat?occurrenceId=${encodeURIComponent(eventId)}`);
-            return;
-          }
-          navigate(`/event/${eventId}`);
-        }}
-      />
-
+      {/* Header Card - First to avoid spacing issues */}
       <div className="bg-white/90 backdrop-blur rounded-xl shadow-md p-4 border border-primary-900/5">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -332,6 +302,36 @@ const EventsPage: React.FC = () => {
           )}
         </>
       )}
+
+      {/* Orange FAB - at end to avoid spacing issues */}
+      <button
+        onClick={() => setIsWizardOpen(true)}
+        className="fixed right-4 z-40 w-16 h-16 bg-gradient-to-br from-accent to-orange-600 rounded-full shadow-lg shadow-accent/40 flex items-center justify-center text-white text-3xl font-bold hover:scale-105 active:scale-95 transition-transform fab-position"
+        title="Create New Event"
+        aria-label="Create new event"
+      >
+        +
+      </button>
+
+      <CreateEventWizard
+        isOpen={isWizardOpen}
+        onClose={() => setIsWizardOpen(false)}
+        parentGroupId={new URLSearchParams(location.search).get('groupId') || undefined}
+        onCreated={(eventId) => {
+          const params = new URLSearchParams(location.search);
+          const returnTo = params.get('returnTo');
+          const groupId = params.get('groupId');
+          if (returnTo === 'group' && groupId) {
+            navigate(`/event/${groupId}/chat`);
+            return;
+          }
+          if (returnTo === 'chat') {
+            navigate(`/event/${eventId}/chat?occurrenceId=${encodeURIComponent(eventId)}`);
+            return;
+          }
+          navigate(`/event/${eventId}`);
+        }}
+      />
     </div>
   );
 };

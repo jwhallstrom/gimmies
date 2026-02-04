@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import useStore from '../state/store';
 import { applyESCAdjustment } from '../utils/handicap';
 
 const HandicapPage: React.FC = () => {
   const { currentProfile, getProfileRounds, loadEventsFromCloud } = useStore();
+  const navigate = useNavigate();
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
 
   // Load events from cloud when component mounts (to get IndividualRounds from completed events)
@@ -92,19 +93,6 @@ const HandicapPage: React.FC = () => {
           </div>
           <div className="text-sm text-gray-600">Best Score</div>
         </div>
-      </div>
-
-      {/* Add Round Button */}
-      <div className="flex justify-center">
-        <Link
-          to="/handicap/add-round"
-          className="bg-primary-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-primary-700 transition-colors flex items-center gap-2"
-        >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-          </svg>
-          Add New Round
-        </Link>
       </div>
 
       {/* Recent Rounds */}
@@ -224,6 +212,16 @@ const HandicapPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Orange FAB - Add New Round */}
+      <button
+        onClick={() => navigate('/handicap/add-round')}
+        className="fixed right-4 z-40 w-16 h-16 bg-gradient-to-br from-accent to-orange-600 rounded-full shadow-lg shadow-accent/40 flex items-center justify-center text-white text-3xl font-bold hover:scale-105 active:scale-95 transition-transform fab-position"
+        title="Add New Round"
+        aria-label="Add new round"
+      >
+        +
+      </button>
     </div>
   );
 };
