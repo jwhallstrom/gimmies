@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { getCourseById } from '../data/cloudCourses';
 import useStore from '../state/store';
+import type { Event } from '../state/types';
 
 const PENDING_JOIN_KEY = 'gimmies.pendingJoinCode.v1';
 
@@ -48,18 +49,28 @@ function getCourseMeta(courseId?: string | null): { name: string; location: stri
 
 const JoinEventPage: React.FC = () => {
   const { code: codeParam } = useParams();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const joinEventByCode = useStore((s: any) => s.joinEventByCode);
   const addGolferToEvent = useStore((s: any) => s.addGolferToEvent);
+  const generateShareCode = useStore((s: any) => s.generateShareCode);
   const currentProfile = useStore((s: any) => s.currentProfile);
   const myEvents = useStore((s: any) => s.events);
   const addToast = useStore((s: any) => s.addToast);
+
+  // Tab state: 'events' or 'groups'
+  const initialTab = searchParams.get('tab') === 'groups' ? 'groups' : 'events';
+  const [activeTab, setActiveTab] = useState<'events' | 'groups'>(initialTab);
 
   const [publicEvents, setPublicEvents] = useState<any[]>([]);
   const [loadingPublic, setLoadingPublic] = useState(false);
   const [publicError, setPublicError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  
+  // Group-specific state
+  const [groupQuery, setGroupQuery] = useState('');
+  const [joiningGroupId, setJoiningGroupId] = useState<string | null>(null);
   const [geoStatus, setGeoStatus] = useState<'idle' | 'requesting' | 'ready' | 'denied' | 'unsupported'>('idle');
   const [geoCoords, setGeoCoords] = useState<{ lat: number; lng: number } | null>(null);
 
@@ -287,13 +298,78 @@ const JoinEventPage: React.FC = () => {
     }
   };
 
+  // ===== GROUP DISCOVERY LOGIC =====
+  
+  // Get all public groups from local store
+  const publicGroups = useMemo(() => {
+    return (myEvents || []).filter((e: Event) => {
+      if (e.hubType !== 'group') return false;
+      const settings = e.groupSettings;
+      if (!settings || settings.visibility !== 'public') return false;
+      // Don't show groups user is already in
+      if (currentProfile && e.golfers?.some((g: any) => g.profileId === currentProfile.id)) return false;
+      return true;
+    });
+  }, [myEvents, currentProfile?.id]);
+
+  // Filter groups by search
+  const filteredGroups = useMemo(() => {
+    if (!groupQuery.trim()) return publicGroups;
+    const q = groupQuery.toLowerCase();
+    return publicGroups.filter((g: Event) => {
+      const name = (g.name || '').toLowerCase();
+      const location = (g.groupSettings?.location || '').toLowerCase();
+      const description = (g.groupSettings?.description || '').toLowerCase();
+      return name.includes(q) || location.includes(q) || description.includes(q);
+    });
+  }, [publicGroups, groupQuery]);
+
+  // Groups user is already a member of
+  const myGroups = useMemo(() => {
+    return (myEvents || []).filter((e: Event) => {
+      if (e.hubType !== 'group') return false;
+      return currentProfile && e.golfers?.some((g: any) => g.profileId === currentProfile.id);
+    });
+  }, [myEvents, currentProfile?.id]);
+
+  const handleJoinGroup = async (group: Event) => {
+    if (!currentProfile) {
+      addToast?.('Please sign in to join groups', 'error');
+      return;
+    }
+
+    setJoiningGroupId(group.id);
+    try {
+      let code = group.shareCode;
+      if (!code) {
+        code = await generateShareCode(group.id);
+      }
+      if (!code) {
+        throw new Error('Could not get join code');
+      }
+
+      const result = await joinEventByCode(code);
+      if (result?.success) {
+        addToast?.(`Joined ${group.name}!`, 'success');
+        navigate(`/event/${group.id}`);
+      } else {
+        throw new Error(result?.error || 'Failed to join');
+      }
+    } catch (e: any) {
+      addToast?.(e?.message || 'Could not join group', 'error');
+    } finally {
+      setJoiningGroupId(null);
+    }
+  };
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
+      {/* Header with Back button */}
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-2xl font-black text-gray-900 dark:text-white">Join a Game</div>
-          <div className="text-sm text-gray-600 dark:text-slate-400 mt-1">
-            Home course first, then favorites — plus nearby and search.
+          <div className="text-2xl font-black text-gray-900 dark:text-white">Join</div>
+          <div className="text-sm text-gray-600 dark:text-slate-400 mt-0.5">
+            Find events or groups to join
           </div>
         </div>
         <button
@@ -305,17 +381,43 @@ const JoinEventPage: React.FC = () => {
         </button>
       </div>
 
-      <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-lg shadow-slate-200/50 dark:shadow-black/20 border border-slate-200/80 dark:border-white/10 overflow-hidden">
-        <div className="p-4 border-b border-slate-100 dark:border-white/5">
-          <div className="flex items-center gap-2">
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search all games (course or game name)"
-              className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500 transition"
-            />
+      {/* Tab Switcher */}
+      <div className="flex gap-1 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl">
+        <button
+          onClick={() => setActiveTab('events')}
+          className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-bold transition-all ${
+            activeTab === 'events'
+              ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm'
+              : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200'
+          }`}
+        >
+          🎯 Events
+        </button>
+        <button
+          onClick={() => setActiveTab('groups')}
+          className={`flex-1 py-2.5 px-4 rounded-xl text-sm font-bold transition-all ${
+            activeTab === 'groups'
+              ? 'bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm'
+              : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200'
+          }`}
+        >
+          👥 Groups
+        </button>
+      </div>
+
+      {/* EVENTS TAB */}
+      {activeTab === 'events' && (
+        <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-lg shadow-slate-200/50 dark:shadow-black/20 border border-slate-200/80 dark:border-white/10 overflow-hidden">
+          <div className="p-4 border-b border-slate-100 dark:border-white/5">
+            <div className="flex items-center gap-2">
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search events (course or event name)"
+                className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold focus:ring-4 focus:ring-primary-500/20 focus:border-primary-500 transition"
+              />
+            </div>
           </div>
-        </div>
 
         <div className="p-4 space-y-3">
           {loadingPublic && (
@@ -545,7 +647,142 @@ const JoinEventPage: React.FC = () => {
           )}
         </div>
       </div>
+      )}
 
+      {/* GROUPS TAB */}
+      {activeTab === 'groups' && (
+        <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-lg shadow-slate-200/50 dark:shadow-black/20 border border-slate-200/80 dark:border-white/10 overflow-hidden">
+          <div className="p-4 border-b border-slate-100 dark:border-white/5">
+            <input
+              value={groupQuery}
+              onChange={(e) => setGroupQuery(e.target.value)}
+              placeholder="Search groups by name or location..."
+              className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-semibold focus:ring-4 focus:ring-purple-500/20 focus:border-purple-500 transition"
+            />
+          </div>
+
+          <div className="p-4 space-y-3">
+            {/* Your Groups */}
+            {myGroups.length > 0 && (
+              <div className="space-y-2 mb-4">
+                <div className="text-[10px] font-bold tracking-[0.15em] text-gray-400 uppercase px-1">Your Groups</div>
+                {myGroups.slice(0, 3).map((group: Event) => {
+                  const settings = group.groupSettings;
+                  const memberCount = group.golfers?.length || 0;
+                  return (
+                    <button
+                      key={group.id}
+                      onClick={() => navigate(`/event/${group.id}`)}
+                      className="w-full rounded-2xl bg-gradient-to-r from-purple-50 to-white dark:from-purple-900/20 dark:to-slate-900 border border-purple-200/50 dark:border-purple-800/30 p-3 flex items-center justify-between gap-3 text-left hover:border-purple-300 transition"
+                    >
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-purple-100 dark:bg-purple-900/50 flex items-center justify-center flex-shrink-0">
+                          <span className="text-lg">👥</span>
+                        </div>
+                        <div className="min-w-0">
+                          <div className="font-bold text-gray-900 dark:text-white truncate">{group.name}</div>
+                          <div className="text-xs text-gray-500 dark:text-slate-400">
+                            {memberCount} member{memberCount !== 1 ? 's' : ''}
+                            {settings?.location ? ` • ${settings.location}` : ''}
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-[9px] font-bold text-purple-600 bg-purple-100 px-2 py-0.5 rounded-full flex-shrink-0">
+                        MEMBER
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Public Groups */}
+            <div className="space-y-2">
+              <div className="text-[10px] font-bold tracking-[0.15em] text-gray-400 uppercase px-1">
+                {groupQuery ? 'Search Results' : 'Public Groups'}
+              </div>
+              
+              {filteredGroups.length === 0 ? (
+                <div className="rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/50 p-6 text-center">
+                  <div className="w-14 h-14 bg-purple-100 dark:bg-purple-900/30 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <span className="text-2xl">👥</span>
+                  </div>
+                  {publicGroups.length === 0 ? (
+                    <>
+                      <div className="font-black text-gray-800 dark:text-white">No public groups yet</div>
+                      <div className="text-sm text-gray-600 dark:text-slate-400 mt-1">
+                        Public groups will appear here, or use a code to join a private group.
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="font-black text-gray-800 dark:text-white">No matches found</div>
+                      <div className="text-sm text-gray-600 dark:text-slate-400 mt-1">
+                        Try a different search term
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : (
+                filteredGroups.map((group: Event) => {
+                  const settings = group.groupSettings;
+                  const isOpen = settings?.joinPolicy === 'open';
+                  const memberCount = group.golfers?.length || 0;
+
+                  return (
+                    <div 
+                      key={group.id}
+                      className="rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-white/5 p-4 hover:border-purple-300 dark:hover:border-purple-700 transition-colors"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="w-12 h-12 rounded-xl bg-purple-100 dark:bg-purple-900/50 flex items-center justify-center flex-shrink-0">
+                          <span className="text-2xl">👥</span>
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="font-bold text-gray-900 dark:text-white truncate">{group.name}</div>
+                          {settings?.location && (
+                            <div className="text-xs text-gray-500 dark:text-slate-400 flex items-center gap-1 mt-0.5">
+                              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                              </svg>
+                              {settings.location}
+                            </div>
+                          )}
+                          {settings?.description && (
+                            <p className="text-xs text-gray-600 dark:text-slate-300 mt-1 line-clamp-2">{settings.description}</p>
+                          )}
+                          <div className="flex items-center gap-3 mt-2">
+                            <span className="text-xs text-gray-500 dark:text-slate-400">{memberCount} member{memberCount !== 1 ? 's' : ''}</span>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                              isOpen 
+                                ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' 
+                                : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                            }`}>
+                              {isOpen ? 'Open' : 'Request to Join'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => handleJoinGroup(group)}
+                          disabled={joiningGroupId === group.id}
+                          className="px-4 py-2 bg-purple-600 text-white text-sm font-bold rounded-xl hover:bg-purple-700 disabled:opacity-60 transition-colors flex-shrink-0"
+                        >
+                          {joiningGroupId === group.id ? 'Joining...' : 'Join'}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Private code section - works for both events and groups */}
       {/* Fringe case: invite-only code */}
       <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-lg shadow-slate-200/50 dark:shadow-black/20 border border-slate-200/80 dark:border-white/10 overflow-hidden">
         <button
