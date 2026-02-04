@@ -184,19 +184,25 @@ const ScoreHubTab: React.FC<Props> = ({ eventId }) => {
                         Hole {nextHoleInfo.hole} <span className="text-lg font-medium opacity-80">• Par {nextHoleInfo.par}</span>
                       </div>
                     </div>
-                    <div className="text-right text-white">
-                      <div className="text-xs opacity-80">Score</div>
-                      <div className={`text-3xl font-black ${
-                        quickScore !== null && quickScore < nextHoleInfo.par ? 'text-yellow-300' :
-                        quickScore !== null && quickScore > nextHoleInfo.par ? 'text-red-200' :
-                        'text-white'
+                    {/* Score name (Par/Birdie/Bogey) in top right */}
+                    {quickScore !== null && (
+                      <div className={`px-3 py-1.5 rounded-xl text-sm font-bold ${
+                        quickScore < nextHoleInfo.par ? 'bg-yellow-400 text-yellow-900' :
+                        quickScore === nextHoleInfo.par ? 'bg-white/30 text-white' :
+                        quickScore === nextHoleInfo.par + 1 ? 'bg-orange-400 text-orange-900' :
+                        'bg-red-400 text-red-900'
                       }`}>
-                        {quickScore ?? nextHoleInfo.par}
+                        {quickScore <= nextHoleInfo.par - 2 ? 'Eagle!' :
+                         quickScore === nextHoleInfo.par - 1 ? 'Birdie!' :
+                         quickScore === nextHoleInfo.par ? 'Par' :
+                         quickScore === nextHoleInfo.par + 1 ? 'Bogey' :
+                         quickScore === nextHoleInfo.par + 2 ? 'Double' :
+                         `+${quickScore - nextHoleInfo.par}`}
                       </div>
-                    </div>
+                    )}
                   </div>
                   
-                  {/* +/- Controls */}
+                  {/* +/- Controls with BIG score number in center */}
                   <div className="flex items-center gap-3">
                     <button
                       onClick={() => setQuickScore((s) => Math.max(1, (s ?? nextHoleInfo.par) - 1))}
@@ -205,23 +211,15 @@ const ScoreHubTab: React.FC<Props> = ({ eventId }) => {
                       −
                     </button>
                     
-                    <div className="flex-1 flex items-center justify-center gap-2">
-                      {/* Score relative to par indicator */}
-                      {quickScore !== null && (
-                        <div className={`px-3 py-1 rounded-full text-sm font-bold ${
-                          quickScore < nextHoleInfo.par ? 'bg-yellow-400 text-yellow-900' :
-                          quickScore === nextHoleInfo.par ? 'bg-white/30 text-white' :
-                          quickScore === nextHoleInfo.par + 1 ? 'bg-orange-400 text-orange-900' :
-                          'bg-red-400 text-red-900'
-                        }`}>
-                          {quickScore < nextHoleInfo.par - 1 ? `${quickScore - nextHoleInfo.par} Eagle!` :
-                           quickScore === nextHoleInfo.par - 1 ? 'Birdie!' :
-                           quickScore === nextHoleInfo.par ? 'Par' :
-                           quickScore === nextHoleInfo.par + 1 ? 'Bogey' :
-                           quickScore === nextHoleInfo.par + 2 ? 'Double' :
-                           `+${quickScore - nextHoleInfo.par}`}
-                        </div>
-                      )}
+                    {/* BIG score number in center */}
+                    <div className="flex-1 flex items-center justify-center">
+                      <div className={`text-7xl font-black tabular-nums ${
+                        quickScore !== null && quickScore < nextHoleInfo.par ? 'text-yellow-300' :
+                        quickScore !== null && quickScore > nextHoleInfo.par ? 'text-red-200' :
+                        'text-white'
+                      }`}>
+                        {quickScore ?? nextHoleInfo.par}
+                      </div>
                     </div>
                     
                     <button
