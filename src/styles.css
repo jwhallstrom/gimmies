@@ -35,12 +35,7 @@ header {
   padding-top: env(safe-area-inset-top, 0px);
 }
 
-/* Fixed footer - extends into home indicator area with fallback */
-footer {
-  /* Only use safe area inset for bottom padding, minimal fallback */
-  padding-bottom: env(safe-area-inset-bottom, 8px);
-  background-color: inherit;
-}
+/* Fixed footer - Tailwind pb-safe-bottom utility handles safe area in App.tsx */
 
 /* ==========================================================================
    Mobile Optimizations - Touch & Performance
