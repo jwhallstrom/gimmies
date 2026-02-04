@@ -4,26 +4,52 @@
 
 /* ==========================================================================
    Root Layout - iOS PWA Safe Area & Dynamic Viewport
-   Using env() variables for dynamic safe area handling
    ========================================================================== */
 
-html, body {
+html {
+  height: 100dvh;
+  /* Fallback for older browsers */
   height: 100%;
-  margin: 0;
-  padding: 0;
-  overflow: hidden;
-  /* Dark background prevents white bleed in safe areas */
+  /* Prevent iOS "white gap" - use dark theme color */
   background-color: #09243F;
+  /* Prevent body scroll, allow internal containers */
+  overflow: hidden;
+  /* Prevent pull-to-refresh in PWA mode */
+  overscroll-behavior-y: contain;
 }
 
-html {
-  overscroll-behavior-y: none;
+body {
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  height: 100dvh;
+  /* Fallback */
+  height: 100%;
+  margin: 0;
+  /* Apply safe area insets to body - fills entire safe area with correct bg */
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  /* Match dark theme so any bleed is dark not white */
+  background-color: #09243F;
+  /* Prevent body from scrolling */
+  overflow: hidden;
+  /* Use fixed to ensure full viewport coverage */
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  /* Box-sizing ensures padding doesn't break layout */
+  box-sizing: border-box;
 }
 
 #root {
-  /* Dynamic viewport height handles home indicator bar */
-  height: 100dvh;
-  min-height: 100dvh;
+  /* Fill remaining space after safe area padding */
+  height: 100%;
+  width: 100%;
+  /* Match dark theme background */
+  background-color: #09243F;
+  /* Flex container for app layout */
   display: flex;
   flex-direction: column;
   overflow: hidden;
