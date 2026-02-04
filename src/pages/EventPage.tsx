@@ -9,7 +9,7 @@
  * - Mobile-first with smooth native feel
  */
 
-import React, { useState, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import useStore from '../state/store';
 import { useEventSync } from '../hooks/useEventSync';
@@ -21,6 +21,18 @@ import ChatTab from '../components/tabs/ChatTab';
 import ShareModal from '../components/ShareModal';
 import EventNotifications from '../components/EventNotifications';
 import { getCourseById } from '../data/cloudCourses';
+
+// Mark group chat as read (stores in localStorage)
+const LAST_READ_KEY = 'gimmies.chatLastRead.v1';
+function markChatAsRead(groupId: string) {
+  try {
+    const current = JSON.parse(localStorage.getItem(LAST_READ_KEY) || '{}');
+    current[groupId] = new Date().toISOString();
+    localStorage.setItem(LAST_READ_KEY, JSON.stringify(current));
+  } catch {
+    // ignore
+  }
+}
 
 const formatDateShort = (iso: string) =>
   new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -170,6 +182,13 @@ const EventPage: React.FC = () => {
 
   // Determine if on chat page (for showing composer)
   const isChatPage = activePageIndex === 0;
+  
+  // Mark group chat as read when viewing chat tab
+  useEffect(() => {
+    if (isGroupHub && isChatPage && event?.id) {
+      markChatAsRead(event.id);
+    }
+  }, [isGroupHub, isChatPage, event?.id]);
   
   // Icon-only tabs (no labels): saves space and removes sideways scrolling.
   const tabPillClass =

@@ -1,4 +1,4 @@
-import React, { useEffect, useState, Suspense, lazy } from 'react';
+import React, { useEffect, useState, Suspense, lazy, useMemo } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
 import { LoginPage } from '../components/auth/LoginPage';
 import { ProfileCompletion } from '../components/auth/ProfileCompletion';
@@ -7,6 +7,7 @@ import UserMenu from '../components/UserMenu';
 import { ToastManager } from '../components/Toast';
 import LoadingSpinner from '../components/LoadingSpinner';
 import { LevelUpModal } from '../components/verified';
+import { MessagesPanel, getUnreadCount } from '../components/MessagesPanel';
 import useStore from '../state/store';
 
 // Lazy load secondary routes for code splitting
@@ -34,10 +35,16 @@ const App: React.FC = () => {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [amplifyUser, setAmplifyUser] = useState<any>(null);
   const [pendingJoinHandled, setPendingJoinHandled] = useState(false);
+  const [showMessagesPanel, setShowMessagesPanel] = useState(false);
   const isEventRoute = location.pathname.startsWith('/event/');
   const isEventChatRoute =
     isEventRoute &&
     (location.pathname.endsWith('/chat') || /^\/event\/[^/]+\/?$/.test(location.pathname));
+  
+  // Calculate unread message count for header badge
+  const unreadMessageCount = useMemo(() => {
+    return getUnreadCount(events, currentProfile?.id);
+  }, [events, currentProfile?.id]);
 
   // If someone opens a join link before their profile is set up, we store the code in sessionStorage.
   // Once a profile exists, auto-join and navigate them straight into the event.
@@ -270,8 +277,35 @@ const App: React.FC = () => {
         <Link to="/">
           <img src="/gimmies-logo.png" alt="Gimmies" className="h-10 w-auto" />
         </Link>
-        <UserMenu />
+        
+        <div className="flex items-center gap-2">
+          {/* Messages icon with badge */}
+          {currentProfile && (
+            <button
+              onClick={() => setShowMessagesPanel(true)}
+              className="relative p-2 rounded-xl hover:bg-white/10 active:bg-white/20 transition"
+              aria-label={`Messages${unreadMessageCount > 0 ? ` (${unreadMessageCount} unread)` : ''}`}
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              {unreadMessageCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-red-500 rounded-full flex items-center justify-center text-[10px] font-bold text-white px-1">
+                  {unreadMessageCount > 99 ? '99+' : unreadMessageCount}
+                </span>
+              )}
+            </button>
+          )}
+          
+          <UserMenu />
+        </div>
       </header>
+      
+      {/* Messages Panel */}
+      <MessagesPanel 
+        isOpen={showMessagesPanel} 
+        onClose={() => setShowMessagesPanel(false)} 
+      />
       {/* Main content area */}
       <main className="flex-1 min-h-0 overflow-hidden relative w-full">
         <div
