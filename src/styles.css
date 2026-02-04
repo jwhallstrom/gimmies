@@ -55,13 +55,7 @@ body {
   overflow: hidden;
 }
 
-/* Header - safe area padding for notch/Dynamic Island */
-header {
-  /* Only use safe area inset, no extra fallback padding */
-  padding-top: env(safe-area-inset-top, 0px);
-}
-
-/* Fixed footer - Tailwind pb-safe-bottom utility handles safe area in App.tsx */
+/* Body handles safe-area padding for all sides - no additional header/footer CSS needed */
 
 /* ==========================================================================
    Mobile Optimizations - Touch & Performance
