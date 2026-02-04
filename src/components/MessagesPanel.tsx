@@ -9,6 +9,7 @@
  */
 
 import React, { useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../state/store';
 
@@ -143,17 +144,20 @@ export const MessagesPanel: React.FC<Props> = ({ isOpen, onClose }) => {
   
   const totalUnread = groupsWithChat.reduce((sum: number, g: any) => sum + g.unreadCount, 0);
   
-  return (
+  return createPortal(
     <div 
-      className="fixed inset-0 z-50 flex items-start justify-end pt-14"
-      onClick={onClose}
+      className="fixed inset-0 z-50"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClose();
+      }}
     >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/30" />
+      <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
       
-      {/* Panel */}
+      {/* Panel - positioned top right under header */}
       <div 
-        className="relative w-full max-w-sm mx-2 mt-2 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden animate-slide-down max-h-[70vh] flex flex-col"
+        className="absolute top-16 right-2 w-full max-w-sm bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden max-h-[70vh] flex flex-col animate-slide-up"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -258,7 +262,8 @@ export const MessagesPanel: React.FC<Props> = ({ isOpen, onClose }) => {
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
 

@@ -282,7 +282,10 @@ const App: React.FC = () => {
           {/* Messages icon with badge */}
           {currentProfile && (
             <button
-              onClick={() => setShowMessagesPanel(true)}
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowMessagesPanel(true);
+              }}
               className="relative p-2 rounded-xl hover:bg-white/10 active:bg-white/20 transition"
               aria-label={`Messages${unreadMessageCount > 0 ? ` (${unreadMessageCount} unread)` : ''}`}
             >
