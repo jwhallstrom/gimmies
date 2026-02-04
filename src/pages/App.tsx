@@ -265,7 +265,7 @@ const App: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col bg-gradient-to-b from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 text-gray-900 dark:text-slate-100">
-      {/* Header - flex child, body CSS handles safe area padding */}
+      {/* ⚠️ CRITICAL: Header - body CSS handles safe area top padding, no pt-safe-top needed */}
       <header className="flex-shrink-0 bg-primary-900/85 backdrop-blur text-white px-4 py-3 flex items-center justify-between shadow-md z-40 border-b border-white/10">
         <Link to="/">
           <img src="/gimmies-logo.png" alt="Gimmies" className="h-10 w-auto" />
@@ -316,8 +316,16 @@ const App: React.FC = () => {
           </div>
         </div>
       </main>
-      {/* Fixed bottom nav - min-h-safe-nav extends background into iOS safe area, pb-safe-bottom pushes content above home indicator */}
-      <footer className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-[#09243F] border-t border-gray-200 dark:border-white/10 min-h-safe-nav pb-safe-bottom flex items-start justify-around px-2 pt-2">
+      {/* ⚠️ CRITICAL iOS PWA Layout - DO NOT MODIFY without testing on iOS 26.2+
+          - h-[68px]: Fixed height prevents expansion
+          - pb-safe-bottom: Extends into safe area (Tailwind utility)
+          - -mb-4: 16px negative margin (sweet spot - tested -3 to -6)
+          - pt-1: Minimal padding (4px) prevents text cutoff
+          See docs/IOS_PWA_LAYOUT_CRITICAL.md for full details */}
+      <footer className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-[#09243F] border-t border-gray-200 dark:border-white/10 h-[68px] pb-safe-bottom -mb-4 flex items-start justify-around px-2 pt-1">
+          - pt-1: Minimal top padding for compact layout
+          Tested to match Instagram/major PWA positioning */}
+      <footer className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-[#09243F] border-t border-gray-200 dark:border-white/10 h-[68px] pb-safe-bottom -mb-5 flex items-start justify-around px-2 pt-1">
         <Link
           to="/"
           className={`flex flex-col items-center justify-center gap-0.5 min-w-[56px] min-h-[52px] py-1.5 rounded-xl transition-all ${

@@ -4,17 +4,15 @@
 
 /* ==========================================================================
    Root Layout - iOS PWA Safe Area & Dynamic Viewport
+   CRITICAL: This layout structure is tuned for iOS 26.2 PWA safe areas
+   DO NOT MODIFY without extensive iOS testing - position:fixed on body is required!
    ========================================================================== */
 
 html {
   height: 100dvh;
-  /* Fallback for older browsers */
   height: 100%;
-  /* Prevent iOS "white gap" - use dark theme color */
   background-color: #09243F;
-  /* Prevent body scroll, allow internal containers */
   overflow: hidden;
-  /* Prevent pull-to-refresh in PWA mode */
   overscroll-behavior-y: contain;
 }
 
@@ -24,38 +22,29 @@ body {
   /* Fallback */
   height: 100%;
   margin: 0;
-  /* Apply safe area insets to body - fills entire safe area with correct bg */
+  /* CRITICAL: Safe area insets - NO bottom padding, footer handles it with -mb-4 */
   padding-top: env(safe-area-inset-top, 0px);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
   padding-left: env(safe-area-inset-left, 0px);
   padding-right: env(safe-area-inset-right, 0px);
-  /* Match dark theme so any bleed is dark not white */
   background-color: #09243F;
-  /* Prevent body from scrolling */
   overflow: hidden;
-  /* Use fixed to ensure full viewport coverage */
+  /* CRITICAL: position:fixed required for iOS safe areas - DO NOT REMOVE */
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  /* Box-sizing ensures padding doesn't break layout */
   box-sizing: border-box;
 }
 
 #root {
-  /* Fill remaining space after safe area padding */
   height: 100%;
   width: 100%;
-  /* Match dark theme background */
   background-color: #09243F;
-  /* Flex container for app layout */
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
-
-/* Body handles safe-area padding for all sides - no additional header/footer CSS needed */
 
 /* ==========================================================================
    Mobile Optimizations - Touch & Performance
@@ -154,10 +143,10 @@ a:active,
 .pr-safe-base-0 { --pr-safe-base: 0; }
 
 /* Ticker positioning - sits directly above the fixed bottom nav */
-.ticker-above-footer {
-  /* Adjusted: 84px (68px footer + 8px safe fallback + 8px buffer) */
-  bottom: 84px;
-  bottom: calc(68px + env(safe-area-inset-bottom, 8px) + 8px);
+.tickCRITICAL: Tuned for footer h-[68px] with -mb-4 (16px) = ~52px effective height */
+  bottom: 56px;
+  bottom: calc(52px + env(safe-area-inset-bottom, 4
+  bottom: calc(48px + env(safe-area-inset-bottom, 8px));
 }
 
 /* FAB positioning - sits above ticker and bottom nav */
