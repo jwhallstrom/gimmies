@@ -143,10 +143,10 @@ a:active,
 .pr-safe-base-0 { --pr-safe-base: 0; }
 
 /* Ticker positioning - sits directly above the fixed bottom nav */
-.tickCRITICAL: Tuned for footer h-[68px] with -mb-4 (16px) = ~52px effective height */
+.ticker-above-footer {
+  /* CRITICAL: Tuned for footer h-[68px] with -mb-4 (16px) = ~52px effective height */
   bottom: 56px;
-  bottom: calc(52px + env(safe-area-inset-bottom, 4
-  bottom: calc(48px + env(safe-area-inset-bottom, 8px));
+  bottom: calc(52px + env(safe-area-inset-bottom, 4px));
 }
 
 /* FAB positioning - sits above ticker and bottom nav */

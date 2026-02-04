@@ -8,7 +8,7 @@
  * - All preferences in one place
  */
 
-import { version } from '../../package.json';
+import packageJson from '../../package.json';
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
@@ -669,7 +669,7 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
                   <span className="text-xl">📱</span>
                   <span className="text-sm font-medium text-gray-900">Version</span>
                 </div>
-                <span className="text-sm text-gray-500">{version}</span>
+                <span className="text-sm text-gray-500">{packageJson.version}</span>
               </div>
             </div>
             
