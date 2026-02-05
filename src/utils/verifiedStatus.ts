@@ -253,7 +253,7 @@ export function getBadgeInfo(badgeId: string): { name: string; emoji: string; de
     club_member: { name: 'Club Member', emoji: '⭐', description: 'Reached Foundation Level' },
     platinum_contender: { name: 'Platinum Contender', emoji: '💎', description: 'Reached Established Level' },
     elite_member: { name: 'Elite Member', emoji: '🦅', description: 'Reached Elite Level' },
-    green_jacket: { name: 'Green Jacket', emoji: '🧥', description: 'Achieved legendary status' },
+    gold_jacket: { name: 'Gold Jacket', emoji: '🧥', description: 'Achieved Hall of Fame status' },
     milestone_10: { name: '10 Rounds', emoji: '🔟', description: '10 verified rounds played' },
     milestone_25: { name: '25 Rounds', emoji: '🎯', description: '25 verified rounds played' },
     milestone_50: { name: '50 Rounds', emoji: '🌟', description: '50 verified rounds played' },

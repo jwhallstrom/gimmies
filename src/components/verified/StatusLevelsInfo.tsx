@@ -36,7 +36,7 @@ const StatusLevelsInfo: React.FC<Props> = ({ onClose, currentLevel = 0 }) => {
                 🏆 Status Levels
               </h2>
               <p className="text-emerald-100 text-sm mt-0.5">
-                Your journey to the Green Jacket
+                Your journey to the Gold Jacket
               </p>
             </div>
             <button
@@ -71,21 +71,20 @@ const StatusLevelsInfo: React.FC<Props> = ({ onClose, currentLevel = 0 }) => {
             <ul className="text-sm text-gray-600 space-y-2">
               <li className="flex items-start gap-2">
                 <span className="text-green-500 mt-0.5">•</span>
-                <span>Play with <strong>2+ golfers</strong> in a Gimmies event</span>
+                <span>Only scores from <strong>Gimmies events</strong> count (not manual handicap entries)</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-green-500 mt-0.5">•</span>
-                <span>All players have <strong>Gimmies profiles</strong></span>
+                <span>Play with <strong>2+ other Gimmies accounts</strong> (guests don't count)</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-green-500 mt-0.5">•</span>
-                <span>Scores entered via the app (not manual entry)</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-green-500 mt-0.5">•</span>
-                <span>Complete at least <strong>14 holes</strong></span>
+                <span>Event must be <strong>completed and closed</strong> with all scores finalized</span>
               </li>
             </ul>
+            <p className="text-xs text-gray-500 mt-3 italic">
+              This ensures verified rounds reflect real competitive play with verified golfers.
+            </p>
           </div>
 
           {/* Status Tiers */}

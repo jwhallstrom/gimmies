@@ -177,10 +177,6 @@ const App: React.FC = () => {
     location: location.pathname 
   });
 
-  // Count user's events
-  const userEventsCount = currentProfile ? events.filter(event =>
-    event.golfers.some(golfer => golfer.profileId === currentProfile.id)
-  ).length : 0;
 
   const handleLoginSuccess = () => {
     console.log('Login successful, checking auth again...');
@@ -279,27 +275,6 @@ const App: React.FC = () => {
         </Link>
         
         <div className="flex items-center gap-2">
-          {/* Messages icon with badge */}
-          {currentProfile && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setShowMessagesPanel(true);
-              }}
-              className="relative p-2 rounded-xl hover:bg-white/10 active:bg-white/20 transition"
-              aria-label={`Messages${unreadMessageCount > 0 ? ` (${unreadMessageCount} unread)` : ''}`}
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
-              {unreadMessageCount > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] bg-red-500 rounded-full flex items-center justify-center text-[10px] font-bold text-white px-1">
-                  {unreadMessageCount > 99 ? '99+' : unreadMessageCount}
-                </span>
-              )}
-            </button>
-          )}
-          
           <UserMenu />
         </div>
       </header>
@@ -369,24 +344,24 @@ const App: React.FC = () => {
           <span className="text-[10px] font-medium">Home</span>
         </Link>
 
-        <Link
-          to="/events"
+        <button
+          onClick={() => setShowMessagesPanel(true)}
           className={`flex flex-col items-center justify-center gap-0.5 min-w-[56px] min-h-[52px] py-1.5 rounded-xl transition-all relative ${
-            location.pathname === '/events' 
+            showMessagesPanel 
               ? 'text-primary-600 bg-primary-50 dark:bg-primary-900/30' 
               : 'text-gray-500 dark:text-gray-400 active:bg-gray-100'
           }`}
         >
           <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
           </svg>
-          <span className="text-[10px] font-medium">Events</span>
-          {userEventsCount > 0 && (
+          <span className="text-[10px] font-medium">Chat</span>
+          {unreadMessageCount > 0 && (
             <span className="absolute top-0.5 right-0.5 bg-red-500 text-white text-[9px] rounded-full h-4 w-4 flex items-center justify-center font-bold">
-              {userEventsCount > 9 ? '9+' : userEventsCount}
+              {unreadMessageCount > 9 ? '9+' : unreadMessageCount}
             </span>
           )}
-        </Link>
+        </button>
 
         <Link
           to="/handicap"

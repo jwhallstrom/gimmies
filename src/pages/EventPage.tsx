@@ -175,8 +175,9 @@ const EventPage: React.FC = () => {
 
   const handleDelete = () => {
     if (window.confirm(`Delete "${event.name}"? This cannot be undone.`)) {
+      // Navigate first to avoid blank screen, then delete
+      navigate('/', { replace: true });
       deleteEvent(id!);
-      navigate('/');
     }
   };
 

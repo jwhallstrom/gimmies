@@ -67,7 +67,7 @@ export const STATUS_TIERS: StatusTier[] = [
     color: 'blue',
     badgeColor: 'bg-blue-600',
     description: 'Respected and verified. Integrity backed by real events—trusted in competitive play and wagers.',
-    perks: ['Verified handicap badge', 'Priority in event matching', 'Trusted for wagers']
+    perks: ['Verified handicap badge', 'Trusted for wagers']
   },
   {
     level: 3,
@@ -78,18 +78,18 @@ export const STATUS_TIERS: StatusTier[] = [
     color: 'purple',
     badgeColor: 'bg-purple-600',
     description: 'Proven excellence. High-caliber verification and standing in the Gimmies network.',
-    perks: ['Elite badge', 'Priority invites', 'Discounted entry fees', 'Network recognition']
+    perks: ['Elite badge', 'Network recognition']
   },
   {
     level: 4,
-    name: 'Green Jacket',
+    name: 'Gold Jacket',
     emoji: '🧥',
     minRounds: 100,
     maxRounds: null,
-    color: 'emerald',
-    badgeColor: 'bg-emerald-700',
-    description: 'Ultimate prestige. Legendary status—your handicap is ironclad, emblematic of lifelong commitment, excellence, and community respect.',
-    perks: ['Green Jacket badge', 'VIP status', 'Free entry to select events', 'Handicap fully verified', 'Lifetime recognition']
+    color: 'amber',
+    badgeColor: 'bg-amber-600',
+    description: 'Hall of Fame status. Your handicap is ironclad—emblematic of lifelong commitment, excellence, and community respect.',
+    perks: ['Gold Jacket badge', 'HOF status', 'Handicap fully verified', 'Lifetime recognition']
   }
 ];
 

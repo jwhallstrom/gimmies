@@ -58,6 +58,14 @@ export function getCourseById(courseId?: string | null): CloudCourse | undefined
   return coursesById.get(courseId);
 }
 
+export function getAllCourses(): CloudCourse[] {
+  return Array.from(coursesById.values());
+}
+
+export function getCoursesCacheSize(): number {
+  return coursesById.size;
+}
+
 export function getTee(courseId: string | undefined, teeName: string | undefined): CloudTee | undefined {
   const course = getCourseById(courseId);
   if (!course) return undefined;

@@ -21,8 +21,6 @@ import type { Event } from '../state/types';
 import useStore from '../state/store';
 import { getHole } from '../data/cloudCourses';
 
-type Tab = 'events' | 'groups';
-
 const formatDateShort = (iso: string) =>
   new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
@@ -60,6 +58,33 @@ type TickerItem = {
 };
 
 const ONBOARDING_DISMISSED_KEY = 'gimmies_onboarding_dismissed';
+const SECTION_ORDER_KEY = 'gimmies_home_section_order';
+const DEFAULT_ITEMS_LIMIT = 5; // Show this many items before "Show more"
+
+type SectionId = 'live' | 'upcoming' | 'groups' | 'history';
+
+const DEFAULT_SECTION_ORDER: SectionId[] = ['live', 'upcoming', 'groups', 'history'];
+
+function getSavedSectionOrder(): SectionId[] {
+  try {
+    const saved = localStorage.getItem(SECTION_ORDER_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      // Validate it contains all sections
+      if (Array.isArray(parsed) && parsed.length === 4 && 
+          DEFAULT_SECTION_ORDER.every(s => parsed.includes(s))) {
+        return parsed;
+      }
+    }
+  } catch {}
+  return DEFAULT_SECTION_ORDER;
+}
+
+function saveSectionOrder(order: SectionId[]) {
+  try {
+    localStorage.setItem(SECTION_ORDER_KEY, JSON.stringify(order));
+  } catch {}
+}
 
 const Dashboard: React.FC = () => {
   const {
@@ -78,16 +103,72 @@ const Dashboard: React.FC = () => {
   const [showDiscoverGroups, setShowDiscoverGroups] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showFabMenu, setShowFabMenu] = useState(false);
-  const homeDefaultTabPref = (currentProfile?.preferences as any)?.homeDefaultTab as Tab | undefined;
-  const [tabTouched, setTabTouched] = useState(false);
-  const [tab, setTab] = useState<Tab>(() => (homeDefaultTabPref === 'groups' ? 'groups' : 'events'));
-  const [showRecentEvents, setShowRecentEvents] = useState(false);
-
-  // Apply preferred default tab when profile loads (unless user already interacted)
-  useEffect(() => {
-    if (tabTouched) return;
-    setTab(homeDefaultTabPref === 'groups' ? 'groups' : 'events');
-  }, [homeDefaultTabPref, tabTouched]);
+  
+  // Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Section order (draggable) - persisted to localStorage
+  const [sectionOrder, setSectionOrder] = useState<SectionId[]>(getSavedSectionOrder);
+  const [draggedSection, setDraggedSection] = useState<SectionId | null>(null);
+  const [dragOverSection, setDragOverSection] = useState<SectionId | null>(null);
+  
+  // Accordion states - LIVE, UPCOMING, GROUPS expanded by default; HISTORY collapsed
+  const [showLive, setShowLive] = useState(true);
+  const [showUpcoming, setShowUpcoming] = useState(true);
+  const [showGroups, setShowGroups] = useState(true);
+  const [showHistory, setShowHistory] = useState(false);
+  
+  // "Show all" states for sections with many items
+  const [showAllLive, setShowAllLive] = useState(false);
+  const [showAllUpcoming, setShowAllUpcoming] = useState(false);
+  const [showAllGroups, setShowAllGroups] = useState(false);
+  const [showAllHistory, setShowAllHistory] = useState(false);
+  
+  // Drag handlers
+  const handleDragStart = (e: React.DragEvent, sectionId: SectionId) => {
+    setDraggedSection(sectionId);
+    e.dataTransfer.effectAllowed = 'move';
+    // Add a slight delay for visual feedback
+    setTimeout(() => {
+      (e.target as HTMLElement).style.opacity = '0.5';
+    }, 0);
+  };
+  
+  const handleDragEnd = (e: React.DragEvent) => {
+    (e.target as HTMLElement).style.opacity = '1';
+    setDraggedSection(null);
+    setDragOverSection(null);
+  };
+  
+  const handleDragOver = (e: React.DragEvent, sectionId: SectionId) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (draggedSection && draggedSection !== sectionId) {
+      setDragOverSection(sectionId);
+    }
+  };
+  
+  const handleDragLeave = () => {
+    setDragOverSection(null);
+  };
+  
+  const handleDrop = (e: React.DragEvent, targetSectionId: SectionId) => {
+    e.preventDefault();
+    if (!draggedSection || draggedSection === targetSectionId) return;
+    
+    const newOrder = [...sectionOrder];
+    const draggedIdx = newOrder.indexOf(draggedSection);
+    const targetIdx = newOrder.indexOf(targetSectionId);
+    
+    // Remove dragged item and insert at target position
+    newOrder.splice(draggedIdx, 1);
+    newOrder.splice(targetIdx, 0, draggedSection);
+    
+    setSectionOrder(newOrder);
+    saveSectionOrder(newOrder);
+    setDraggedSection(null);
+    setDragOverSection(null);
+  };
   
   // Prevent multiple wizards from opening simultaneously
   const openEventWizard = () => {
@@ -129,7 +210,7 @@ const Dashboard: React.FC = () => {
   }, [currentProfile?.id]);
 
   // Separate events into categories: live, upcoming, completed, groups
-  const { liveEvents, upcomingEvents, completedEvents, groups, activeEvents } = useMemo(() => {
+  const { liveEvents, upcomingEvents, completedEvents, groups, activeEvents, filteredLive, filteredUpcoming, filteredGroups, filteredHistory } = useMemo(() => {
     const live: Event[] = [];
     const upcoming: Event[] = [];
     const completed: Event[] = [];
@@ -156,8 +237,22 @@ const Dashboard: React.FC = () => {
     // activeEvents = all non-completed for backward compat
     const active = [...live, ...upcoming];
     
-    return { liveEvents: live, upcomingEvents: upcoming, completedEvents: completed, groups: groupList, activeEvents: active };
-  }, [userEvents]);
+    // Apply search filter
+    const q = searchQuery.toLowerCase().trim();
+    const matchesSearch = (e: Event) => !q || (e.name || '').toLowerCase().includes(q);
+    
+    return { 
+      liveEvents: live, 
+      upcomingEvents: upcoming, 
+      completedEvents: completed, 
+      groups: groupList, 
+      activeEvents: active,
+      filteredLive: live.filter(matchesSearch),
+      filteredUpcoming: upcoming.filter(matchesSearch),
+      filteredGroups: groupList.filter(matchesSearch),
+      filteredHistory: completed.filter(matchesSearch),
+    };
+  }, [userEvents, searchQuery]);
 
 
   // Quick stats
@@ -416,7 +511,7 @@ const Dashboard: React.FC = () => {
               {/* Groups */}
               <button 
                 className="w-full flex items-start gap-3 p-4 bg-purple-50 rounded-xl border border-purple-100 hover:bg-purple-100 transition-colors text-left"
-                onClick={() => { setTabTouched(true); setTab('groups'); dismissOnboarding(false); }}
+                onClick={() => { setShowGroups(true); dismissOnboarding(false); }}
               >
                 <div className="w-12 h-12 rounded-full bg-purple-200 flex items-center justify-center flex-shrink-0">
                   <span className="text-2xl">👥</span>
@@ -495,158 +590,224 @@ const Dashboard: React.FC = () => {
         document.body
       )}
 
-      {/* Events & Groups - Segmented Control Style */}
-      <section className="-mx-4 sm:mx-0 rounded-none sm:rounded-2xl overflow-hidden border-y border-x-0 sm:border-2 border-slate-200 shadow-md bg-white">
-        {/* Tab Bar - Pill Style with Colored Backgrounds */}
-        <div className="flex gap-2 p-1.5 bg-slate-100 border-b border-slate-200">
+      {/* Search Bar */}
+      <div className="relative">
+        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search events & groups..."
+          className="w-full pl-9 pr-9 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200 focus:border-primary-300 shadow-sm"
+        />
+        {searchQuery && (
           <button
-            onClick={() => { setTabTouched(true); setTab('events'); }}
-            className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
-              tab === 'events' 
-                ? 'bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-md' 
-                : 'bg-transparent text-gray-600 hover:bg-white/50'
-            }`}
+            onClick={() => setSearchQuery('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"
           >
-            <span className="text-base">⛳</span>
-            <span>Events</span>
-            {activeEvents.length > 0 && (
-              <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${
-                tab === 'events' 
-                  ? 'bg-white/25 text-white' 
-                  : 'bg-primary-100 text-primary-700'
-              }`}>
-                {activeEvents.length}
-              </span>
-            )}
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
-          <button
-            onClick={() => { setTabTouched(true); setTab('groups'); }}
-            className={`flex-1 py-3 px-4 rounded-xl text-sm font-bold transition-all flex items-center justify-center gap-2 ${
-              tab === 'groups' 
-                ? 'bg-gradient-to-r from-purple-600 to-purple-700 text-white shadow-md' 
-                : 'bg-transparent text-gray-600 hover:bg-white/50'
-            }`}
-          >
-            <span className="text-base">👥</span>
-            <span>Groups</span>
-            {groups.length > 0 && (
-              <span className={`px-1.5 py-0.5 text-[10px] font-bold rounded-full ${
-                tab === 'groups' 
-                  ? 'bg-white/25 text-white' 
-                  : 'bg-purple-100 text-purple-700'
-              }`}>
-                {groups.length}
-              </span>
-            )}
-          </button>
-        </div>
-        
-        {/* Content Area */}
-        <div className="p-3">
-            {tab === 'events' && (
-            <>
-              {/* Empty state */}
-              {liveEvents.length === 0 && upcomingEvents.length === 0 && completedEvents.length === 0 && (
-                <div className="py-10 text-center">
-                  <div className="text-5xl mb-4">⛳</div>
-                  <div className="font-bold text-gray-800 text-lg mb-2">No events yet</div>
-                  <p className="text-gray-500 mb-6">
-                    Tap the <span className="inline-flex items-center justify-center w-8 h-8 bg-accent rounded-full text-white font-bold text-lg align-middle mx-1">+</span> button to get started
-                  </p>
-                </div>
-              )}
+        )}
+      </div>
 
-              {/* 🔴 LIVE Section */}
-              {liveEvents.length > 0 && (
-                <div className="mb-3">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-                    <h3 className="font-bold text-gray-800 text-xs uppercase tracking-wide">Live</h3>
-                    <span className="text-xs text-gray-500">({liveEvents.length})</span>
-                  </div>
-                  <div className="space-y-1.5">
-                    {liveEvents.map(event => (
-                      <EventCard key={event.id} event={event} profiles={profiles} status="live" />
-                    ))}
-                  </div>
-                </div>
-              )}
+      {/* Unified Content - Draggable Accordions */}
+      <section className="space-y-3">
+        {/* Empty state - show if no events AND no groups */}
+        {liveEvents.length === 0 && upcomingEvents.length === 0 && completedEvents.length === 0 && groups.length === 0 && (
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm py-12 text-center">
+            <div className="text-5xl mb-4">⛳</div>
+            <div className="font-bold text-gray-800 text-lg mb-2">Welcome to Gimmies!</div>
+            <p className="text-gray-500 mb-2 px-4">
+              Tap the <span className="inline-flex items-center justify-center w-8 h-8 bg-accent rounded-full text-white font-bold text-lg align-middle mx-1">+</span> to create an event or group
+            </p>
+          </div>
+        )}
 
-              {/* 📅 UPCOMING Section */}
-              {upcomingEvents.length > 0 && (
-                <div className="mb-3">
-                  <div className="flex items-center gap-2 mb-1.5">
-                    <span className="text-sm">📅</span>
-                    <h3 className="font-bold text-gray-800 text-xs uppercase tracking-wide">Upcoming</h3>
-                    <span className="text-xs text-gray-500">({upcomingEvents.length})</span>
-                  </div>
-                  <div className="space-y-1.5">
-                    {upcomingEvents.map(event => (
-                      <EventCard key={event.id} event={event} profiles={profiles} status="upcoming" />
-                    ))}
-                  </div>
-                </div>
-              )}
+        {/* No search results */}
+        {searchQuery && filteredLive.length === 0 && filteredUpcoming.length === 0 && filteredGroups.length === 0 && filteredHistory.length === 0 && (liveEvents.length > 0 || upcomingEvents.length > 0 || groups.length > 0 || completedEvents.length > 0) && (
+          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm py-8 text-center">
+            <div className="text-gray-500">No results for "{searchQuery}"</div>
+          </div>
+        )}
 
-              {/* ✅ RECENT Section (collapsible) */}
-              {completedEvents.length > 0 && (
-                <div className="mb-2">
-                  <button
-                    onClick={() => setShowRecentEvents(!showRecentEvents)}
-                    className="flex items-center gap-2 mb-1.5 w-full text-left"
+        {/* Render sections in user-defined order */}
+        {sectionOrder.map(sectionId => {
+          // Determine if section should show based on data
+          const sectionConfig: Record<SectionId, { 
+            show: boolean; 
+            isExpanded: boolean; 
+            setExpanded: (v: boolean) => void;
+            showAll: boolean;
+            setShowAll: (v: boolean) => void;
+            icon: React.ReactNode;
+            label: string;
+            count: number;
+            gradient: string;
+            badgeBg: string;
+            labelColor: string;
+            items: Event[];
+            renderItem: (item: Event) => React.ReactNode;
+          }> = {
+            live: {
+              show: liveEvents.length > 0,
+              isExpanded: showLive,
+              setExpanded: setShowLive,
+              showAll: showAllLive,
+              setShowAll: setShowAllLive,
+              icon: <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>,
+              label: 'Live',
+              count: filteredLive.length,
+              gradient: 'from-red-50 to-white hover:from-red-100',
+              badgeBg: 'bg-red-100',
+              labelColor: 'text-gray-800',
+              items: filteredLive,
+              renderItem: (event) => (
+                <EventCard key={event.id} event={event} profiles={profiles} status="live" />
+              ),
+            },
+            upcoming: {
+              show: upcomingEvents.length > 0,
+              isExpanded: showUpcoming,
+              setExpanded: setShowUpcoming,
+              showAll: showAllUpcoming,
+              setShowAll: setShowAllUpcoming,
+              icon: <span className="text-base">📅</span>,
+              label: 'Upcoming',
+              count: filteredUpcoming.length,
+              gradient: 'from-primary-50 to-white hover:from-primary-100',
+              badgeBg: 'bg-primary-100',
+              labelColor: 'text-gray-800',
+              items: filteredUpcoming,
+              renderItem: (event) => (
+                <EventCard key={event.id} event={event} profiles={profiles} status="upcoming" />
+              ),
+            },
+            groups: {
+              show: groups.length > 0,
+              isExpanded: showGroups,
+              setExpanded: setShowGroups,
+              showAll: showAllGroups,
+              setShowAll: setShowAllGroups,
+              icon: <span className="text-base">👥</span>,
+              label: 'Groups',
+              count: filteredGroups.length,
+              gradient: 'from-purple-50 to-white hover:from-purple-100',
+              badgeBg: 'bg-purple-100',
+              labelColor: 'text-gray-800',
+              items: filteredGroups,
+              renderItem: (group) => (
+                <GroupCard key={group.id} group={group} />
+              ),
+            },
+            history: {
+              show: completedEvents.length > 0,
+              isExpanded: showHistory,
+              setExpanded: setShowHistory,
+              showAll: showAllHistory,
+              setShowAll: setShowAllHistory,
+              icon: <span className="text-base">📜</span>,
+              label: 'History',
+              count: filteredHistory.length,
+              gradient: 'from-gray-50 to-white hover:from-gray-100',
+              badgeBg: 'bg-gray-100',
+              labelColor: 'text-gray-600',
+              items: filteredHistory,
+              renderItem: (event) => (
+                <EventCard key={event.id} event={event} profiles={profiles} status="completed" />
+              ),
+            },
+          };
+          
+          const config = sectionConfig[sectionId];
+          if (!config.show) return null;
+          
+          const isDragging = draggedSection === sectionId;
+          const isDragOver = dragOverSection === sectionId;
+          
+          // Determine which items to show (limited or all)
+          const hasMoreItems = config.items.length > DEFAULT_ITEMS_LIMIT;
+          const itemsToShow = config.showAll ? config.items : config.items.slice(0, DEFAULT_ITEMS_LIMIT);
+          const hiddenCount = config.items.length - DEFAULT_ITEMS_LIMIT;
+          
+          return (
+            <div
+              key={sectionId}
+              draggable
+              onDragStart={(e) => handleDragStart(e, sectionId)}
+              onDragEnd={handleDragEnd}
+              onDragOver={(e) => handleDragOver(e, sectionId)}
+              onDragLeave={handleDragLeave}
+              onDrop={(e) => handleDrop(e, sectionId)}
+              className={`bg-white rounded-2xl border-2 shadow-sm overflow-hidden transition-all duration-200 ${
+                isDragging ? 'opacity-50 scale-[0.98]' : ''
+              } ${
+                isDragOver ? 'border-primary-400 border-dashed bg-primary-50' : 'border-gray-200'
+              }`}
+            >
+              <div className={`flex items-center bg-gradient-to-r ${config.gradient} transition-colors`}>
+                {/* Drag Handle */}
+                <div 
+                  className="px-2 py-3 cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 touch-none"
+                  title="Drag to reorder"
+                >
+                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z" />
+                  </svg>
+                </div>
+                
+                {/* Accordion Header Button */}
+                <button
+                  onClick={() => config.setExpanded(!config.isExpanded)}
+                  className="flex-1 flex items-center gap-2 pr-4 py-3"
+                >
+                  {config.icon}
+                  <h3 className={`font-bold ${config.labelColor} text-sm uppercase tracking-wide`}>{config.label}</h3>
+                  <span className={`text-xs text-gray-500 ${config.badgeBg} px-2 py-0.5 rounded-full font-medium`}>{config.count}</span>
+                  <svg 
+                    className={`w-4 h-4 text-gray-400 ml-auto transition-transform duration-200 ${config.isExpanded ? 'rotate-180' : ''}`} 
+                    fill="none" 
+                    stroke="currentColor" 
+                    viewBox="0 0 24 24"
                   >
-                    <span className="text-sm">✅</span>
-                    <h3 className="font-bold text-gray-600 text-xs uppercase tracking-wide">Recent</h3>
-                    <span className="text-xs text-gray-500">({completedEvents.length})</span>
-                    <svg 
-                      className={`w-4 h-4 text-gray-400 ml-auto transition-transform ${showRecentEvents ? 'rotate-180' : ''}`} 
-                      fill="none" 
-                      stroke="currentColor" 
-                      viewBox="0 0 24 24"
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+              </div>
+              
+              {/* Content */}
+              {config.isExpanded && config.items.length > 0 && (
+                <div className="px-3 pb-3 space-y-1.5">
+                  {itemsToShow.map(item => config.renderItem(item))}
+                  
+                  {/* Show more/less button */}
+                  {hasMoreItems && !config.showAll && (
+                    <button
+                      onClick={() => config.setShowAll(true)}
+                      className="w-full py-2.5 text-sm font-semibold text-primary-600 hover:text-primary-700 bg-primary-50 hover:bg-primary-100 rounded-xl transition-colors border border-primary-200"
                     >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </button>
-                  {showRecentEvents && (
-                    <div className="space-y-1.5">
-                      {completedEvents.slice(0, 5).map(event => (
-                        <EventCard key={event.id} event={event} profiles={profiles} status="completed" />
-                      ))}
-                      {completedEvents.length > 5 && (
-                        <Link 
-                          to="/events" 
-                          className="block text-center py-2 text-sm font-medium text-primary-600 hover:text-primary-700"
-                        >
-                          View all {completedEvents.length} completed →
-                        </Link>
-                      )}
-                    </div>
+                      Show {hiddenCount} more {config.label.toLowerCase()} →
+                    </button>
+                  )}
+                  {hasMoreItems && config.showAll && (
+                    <button
+                      onClick={() => config.setShowAll(false)}
+                      className="w-full py-2 text-xs font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-lg transition-colors"
+                    >
+                      ← Show less
+                    </button>
                   )}
                 </div>
               )}
-            </>
-          )}
-
-          {tab === 'groups' && (
-            <>
-              {groups.length === 0 ? (
-                <div className="py-10 text-center">
-                  <div className="text-5xl mb-4">👥</div>
-                  <div className="font-bold text-gray-800 text-lg mb-2">No groups yet</div>
-                  <p className="text-gray-500 mb-6">
-                    Tap the <span className="inline-flex items-center justify-center w-8 h-8 bg-accent rounded-full text-white font-bold text-lg align-middle mx-1">+</span> button to create or join a group
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {groups.map(group => (
-                    <GroupCard key={group.id} group={group} />
-                  ))}
-                </div>
+              {config.isExpanded && config.items.length === 0 && searchQuery && (
+                <div className="px-4 pb-4 text-sm text-gray-500">No {config.label.toLowerCase()} match "{searchQuery}"</div>
               )}
-            </>
-          )}
-        </div>
+            </div>
+          );
+        })}
       </section>
 
       {/* Score Ticker - Fixed at bottom, full width on mobile, above footer with safe area */}
