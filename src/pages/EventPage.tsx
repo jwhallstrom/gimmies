@@ -493,7 +493,7 @@ const EventPage: React.FC = () => {
             className="w-full flex-shrink-0 snap-center overflow-y-auto"
             style={{ minWidth: '100%' }}
           >
-            <div className="h-full px-4 py-2">
+            <div className="px-4 py-2 pb-32">
               {tab.id === 'chat' && <ChatTab eventId={event.id} />}
               {tab.id === 'scorecard' && <ScoreHubTab eventId={event.id} />}
               {tab.id === 'games' && <GamesTab eventId={event.id} />}
