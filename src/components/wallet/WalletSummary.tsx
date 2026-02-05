@@ -59,11 +59,11 @@ const WalletSummary: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header Card */}
+      {/* Header Card - matches other pages */}
       <div className="bg-white/90 backdrop-blur rounded-xl shadow-md border border-primary-900/5 overflow-hidden">
-        <div className="bg-gradient-to-r from-primary-800 to-primary-900 p-6 text-white">
-          <h1 className="text-xl font-bold mb-1">💰 My Wallet</h1>
-          <p className="text-white/70 text-sm">{currentProfile.name}</p>
+        <div className="p-6 border-b border-gray-200">
+          <h1 className="text-2xl font-bold text-primary-800">💰 My Wallet</h1>
+          <p className="text-gray-600 mt-1">{currentProfile.name}</p>
         </div>
         
         {/* Stats Grid */}

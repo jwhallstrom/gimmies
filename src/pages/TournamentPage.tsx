@@ -245,7 +245,7 @@ const TournamentPage: React.FC = () => {
       </div>
       
       {/* Content */}
-      <div className="p-4 pb-safe">
+      <div className="p-4 pb-32">
         <Routes>
           <Route index element={<TournamentInfoTab tournamentId={tournament.id} />} />
           <Route path="info" element={<TournamentInfoTab tournamentId={tournament.id} />} />

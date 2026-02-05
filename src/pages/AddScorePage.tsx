@@ -164,7 +164,7 @@ const AddScorePage: React.FC = () => {
   if (!currentProfile) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-600 dark:text-slate-300">Please create a profile to add rounds.</p>
+        <p className="text-gray-600">Please create a profile to add rounds.</p>
       </div>
     );
   }
@@ -190,53 +190,57 @@ const AddScorePage: React.FC = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </Link>
-          <h1 className="text-2xl font-bold text-primary-800 dark:text-primary-200">Add New Round</h1>
+          <h1 className="text-2xl font-bold text-primary-800">Add New Round</h1>
         </div>
 
-        <div className="bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 backdrop-blur rounded-xl shadow-md p-6 border border-primary-900/5 dark:border-slate-800">
-          <h2 className="text-lg font-semibold mb-4">Select Course & Tees</h2>
-          
-          <div className="mb-4">
-            <label htmlFor="date-input" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-              Date
-            </label>
-            <div className="flex gap-2">
-              <input
-                id="date-input"
-                type="date"
-                value={formData.date}
-                onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                className="flex-1 p-3 border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              />
-              <button
-                onClick={() => setFormData(prev => ({ ...prev, date: new Date().toISOString().slice(0, 10) }))}
-                className="bg-gray-100 text-gray-700 p-3 rounded-lg hover:bg-gray-200 transition-colors dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700"
-                title="Set to Today"
-                type="button"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                </svg>
-              </button>
-            </div>
+        <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
+          {/* Card Header */}
+          <div className="bg-gradient-to-r from-primary-600 to-primary-700 px-6 py-4">
+            <h2 className="text-lg font-semibold text-white">Select Course & Tees</h2>
           </div>
-
-          <div className="space-y-4">
+          
+          {/* Card Body */}
+          <div className="p-6 space-y-6">
             <div>
-              <label htmlFor="course-search" className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Search Course</label>
+              <label htmlFor="date-input" className="block text-sm font-semibold text-gray-800 mb-2">
+                Date
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id="date-input"
+                  type="date"
+                  value={formData.date}
+                  onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                  className="flex-1 p-3 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                />
+                <button
+                  onClick={() => setFormData(prev => ({ ...prev, date: new Date().toISOString().slice(0, 10) }))}
+                  className="bg-gray-100 text-gray-700 p-3 rounded-lg hover:bg-gray-200 transition-colors"
+                  title="Set to Today"
+                  type="button"
+                >
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <label htmlFor="course-search" className="block text-sm font-semibold text-gray-800 mb-2">Search Course</label>
               <input
                 id="course-search"
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Start typing a course name..."
-                className="w-full p-3 border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full p-3 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
 
             <div className="max-h-72 overflow-auto">
               {filteredCourses.length === 0 ? (
-                <div className="text-sm text-gray-500 dark:text-slate-400">No courses found.</div>
+                <div className="text-sm text-gray-500">No courses found.</div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {filteredCourses.map(course => {
@@ -244,24 +248,20 @@ const AddScorePage: React.FC = () => {
                     return (
                       <div
                         key={course.courseId}
-                        className={`p-3 border rounded-lg transition-colors ${
-                          isSelected
-                            ? 'border-primary-600 bg-primary-50 dark:bg-primary-900/20'
-                            : 'border-gray-200 dark:border-slate-700 dark:bg-slate-950'
-                        }`}
+                        className={`p-3 border-2 ${isSelected ? 'border-primary-500 bg-primary-50' : 'border-gray-200 bg-white'} rounded-lg transition-colors`}
                       >
                         <div className="flex items-center gap-3">
                           <div className="flex-1">
-                            <div className="font-medium">{course.name}</div>
-                            <div className="text-sm text-gray-500 dark:text-slate-400">{course.tees?.[0]?.holes?.length || 18} holes</div>
+                            <div className="font-medium text-gray-900">{course.name}</div>
+                            <div className="text-sm text-gray-500">{course.tees?.[0]?.holes?.length || 18} holes</div>
                           </div>
                           {isSelected ? (
-                            <span className="text-xs px-2 py-1 rounded bg-primary-600 text-white">Selected</span>
+                            <span className="text-xs px-2 py-1 rounded bg-primary-600 text-white font-medium">Selected</span>
                           ) : (
                             <button
                               type="button"
                               onClick={() => handleCourseSelect(course.courseId)}
-                              className="text-sm text-primary-700 dark:text-primary-200 border border-primary-200 dark:border-primary-800 hover:border-primary-400 dark:hover:border-primary-600 px-3 py-1 rounded"
+                              className="text-sm text-primary-700 border border-primary-300 bg-white hover:bg-primary-50 hover:border-primary-400 px-3 py-1 rounded font-medium"
                             >
                               Select
                             </button>
@@ -269,13 +269,13 @@ const AddScorePage: React.FC = () => {
                         </div>
 
                         {isSelected && (
-                          <div className="pt-3 space-y-3">
-                            <label htmlFor={`tee-select-${course.courseId}`} className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Choose Tees</label>
+                          <div className="pt-3 mt-3 border-t border-primary-200 space-y-3">
+                            <label htmlFor={`tee-select-${course.courseId}`} className="block text-sm font-semibold text-gray-800">Choose Tees</label>
                             <select
                               id={`tee-select-${course.courseId}`}
                               value={formData.teeName}
                               onChange={(e) => setFormData(prev => ({ ...prev, teeName: e.target.value }))}
-                              className="w-full p-3 border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                              className="w-full p-3 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                             >
                               <option value="">-- Choose tees --</option>
                               {course.tees.map(tee => (
@@ -287,9 +287,9 @@ const AddScorePage: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={proceedToScoreEntry}
-                                className="mt-2 w-full bg-primary-600 text-white py-3 rounded-lg font-medium hover:bg-primary-700 transition-colors"
+                                className="mt-2 w-full bg-primary-600 text-white py-3 rounded-lg font-semibold hover:bg-primary-700 transition-colors"
                               >
-                                Next
+                                Next →
                               </button>
                             )}
                           </div>
@@ -300,7 +300,6 @@ const AddScorePage: React.FC = () => {
                 </div>
               )}
             </div>
-
           </div>
         </div>
       </div>
@@ -354,36 +353,38 @@ const AddScorePage: React.FC = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <h1 className="text-2xl font-bold text-primary-800 dark:text-primary-200">Enter Hole-by-Hole Score</h1>
+          <h1 className="text-2xl font-bold text-primary-800">Enter Hole-by-Hole Score</h1>
         </div>
 
-        <div className="bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 backdrop-blur rounded-xl shadow-md p-6 border border-primary-900/5 dark:border-slate-800">
-          <div className="mb-4">
-            <h3 className="font-semibold text-gray-900 dark:text-slate-100">{selectedCourse?.name}</h3>
-            <p className="text-sm text-gray-600 dark:text-slate-300">{selectedTee?.name} • {selectedTee?.yardage}y • Par {coursePar}</p>
+        <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
+          {/* Card Header */}
+          <div className="bg-gradient-to-r from-primary-600 to-primary-700 px-6 py-4">
+            <h3 className="font-semibold text-white">{selectedCourse?.name}</h3>
+            <p className="text-sm text-primary-100">{selectedTee?.name} • {selectedTee?.yardage}y • Par {coursePar}</p>
           </div>
 
-          <div className="space-y-4">
-            <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">Front Nine</div>
+          {/* Card Body */}
+          <div className="p-6 space-y-4">
+            <div className="text-xs font-semibold text-gray-700">Front Nine</div>
             <div className="space-y-0.5">
               <div className="flex gap-0.5">
-                <div className="w-10 text-[10px] font-semibold text-slate-600 dark:text-slate-300 py-1">Hole</div>
+                <div className="w-10 text-[10px] font-semibold text-slate-600 py-1">Hole</div>
                 {front.map(h => (
-                  <div key={h.number} className="w-7 text-[10px] font-semibold text-slate-600 dark:text-slate-300 py-1 text-center">{h.number}</div>
+                  <div key={h.number} className="w-7 text-[10px] font-semibold text-slate-600 py-1 text-center">{h.number}</div>
                 ))}
-                <div className="w-8 text-[10px] font-semibold text-slate-600 dark:text-slate-300 py-1 text-center ml-0.5">Out</div>
+                <div className="w-8 text-[10px] font-semibold text-slate-600 py-1 text-center ml-0.5">Out</div>
               </div>
 
               <div className="flex gap-0.5">
-                <div className="w-10 text-[10px] font-semibold text-slate-600 dark:text-slate-300 py-1">Par</div>
+                <div className="w-10 text-[10px] font-semibold text-slate-600 py-1">Par</div>
                 {front.map(h => (
-                  <div key={h.number} className="w-7 text-[10px] text-slate-600 dark:text-slate-300 py-1 text-center bg-slate-100 dark:bg-slate-800 rounded">{h.par}</div>
+                  <div key={h.number} className="w-7 text-[10px] text-slate-600 py-1 text-center bg-slate-100 rounded">{h.par}</div>
                 ))}
-                <div className="w-8 text-[10px] text-slate-600 dark:text-slate-300 py-1 text-center bg-slate-200 dark:bg-slate-700 rounded ml-0.5 font-semibold">{front.reduce((a, h) => a + h.par, 0)}</div>
+                <div className="w-8 text-[10px] text-slate-600 py-1 text-center bg-slate-200 rounded ml-0.5 font-semibold">{front.reduce((a, h) => a + h.par, 0)}</div>
               </div>
 
               <div className="flex gap-0.5">
-                <div className="w-10 text-[10px] font-semibold text-slate-700 dark:text-slate-200 py-1">Score</div>
+                <div className="w-10 text-[10px] font-semibold text-slate-700 py-1">Score</div>
                 {front.map(h => {
                   const s = formData.scores.find(ss => ss.hole === h.number);
                   const gross = s?.strokes ?? '';
@@ -409,7 +410,7 @@ const AddScorePage: React.FC = () => {
                         </div>
                       )}
                       <input
-                        className={`w-full h-7 px-0.5 py-0 text-center text-[10px] outline-none focus:ring-2 focus:ring-primary-300 focus:bg-primary-50/70 transition rounded bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 ${colorClass} ${handicapStrokes > 0 ? 'pl-2' : ''}`}
+                        className={`w-full h-7 px-0.5 py-0 text-center text-[10px] outline-none focus:ring-2 focus:ring-primary-300 focus:bg-primary-50/70 transition rounded ${colorClass} ${handicapStrokes > 0 ? 'pl-2' : ''}`}
                         value={gross}
                         inputMode="numeric"
                         aria-label={`Hole ${h.number} Score`}
@@ -429,47 +430,47 @@ const AddScorePage: React.FC = () => {
                     </div>
                   );
                 })}
-                <div className="w-8 text-[10px] py-1 text-center font-semibold bg-slate-100 dark:bg-slate-800 rounded ml-0.5">{(() => {
+                <div className="w-8 text-[10px] py-1 text-center font-semibold bg-slate-100 rounded ml-0.5">{(() => {
                   const frontScores = formData.scores.filter(s => s.hole <= 9).map(s => s.strokes || 0);
                   return frontScores.length === 9 ? frontScores.reduce((a, b) => a + b, 0) : frontScores.reduce((a, b) => a + b, 0);
                 })()}</div>
               </div>
 
               <div className="flex gap-0.5">
-                <div className="w-10 text-[10px] font-medium text-primary-700 dark:text-primary-200 py-1">Adj</div>
+                <div className="w-10 text-[10px] font-medium text-primary-700 py-1">Adj</div>
                 {front.map(h => {
                   const s = formData.scores.find(ss => ss.hole === h.number);
                   const handicapStrokes = strokeDistribution[h.number] || 0;
                   const adj = s?.adjustedStrokes ?? (typeof s?.strokes === 'number' ? applyESCAdjustment(s.strokes, h.par, handicapStrokes) : undefined);
                   return (
-                    <div key={`adj-${h.number}`} className="w-7 text-[10px] py-1 text-center text-primary-700 dark:text-primary-200 font-medium">{typeof adj === 'number' ? adj : ''}</div>
+                    <div key={`adj-${h.number}`} className="w-7 text-[10px] py-1 text-center text-primary-700 font-medium">{typeof adj === 'number' ? adj : ''}</div>
                   );
                 })}
-                <div className="w-8 text-[10px] py-1 text-center font-medium text-primary-700 dark:text-primary-200 bg-primary-50 dark:bg-primary-900/20 rounded ml-0.5">{''}</div>
+                <div className="w-8 text-[10px] py-1 text-center font-medium text-primary-700 bg-primary-50 rounded ml-0.5">{''}</div>
               </div>
             </div>
 
             {/* Back nine - similar layout */}
-            <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">Back Nine</div>
+            <div className="text-xs font-semibold text-slate-600">Back Nine</div>
             <div className="space-y-0.5">
               <div className="flex gap-0.5">
-                <div className="w-10 text-[10px] font-semibold text-slate-600 dark:text-slate-300 py-1">Hole</div>
+                <div className="w-10 text-[10px] font-semibold text-slate-600 py-1">Hole</div>
                 {back.map(h => (
-                  <div key={h.number} className="w-7 text-[10px] font-semibold text-slate-600 dark:text-slate-300 py-1 text-center">{h.number}</div>
+                  <div key={h.number} className="w-7 text-[10px] font-semibold text-slate-600 py-1 text-center">{h.number}</div>
                 ))}
-                <div className="w-8 text-[10px] font-semibold text-slate-600 dark:text-slate-300 py-1 text-center ml-0.5">In</div>
+                <div className="w-8 text-[10px] font-semibold text-slate-600 py-1 text-center ml-0.5">In</div>
               </div>
 
               <div className="flex gap-0.5">
-                <div className="w-10 text-[10px] font-semibold text-slate-600 dark:text-slate-300 py-1">Par</div>
+                <div className="w-10 text-[10px] font-semibold text-slate-600 py-1">Par</div>
                 {back.map(h => (
-                  <div key={h.number} className="w-7 text-[10px] text-slate-600 dark:text-slate-300 py-1 text-center bg-slate-100 dark:bg-slate-800 rounded">{h.par}</div>
+                  <div key={h.number} className="w-7 text-[10px] text-slate-600 py-1 text-center bg-slate-100 rounded">{h.par}</div>
                 ))}
-                <div className="w-8 text-[10px] text-slate-600 dark:text-slate-300 py-1 text-center bg-slate-200 dark:bg-slate-700 rounded ml-0.5 font-semibold">{back.reduce((a, h) => a + h.par, 0)}</div>
+                <div className="w-8 text-[10px] text-slate-600 py-1 text-center bg-slate-200 rounded ml-0.5 font-semibold">{back.reduce((a, h) => a + h.par, 0)}</div>
               </div>
 
               <div className="flex gap-0.5">
-                <div className="w-10 text-[10px] font-semibold text-slate-700 dark:text-slate-200 py-1">Score</div>
+                <div className="w-10 text-[10px] font-semibold text-slate-700 py-1">Score</div>
                 {back.map(h => {
                   const s = formData.scores.find(ss => ss.hole === h.number);
                   const gross = s?.strokes ?? '';
@@ -495,7 +496,7 @@ const AddScorePage: React.FC = () => {
                         </div>
                       )}
                       <input
-                        className={`w-full h-7 px-0.5 py-0 text-center text-[10px] outline-none focus:ring-2 focus:ring-primary-300 focus:bg-primary-50/70 transition rounded bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 ${colorClass} ${handicapStrokes > 0 ? 'pl-2' : ''}`}
+                        className={`w-full h-7 px-0.5 py-0 text-center text-[10px] outline-none focus:ring-2 focus:ring-primary-300 focus:bg-primary-50/70 transition rounded ${colorClass} ${handicapStrokes > 0 ? 'pl-2' : ''}`}
                         value={gross}
                         inputMode="numeric"
                         aria-label={`Hole ${h.number} Score`}
@@ -514,35 +515,35 @@ const AddScorePage: React.FC = () => {
                     </div>
                   );
                 })}
-                <div className="w-8 text-[10px] py-1 text-center font-semibold bg-slate-100 dark:bg-slate-800 rounded ml-0.5">{(() => {
+                <div className="w-8 text-[10px] py-1 text-center font-semibold bg-slate-100 rounded ml-0.5">{(() => {
                   const backScores = formData.scores.filter(s => s.hole >= 10).map(s => s.strokes || 0);
                   return backScores.length === 9 ? backScores.reduce((a, b) => a + b, 0) : backScores.reduce((a, b) => a + b, 0);
                 })()}</div>
               </div>
 
               <div className="flex gap-0.5">
-                <div className="w-10 text-[10px] font-medium text-primary-700 dark:text-primary-200 py-1">Adj</div>
+                <div className="w-10 text-[10px] font-medium text-primary-700 py-1">Adj</div>
                 {back.map(h => {
                   const s = formData.scores.find(ss => ss.hole === h.number);
                   const handicapStrokes = strokeDistribution[h.number] || 0;
                   const adj = s?.adjustedStrokes ?? (typeof s?.strokes === 'number' ? applyESCAdjustment(s.strokes, h.par, handicapStrokes) : undefined);
                   return (
-                    <div key={`adj-${h.number}`} className="w-7 text-[10px] py-1 text-center text-primary-700 dark:text-primary-200 font-medium">{typeof adj === 'number' ? adj : ''}</div>
+                    <div key={`adj-${h.number}`} className="w-7 text-[10px] py-1 text-center text-primary-700 font-medium">{typeof adj === 'number' ? adj : ''}</div>
                   );
                 })}
-                <div className="w-8 text-[10px] py-1 text-center font-medium text-primary-700 dark:text-primary-200 bg-primary-50 dark:bg-primary-900/20 rounded ml-0.5">{''}</div>
+                <div className="w-8 text-[10px] py-1 text-center font-medium text-primary-700 bg-primary-50 rounded ml-0.5">{''}</div>
               </div>
             </div>
 
             <div className="pt-4">
               <div className="grid grid-cols-2 gap-4 mb-4">
-                <div className="text-center p-4 bg-gray-50 dark:bg-slate-800 rounded-lg">
+                <div className="text-center p-4 bg-gray-50 rounded-lg">
                   <div className="text-2xl font-bold text-primary-600">{grossSum}</div>
-                  <div className="text-sm text-gray-600 dark:text-slate-300">Gross Score</div>
+                  <div className="text-sm text-gray-600">Gross Score</div>
                 </div>
-                <div className="text-center p-4 bg-gray-50 dark:bg-slate-800 rounded-lg">
+                <div className="text-center p-4 bg-gray-50 rounded-lg">
                   <div className="text-2xl font-bold text-primary-600">{selectedTee?.courseRating || '--'}</div>
-                  <div className="text-sm text-gray-600 dark:text-slate-300">Course Rating</div>
+                  <div className="text-sm text-gray-600">Course Rating</div>
                 </div>
               </div>
 
@@ -585,78 +586,81 @@ const AddScorePage: React.FC = () => {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
           </svg>
         </button>
-        <h1 className="text-2xl font-bold text-primary-800 dark:text-primary-200">Review Round</h1>
+        <h1 className="text-2xl font-bold text-primary-800">Review Round</h1>
       </div>
 
-      <div className="bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 backdrop-blur rounded-xl shadow-md p-6 border border-primary-900/5 dark:border-slate-800">
-        {(() => {
-          // Precompute adjusted gross and differential preview
-          const coursePar = selectedTee?.par || 72;
-          const courseRating = selectedTee?.courseRating ?? coursePar;
-          const slopeRating = selectedTee?.slopeRating ?? 113;
-          const ch = calculateCourseHandicap(currentProfile?.handicapIndex || 0, slopeRating, courseRating, coursePar);
-          const holes = selectedTee?.holes || [];
-          const dist = selectedCourse ? distributeHandicapStrokes(ch, selectedCourse.courseId, formData.teeName) : {};
-          const scoreMap: Record<number, number | null> = {};
-          (formData.scores || []).forEach(s => { scoreMap[s.hole] = s.strokes ?? null; });
-          let adj = 0;
-          holes.forEach(h => {
-            const raw = scoreMap[h.number];
-            if (typeof raw === 'number') {
-              const hs = dist[h.number] || 0;
-              adj += applyESCAdjustment(raw, h.par, hs);
-            }
-          });
-          const diff = holes.length > 0 ? calculateScoreDifferential(adj, courseRating, slopeRating) : undefined;
-          return (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-              <div className="text-center p-4 bg-gray-50 dark:bg-slate-800 rounded-lg">
-                <div className="text-2xl font-bold text-primary-600">{formData.grossScore}</div>
-                <div className="text-sm text-gray-600 dark:text-slate-300">Gross Score</div>
-              </div>
-              <div className="text-center p-4 bg-gray-50 dark:bg-slate-800 rounded-lg">
-                <div className="text-2xl font-bold text-primary-600">{formData.grossScore - (selectedTee?.par || 72)}</div>
-                <div className="text-sm text-gray-600 dark:text-slate-300">vs Par</div>
-              </div>
-              <div className="text-center p-4 bg-gray-50 dark:bg-slate-800 rounded-lg">
-                <div className="text-2xl font-bold text-primary-600">{selectedTee?.courseRating || '--'}</div>
-                <div className="text-sm text-gray-600 dark:text-slate-300">Course Rating</div>
-              </div>
-              <div className="text-center p-4 bg-gray-50 dark:bg-slate-800 rounded-lg">
-                <div className="text-2xl font-bold text-primary-600">{selectedTee?.slopeRating || '--'}</div>
-                <div className="text-sm text-gray-600 dark:text-slate-300">Slope Rating</div>
-              </div>
-              <div className="text-center p-4 bg-gray-50 dark:bg-slate-800 rounded-lg col-span-2 md:col-span-2">
-                <div className="text-2xl font-bold text-primary-600">{adj || '--'}</div>
-                <div className="text-sm text-gray-600 dark:text-slate-300">Adjusted Gross (WHS)</div>
-              </div>
-              <div className="text-center p-4 bg-gray-50 dark:bg-slate-800 rounded-lg col-span-2 md:col-span-2">
-                <div className="text-2xl font-bold text-primary-600">{diff ?? '--'}</div>
-                <div className="text-sm text-gray-600 dark:text-slate-300">Score Differential (uses adjusted)</div>
-              </div>
-            </div>
-          );
-        })()}
-        <div className="mb-6">
-          <h3 className="font-semibold text-gray-900 dark:text-slate-100">{selectedCourse?.name}</h3>
-          <p className="text-sm text-gray-600 dark:text-slate-300">
-            {selectedTee?.name} • {formData.date}
-          </p>
+      <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
+        {/* Card Header */}
+        <div className="bg-gradient-to-r from-primary-600 to-primary-700 px-6 py-4">
+          <h3 className="font-semibold text-white">{selectedCourse?.name}</h3>
+          <p className="text-sm text-primary-100">{selectedTee?.name} • {formData.date}</p>
         </div>
 
-        <div className="space-y-4">
-          <p className="text-sm text-gray-600 dark:text-slate-300">
-            This round will be added to your handicap history and used for handicap index calculations.
-          </p>
-          
-          <button
-            onClick={handleSubmit}
-            disabled={isSaving}
-            className={`w-full py-3 rounded-lg font-medium transition-colors ${isSaving ? 'bg-primary-300 text-white cursor-wait' : 'bg-primary-600 text-white hover:bg-primary-700'}`}
-            type="button"
-          >
-            {isSaving ? 'Saving…' : 'Save Round'}
-          </button>
+        {/* Card Body */}
+        <div className="p-6">
+          {(() => {
+            // Precompute adjusted gross and differential preview
+            const coursePar = selectedTee?.par || 72;
+            const courseRating = selectedTee?.courseRating ?? coursePar;
+            const slopeRating = selectedTee?.slopeRating ?? 113;
+            const ch = calculateCourseHandicap(currentProfile?.handicapIndex || 0, slopeRating, courseRating, coursePar);
+            const holes = selectedTee?.holes || [];
+            const dist = selectedCourse ? distributeHandicapStrokes(ch, selectedCourse.courseId, formData.teeName) : {};
+            const scoreMap: Record<number, number | null> = {};
+            (formData.scores || []).forEach(s => { scoreMap[s.hole] = s.strokes ?? null; });
+            let adj = 0;
+            holes.forEach(h => {
+              const raw = scoreMap[h.number];
+              if (typeof raw === 'number') {
+                const hs = dist[h.number] || 0;
+                adj += applyESCAdjustment(raw, h.par, hs);
+              }
+            });
+            const diff = holes.length > 0 ? calculateScoreDifferential(adj, courseRating, slopeRating) : undefined;
+            return (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="text-center p-4 bg-gray-50 rounded-lg border border-gray-100">
+                  <div className="text-2xl font-bold text-primary-600">{formData.grossScore}</div>
+                  <div className="text-sm text-gray-600">Gross Score</div>
+                </div>
+                <div className="text-center p-4 bg-gray-50 rounded-lg border border-gray-100">
+                  <div className="text-2xl font-bold text-primary-600">{formData.grossScore - (selectedTee?.par || 72)}</div>
+                  <div className="text-sm text-gray-600">vs Par</div>
+                </div>
+                <div className="text-center p-4 bg-gray-50 rounded-lg border border-gray-100">
+                  <div className="text-2xl font-bold text-primary-600">{selectedTee?.courseRating || '--'}</div>
+                  <div className="text-sm text-gray-600">Course Rating</div>
+                </div>
+                <div className="text-center p-4 bg-gray-50 rounded-lg border border-gray-100">
+                  <div className="text-2xl font-bold text-primary-600">{selectedTee?.slopeRating || '--'}</div>
+                  <div className="text-sm text-gray-600">Slope Rating</div>
+                </div>
+                <div className="text-center p-4 bg-gray-50 rounded-lg border border-gray-100 col-span-2 md:col-span-2">
+                  <div className="text-2xl font-bold text-primary-600">{adj || '--'}</div>
+                  <div className="text-sm text-gray-600">Adjusted Gross (WHS)</div>
+                </div>
+                <div className="text-center p-4 bg-gray-50 rounded-lg border border-gray-100 col-span-2 md:col-span-2">
+                  <div className="text-2xl font-bold text-primary-600">{diff ?? '--'}</div>
+                  <div className="text-sm text-gray-600">Score Differential (uses adjusted)</div>
+                </div>
+              </div>
+            );
+          })()}
+
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              This round will be added to your handicap history and used for handicap index calculations.
+            </p>
+            
+            <button
+              onClick={handleSubmit}
+              disabled={isSaving}
+              className={`w-full py-3 rounded-lg font-semibold transition-colors ${isSaving ? 'bg-primary-300 text-white cursor-wait' : 'bg-primary-600 text-white hover:bg-primary-700'}`}
+              type="button"
+            >
+              {isSaving ? 'Saving…' : 'Save Round ✓'}
+            </button>
+          </div>
         </div>
       </div>
     </div>

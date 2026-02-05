@@ -256,9 +256,10 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
               type="button"
               onClick={async () => {
                 if (window.confirm(`Delete "${event.name || 'this group'}"? This cannot be undone.`)) {
+                  // Navigate first to avoid blank screen, then delete
+                  navigate('/', { replace: true });
                   await useStore.getState().deleteEvent(eventId);
                   useStore.getState().addToast('Group deleted', 'success');
-                  navigate('/');
                 }
               }}
               className="w-full py-2.5 px-4 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm font-medium hover:bg-red-100 transition-colors flex items-center justify-center gap-2"
@@ -567,9 +568,10 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
             type="button"
             onClick={async () => {
               if (window.confirm(`Delete "${event.name || 'this event'}"? This removes all scores and data.`)) {
+                // Navigate first to avoid blank screen, then delete
+                navigate('/', { replace: true });
                 await useStore.getState().deleteEvent(eventId);
                 useStore.getState().addToast('Event deleted', 'success');
-                navigate('/');
               }
             }}
             className="w-full py-2 px-4 bg-red-50 border border-red-200 text-red-600 rounded-xl text-sm font-medium hover:bg-red-100 transition-colors flex items-center justify-center gap-2"

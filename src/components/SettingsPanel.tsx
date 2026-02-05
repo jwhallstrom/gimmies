@@ -504,36 +504,6 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
               <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Preferences</h3>
             </div>
             <div className="bg-white border-y border-gray-200 divide-y divide-gray-100">
-              {/* Default Home Tab */}
-              <div className="px-4 py-3.5">
-                <div className="flex items-center gap-3 mb-2">
-                  <span className="text-xl">🏠</span>
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium text-gray-900">Default Home Tab</div>
-                    <div className="text-xs text-gray-500">Choose what opens first on Home</div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2 ml-9">
-                  {(['events', 'groups'] as const).map(opt => {
-                    const current = (currentProfile.preferences as any)?.homeDefaultTab;
-                    const isActive = (current ? current : 'events') === opt;
-                    return (
-                      <button
-                        key={opt}
-                        onClick={() => handleUpdatePreference('homeDefaultTab', opt)}
-                        className={`py-2.5 px-3 rounded-lg text-xs font-extrabold transition-colors ${
-                          isActive
-                            ? (opt === 'groups' ? 'bg-purple-600 text-white' : 'bg-primary-600 text-white')
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                      >
-                        {opt === 'groups' ? '👥 Groups' : '⛳ Events'}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
               {/* Theme */}
               <div className="px-4 py-3.5">
                 <div className="flex items-center justify-between mb-2">
