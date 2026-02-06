@@ -982,8 +982,8 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
               <div className="px-4 pb-3 border-t border-slate-100 pt-2 space-y-1">
                 {Object.entries(summary.pointsByGolfer).sort((a: any, b: any) => b[1] - a[1]).map(([gid, pts]) => (
                   <div key={gid} className="flex items-center justify-between text-xs">
-                    <span className={`${gid === myGolferId ? 'font-bold text-gray-900' : 'text-gray-600'}`}>{getGolferName(gid)}</span>
-                    <span className="font-mono font-bold">{pts as number} pts</span>
+                    <span className={`${gid === myGolferId ? 'font-bold text-gray-900 bg-primary-100 px-1.5 py-0.5 rounded' : 'text-gray-600'}`}>{getGolferName(gid)}</span>
+                    <span className="font-mono font-bold text-primary-700 bg-primary-50 px-2 py-0.5 rounded">{pts as number} pts</span>
                   </div>
                 ))}
               </div>

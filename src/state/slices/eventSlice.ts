@@ -141,7 +141,7 @@ export const createEventSlice = (
       golfers: [eventGolfer],
       groups: [group],
       scorecards: [scorecard],
-      games: { nassau: [], skins: [], pinky: [], greenie: [] },
+      games: { nassau: [], skins: [], pinky: [], greenie: [], stableford: [], ninePoint: [], bingoBangoBongo: [], wolf: [], dots: [] },
       ownerProfileId: currentProfile.id,
       scorecardView: 'individual',
       isPublic: true,
@@ -197,12 +197,17 @@ export const createEventSlice = (
     set((state: any) => ({
       events: state.events.map((e: Event) => {
         if (e.id !== id) return e;
-        const currentGames = e.games || { nassau: [], skins: [], pinky: [], greenie: [] };
+        const currentGames = e.games || { nassau: [], skins: [], pinky: [], greenie: [], stableford: [], ninePoint: [], bingoBangoBongo: [], wolf: [], dots: [] };
         const updatedGames = patch.games ? {
           nassau: patch.games.nassau ?? currentGames.nassau ?? [],
           skins: patch.games.skins ?? currentGames.skins ?? [],
           pinky: patch.games.pinky ?? currentGames.pinky ?? [],
-          greenie: patch.games.greenie ?? currentGames.greenie ?? []
+          greenie: patch.games.greenie ?? currentGames.greenie ?? [],
+          stableford: patch.games.stableford ?? currentGames.stableford ?? [],
+          ninePoint: patch.games.ninePoint ?? currentGames.ninePoint ?? [],
+          bingoBangoBongo: patch.games.bingoBangoBongo ?? currentGames.bingoBangoBongo ?? [],
+          wolf: patch.games.wolf ?? currentGames.wolf ?? [],
+          dots: patch.games.dots ?? currentGames.dots ?? [],
         } : currentGames;
         return { ...e, ...patch, games: updatedGames, lastModified: new Date().toISOString() };
       })

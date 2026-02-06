@@ -561,14 +561,14 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
       )}
       
       {/* Danger Zone */}
-      {isOwner && !event.isCompleted && (
+      {isOwner && (
         <div className="border-t border-red-200 pt-6 mt-4">
           <h3 className="text-sm font-semibold mb-2 text-red-800">Danger Zone</h3>
           <button
             type="button"
             onClick={async () => {
-              if (window.confirm(`Delete "${event.name || 'this event'}"? This removes all scores and data.`)) {
-                // Navigate first to avoid blank screen, then delete
+              const extra = event.isCompleted ? '\n\nThis event is completed — scores and payouts will be permanently lost.' : '';
+              if (window.confirm(`Delete "${event.name || 'this event'}"? This removes all scores and data.${extra}`)) {
                 navigate('/', { replace: true });
                 await useStore.getState().deleteEvent(eventId);
                 useStore.getState().addToast('Event deleted', 'success');

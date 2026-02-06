@@ -50,19 +50,21 @@ const ScoreHubTab: React.FC<Props> = ({ eventId, isTabActive = true }) => {
 
   if (!event) return null;
 
-  const handleEnterScores = (golferId: string, mode: 'cards' | 'team' = 'cards') => {
-    // Set appropriate scorecard view based on permissions
-    if (isOwner) {
+  const handleEnterScores = (golferId: string, mode: 'cards' | 'team' | 'admin' = 'cards') => {
+    // When clicking on a specific player, show ONLY that player's scorecard (individual mode)
+    // User can then toggle to team/admin view if they want to see more
+    if (mode === 'admin') {
+      // Admin mode explicitly requested - show all players (owner only)
       setScorecardView(eventId, 'admin');
-    } else if (currentProfile) {
-      if (myTeamGolferIds.has(golferId)) {
-        setScorecardView(eventId, 'team');
-      } else {
-        setScorecardView(eventId, 'individual');
-      }
+    } else if (mode === 'team') {
+      // Team mode explicitly requested - show all team members
+      setScorecardView(eventId, 'team');
+    } else {
+      // Default: show only the clicked player's scorecard
+      setScorecardView(eventId, 'individual');
     }
 
-    setEntryMode(mode);
+    setEntryMode(mode === 'admin' ? 'cards' : mode);
     setFocusGolferId(golferId);
   };
 
@@ -297,8 +299,7 @@ const ScoreHubTab: React.FC<Props> = ({ eventId, isTabActive = true }) => {
                   <button
                     onClick={() => { 
                       setShowFabMenu(false);
-                      setScorecardView(eventId, 'admin');
-                      handleEnterScores(currentProfile.id, 'cards'); 
+                      handleEnterScores(currentProfile.id, 'admin'); 
                     }}
                     className="w-full p-4 flex items-center gap-4 hover:bg-slate-50 active:bg-slate-100 transition border-b border-slate-100"
                   >

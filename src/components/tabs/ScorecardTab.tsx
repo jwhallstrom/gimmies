@@ -78,6 +78,7 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
   const showBack = view === 'back' || view === 'full';
 
   // Filter golfers based on scorecard view permissions
+  // When focusGolferId is set and we're in 'individual' mode, show ONLY that golfer
   const visibleGolfers = event.golfers.filter(eventGolfer => {
     const profile = eventGolfer.profileId ? profiles.find(p => p.id === eventGolfer.profileId) : null;
     // Use displayName snapshot first (for cross-device compatibility), fall back to profile lookup, then customName
@@ -87,14 +88,19 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
     const golferId = eventGolfer.profileId || eventGolfer.customName;
     if (!golferId) return false; // Ensure golferId is defined
 
+    // If user clicked on a specific player and view is 'individual', show ONLY that player
+    if (focusGolferId && event.scorecardView === 'individual') {
+      return golferId === focusGolferId;
+    }
+
     const isEventOwner = currentProfile?.id === event.ownerProfileId;
     const isCurrentUser = golferId === currentProfile?.id;
 
     // Event owner permissions
     if (isEventOwner) {
       if (event.scorecardView === 'individual') {
-        // Only show owner's own scorecard
-        return isCurrentUser;
+        // Only show owner's own scorecard (or focused player if set)
+        return focusGolferId ? golferId === focusGolferId : isCurrentUser;
       } else if (event.scorecardView === 'team') {
         // Show owner's team in Nassau games
         if (!currentProfile) return false;
