@@ -21,6 +21,7 @@ import ChatTab from '../components/tabs/ChatTab';
 import ShareModal from '../components/ShareModal';
 import EventNotifications from '../components/EventNotifications';
 import { getCourseById } from '../data/cloudCourses';
+import { LeaderboardIcon } from '../components/icons/LeaderboardIcon';
 
 // Mark group chat as read (stores in localStorage)
 const LAST_READ_KEY = 'gimmies.chatLastRead.v1';
@@ -43,10 +44,12 @@ const EventPage: React.FC = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showEventsDropdown, setShowEventsDropdown] = useState(false);
+  const [activePageIndex, setActivePageIndex] = useState(0);
   const navigate = useNavigate();
   
-  // Auto-sync event from cloud every 30 seconds
-  useEventSync(id, 30000);
+  // Auto-sync event from cloud - faster polling when on chat tab (8s) vs other tabs (20s)
+  const isChatActive = activePageIndex === 0;
+  useEventSync(id, isChatActive ? 8000 : 20000);
   
   const event = useStore(s => 
     s.events.find(e => e.id === id) || 
@@ -122,8 +125,7 @@ const EventPage: React.FC = () => {
     return { golferCount };
   }, [event.golfers.length]);
 
-  // Swipeable page index state
-  const [activePageIndex, setActivePageIndex] = useState(0);
+  // Swipeable page refs
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   
   // Define tabs based on hub type
@@ -140,7 +142,7 @@ const EventPage: React.FC = () => {
       ]
     : [
         { id: 'chat', label: 'Chat', icon: '💬' },
-        { id: 'scorecard', label: 'Leaderboard', icon: '🏆' },
+        { id: 'scorecard', label: 'Leaderboard', icon: <LeaderboardIcon className="w-5 h-5" /> },
         { id: 'games', label: 'Games', icon: '🎯' },
         { id: 'golfers', label: 'Golfers', icon: '👥', badge: stats.golferCount },
         ...(isOwner ? [
@@ -197,7 +199,7 @@ const EventPage: React.FC = () => {
   const tabBarClass = 'flex gap-1.5 px-3 pb-1 -mx-3 justify-center';
 
   return (
-    <div className="h-full min-h-0 -mx-4 -mt-4 flex flex-col">
+    <div className="h-full min-h-0 -mx-4 -mt-4 flex flex-col event-page-container">
       {/* Header - Compact & Sticky */}
       <div className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 px-3 py-2 shadow-lg sticky top-0 z-30 flex-shrink-0">
         {/* Single Row: Event Info + Actions */}
@@ -490,12 +492,12 @@ const EventPage: React.FC = () => {
         {swipeableTabs.map((tab) => (
           <div 
             key={tab.id}
-            className="w-full flex-shrink-0 snap-center overflow-y-auto"
+            className={`w-full flex-shrink-0 snap-center ${tab.id === 'chat' ? 'overflow-hidden' : 'overflow-y-auto'}`}
             style={{ minWidth: '100%' }}
           >
-            <div className="px-4 py-2 pb-32">
+            <div className={tab.id === 'chat' ? 'h-full px-4 py-2' : 'px-4 py-2 pb-32'}>
               {tab.id === 'chat' && <ChatTab eventId={event.id} />}
-              {tab.id === 'scorecard' && <ScoreHubTab eventId={event.id} />}
+              {tab.id === 'scorecard' && <ScoreHubTab eventId={event.id} isTabActive={swipeableTabs[activePageIndex]?.id === 'scorecard'} />}
               {tab.id === 'games' && <GamesTab eventId={event.id} />}
               {tab.id === 'golfers' && <GolfersTab eventId={event.id} />}
               {tab.id === 'settings' && (isOwner ? <SetupTab eventId={event.id} /> : <AccessDenied />)}

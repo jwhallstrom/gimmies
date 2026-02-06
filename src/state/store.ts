@@ -36,6 +36,10 @@ export type {
   EventWalletSettings, WalletTransaction, Settlement, TipFund, ProfileWallet,
   Tournament, TournamentRegistration, TournamentDivision, TournamentTeeTime,
   TournamentRound, TournamentScorecard, TournamentStanding,
+  // New game types
+  StablefordConfig, NinePointConfig, BingoBangoBongoConfig,
+  BingoBangoBongoHoleResult, WolfConfig, WolfHoleResult,
+  DotsConfig, DotsPlayerResult, DotCategory,
 };
 
 // Import slice creators

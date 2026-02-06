@@ -176,6 +176,8 @@ export interface EventGolfer {
    * - 'none': participates in no games (leaderboard/score only)
    */
   gamePreference?: 'all' | 'nassau' | 'skins' | 'none';
+  /** Fine-grained per-game opt-in (overrides gamePreference when present) */
+  gameOptIn?: Record<string, boolean>; // gameConfigId -> opted in
 }
 
 // ============================================================================
@@ -273,24 +275,185 @@ export interface GreenieResult {
   count: number; 
 }
 
+// ============================================================================
+// Stableford - Points-based scoring (auto-calculated from scores)
+// ============================================================================
+
+export interface StablefordConfig {
+  id: string;
+  fee: number;            // Per-player entry fee
+  net: boolean;           // Use net scores (handicap-adjusted)
+  participantGolferIds?: string[];
+  /**
+   * Point system:
+   * 'standard': Double bogey+=0, Bogey=1, Par=2, Birdie=3, Eagle=4, Albatross=5
+   * 'modified': Double bogey+=-3, Bogey=-1, Par=0, Birdie=+2, Eagle=+5, Albatross=+8
+   */
+  system?: 'standard' | 'modified';
+}
+
+// ============================================================================
+// 9-Point (Nines / 5-3-1) - Three-player game
+// ============================================================================
+
+export interface NinePointConfig {
+  id: string;
+  fee: number;            // $ per point (e.g., $1/point → max $9/hole)
+  net: boolean;           // Use net scores
+  participantGolferIds?: string[]; // Must be exactly 3 golfer IDs
+  /** If true, winning by 2+ strokes on a hole = all 9 points */
+  sweepEnabled?: boolean;
+}
+
+// ============================================================================
+// Bingo Bango Bongo - 3 points per hole (manual entry)
+// ============================================================================
+
+export interface BingoBangoBongoConfig {
+  id: string;
+  fee: number;            // $ per point
+  participantGolferIds?: string[];
+}
+
+/** Per-hole results for BBB (manually entered by admin/owner) */
+export interface BingoBangoBongoHoleResult {
+  hole: number;
+  bingo?: string;   // golferId who was first on green
+  bango?: string;   // golferId closest to pin when all on green
+  bongo?: string;   // golferId first to hole out
+}
+
+// ============================================================================
+// Wolf - 4-player rotating wolf game
+// ============================================================================
+
+export interface WolfConfig {
+  id: string;
+  fee: number;            // Base point value
+  participantGolferIds?: string[]; // Must be exactly 4 golfer IDs
+  /** Order of wolf rotation (golfer IDs in tee order) */
+  wolfOrder?: string[];
+  /** Allow "Blind Wolf" declaration (before anyone tees off) */
+  blindWolfEnabled?: boolean;
+}
+
+/** Per-hole Wolf result */
+export interface WolfHoleResult {
+  hole: number;
+  wolfId: string;           // Who was wolf this hole
+  partnerId?: string;       // Partner chosen (null = Lone Wolf)
+  isLoneWolf: boolean;
+  isBlindWolf?: boolean;    // Declared before seeing drives
+  /** Hole winner: 'wolf' or 'field'. Wolf side = wolf + partner. Field = others. */
+  winner: 'wolf' | 'field';
+  /** Points won/lost by the wolf side this hole */
+  points: number;
+}
+
+// ============================================================================
+// Dots / Garbage / Junk - Collection of small side bets
+// ============================================================================
+
+/** The available dot categories */
+export type DotCategory =
+  | 'birdie'         // Made a birdie
+  | 'eagle'          // Made an eagle
+  | 'sandie'         // Up-and-down from bunker
+  | 'greenie'        // GIR (green in regulation)
+  | 'chipin'         // Chip-in from off the green
+  | 'longestdrive'   // Longest drive on designated holes
+  | 'closestpin'     // Closest to pin on par 3s
+  | 'threejack'      // 3-putt (penalty: negative dot)
+  | 'waterball'      // Hit into water (penalty)
+  | 'poley'          // 1-putt (holed a long putt)
+  | 'natural_birdie' // Birdie without handicap strokes
+  | 'par3_birdie';   // Birdie on a par 3
+
+export interface DotsConfig {
+  id: string;
+  fee: number;            // $ per dot
+  participantGolferIds?: string[];
+  /** Which dot categories are active for this event */
+  activeDots: DotCategory[];
+}
+
+/** Per-player accumulated dot totals */
+export interface DotsPlayerResult {
+  golferId: string;
+  dots: Partial<Record<DotCategory, number>>; // Category → count
+  totalDots: number; // Net total (positive birdies etc. minus penalty dots)
+}
+
+// ============================================================================
+// Extended Game Config - All game types
+// ============================================================================
+
 export interface EventGameConfig { 
   nassau: NassauConfig[]; 
   skins: SkinsConfig[]; 
   pinky: PinkyConfig[]; 
-  greenie: GreenieConfig[]; 
+  greenie: GreenieConfig[];
+  // New game types
+  stableford?: StablefordConfig[];
+  ninePoint?: NinePointConfig[];
+  bingoBangoBongo?: BingoBangoBongoConfig[];
+  wolf?: WolfConfig[];
+  dots?: DotsConfig[];
 }
 
 // ============================================================================
 // Chat & Notifications
 // ============================================================================
 
-// Event scoped chat message
+// Chat message types
+export type ChatMessageType = 'text' | 'image' | 'system' | 'poll' | 'scorecard' | 'invite';
+
+// Golf-themed reaction emojis
+export const CHAT_REACTIONS = ['👍', '🔥', '😂', '⛳', '🏌️', '🎯'] as const;
+export type ChatReaction = typeof CHAT_REACTIONS[number];
+
+// Poll option for in-chat polls
+export interface ChatPollOption {
+  id: string;
+  text: string;
+  votes: string[]; // profileId[]
+}
+
+// Event scoped chat message (all new fields optional for backwards compat)
 export interface ChatMessage {
   id: string;            // unique id
   profileId: string;     // sender profile id
   senderName?: string;   // sender display name snapshot (for cross-device)
-  text: string;          // message body (plain text for now)
+  text: string;          // message body
   createdAt: string;     // ISO timestamp
+  
+  // Rich message support
+  type?: ChatMessageType;           // defaults to 'text'
+  replyTo?: string;                 // message id for threaded replies
+  reactions?: Record<string, string[]>; // emoji -> profileId[]
+  attachments?: ChatAttachment[];   // images, files, etc.
+  metadata?: Record<string, any>;   // poll data, invite code, scorecard summary
+  editedAt?: string;                // last edit timestamp
+  isDeleted?: boolean;              // soft delete
+  
+  // Poll data (when type === 'poll')
+  pollQuestion?: string;
+  pollOptions?: ChatPollOption[];
+  pollClosed?: boolean;
+}
+
+export interface ChatAttachment {
+  url: string;
+  type: 'image' | 'video' | 'file';
+  name?: string;
+  thumbnail?: string;
+  size?: number;
+}
+
+// Chat mute preferences (stored locally)
+export interface ChatMuteSettings {
+  mutedUntil?: string;   // ISO timestamp, undefined = not muted
+  muteType?: 'forever' | '1h' | '8h' | '24h';
 }
 
 // Toast notification interface
@@ -375,6 +538,10 @@ export interface Event {
   games: EventGameConfig;
   pinkyResults?: Record<string, PinkyResult[]>; // pinkyConfigId -> results array
   greenieResults?: Record<string, GreenieResult[]>; // greenieConfigId -> results array
+  // New game results
+  bbbResults?: Record<string, BingoBangoBongoHoleResult[]>; // bbbConfigId -> per-hole results
+  wolfResults?: Record<string, WolfHoleResult[]>;            // wolfConfigId -> per-hole results
+  dotsResults?: Record<string, DotsPlayerResult[]>;          // dotsConfigId -> per-player totals
   ownerProfileId: string;
   scorecardView: 'individual' | 'team' | 'admin';
   isPublic: boolean;
@@ -477,7 +644,7 @@ export interface WalletTransaction {
   profileId: string;
   
   // What happened
-  gameType: 'nassau' | 'skins' | 'pinky' | 'greenie' | 'total';
+  gameType: 'nassau' | 'skins' | 'pinky' | 'greenie' | 'stableford' | 'ninePoint' | 'bingoBangoBongo' | 'wolf' | 'dots' | 'total';
   description: string;
   
   // Money flow

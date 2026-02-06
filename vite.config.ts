@@ -18,14 +18,19 @@ export default defineConfig({
         name: 'Gimmies',
         short_name: 'Gimmies',
         start_url: '/',
+        scope: '/',
         display: 'standalone',
-        background_color: '#14532d',
-        theme_color: '#14532d',
+        orientation: 'portrait',
+        background_color: '#09243F',
+        theme_color: '#09243F',
         description: 'On-course golf gambling games (Nassau & Skins)',
         icons: [
-          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any maskable' },
-          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
-          { src: '/icons/icon-1024.png', sizes: '1024x1024', type: 'image/png', purpose: 'any maskable' }
+          // Separate purpose entries for best Android adaptive icon support
+          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'maskable' },
+          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: '/icons/icon-1024.png', sizes: '1024x1024', type: 'image/png', purpose: 'any' }
         ]
       },
       workbox: {

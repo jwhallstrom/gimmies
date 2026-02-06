@@ -3,8 +3,8 @@
 @tailwind utilities;
 
 /* ==========================================================================
-   Root Layout - iOS PWA Safe Area & Dynamic Viewport
-   Using env() variables for dynamic safe area handling
+   Root Layout - Cross-Platform PWA Safe Area & Dynamic Viewport
+   Works on both iOS (notch, home indicator) and Android (status bar, gesture nav)
    ========================================================================== */
 
 html, body {
@@ -21,31 +21,36 @@ html {
 }
 
 #root {
-  /* Dynamic viewport height handles home indicator bar */
+  /* Fallback for browsers without dvh support (older Android) */
+  height: 100vh;
   height: 100dvh;
+  min-height: 100vh;
   min-height: 100dvh;
+  /* JS-set variable as ultimate fallback for tricky Android browsers */
+  height: var(--app-height, 100vh);
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
 
-/* Header - safe area padding for notch/Dynamic Island */
+/* Header - safe area padding for notch/Dynamic Island (iOS) and status bar (Android).
+   Uses max() to guarantee a minimum 10px pad even when env() returns 0 (Android non-notch). */
 header {
-  /* Fallback padding-top for iOS safe area */
-  padding-top: 50px;
-  padding-top: env(safe-area-inset-top, 50px);
+  /* Ancient browser fallback */
+  padding-top: 10px;
+  /* Modern: at least 10px, or the safe-area value for devices with notches */
+  padding-top: max(10px, env(safe-area-inset-top, 10px));
 }
 
-/* Fixed footer - extends into home indicator area with fallback */
+/* Fixed footer - extends into home indicator area (iOS) / gesture bar (Android) */
 footer {
-  /* Fallback for browsers that don't support env() - 34px for home indicator */
-  padding-bottom: 34px;
-  /* Real value for iOS - overrides fallback when env() works */
-  padding-bottom: env(safe-area-inset-bottom, 34px);
-  /* Fallback min-height */
-  min-height: 102px;
-  /* Real min-height with safe area */
-  min-height: calc(68px + env(safe-area-inset-bottom, 34px));
+  /* Fallback for browsers that don't support env() */
+  padding-bottom: 8px;
+  /* On iOS: adds home indicator inset. On Android: env() is 0 so just 8px base. */
+  padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  /* Base nav height. On iOS: taller for home indicator. */
+  min-height: 68px;
+  min-height: calc(68px + env(safe-area-inset-bottom, 0px));
   background-color: inherit;
 }
 
@@ -93,10 +98,14 @@ body.chat-input-focused .app-scroll-with-bottom-nav {
   /* No bottom offset needed with flex layout */
 }
 
-/* Smooth momentum scrolling */
+/* Smooth momentum scrolling (iOS Safari; no-op on Android/Chrome) */
 .scroll-smooth {
   -webkit-overflow-scrolling: touch;
 }
+
+/* Hide scrollbar cross-browser (Chrome/Safari + Firefox) */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { scrollbar-width: none; }
 
 /* Fast tap response - remove 300ms delay */
 * {
@@ -145,25 +154,29 @@ a:active,
 .pl-safe-base-0 { --pl-safe-base: 0; }
 .pr-safe-base-0 { --pr-safe-base: 0; }
 
-/* Ticker positioning - sits directly above the fixed bottom nav */
+/* Ticker positioning - sits directly above the fixed bottom nav.
+   Footer = 68px + safe-area. Ticker sits right above. */
 .ticker-above-footer {
-  /* Fallback: 110px (68px footer + 34px safe + 8px buffer) */
-  bottom: 110px;
-  bottom: calc(68px + env(safe-area-inset-bottom, 34px) + 8px);
+  bottom: 76px; /* Fallback: footer (68px) + 8px base pad */
+  bottom: calc(76px + env(safe-area-inset-bottom, 0px));
 }
 
 /* FAB positioning - sits above ticker and bottom nav */
 .fab-position {
-  /* Fallback: 154px (120px + 34px safe area) */
-  bottom: 154px;
-  bottom: calc(120px + env(safe-area-inset-bottom, 34px));
+  bottom: 120px; /* Fallback: ticker (~44px) + footer (68px) + 8px */
+  bottom: calc(120px + env(safe-area-inset-bottom, 0px));
 }
 
 /* Content padding - bottom space for scrollable content to clear fixed footer */
 .content-with-footer {
-  /* Fallback: 118px (84px + 34px safe area) */
-  padding-bottom: 118px;
-  padding-bottom: calc(84px + env(safe-area-inset-bottom, 34px));
+  padding-bottom: 92px; /* Fallback: footer(68px) + 8px pad + 16px breathing room */
+  padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+}
+
+/* Event page container - must not extend behind fixed bottom nav */
+.event-page-container {
+  padding-bottom: 76px; /* footer (68px) + 8px base pad */
+  padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
 }
 
 /* PWA Safe Area Support - standalone detection (WebKit + others) */
@@ -189,21 +202,29 @@ a:active,
   }
 }
 
-/* Mobile viewport fix - Use dynamic viewport units */
+/* Mobile viewport fix - dynamic viewport units with fallbacks.
+   dvh works on modern Chrome (108+), Safari 15.4+, Firefox 108+.
+   -webkit-fill-available is the iOS Safari fallback. */
+.min-h-screen {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+.h-screen {
+  height: 100vh;
+  height: 100dvh;
+}
+
+.min-h-dvh {
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+
+/* iOS Safari specific: -webkit-fill-available is more reliable than dvh */
 @supports (-webkit-touch-callout: none) {
-  .min-h-screen {
-    min-height: -webkit-fill-available;
-  }
-  
-  .h-screen {
-    height: 100dvh;
-    height: -webkit-fill-available;
-  }
-  
-  .min-h-dvh {
-    min-height: 100dvh;
-    min-height: -webkit-fill-available;
-  }
+  .min-h-screen { min-height: -webkit-fill-available; }
+  .h-screen { height: -webkit-fill-available; }
+  .min-h-dvh { min-height: -webkit-fill-available; }
 }
 
 /* Full-screen overlay for modals/profile editor */
@@ -216,6 +237,7 @@ a:active,
   width: 100vw;
   height: 100vh;
   height: 100dvh;
+  height: var(--app-height, 100vh);
   z-index: 10000;
 }
 
@@ -264,15 +286,11 @@ body.pwa-standalone .fullscreen-overlay {
   padding-right: env(safe-area-inset-right);
 }
 
-/* Use dynamic viewport units */
-body, html {
-  min-height: 100dvh;
-}
-
-/* Dynamic viewport height utility */
+/* Dynamic viewport height utility - with fallback for older Android */
 .h-dvh {
   height: 100vh;
   height: 100dvh;
+  height: var(--app-height, 100vh);
 }
 
 /* Note: Footer uses Tailwind h-safe-nav and pb-safe-bottom utilities */
@@ -436,6 +454,26 @@ body, html {
   animation: slide-up 0.3s ease-out forwards;
 }
 
+@keyframes scale-in {
+  0% { transform: scale(0.8); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-scale-in {
+  animation: scale-in 0.15s ease-out forwards;
+}
+
+@keyframes reaction-pop {
+  0% { transform: scale(0.3); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 1; }
+  100% { transform: scale(0) translateY(-20px); opacity: 0; }
+}
+
+.animate-reaction-pop {
+  animation: reaction-pop 0.6s ease-out forwards;
+  pointer-events: none;
+}
+
 @keyframes slide-down {
   from {
     transform: translateY(0);
@@ -517,4 +555,44 @@ body, html {
 
 .animate-bounce-slow {
   animation: bounce-slow 2s ease-in-out infinite;
+}
+
+/* ==========================================================================
+   Android-Specific Adjustments
+   Applied via JS-set body class 'platform-android'
+   ========================================================================== */
+
+/* Android doesn't have iOS home indicator, so footer doesn't need extra bottom padding */
+body.platform-android footer {
+  padding-bottom: 8px;
+  min-height: 68px;
+}
+
+/* Android header: no notch on most devices, but ensure readable spacing */
+body.platform-android header {
+  padding-top: 10px;
+}
+
+/* Android PWA standalone: the system draws the status bar separately,
+   so safe-area-inset-top is 0. Ensure the header still has comfortable padding. */
+body.platform-android.pwa-standalone header {
+  padding-top: 10px;
+}
+
+/* Android gesture nav: some devices report safe-area-inset-bottom,
+   handled by the calc() rules above. This is just a safety net. */
+body.platform-android .content-with-footer {
+  padding-bottom: 92px;
+}
+
+body.platform-android .event-page-container {
+  padding-bottom: 76px;
+}
+
+body.platform-android .ticker-above-footer {
+  bottom: 76px;
+}
+
+body.platform-android .fab-position {
+  bottom: 120px;
 }

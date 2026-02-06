@@ -18,9 +18,9 @@ import { useCourse } from '../../hooks/useCourse';
 import LeaderboardTab from './LeaderboardTab';
 import ScorecardTab from './ScorecardTab';
 
-type Props = { eventId: string };
+type Props = { eventId: string; isTabActive?: boolean };
 
-const ScoreHubTab: React.FC<Props> = ({ eventId }) => {
+const ScoreHubTab: React.FC<Props> = ({ eventId, isTabActive = true }) => {
   const event = useStore((s: any) => 
     s.events.find((e: any) => e.id === eventId) || 
     s.completedEvents.find((e: any) => e.id === eventId)
@@ -49,13 +49,6 @@ const ScoreHubTab: React.FC<Props> = ({ eventId }) => {
   }, [event?.id, event?.lastModified, currentProfile?.id]);
 
   if (!event) return null;
-
-  // Calculate scoring progress (compact)
-  const scoringProgress = useMemo(() => {
-    const total = event.golfers.length;
-    const complete = event.scorecards.filter((sc: any) => sc.scores.length >= 18).length;
-    return { total, complete };
-  }, [event.golfers.length, event.scorecards]);
 
   const handleEnterScores = (golferId: string, mode: 'cards' | 'team' = 'cards') => {
     // Set appropriate scorecard view based on permissions
@@ -149,8 +142,8 @@ const ScoreHubTab: React.FC<Props> = ({ eventId }) => {
         <div className="relative">
           <LeaderboardTab eventId={eventId} onEnterScores={handleEnterScores} />
 
-          {/* Orange FAB - matches home page design */}
-          {!event.isCompleted && currentProfile && (
+          {/* Orange FAB - matches home page design. Only show when this tab is active to avoid covering chat. */}
+          {!event.isCompleted && currentProfile && isTabActive && (
             <button
               onClick={() => setShowFabMenu(true)}
               className="fixed right-4 z-40 w-16 h-16 bg-gradient-to-br from-accent to-orange-600 rounded-full shadow-lg shadow-accent/40 flex items-center justify-center text-white text-3xl font-bold hover:scale-105 active:scale-95 transition-transform fab-position"
@@ -187,10 +180,11 @@ const ScoreHubTab: React.FC<Props> = ({ eventId }) => {
                     {/* Score name (Par/Birdie/Bogey) in top right */}
                     {quickScore !== null && (
                       <div className={`px-3 py-1.5 rounded-xl text-sm font-bold ${
-                        quickScore < nextHoleInfo.par ? 'bg-yellow-400 text-yellow-900' :
+                        quickScore <= nextHoleInfo.par - 2 ? 'bg-amber-400 text-amber-950' :
+                        quickScore < nextHoleInfo.par ? 'bg-red-500 text-white' :
                         quickScore === nextHoleInfo.par ? 'bg-white/30 text-white' :
-                        quickScore === nextHoleInfo.par + 1 ? 'bg-orange-400 text-orange-900' :
-                        'bg-red-400 text-red-900'
+                        quickScore === nextHoleInfo.par + 1 ? 'bg-blue-300 text-blue-900' :
+                        'bg-blue-500 text-white'
                       }`}>
                         {quickScore <= nextHoleInfo.par - 2 ? 'Eagle!' :
                          quickScore === nextHoleInfo.par - 1 ? 'Birdie!' :
@@ -214,8 +208,8 @@ const ScoreHubTab: React.FC<Props> = ({ eventId }) => {
                     {/* BIG score number in center */}
                     <div className="flex-1 flex items-center justify-center">
                       <div className={`text-7xl font-black tabular-nums ${
-                        quickScore !== null && quickScore < nextHoleInfo.par ? 'text-yellow-300' :
-                        quickScore !== null && quickScore > nextHoleInfo.par ? 'text-red-200' :
+                        quickScore !== null && quickScore < nextHoleInfo.par ? 'text-red-300' :
+                        quickScore !== null && quickScore > nextHoleInfo.par ? 'text-blue-200' :
                         'text-white'
                       }`}>
                         {quickScore ?? nextHoleInfo.par}
@@ -333,12 +327,6 @@ const ScoreHubTab: React.FC<Props> = ({ eventId }) => {
             document.body
           )}
 
-          {/* Optional tiny progress (non-blocking) */}
-          {scoringProgress.total > 0 && (
-            <div className="fixed left-4 bottom-24 z-30 text-[11px] text-slate-500 bg-white/90 backdrop-blur px-2 py-1 rounded-lg border border-slate-200 shadow-sm">
-              {scoringProgress.complete}/{scoringProgress.total} complete
-            </div>
-          )}
         </div>
       )}
     </div>
