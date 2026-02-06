@@ -24,6 +24,9 @@ import type {
   EventWalletSettings, WalletTransaction, Settlement, TipFund, ProfileWallet,
   Tournament, TournamentRegistration, TournamentDivision, TournamentTeeTime,
   TournamentRound, TournamentScorecard, TournamentStanding,
+  StablefordConfig, NinePointConfig, BingoBangoBongoConfig,
+  BingoBangoBongoHoleResult, WolfConfig, WolfHoleResult,
+  DotsConfig, DotsPlayerResult, DotCategory,
 } from './types';
 
 // Re-export all types for backward compatibility
@@ -140,6 +143,15 @@ interface State {
   setPinkyResults: GameSliceActions['setPinkyResults'];
   removeGreenie: GameSliceActions['removeGreenie'];
   setGreenieResults: GameSliceActions['setGreenieResults'];
+  // New game actions
+  removeStableford: GameSliceActions['removeStableford'];
+  removeNinePoint: GameSliceActions['removeNinePoint'];
+  removeBingoBangoBongo: GameSliceActions['removeBingoBangoBongo'];
+  setBBBResults: GameSliceActions['setBBBResults'];
+  removeWolf: GameSliceActions['removeWolf'];
+  setWolfResults: GameSliceActions['setWolfResults'];
+  removeDots: GameSliceActions['removeDots'];
+  setDotsResults: GameSliceActions['setDotsResults'];
   
   // Handicap actions
   addIndividualRound: HandicapSliceActions['addIndividualRound'];

@@ -49,7 +49,7 @@ export function computeNinePoint(event: Event, config: NinePointConfig, profiles
   const pointsByGolfer: Record<string, number> = {};
   const owingsByGolfer: Record<string, number> = {};
   
-  players.forEach(p => {
+  players.forEach((p: string) => {
     pointsByGolfer[p] = 0;
     owingsByGolfer[p] = 0;
   });
@@ -59,7 +59,7 @@ export function computeNinePoint(event: Event, config: NinePointConfig, profiles
     const distribution: Record<string, number> = {};
     
     // Get each player's score
-    players.forEach(pid => {
+    players.forEach((pid: string) => {
       const sc = event.scorecards.find(s => s.golferId === pid);
       const gross = sc?.scores.find(s => s.hole === hole)?.strokes ?? null;
       const value = config.net ? netScore(event, pid, hole, gross, profiles) : gross;
@@ -67,7 +67,7 @@ export function computeNinePoint(event: Event, config: NinePointConfig, profiles
     });
 
     // Check if all have scores
-    const validPlayers = players.filter(p => scores[p] != null);
+    const validPlayers = players.filter((p: string) => scores[p] != null);
     if (validPlayers.length < 3) {
       // Not enough scores — give 3-3-3
       players.forEach(p => { distribution[p] = 3; });
@@ -107,7 +107,7 @@ export function computeNinePoint(event: Event, config: NinePointConfig, profiles
     }
 
     // Accumulate
-    players.forEach(p => {
+    players.forEach((p: string) => {
       const pts = distribution[p] || 0;
       pointsByGolfer[p] += pts;
     });
@@ -121,12 +121,12 @@ export function computeNinePoint(event: Event, config: NinePointConfig, profiles
   const [p1, p2, p3] = players;
   const avgPoints = (pointsByGolfer[p1] + pointsByGolfer[p2] + pointsByGolfer[p3]) / 3;
   
-  players.forEach(p => {
+  players.forEach((p: string) => {
     // Your net = (your points - average) × fee × (n-1) / n 
     // Simplified: sum of (your points - each opponent's points) × fee
-    const otherPlayers = players.filter(x => x !== p);
+    const otherPlayers = players.filter((x: string) => x !== p);
     let net = 0;
-    otherPlayers.forEach(opp => {
+    otherPlayers.forEach((opp: string) => {
       net += (pointsByGolfer[p] - pointsByGolfer[opp]) * feePerPoint;
     });
     owingsByGolfer[p] = net;

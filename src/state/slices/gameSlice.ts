@@ -1,9 +1,9 @@
 /**
  * Game Slice
- * Handles game configuration actions (Nassau, Skins, Pinky, Greenie)
+ * Handles game configuration actions for all game types
  */
 
-import type { PinkyResult, GreenieResult, Event } from '../types';
+import type { PinkyResult, GreenieResult, BingoBangoBongoHoleResult, WolfHoleResult, DotsPlayerResult, Event } from '../types';
 
 // ============================================================================
 // Helper Function
@@ -37,6 +37,15 @@ export interface GameSliceActions {
   setPinkyResults: (eventId: string, pinkyId: string, results: PinkyResult[]) => Promise<void>;
   removeGreenie: (eventId: string, greenieId: string) => Promise<void>;
   setGreenieResults: (eventId: string, greenieId: string, results: GreenieResult[]) => Promise<void>;
+  // New game types
+  removeStableford: (eventId: string, configId: string) => Promise<void>;
+  removeNinePoint: (eventId: string, configId: string) => Promise<void>;
+  removeBingoBangoBongo: (eventId: string, configId: string) => Promise<void>;
+  setBBBResults: (eventId: string, configId: string, results: BingoBangoBongoHoleResult[]) => Promise<void>;
+  removeWolf: (eventId: string, configId: string) => Promise<void>;
+  setWolfResults: (eventId: string, configId: string, results: WolfHoleResult[]) => Promise<void>;
+  removeDots: (eventId: string, configId: string) => Promise<void>;
+  setDotsResults: (eventId: string, configId: string, results: DotsPlayerResult[]) => Promise<void>;
 }
 
 // ============================================================================
@@ -144,8 +153,98 @@ export const createGameSlice = (
         };
       })
     }));
-    
-    // Sync to cloud
+    await syncEventToCloud(eventId, get);
+  },
+
+  // ============================================================================
+  // New Game Types
+  // ============================================================================
+
+  removeStableford: async (eventId: string, configId: string) => {
+    set((state: any) => ({
+      events: state.events.map((e: Event) => {
+        if (e.id !== eventId) return e;
+        const arr = Array.isArray(e.games.stableford) ? e.games.stableford : [];
+        return { ...e, games: { ...e.games, stableford: arr.filter(s => s.id !== configId) }, lastModified: new Date().toISOString() };
+      })
+    }));
+    await syncEventToCloud(eventId, get);
+  },
+
+  removeNinePoint: async (eventId: string, configId: string) => {
+    set((state: any) => ({
+      events: state.events.map((e: Event) => {
+        if (e.id !== eventId) return e;
+        const arr = Array.isArray(e.games.ninePoint) ? e.games.ninePoint : [];
+        return { ...e, games: { ...e.games, ninePoint: arr.filter(s => s.id !== configId) }, lastModified: new Date().toISOString() };
+      })
+    }));
+    await syncEventToCloud(eventId, get);
+  },
+
+  removeBingoBangoBongo: async (eventId: string, configId: string) => {
+    set((state: any) => ({
+      events: state.events.map((e: Event) => {
+        if (e.id !== eventId) return e;
+        const arr = Array.isArray(e.games.bingoBangoBongo) ? e.games.bingoBangoBongo : [];
+        return { ...e, games: { ...e.games, bingoBangoBongo: arr.filter(s => s.id !== configId) }, lastModified: new Date().toISOString() };
+      })
+    }));
+    await syncEventToCloud(eventId, get);
+  },
+
+  setBBBResults: async (eventId: string, configId: string, results: BingoBangoBongoHoleResult[]) => {
+    set((state: any) => ({
+      events: state.events.map((e: Event) => {
+        if (e.id !== eventId) return e;
+        const bbbResults = e.bbbResults || {};
+        return { ...e, bbbResults: { ...bbbResults, [configId]: results }, lastModified: new Date().toISOString() };
+      })
+    }));
+    await syncEventToCloud(eventId, get);
+  },
+
+  removeWolf: async (eventId: string, configId: string) => {
+    set((state: any) => ({
+      events: state.events.map((e: Event) => {
+        if (e.id !== eventId) return e;
+        const arr = Array.isArray(e.games.wolf) ? e.games.wolf : [];
+        return { ...e, games: { ...e.games, wolf: arr.filter(s => s.id !== configId) }, lastModified: new Date().toISOString() };
+      })
+    }));
+    await syncEventToCloud(eventId, get);
+  },
+
+  setWolfResults: async (eventId: string, configId: string, results: WolfHoleResult[]) => {
+    set((state: any) => ({
+      events: state.events.map((e: Event) => {
+        if (e.id !== eventId) return e;
+        const wolfResults = e.wolfResults || {};
+        return { ...e, wolfResults: { ...wolfResults, [configId]: results }, lastModified: new Date().toISOString() };
+      })
+    }));
+    await syncEventToCloud(eventId, get);
+  },
+
+  removeDots: async (eventId: string, configId: string) => {
+    set((state: any) => ({
+      events: state.events.map((e: Event) => {
+        if (e.id !== eventId) return e;
+        const arr = Array.isArray(e.games.dots) ? e.games.dots : [];
+        return { ...e, games: { ...e.games, dots: arr.filter(s => s.id !== configId) }, lastModified: new Date().toISOString() };
+      })
+    }));
+    await syncEventToCloud(eventId, get);
+  },
+
+  setDotsResults: async (eventId: string, configId: string, results: DotsPlayerResult[]) => {
+    set((state: any) => ({
+      events: state.events.map((e: Event) => {
+        if (e.id !== eventId) return e;
+        const dotsResults = e.dotsResults || {};
+        return { ...e, dotsResults: { ...dotsResults, [configId]: results }, lastModified: new Date().toISOString() };
+      })
+    }));
     await syncEventToCloud(eventId, get);
   },
 });

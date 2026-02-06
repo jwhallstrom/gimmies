@@ -37,7 +37,7 @@ export function computeWolf(
   const pointsByGolfer: Record<string, number> = {};
   const owingsByGolfer: Record<string, number> = {};
 
-  players.forEach(p => {
+  players.forEach((p: string) => {
     pointsByGolfer[p] = 0;
     owingsByGolfer[p] = 0;
   });
@@ -55,40 +55,40 @@ export function computeWolf(
 
     if (isLone) {
       // Lone wolf vs 3 opponents
-      const opponents = players.filter(p => p !== wolf);
+      const opponents = players.filter((p: string) => p !== wolf);
       if (wolfWon) {
         // Wolf wins multiplier points from each opponent
         pointsByGolfer[wolf] += multiplier * opponents.length;
-        opponents.forEach(opp => {
+        opponents.forEach((opp: string) => {
           pointsByGolfer[opp] -= multiplier;
         });
       } else {
         // Wolf loses multiplier points to each opponent
         pointsByGolfer[wolf] -= multiplier * opponents.length;
-        opponents.forEach(opp => {
+        opponents.forEach((opp: string) => {
           pointsByGolfer[opp] += multiplier;
         });
       }
     } else if (partner) {
       // 2v2: wolf + partner vs field
       const wolfSide = [wolf, partner];
-      const fieldSide = players.filter(p => !wolfSide.includes(p));
+      const fieldSide = players.filter((p: string) => !wolfSide.includes(p));
       
       if (wolfWon) {
-        wolfSide.forEach(p => { pointsByGolfer[p] += multiplier; });
-        fieldSide.forEach(p => { pointsByGolfer[p] -= multiplier; });
+        wolfSide.forEach((p: string) => { pointsByGolfer[p] += multiplier; });
+        fieldSide.forEach((p: string) => { pointsByGolfer[p] -= multiplier; });
       } else {
-        wolfSide.forEach(p => { pointsByGolfer[p] -= multiplier; });
-        fieldSide.forEach(p => { pointsByGolfer[p] += multiplier; });
+        wolfSide.forEach((p: string) => { pointsByGolfer[p] -= multiplier; });
+        fieldSide.forEach((p: string) => { pointsByGolfer[p] += multiplier; });
       }
     }
   });
 
   // Net owings: each pair settles point difference × fee
-  players.forEach(p => {
-    const others = players.filter(x => x !== p);
+  players.forEach((p: string) => {
+    const others = players.filter((x: string) => x !== p);
     let net = 0;
-    others.forEach(opp => {
+    others.forEach((opp: string) => {
       net += (pointsByGolfer[p] - pointsByGolfer[opp]) * feePerPoint;
     });
     owingsByGolfer[p] = net;
