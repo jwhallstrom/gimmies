@@ -1,0 +1,23 @@
+name: Deploy to Master
+
+# Whenever code lands on `main`, mirror it to `master`.
+# AWS Amplify watches `master` and auto-deploys from there.
+# This lets anyone push/merge to `main` and the live app updates automatically.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  sync-master:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Full history so we can push to master
+
+      - name: Push main to master
+        run: git push origin main:master
