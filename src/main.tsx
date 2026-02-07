@@ -6,6 +6,7 @@ import { BrowserRouter } from 'react-router-dom';
 import './amplify/configure';
 
 import App from './pages/App';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import './styles.css';
 
 // In dev, ensure SW doesn't cache stale bundles.
@@ -96,8 +97,10 @@ if (typeof window !== 'undefined') {
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </ErrorBoundary>
   </React.StrictMode>
 );

@@ -116,6 +116,19 @@ const App: React.FC = () => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
+        // Check if Amplify is actually configured before trying auth
+        const { Amplify } = await import('aws-amplify');
+        const config = (Amplify as any).getConfig?.();
+        const hasUserPool = !!(config?.Auth?.Cognito?.userPoolId);
+
+        if (!hasUserPool) {
+          // No Amplify backend configured -- skip cloud auth entirely
+          console.log('[Auth] Amplify not configured, running in local/offline mode');
+          setAmplifyUser(null);
+          setIsCheckingAuth(false);
+          return;
+        }
+
         const { getCurrentUser, fetchUserAttributes } = await import('aws-amplify/auth');
         const { fetchCloudProfile } = await import('../utils/profileSync');
         const { loadIndividualRoundsFromCloud } = await import('../utils/roundSync');
@@ -184,6 +197,17 @@ const App: React.FC = () => {
     // Re-check auth after successful login
     setTimeout(async () => {
       try {
+        // Check if Amplify is actually configured
+        const { Amplify } = await import('aws-amplify');
+        const config = (Amplify as any).getConfig?.();
+        const hasUserPool = !!(config?.Auth?.Cognito?.userPoolId);
+
+        if (!hasUserPool) {
+          console.log('[Auth] Amplify not configured, skipping cloud auth after login');
+          setIsCheckingAuth(false);
+          return;
+        }
+
         const { getCurrentUser, fetchUserAttributes } = await import('aws-amplify/auth');
         const { fetchCloudProfile } = await import('../utils/profileSync');
         const { loadIndividualRoundsFromCloud } = await import('../utils/roundSync');
