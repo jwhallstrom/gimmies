@@ -8,6 +8,7 @@ import { nanoid } from 'nanoid/non-secure';
 interface ChatTabProps {
   eventId: string;
   onCreateEvent?: () => void;
+  isActive?: boolean;
 }
 
 // ============================================================================
@@ -442,7 +443,7 @@ const PollCreator: React.FC<{
 // Main ChatTab Component
 // ============================================================================
 
-const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent }) => {
+const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = true }) => {
   const {
     event, currentProfile, messages, profilesById,
     send, toggleReaction, deleteMessage, votePoll,
@@ -510,9 +511,12 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent }) => {
     [messages]
   );
 
-  // Auto-scroll to bottom on new messages
+  // Auto-scroll to bottom on new messages (scoped to chat container only)
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const container = messagesContainerRef.current;
+    if (container) {
+      container.scrollTop = container.scrollHeight;
+    }
   }, [visibleMessages.length]);
 
   // Close reaction picker on outside tap
@@ -609,16 +613,18 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent }) => {
           const replyPreview = m.replyTo ? getReplyPreview(m.replyTo) : null;
           const isReactionTarget = activeReactionId === m.id;
 
-          // System / Bot messages
+          // System / Bot messages — branded with Gimmies logo
           if (isBot) {
             return (
-              <div key={m.id} className="flex justify-center my-2">
-                <div className="max-w-[90%] rounded-xl px-3.5 py-2.5 shadow-sm border text-[13px] leading-snug bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-amber-200 dark:border-amber-700 text-amber-900 dark:text-amber-200">
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-bold text-amber-700 dark:text-amber-400 text-xs">🎯 Gimmies</span>
+              <div key={m.id} className="flex items-start gap-2 my-3 px-2">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-0.5">
+                    <img src="/gimmies-logo.png" alt="Gimmies" className="h-5 w-auto opacity-90" />
                     <span className="text-[10px] text-amber-500">{timeAgo(m.createdAt)}</span>
                   </div>
-                  <div className="whitespace-pre-wrap break-words font-medium">{m.text}</div>
+                  <div className="rounded-2xl rounded-tl-sm px-3.5 py-2.5 shadow-sm border text-[13px] leading-snug bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/20 dark:to-orange-900/20 border-amber-200 dark:border-amber-700 text-amber-900 dark:text-amber-200">
+                    <div className="whitespace-pre-wrap break-words font-medium">{m.text}</div>
+                  </div>
                 </div>
               </div>
             );

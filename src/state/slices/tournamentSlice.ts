@@ -16,6 +16,8 @@ import type {
   TournamentVisibility,
   TournamentStatus,
   ScoreEntry,
+  ClubEmailContact,
+  Club,
 } from '../types';
 
 // ============================================================================

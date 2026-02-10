@@ -436,63 +436,161 @@ const ClubOnboardingWizard: React.FC<Props> = ({ isOpen, onClose, onComplete }) 
     </div>
   );
   
+  const [stripeConnecting, setStripeConnecting] = useState(false);
+  const [stripeConnected, setStripeConnected] = useState(false);
+  const [playerPaysFee, setPlayerPaysFee] = useState(false);
+  
+  const handleStripeConnect = async () => {
+    setStripeConnecting(true);
+    // In production: window.location.href = `/api/stripe/connect?club_id=${clubData.id}`;
+    // This simulates the OAuth flow returning after Stripe onboarding
+    await new Promise(resolve => setTimeout(resolve, 2500));
+    
+    setClubData(prev => ({
+      ...prev,
+      stripe: {
+        ...prev.stripe!,
+        connectStatus: 'active' as const,
+        accountId: 'acct_demo_' + Math.random().toString(36).substring(2, 10),
+        onboardingComplete: true,
+        chargesEnabled: true,
+        payoutsEnabled: true,
+        detailsSubmitted: true,
+      },
+    }));
+    setStripeConnected(true);
+    setStripeConnecting(false);
+  };
+  
   const renderStripeStep = () => (
     <div className="space-y-5">
       <div className="text-center py-4">
         <div className="text-4xl mb-3">💳</div>
         <h3 className="text-lg font-bold text-gray-900">Accept Payments</h3>
         <p className="text-sm text-gray-600 mt-1">
-          Connect with Stripe to collect entry fees and distribute prize money.
+          One tap to start collecting entry fees and distributing prize money.
         </p>
       </div>
       
-      <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-5 border border-purple-100">
-        <h4 className="font-bold text-gray-900 mb-3">With Stripe Connect, you can:</h4>
-        <ul className="space-y-2">
-          {[
-            'Collect tournament entry fees online',
-            'Automatically distribute prize money',
-            'Track all payments in one dashboard',
-            'Accept cards, Apple Pay, Google Pay',
-            'Get paid directly to your bank account',
-          ].map((item, idx) => (
-            <li key={idx} className="flex items-center gap-2 text-sm text-gray-700">
-              <span className="text-green-500">✓</span>
-              {item}
-            </li>
-          ))}
-        </ul>
-      </div>
-      
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-        <div className="flex items-start gap-3">
-          <span className="text-amber-500 text-xl">💡</span>
-          <div>
-            <p className="text-sm text-gray-700">
-              <strong>Set up later:</strong> You can skip this step and set up payments when you're ready to host your first paid tournament.
-            </p>
+      {stripeConnected ? (
+        <>
+          {/* Connected State */}
+          <div className="bg-green-50 border border-green-200 rounded-xl p-5 text-center">
+            <div className="w-14 h-14 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <svg className="w-7 h-7 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <div className="font-bold text-green-800 text-lg">Stripe Connected!</div>
+            <p className="text-sm text-green-600 mt-1">You're ready to accept payments.</p>
+            <div className="mt-3 text-xs text-green-700 bg-green-100 rounded-lg px-3 py-2 inline-block">
+              Account: {clubData.stripe?.accountId}
+            </div>
           </div>
-        </div>
-      </div>
-      
-      <button
-        className="w-full py-4 bg-[#635bff] text-white rounded-xl font-bold text-base hover:bg-[#5851db] transition-colors flex items-center justify-center gap-3"
-        onClick={() => {
-          // In production, this would redirect to Stripe Connect onboarding
-          alert('In production, this would redirect to Stripe Connect onboarding.');
-        }}
-      >
-        <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.591-7.305z"/>
-        </svg>
-        Connect with Stripe
-      </button>
+          
+          {/* Fee Transparency */}
+          <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3">
+            <h4 className="font-semibold text-gray-900">Fee Structure</h4>
+            <div className="bg-gray-50 rounded-lg p-3 space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Stripe processing</span>
+                <span className="font-medium text-gray-900">2.9% + $0.30</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Gimmies platform</span>
+                <span className="font-medium text-gray-900">{clubData.stripe?.platformFeePercent || 2.5}%</span>
+              </div>
+              <div className="border-t border-gray-200 pt-2 flex justify-between">
+                <span className="text-gray-600">On a $50 entry fee, you receive</span>
+                <span className="font-bold text-green-600">
+                  ${(50 - 50 * 0.029 - 0.30 - 50 * ((clubData.stripe?.platformFeePercent || 2.5) / 100)).toFixed(2)}
+                </span>
+              </div>
+            </div>
+            
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={playerPaysFee}
+                onChange={e => setPlayerPaysFee(e.target.checked)}
+                className="h-5 w-5 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+              />
+              <div>
+                <div className="text-sm font-medium text-gray-900">Player absorbs fee</div>
+                <div className="text-xs text-gray-500">Players pay $51.75 so you receive the full $50</div>
+              </div>
+            </label>
+          </div>
+        </>
+      ) : (
+        <>
+          {/* Benefits List */}
+          <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-xl p-5 border border-purple-100">
+            <h4 className="font-bold text-gray-900 mb-3">With Stripe Connect, you can:</h4>
+            <ul className="space-y-2">
+              {[
+                'Collect tournament entry fees online',
+                'Automatically distribute prize money',
+                'Track all payments in one dashboard',
+                'Accept cards, Apple Pay, Google Pay',
+                'Get paid directly to your bank account',
+              ].map((item, idx) => (
+                <li key={idx} className="flex items-center gap-2 text-sm text-gray-700">
+                  <span className="text-green-500">✓</span>
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+          
+          {/* Fee Transparency (pre-connect) */}
+          <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+            <div className="text-sm text-gray-700 text-center">
+              <span className="font-semibold">Stripe fees:</span> 2.9% + $0.30 per transaction
+              <br />
+              <span className="text-xs text-gray-500">You keep the rest. No hidden fees.</span>
+            </div>
+          </div>
+          
+          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+            <div className="flex items-start gap-3">
+              <span className="text-amber-500 text-xl">💡</span>
+              <div>
+                <p className="text-sm text-gray-700">
+                  <strong>Set up later:</strong> You can skip this step and connect Stripe when you're ready to host your first paid tournament.
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          {/* Big Connect Button */}
+          <button
+            className="w-full py-4 bg-[#635bff] text-white rounded-xl font-bold text-base hover:bg-[#5851db] transition-colors flex items-center justify-center gap-3 disabled:opacity-70"
+            onClick={handleStripeConnect}
+            disabled={stripeConnecting}
+          >
+            {stripeConnecting ? (
+              <>
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Connecting to Stripe...
+              </>
+            ) : (
+              <>
+                <svg className="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.591-7.305z"/>
+                </svg>
+                Connect with Stripe
+              </>
+            )}
+          </button>
+        </>
+      )}
       
       <button
         onClick={nextStep}
         className="w-full py-3 text-gray-600 hover:text-gray-900 text-sm transition-colors"
       >
-        Skip for now →
+        {stripeConnected ? 'Continue →' : 'Skip for now →'}
       </button>
     </div>
   );

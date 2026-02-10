@@ -48,8 +48,8 @@ const EventPage: React.FC = () => {
   const navigate = useNavigate();
   
   // Auto-sync event from cloud - faster polling when on chat tab (8s) vs other tabs (20s)
-  const isChatActive = activePageIndex === 0;
-  useEventSync(id, isChatActive ? 8000 : 20000);
+  // Chat is index 0 for groups, index 1 for events
+  useEventSync(id, 15000);
   
   const event = useStore(s => 
     s.events.find(e => e.id === id) || 
@@ -129,7 +129,8 @@ const EventPage: React.FC = () => {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   
   // Define tabs based on hub type
-  // ORDER: Chat → Leaderboard → Games/Payouts → Golfers → Settings (most used first)
+  // Events: Leaderboard first (primary view), Chat one swipe away
+  // Groups: Chat first (primary view)
   const tabs = isGroupHub
     ? [
         { id: 'chat', label: 'Chat', icon: '💬' },
@@ -141,10 +142,10 @@ const EventPage: React.FC = () => {
         ] : []),
       ]
     : [
-        { id: 'chat', label: 'Chat', icon: '💬' },
         { id: 'scorecard', label: 'Leaderboard', icon: <LeaderboardIcon className="w-5 h-5" /> },
         { id: 'games', label: 'Games', icon: '🎯' },
         { id: 'golfers', label: 'Golfers', icon: '👥', badge: stats.golferCount },
+        { id: 'chat', label: 'Chat', icon: '💬' },
         ...(isOwner ? [
           { id: 'alerts', label: 'Alerts', icon: '🔔', isModal: true },
           { id: 'settings', label: 'Settings', icon: '⚙️' },
@@ -184,7 +185,9 @@ const EventPage: React.FC = () => {
   };
 
   // Determine if on chat page (for showing composer)
-  const isChatPage = activePageIndex === 0;
+  // Chat is index 0 for groups, index 3 for events (after Leaderboard, Games, Golfers)
+  const chatSwipeIndex = isGroupHub ? 0 : swipeableTabs.findIndex(t => t.id === 'chat');
+  const isChatPage = activePageIndex === chatSwipeIndex;
   
   // Mark group chat as read when viewing chat tab
   useEffect(() => {
@@ -192,6 +195,8 @@ const EventPage: React.FC = () => {
       markChatAsRead(event.id);
     }
   }, [isGroupHub, isChatPage, event?.id]);
+
+  
   
   // Icon-only tabs (no labels): saves space and removes sideways scrolling.
   const tabPillClass =
@@ -495,8 +500,8 @@ const EventPage: React.FC = () => {
             className={`w-full flex-shrink-0 snap-center ${tab.id === 'chat' ? 'overflow-hidden' : 'overflow-y-auto'}`}
             style={{ minWidth: '100%' }}
           >
-            <div className={tab.id === 'chat' ? 'h-full px-4 py-2' : 'px-4 py-2 pb-32'}>
-              {tab.id === 'chat' && <ChatTab eventId={event.id} />}
+            <div className={tab.id === 'chat' ? 'h-full px-2 pt-1' : 'px-4 py-2 pb-32'}>
+              {tab.id === 'chat' && <ChatTab eventId={event.id} isActive={isChatPage} />}
               {tab.id === 'scorecard' && <ScoreHubTab eventId={event.id} isTabActive={swipeableTabs[activePageIndex]?.id === 'scorecard'} />}
               {tab.id === 'games' && <GamesTab eventId={event.id} />}
               {tab.id === 'golfers' && <GolfersTab eventId={event.id} />}
