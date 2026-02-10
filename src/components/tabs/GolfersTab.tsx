@@ -31,6 +31,7 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
 
   const [showAddModal, setShowAddModal] = useState(false);
   const [addModalTab, setAddModalTab] = useState<AddModalTab>('invite');
+  const [showFabMenu, setShowFabMenu] = useState(false);
   const [golferName, setGolferName] = useState('');
   const [customTeeName, setCustomTeeName] = useState('');
   const [customHandicap, setCustomHandicap] = useState('');
@@ -229,6 +230,8 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
   };
 
   // Craft compelling invite messages
+  const isPublicEvent = !!event.isPublic;
+
   const getInviteMessage = () => {
     const groupName = event.name || 'our golf group';
     const senderName = currentProfile?.name || 'A friend';
@@ -249,7 +252,19 @@ Join here: ${shareUrl}
 Or use code: ${event.shareCode}`,
         shortText: `${senderName} invited you to "${groupName}" on Gimmies Golf! Join: ${shareUrl}`
       };
+    } else if (isPublicEvent) {
+      // Public event: just share the link, no code emphasis
+      return {
+        title: `Join ${event.name || 'my golf event'}`,
+        text: `Hey! ${senderName} invited you to "${event.name}" on Gimmies Golf ⛳
+
+Tap the link to join — no code needed!
+
+Join: ${shareUrl}`,
+        shortText: `Join my golf event "${event.name}": ${shareUrl}`
+      };
     } else {
+      // Private event: include the code
       return {
         title: `Join ${event.name || 'my golf event'}`,
         text: `Hey! Join me for golf - "${event.name}"
@@ -332,23 +347,6 @@ Code: ${event.shareCode}`,
             {golferData.length} {isGroupHub ? 'member' : 'player'}{golferData.length !== 1 ? 's' : ''} in this {isGroupHub ? 'group' : 'event'}
           </p>
         </div>
-        
-        {!event.isCompleted && (
-          <button
-            onClick={() => setShowAddModal(true)}
-            disabled={!isGroupHub && (!courseSelected || !teeSelected)}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all ${
-              isGroupHub || (courseSelected && teeSelected)
-                ? 'bg-primary-600 text-white hover:bg-primary-700 shadow-md shadow-primary-200'
-                : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-            }`}
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-            {isGroupHub ? 'Add Member' : 'Add Golfer'}
-          </button>
-        )}
       </div>
 
       {/* Setup hint removed - course selection happens naturally in flow */}
@@ -536,12 +534,16 @@ Code: ${event.shareCode}`,
           >
             {/* Modal Header */}
             <div className={`px-4 py-4 flex items-center justify-between flex-shrink-0 ${
-              isGroupHub ? 'bg-purple-600' : 'bg-primary-700'
+              addModalTab === 'invite'
+                ? isGroupHub ? 'bg-purple-600' : 'bg-primary-700'
+                : 'bg-amber-500'
             }`}>
               <div className="flex items-center gap-2">
-                <span className="text-xl">{isGroupHub ? '👥' : '⛳'}</span>
+                <span className="text-xl">{addModalTab === 'invite' ? (isGroupHub ? '👥' : '📲') : '👤'}</span>
                 <h3 className="text-lg font-bold text-white">
-                  {isGroupHub ? 'Add Member' : 'Add Golfer'}
+                  {addModalTab === 'invite'
+                    ? isGroupHub ? 'Invite to Group' : 'Invite a Golfer'
+                    : isGroupHub ? 'Add Member' : 'Add a Guest'}
                 </h3>
               </div>
               <button
@@ -551,40 +553,6 @@ Code: ${event.shareCode}`,
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
-              </button>
-            </div>
-
-            {/* Tabs - Both groups AND events get invite/manual */}
-            <div className="flex border-b border-gray-200 flex-shrink-0">
-              <button
-                onClick={() => setAddModalTab('invite')}
-                className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${
-                  addModalTab === 'invite' 
-                    ? isGroupHub ? 'text-purple-700' : 'text-primary-700'
-                    : 'text-gray-500'
-                }`}
-              >
-                📲 Send Invite
-                {addModalTab === 'invite' && (
-                  <span className={`absolute bottom-0 left-4 right-4 h-0.5 rounded-full ${
-                    isGroupHub ? 'bg-purple-600' : 'bg-primary-600'
-                  }`} />
-                )}
-              </button>
-              <button
-                onClick={() => setAddModalTab('manual')}
-                className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${
-                  addModalTab === 'manual'
-                    ? isGroupHub ? 'text-purple-700' : 'text-primary-700'
-                    : 'text-gray-500'
-                }`}
-              >
-                ✏️ Add by Name
-                {addModalTab === 'manual' && (
-                  <span className={`absolute bottom-0 left-4 right-4 h-0.5 rounded-full ${
-                    isGroupHub ? 'bg-purple-600' : 'bg-primary-600'
-                  }`} />
-                )}
               </button>
             </div>
             
@@ -598,15 +566,21 @@ Code: ${event.shareCode}`,
                     <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 ${
                       isGroupHub ? 'bg-purple-100' : 'bg-primary-100'
                     }`}>
-                      <span className="text-3xl">📲</span>
+                      <span className="text-3xl">{isPublicEvent && !isGroupHub ? '🔗' : '📲'}</span>
                     </div>
                     <h4 className="font-bold text-gray-900 mb-1">
-                      {isGroupHub ? 'Invite friends to join' : 'Invite golfers to play'}
+                      {isGroupHub 
+                        ? 'Invite friends to join' 
+                        : isPublicEvent 
+                          ? 'Share this event' 
+                          : 'Invite golfers to play'}
                     </h4>
                     <p className="text-sm text-gray-500">
                       {isGroupHub 
                         ? 'Send a link — they tap it and join your group'
-                        : 'Send a link — they tap it and join your game'}
+                        : isPublicEvent
+                          ? 'Anyone with the link can join — no code needed'
+                          : 'Send a link or code — they tap it and join your game'}
                     </p>
                   </div>
 
@@ -647,8 +621,8 @@ Code: ${event.shareCode}`,
                     </button>
                   </div>
 
-                  {/* Or divider + code */}
-                  {event.shareCode && (
+                  {/* Or divider + code — only for private events and groups */}
+                  {event.shareCode && (!isPublicEvent || isGroupHub) && (
                     <>
                       <div className="flex items-center gap-3">
                         <div className="flex-1 h-px bg-gray-200" />
@@ -792,7 +766,7 @@ Code: ${event.shareCode}`,
                         : 'bg-gray-200 text-gray-500 cursor-not-allowed'
                     }`}
                   >
-                    {isGroupHub ? 'Add Member' : 'Add Golfer'}
+                    {isGroupHub ? 'Add Member' : 'Add Guest'}
                   </button>
                 </div>
               )}
@@ -952,6 +926,120 @@ Code: ${event.shareCode}`,
           onClose={() => setShowStatusLevels(false)}
           currentLevel={selectedPlayer?.verifiedStatus?.statusLevel || currentProfile?.verifiedStatus?.statusLevel || 0}
         />
+      )}
+
+      {/* ========== FAB + Action Sheet ========== */}
+      {!event.isCompleted && (
+        <>
+          {/* FAB Button */}
+          <button
+            onClick={() => setShowFabMenu(true)}
+            className="fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full bg-gradient-to-br from-accent to-orange-500 text-white shadow-lg shadow-orange-300/40 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
+          >
+            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6v12m6-6H6" />
+            </svg>
+          </button>
+
+          {/* Bottom-up Action Sheet */}
+          {showFabMenu && (
+            <div
+              className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm"
+              onClick={() => setShowFabMenu(false)}
+            >
+              <div
+                className="w-full max-w-lg bg-white dark:bg-slate-800 rounded-t-2xl shadow-2xl animate-slide-up pb-safe"
+                onClick={e => e.stopPropagation()}
+              >
+                {/* Handle bar */}
+                <div className="flex justify-center pt-3 pb-2">
+                  <div className="w-10 h-1 bg-gray-300 dark:bg-gray-600 rounded-full" />
+                </div>
+
+                <div className="px-5 pb-6 space-y-3">
+                  <h3 className="text-base font-bold text-gray-900 dark:text-white text-center mb-4">
+                    {isGroupHub ? 'Add to Group' : 'Add to Event'}
+                  </h3>
+
+                  {/* Option 1: Invite a Golfer */}
+                  <button
+                    onClick={() => {
+                      setShowFabMenu(false);
+                      setAddModalTab('invite');
+                      setShowAddModal(true);
+                    }}
+                    className="w-full flex items-center gap-4 p-4 bg-primary-50 dark:bg-primary-900/30 hover:bg-primary-100 dark:hover:bg-primary-900/50 border-2 border-primary-200 dark:border-primary-800 rounded-xl transition-colors"
+                  >
+                    <div className="w-12 h-12 rounded-full bg-primary-600 flex items-center justify-center flex-shrink-0 shadow-md">
+                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 text-left">
+                      <div className="font-bold text-gray-900 dark:text-white text-sm">
+                        {isGroupHub ? 'Invite to Group' : 'Invite a Golfer'}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        Send a link or code — they join with the app
+                      </div>
+                    </div>
+                    <svg className="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+
+                  {/* Option 2: Add a Guest */}
+                  <button
+                    onClick={() => {
+                      setShowFabMenu(false);
+                      setAddModalTab('manual');
+                      setShowAddModal(true);
+                    }}
+                    disabled={!isGroupHub && (!courseSelected || !teeSelected)}
+                    className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-colors ${
+                      isGroupHub || (courseSelected && teeSelected)
+                        ? 'bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30 border-amber-200 dark:border-amber-800'
+                        : 'bg-gray-50 dark:bg-gray-700/30 border-gray-200 dark:border-gray-600 opacity-50 cursor-not-allowed'
+                    }`}
+                  >
+                    <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 shadow-md ${
+                      isGroupHub || (courseSelected && teeSelected)
+                        ? 'bg-amber-500'
+                        : 'bg-gray-400'
+                    }`}>
+                      <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 text-left">
+                      <div className="font-bold text-gray-900 dark:text-white text-sm">
+                        {isGroupHub ? 'Add Member by Name' : 'Add a Guest'}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        {isGroupHub
+                          ? 'Add someone manually by name'
+                          : (!courseSelected || !teeSelected)
+                            ? 'Set up course & tee first'
+                            : 'Playing but not on the app — add by name'}
+                      </div>
+                    </div>
+                    <svg className="w-5 h-5 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+
+                  {/* Cancel */}
+                  <button
+                    onClick={() => setShowFabMenu(false)}
+                    className="w-full py-3 text-gray-500 dark:text-gray-400 text-sm font-semibold hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

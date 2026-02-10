@@ -603,8 +603,13 @@ const JoinEventPage: React.FC = () => {
           <span className="text-base">{event.isHome ? '🏠' : '⛳'}</span>
         </div>
         <div className="flex-1 min-w-0">
-          <div className="font-semibold text-sm text-gray-900 dark:text-white truncate">
+          <div className="font-semibold text-sm text-gray-900 dark:text-white truncate flex items-center gap-1.5">
             {event.name || 'Golf Game'}
+            {event.isPublic === false && (
+              <svg className="w-3 h-3 text-gray-400 dark:text-gray-500 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+              </svg>
+            )}
           </div>
           {/* Course & Location line */}
           <div className="text-xs text-gray-600 dark:text-gray-300 truncate flex items-center gap-1">

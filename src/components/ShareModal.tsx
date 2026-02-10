@@ -53,6 +53,7 @@ const ShareModal: React.FC<ShareModalProps> = ({ eventId, isOpen, onClose }) => 
   if (!event) return null;
 
   const isGroupHub = event.hubType === 'group';
+  const isPublic = !!event.isPublic;
   const shareUrl = event.shareCode ? `${window.location.origin}/join/${event.shareCode}` : '';
 
   const handleCopy = (text: string, type: string) => {
@@ -204,28 +205,36 @@ const ShareModal: React.FC<ShareModalProps> = ({ eventId, isOpen, onClose }) => 
                     </svg>
                   </button>
 
-                  {/* Join Code - visible but secondary */}
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 h-px bg-gray-200" />
-                    <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Or share the code</span>
-                    <div className="flex-1 h-px bg-gray-200" />
-                  </div>
-                  <button
-                    onClick={() => handleCopy(event.shareCode!, 'Code')}
-                    className="w-full bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl p-3 hover:border-primary-400 hover:bg-primary-50 transition-all group"
-                  >
-                    <span className="text-2xl font-mono font-black text-gray-800 tracking-[0.2em] group-hover:text-primary-700">
-                      {event.shareCode}
-                    </span>
-                    <p className="text-[10px] text-gray-400 mt-0.5 group-hover:text-primary-600">Tap to copy</p>
-                  </button>
+                  {/* Join Code - only for private events and groups */}
+                  {(!isPublic || isGroupHub) && (
+                    <>
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1 h-px bg-gray-200" />
+                        <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Or share the code</span>
+                        <div className="flex-1 h-px bg-gray-200" />
+                      </div>
+                      <button
+                        onClick={() => handleCopy(event.shareCode!, 'Code')}
+                        className="w-full bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl p-3 hover:border-primary-400 hover:bg-primary-50 transition-all group"
+                      >
+                        <span className="text-2xl font-mono font-black text-gray-800 tracking-[0.2em] group-hover:text-primary-700">
+                          {event.shareCode}
+                        </span>
+                        <p className="text-[10px] text-gray-400 mt-0.5 group-hover:text-primary-600">Tap to copy</p>
+                      </button>
+                    </>
+                  )}
 
                   {/* How it works for grandma */}
                   <div className={`p-3 rounded-xl text-xs ${
                     isGroupHub ? 'bg-purple-50 text-purple-700' : 'bg-primary-50 text-primary-700'
                   }`}>
                     <p className="font-semibold mb-1">How it works:</p>
-                    <p>Send the link. They tap it. They're in. That's it.</p>
+                    {isPublic ? (
+                      <p>Send the link. They tap it. They're in. No code needed.</p>
+                    ) : (
+                      <p>Send the link or code. They tap the link (or enter the code) and they're in.</p>
+                    )}
                   </div>
                 </div>
               ) : (
