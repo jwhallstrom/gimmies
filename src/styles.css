@@ -3,8 +3,9 @@
 @tailwind utilities;
 
 /* ==========================================================================
-   Root Layout - Cross-Platform PWA Safe Area & Dynamic Viewport
-   Works on both iOS (notch, home indicator) and Android (status bar, gesture nav)
+   Root Layout - iOS PWA Safe Area & Dynamic Viewport
+   CRITICAL: This layout structure is tuned for iOS 26.2 PWA safe areas
+   DO NOT MODIFY without extensive iOS testing - position:fixed on body is required!
    ========================================================================== */
 
 html {
@@ -37,37 +38,12 @@ body {
 }
 
 #root {
-  /* Fallback for browsers without dvh support (older Android) */
-  height: 100vh;
-  height: 100dvh;
-  min-height: 100vh;
-  min-height: 100dvh;
-  /* JS-set variable as ultimate fallback for tricky Android browsers */
-  height: var(--app-height, 100vh);
+  height: 100%;
+  width: 100%;
+  background-color: #09243F;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-/* Header - safe area padding for notch/Dynamic Island (iOS) and status bar (Android).
-   Uses max() to guarantee a minimum 10px pad even when env() returns 0 (Android non-notch). */
-header {
-  /* Ancient browser fallback */
-  padding-top: 10px;
-  /* Modern: at least 10px, or the safe-area value for devices with notches */
-  padding-top: max(10px, env(safe-area-inset-top, 10px));
-}
-
-/* Fixed footer - extends into home indicator area (iOS) / gesture bar (Android) */
-footer {
-  /* Fallback for browsers that don't support env() */
-  padding-bottom: 8px;
-  /* On iOS: adds home indicator inset. On Android: env() is 0 so just 8px base. */
-  padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
-  /* Base nav height. On iOS: taller for home indicator. */
-  min-height: 68px;
-  min-height: calc(68px + env(safe-area-inset-bottom, 0px));
-  background-color: inherit;
 }
 
 /* ==========================================================================
