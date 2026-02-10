@@ -42,6 +42,9 @@ export function getUnreadCount(events: any[], currentProfileId: string | undefin
   if (!currentProfileId) return 0;
   
   const lastReadMap = getLastReadTimestamps();
+  let muteSettings: Record<string, string> = {};
+  try { muteSettings = JSON.parse(localStorage.getItem('gimmies.chatMute.v1') || '{}'); } catch {}
+  
   let total = 0;
   
   events.forEach((event) => {
@@ -49,17 +52,21 @@ export function getUnreadCount(events: any[], currentProfileId: string | undefin
     if (event.hubType !== 'group') return;
     if (!event.golfers?.some((g: any) => g.profileId === currentProfileId)) return;
     
+    // Skip muted chats
+    const mutedUntil = muteSettings[event.id];
+    if (mutedUntil === 'forever' || (mutedUntil && new Date(mutedUntil).getTime() > Date.now())) return;
+    
     const chat = event.chat || [];
     if (chat.length === 0) return;
     
     const lastRead = lastReadMap[event.id];
     if (!lastRead) {
-      // Never read - count all messages not from self
-      total += chat.filter((m: any) => m.profileId !== currentProfileId).length;
+      // Never read - count all messages not from self (exclude deleted)
+      total += chat.filter((m: any) => m.profileId !== currentProfileId && !m.isDeleted).length;
     } else {
-      // Count messages after lastRead that aren't from self
+      // Count messages after lastRead that aren't from self (exclude deleted)
       total += chat.filter((m: any) => 
-        m.createdAt > lastRead && m.profileId !== currentProfileId
+        m.createdAt > lastRead && m.profileId !== currentProfileId && !m.isDeleted
       ).length;
     }
   });

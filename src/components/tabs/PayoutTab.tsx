@@ -110,13 +110,13 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
   // Buy-in and net calculations
   const { buyinByGolfer, netByGolfer, gameBreakdown } = useMemo(() => {
     const buyins: Record<string, number> = {};
-    const breakdown: Record<string, { nassau: number; skins: number; pinky: number; greenie: number }> = {};
+    const breakdown: Record<string, { nassau: number; skins: number; pinky: number; greenie: number; stableford: number; ninePoint: number; bingoBangoBongo: number; wolf: number; dots: number }> = {};
     
     event.golfers.forEach((eg: any) => { 
       const gid = eg.profileId || eg.customName;
       if (gid) {
         buyins[gid] = 0;
-        breakdown[gid] = { nassau: 0, skins: 0, pinky: 0, greenie: 0 };
+        breakdown[gid] = { nassau: 0, skins: 0, pinky: 0, greenie: 0, stableford: 0, ninePoint: 0, bingoBangoBongo: 0, wolf: 0, dots: 0 };
       }
     });
     
@@ -156,6 +156,14 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
       participants.forEach((gid: string) => { buyins[gid] = (buyins[gid] || 0) + sk.fee; });
     });
     
+    // Stableford buy-in (pot-based like skins)
+    const stablefordArr = Array.isArray(event.games.stableford) ? event.games.stableford : [];
+    stablefordArr.forEach((s: any) => {
+      const base = event.golfers.map((g: any) => g.profileId || g.customName || g.displayName).filter(Boolean);
+      const participants = s.participantGolferIds?.length > 1 ? s.participantGolferIds : base;
+      participants.forEach((gid: string) => { buyins[gid] = (buyins[gid] || 0) + s.fee; });
+    });
+
     // Tally winnings by game type
     payouts.nassau.forEach(n => {
       Object.entries(n.winningsByGolfer).forEach(([gid, amt]) => {
@@ -178,11 +186,40 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
         if (breakdown[gid]) breakdown[gid].greenie += amt;
       });
     });
+    // New game types
+    (payouts.stableford || []).forEach((s: any) => {
+      Object.entries(s.winningsByGolfer || {}).forEach(([gid, amt]) => {
+        if (breakdown[gid]) breakdown[gid].stableford += amt as number;
+      });
+    });
+    (payouts.ninePoint || []).forEach((np: any) => {
+      Object.entries(np.owingsByGolfer || {}).forEach(([gid, amt]) => {
+        if (breakdown[gid]) breakdown[gid].ninePoint += amt as number;
+      });
+    });
+    (payouts.bingoBangoBongo || []).forEach((b: any) => {
+      Object.entries(b.owingsByGolfer || {}).forEach(([gid, amt]) => {
+        if (breakdown[gid]) breakdown[gid].bingoBangoBongo += amt as number;
+      });
+    });
+    (payouts.wolf || []).forEach((w: any) => {
+      Object.entries(w.owingsByGolfer || {}).forEach(([gid, amt]) => {
+        if (breakdown[gid]) breakdown[gid].wolf += amt as number;
+      });
+    });
+    (payouts.dots || []).forEach((d: any) => {
+      Object.entries(d.owingsByGolfer || {}).forEach(([gid, amt]) => {
+        if (breakdown[gid]) breakdown[gid].dots += amt as number;
+      });
+    });
     
     const nets: Record<string, number> = {};
     Object.keys(buyins).forEach((gid) => {
-      const totalWinnings = (breakdown[gid]?.nassau || 0) + (breakdown[gid]?.skins || 0) + 
-                           (breakdown[gid]?.pinky || 0) + (breakdown[gid]?.greenie || 0);
+      const b = breakdown[gid];
+      const totalWinnings = (b?.nassau || 0) + (b?.skins || 0) + 
+                           (b?.pinky || 0) + (b?.greenie || 0) +
+                           (b?.stableford || 0) + (b?.ninePoint || 0) + (b?.bingoBangoBongo || 0) +
+                           (b?.wolf || 0) + (b?.dots || 0);
       nets[gid] = totalWinnings - (buyins[gid] || 0);
     });
     
@@ -586,35 +623,44 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
         );
       })}
 
-      {/* Greenie/Pinky combined if they exist */}
-      {(greenieArray.length > 0 || pinkyArray.length > 0) && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-          <div className="px-4 py-3 bg-gradient-to-r from-green-50 to-white border-b border-gray-100">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">🎯</span>
-              <span className="font-bold text-gray-900">Side Games</span>
+      {/* Side Games combined card */}
+      {(() => {
+        const stablefordArr = Array.isArray(event.games.stableford) ? event.games.stableford : [];
+        const ninePointArr = Array.isArray(event.games.ninePoint) ? event.games.ninePoint : [];
+        const bbbArr = Array.isArray(event.games.bingoBangoBongo) ? event.games.bingoBangoBongo : [];
+        const wolfArr = Array.isArray(event.games.wolf) ? event.games.wolf : [];
+        const dotsArr = Array.isArray(event.games.dots) ? event.games.dots : [];
+        const hasSideGames = greenieArray.length > 0 || pinkyArray.length > 0 || stablefordArr.length > 0 || ninePointArr.length > 0 || bbbArr.length > 0 || wolfArr.length > 0 || dotsArr.length > 0;
+        if (!hasSideGames) return null;
+        const items: { name: string; emoji: string; amount: number }[] = [];
+        if (greenieArray.length > 0) items.push({ name: 'Greenies', emoji: '🟢', amount: myBreakdown?.greenie || 0 });
+        if (pinkyArray.length > 0) items.push({ name: 'Pinkies', emoji: '🤙', amount: myBreakdown?.pinky || 0 });
+        if (stablefordArr.length > 0) items.push({ name: 'Stableford', emoji: '📊', amount: myBreakdown?.stableford || 0 });
+        if (ninePointArr.length > 0) items.push({ name: '9-Point', emoji: '9️⃣', amount: myBreakdown?.ninePoint || 0 });
+        if (bbbArr.length > 0) items.push({ name: 'Bingo Bango Bongo', emoji: '🎯', amount: myBreakdown?.bingoBangoBongo || 0 });
+        if (wolfArr.length > 0) items.push({ name: 'Wolf', emoji: '🐺', amount: myBreakdown?.wolf || 0 });
+        if (dotsArr.length > 0) items.push({ name: 'Dots', emoji: '⚡', amount: myBreakdown?.dots || 0 });
+        return (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-4 py-3 bg-gradient-to-r from-green-50 to-white border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">🎯</span>
+                <span className="font-bold text-gray-900">Side Games</span>
+              </div>
+            </div>
+            <div className="px-4 py-3 space-y-2">
+              {items.map(item => (
+                <div key={item.name} className="flex items-center justify-between text-sm">
+                  <span className="text-gray-600">{item.emoji} {item.name}</span>
+                  <span className={`font-semibold ${item.amount >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {signedCurrency(item.amount)}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
-          <div className="px-4 py-3 space-y-2">
-            {greenieArray.length > 0 && (
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">Greenies</span>
-                <span className={`font-semibold ${(myBreakdown?.greenie || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {signedCurrency(myBreakdown?.greenie || 0)}
-                </span>
-              </div>
-            )}
-            {pinkyArray.length > 0 && (
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-gray-600">Pinkies</span>
-                <span className={`font-semibold ${(myBreakdown?.pinky || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {signedCurrency(myBreakdown?.pinky || 0)}
-                </span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* Running Total (during event, not completed) */}
       {!isCompleted && myNet != null && (
@@ -688,9 +734,39 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
                 </span>
               </div>
             )}
+            {(myBreakdown.stableford || 0) !== 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">📊 Stableford</span>
+                <span className={`font-semibold ${myBreakdown.stableford > 0 ? 'text-green-600' : 'text-red-600'}`}>{signedCurrency(myBreakdown.stableford)}</span>
+              </div>
+            )}
+            {(myBreakdown.ninePoint || 0) !== 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">9️⃣ 9-Point</span>
+                <span className={`font-semibold ${myBreakdown.ninePoint > 0 ? 'text-green-600' : 'text-red-600'}`}>{signedCurrency(myBreakdown.ninePoint)}</span>
+              </div>
+            )}
+            {(myBreakdown.bingoBangoBongo || 0) !== 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">🎯 Bingo Bango Bongo</span>
+                <span className={`font-semibold ${myBreakdown.bingoBangoBongo > 0 ? 'text-green-600' : 'text-red-600'}`}>{signedCurrency(myBreakdown.bingoBangoBongo)}</span>
+              </div>
+            )}
+            {(myBreakdown.wolf || 0) !== 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">🐺 Wolf</span>
+                <span className={`font-semibold ${myBreakdown.wolf > 0 ? 'text-green-600' : 'text-red-600'}`}>{signedCurrency(myBreakdown.wolf)}</span>
+              </div>
+            )}
+            {(myBreakdown.dots || 0) !== 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">⚡ Dots</span>
+                <span className={`font-semibold ${myBreakdown.dots > 0 ? 'text-green-600' : 'text-red-600'}`}>{signedCurrency(myBreakdown.dots)}</span>
+              </div>
+            )}
             <div className="pt-2 border-t border-gray-100 flex justify-between text-sm">
               <span className="text-gray-600">Total Buy-in</span>
-              <span className="font-semibold text-gray-900">−{currency(myBuyin)}</span>
+              <span className="font-semibold text-gray-900">-{currency(myBuyin)}</span>
             </div>
           </div>
         </div>

@@ -80,6 +80,7 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
   const showBack = view === 'back' || view === 'full';
 
   // Filter golfers based on scorecard view permissions
+  // When focusGolferId is set and we're in 'individual' mode, show ONLY that golfer
   const visibleGolfers = event.golfers.filter(eventGolfer => {
     const profile = eventGolfer.profileId ? profiles.find(p => p.id === eventGolfer.profileId) : null;
     // Use displayName snapshot first (for cross-device compatibility), fall back to profile lookup, then customName
@@ -89,14 +90,19 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
     const golferId = eventGolfer.profileId || eventGolfer.customName;
     if (!golferId) return false; // Ensure golferId is defined
 
+    // If user clicked on a specific player and view is 'individual', show ONLY that player
+    if (focusGolferId && event.scorecardView === 'individual') {
+      return golferId === focusGolferId;
+    }
+
     const isEventOwner = currentProfile?.id === event.ownerProfileId;
     const isCurrentUser = golferId === currentProfile?.id;
 
     // Event owner permissions
     if (isEventOwner) {
       if (event.scorecardView === 'individual') {
-        // Only show owner's own scorecard
-        return isCurrentUser;
+        // Only show owner's own scorecard (or focused player if set)
+        return focusGolferId ? golferId === focusGolferId : isCurrentUser;
       } else if (event.scorecardView === 'team') {
         // Show owner's team in Nassau games
         if (!currentProfile) return false;
@@ -174,26 +180,15 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
   const teamHoleMeta = useMemo(() => holes.find((h: any) => h.number === teamHole) || null, [holes, teamHole]);
 
   return (
-    <div className="overflow-x-auto rounded-lg shadow-inner bg-white/95 backdrop-blur border border-primary-900/10">
-      {/* Done header - sticky when editing */}
+    <div className={`overflow-x-auto rounded-lg shadow-inner bg-white/95 backdrop-blur border border-primary-900/10 ${onDone && !event.isCompleted ? 'pb-20' : ''}`}>
+      {/* Slim info header when editing */}
       {onDone && !event.isCompleted && (
-        <div className="sticky top-0 z-20 bg-gradient-to-r from-green-500 to-emerald-600 px-3 py-2.5 flex items-center justify-between shadow-md">
-          <div className="flex items-center gap-2 text-white">
-            <span className="text-lg">⛳</span>
-            <div>
-              <div className="font-bold text-sm">Entering Scores</div>
-              <div className="text-[10px] text-white/80">Tap a cell to enter • Auto-saves</div>
-            </div>
+        <div className="sticky top-0 z-20 bg-gradient-to-r from-green-500 to-emerald-600 px-3 py-2 flex items-center gap-2 shadow-md">
+          <span className="text-lg">⛳</span>
+          <div className="text-white">
+            <div className="font-bold text-sm">Entering Scores</div>
+            <div className="text-[10px] text-white/80">Tap a cell to enter • Auto-saves</div>
           </div>
-          <button
-            onClick={handleDone}
-            className="flex items-center gap-1.5 px-4 py-2 bg-white text-green-700 font-extrabold text-sm rounded-xl shadow-lg hover:bg-green-50 active:scale-95 transition-all"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
-            </svg>
-            Done
-          </button>
         </div>
       )}
       
@@ -268,13 +263,12 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
         )}
 
         <div className="text-[8px] sm:text-[9px] flex flex-wrap gap-1 leading-tight">
-          <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded bg-fuchsia-600 block"></span> ≤-3</span>
-          <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded bg-amber-500 block"></span> -2</span>
-          <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded bg-green-500 block"></span> -1</span>
-          <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded bg-neutral-200 border border-neutral-300 block"></span> E</span>
-          <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded bg-orange-200 block"></span> +1</span>
-          <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded bg-red-300 block"></span> +2</span>
-          <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded bg-red-600 block"></span> 3+</span>
+          <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded bg-amber-400 block"></span> Eagle</span>
+          <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded bg-red-500 block"></span> Birdie</span>
+          <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded bg-neutral-200 border border-neutral-300 block"></span> Par</span>
+          <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded bg-blue-200 block"></span> Bogey</span>
+          <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded bg-blue-400 block"></span> Dbl</span>
+          <span className="flex items-center gap-0.5"><span className="w-2 h-2 rounded bg-blue-700 block"></span> 3+</span>
         </div>
       </div>
 
@@ -380,11 +374,11 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
                       <span className="font-bold text-sm text-white">{displayName}</span>
                       {scoreToPar != null && (
                         <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${
-                          scoreToPar < 0 ? 'bg-green-400 text-green-900' :
-                          scoreToPar === 0 ? 'bg-white/90 text-blue-800' :
-                          'bg-red-400 text-red-900'
+                          scoreToPar < 0 ? 'bg-red-500 text-white' :
+                          scoreToPar === 0 ? 'bg-white/90 text-gray-800' :
+                          'bg-gray-600 text-white'
                         }`}>
-                          {scoreToPar > 0 ? `+${scoreToPar}` : scoreToPar}
+                          {scoreToPar === 0 ? 'E' : scoreToPar > 0 ? `+${scoreToPar}` : scoreToPar}
                         </span>
                       )}
                     </div>
@@ -443,15 +437,15 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
                         const hcpStrokes = strokesForHole(event, golferId, s.hole, profiles);
                         const gross = s.strokes;
                         const diff = gross != null && par != null ? gross - par : null;
-                        let colorClass = 'bg-white text-gray-900'; // Default with visible text
+                        // Golf convention: Red = under par (birdie), Blue = over par (bogey)
+                        let colorClass = 'bg-white text-gray-900';
                         if (diff != null) {
-                          if (diff <= -3) colorClass = 'bg-fuchsia-600 text-white font-semibold';
-                          else if (diff === -2) colorClass = 'bg-amber-500 text-gray-900 font-semibold';
-                          else if (diff === -1) colorClass = 'bg-green-500 text-white font-semibold';
-                          else if (diff === 0) colorClass = 'bg-neutral-100 text-gray-900';
-                          else if (diff === 1) colorClass = 'bg-orange-200 text-gray-900';
-                          else if (diff === 2) colorClass = 'bg-red-300 text-red-900 font-semibold';
-                          else if (diff >= 3) colorClass = 'bg-red-600 text-white font-semibold';
+                          if (diff <= -2) colorClass = 'bg-amber-400 text-amber-950 font-bold';       // Eagle+: gold
+                          else if (diff === -1) colorClass = 'bg-red-500 text-white font-semibold';    // Birdie: RED
+                          else if (diff === 0) colorClass = 'bg-neutral-100 text-gray-900';            // Par: neutral
+                          else if (diff === 1) colorClass = 'bg-blue-200 text-blue-900';               // Bogey: blue
+                          else if (diff === 2) colorClass = 'bg-blue-400 text-white font-semibold';    // Double: darker blue
+                          else if (diff >= 3) colorClass = 'bg-blue-700 text-white font-semibold';     // Triple+: darkest blue
                         }
                         
                         const cellKey = `${golferId}-${s.hole}`;
@@ -588,15 +582,15 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
                         const hcpStrokes = strokesForHole(event, golferId, s.hole, profiles);
                         const gross = s.strokes;
                         const diff = gross != null && par != null ? gross - par : null;
-                        let colorClass = 'bg-white text-gray-900'; // Default with visible text
+                        // Golf convention: Red = under par (birdie), Blue = over par (bogey)
+                        let colorClass = 'bg-white text-gray-900';
                         if (diff != null) {
-                          if (diff <= -3) colorClass = 'bg-fuchsia-600 text-white font-semibold';
-                          else if (diff === -2) colorClass = 'bg-amber-500 text-gray-900 font-semibold';
-                          else if (diff === -1) colorClass = 'bg-green-500 text-white font-semibold';
-                          else if (diff === 0) colorClass = 'bg-neutral-100 text-gray-900';
-                          else if (diff === 1) colorClass = 'bg-orange-200 text-gray-900';
-                          else if (diff === 2) colorClass = 'bg-red-300 text-red-900 font-semibold';
-                          else if (diff >= 3) colorClass = 'bg-red-600 text-white font-semibold';
+                          if (diff <= -2) colorClass = 'bg-amber-400 text-amber-950 font-bold';       // Eagle+: gold
+                          else if (diff === -1) colorClass = 'bg-red-500 text-white font-semibold';    // Birdie: RED
+                          else if (diff === 0) colorClass = 'bg-neutral-100 text-gray-900';            // Par: neutral
+                          else if (diff === 1) colorClass = 'bg-blue-200 text-blue-900';               // Bogey: blue
+                          else if (diff === 2) colorClass = 'bg-blue-400 text-white font-semibold';    // Double: darker blue
+                          else if (diff >= 3) colorClass = 'bg-blue-700 text-white font-semibold';     // Triple+: darkest blue
                         }
                         
                         const cellKey = `${golferId}-${s.hole}`;
@@ -708,6 +702,21 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Fixed bottom Done CTA - always visible, no scrolling needed */}
+      {onDone && !event.isCompleted && (
+        <div className="fixed bottom-0 left-0 right-0 z-50 p-3 bg-gradient-to-t from-slate-900/95 via-slate-900/90 to-transparent">
+          <button
+            onClick={handleDone}
+            className="w-full max-w-lg mx-auto flex items-center justify-center gap-2 py-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-extrabold text-lg rounded-2xl shadow-xl shadow-green-900/30 hover:from-green-600 hover:to-emerald-700 active:scale-[0.98] transition-all"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+            </svg>
+            Done
+          </button>
         </div>
       )}
     </div>

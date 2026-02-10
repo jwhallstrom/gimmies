@@ -5,6 +5,8 @@ import { nanoid } from 'nanoid/non-secure';
 import { useNavigate } from 'react-router-dom';
 import { calculateEventPayouts } from '../../games/payouts';
 import { EventSettlement } from '../wallet';
+import { DOT_DEFINITIONS, DEFAULT_DOTS } from '../../games/dots';
+import type { DotCategory, BingoBangoBongoHoleResult, WolfHoleResult, DotsPlayerResult } from '../../state/types';
 
 type Props = { eventId: string };
 
@@ -12,26 +14,76 @@ const GAME_TYPES = [
   {
     id: 'nassau',
     name: 'Nassau',
+    emoji: '🏌️',
     description: 'Three bets in one: Front 9, Back 9, and Total 18. Can be played individually or as teams. The classic golf bet.',
-    hasNetOption: true
+    hasNetOption: true,
+    minPlayers: 2
   },
   {
     id: 'skins',
     name: 'Skins',
-    description: 'Each hole is worth a "skin". The player with the lowest score on a hole wins the skin. By default, ties are a push (no skin). You can optionally enable carryovers per Skins game.',
-    hasNetOption: true
+    emoji: '💰',
+    description: 'Each hole is worth a "skin". The player with the lowest score on a hole wins the skin. Ties can push or carry.',
+    hasNetOption: true,
+    minPlayers: 2
+  },
+  {
+    id: 'stableford',
+    name: 'Stableford',
+    emoji: '📊',
+    description: 'Points per hole based on score vs par. Blow up a hole? Just pick up — no penalty beyond 0 points. Encourages aggressive play.',
+    hasNetOption: true,
+    minPlayers: 2
+  },
+  {
+    id: 'ninePoint',
+    name: '9-Point',
+    emoji: '9️⃣',
+    description: 'Perfect for threesomes. 9 points every hole: Low=5, Mid=3, High=1. Ties split evenly. Every hole matters.',
+    hasNetOption: true,
+    minPlayers: 3,
+    maxPlayers: 3
+  },
+  {
+    id: 'bingoBangoBongo',
+    name: 'Bingo Bango Bongo',
+    emoji: '🎯',
+    description: '3 points per hole: First on green (Bingo), closest to pin when all on (Bango), first to hole out (Bongo). Great for mixed abilities.',
+    hasNetOption: false,
+    minPlayers: 2
+  },
+  {
+    id: 'wolf',
+    name: 'Wolf',
+    emoji: '🐺',
+    description: 'The drama king. Rotating wolf picks a partner or goes Lone Wolf (3x points). 4 players required. Maximum trash talk.',
+    hasNetOption: false,
+    minPlayers: 4,
+    maxPlayers: 4
+  },
+  {
+    id: 'dots',
+    name: 'Dots / Junk',
+    emoji: '⚡',
+    description: 'Collection of small side bets: Birdies, Sandies, Chip-ins, 3-putts, and more. Perfect add-on that keeps everyone engaged.',
+    hasNetOption: false,
+    minPlayers: 2
   },
   {
     id: 'pinky',
     name: 'Pinky',
-    description: 'At the end of the round, each player declares how many "pinkys" they had. For each pinky, that player owes each other player the set fee amount.',
-    hasNetOption: false
+    emoji: '🤙',
+    description: 'At the end of the round, each player declares how many "pinkys" they had. For each pinky, that player owes each other player the fee.',
+    hasNetOption: false,
+    minPlayers: 2
   },
   {
     id: 'greenie',
     name: 'Greenie',
-    description: 'At the end of the round, each player declares how many "greenies" they had (hitting the green in regulation on par 3s). For each greenie, ALL OTHER players owe that player the set fee amount.',
-    hasNetOption: false
+    emoji: '🟢',
+    description: 'Each player declares greenies (GIR on par 3s). For each greenie, ALL OTHER players owe that player the fee.',
+    hasNetOption: false,
+    minPlayers: 2
   }
 ];
 
@@ -54,6 +106,11 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
   const [skinsSetupId, setSkinsSetupId] = useState<string | null>(null);
   const [pinkySetupId, setPinkySetupId] = useState<string | null>(null);
   const [greenieSetupId, setGreenieSetupId] = useState<string | null>(null);
+  const [stablefordSetupId, setStablefordSetupId] = useState<string | null>(null);
+  const [ninePointSetupId, setNinePointSetupId] = useState<string | null>(null);
+  const [bbbSetupId, setBbbSetupId] = useState<string | null>(null);
+  const [wolfSetupId, setWolfSetupId] = useState<string | null>(null);
+  const [dotsSetupId, setDotsSetupId] = useState<string | null>(null);
   const [showSettlements, setShowSettlements] = useState(false);
   
   const completeEvent = useStore((s) => s.completeEvent);
@@ -186,7 +243,58 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
     }
     useStore.getState().setGreenieResults(eventId, greenieId, updatedResults);
   };
-  
+
+  // ============================================================================
+  // New game type arrays and management functions
+  // ============================================================================
+  const stablefordArray: any[] = Array.isArray(event.games.stableford) ? event.games.stableford : [];
+  const ninePointArray: any[] = Array.isArray(event.games.ninePoint) ? event.games.ninePoint : [];
+  const bbbArray: any[] = Array.isArray(event.games.bingoBangoBongo) ? event.games.bingoBangoBongo : [];
+  const wolfArray: any[] = Array.isArray(event.games.wolf) ? event.games.wolf : [];
+  const dotsArray: any[] = Array.isArray(event.games.dots) ? event.games.dots : [];
+
+  const addStableford = (net: boolean) => {
+    const id = nanoid(6);
+    updateEvent(eventId, {
+      games: { ...event.games, stableford: [...stablefordArray, { id, fee: 10, net, system: 'standard', participantGolferIds: gameEligibleIds('nassau') }] }
+    });
+    setStablefordSetupId(id);
+  };
+
+  const addNinePoint = (net: boolean) => {
+    const id = nanoid(6);
+    const eligible = gameEligibleIds('nassau').slice(0, 3);
+    updateEvent(eventId, {
+      games: { ...event.games, ninePoint: [...ninePointArray, { id, fee: 1, net, participantGolferIds: eligible, sweepEnabled: false }] }
+    });
+    setNinePointSetupId(id);
+  };
+
+  const addBingoBangoBongo = () => {
+    const id = nanoid(6);
+    updateEvent(eventId, {
+      games: { ...event.games, bingoBangoBongo: [...bbbArray, { id, fee: 1, participantGolferIds: gameEligibleIds('nassau') }] }
+    });
+    setBbbSetupId(id);
+  };
+
+  const addWolf = () => {
+    const id = nanoid(6);
+    const eligible = gameEligibleIds('nassau').slice(0, 4);
+    updateEvent(eventId, {
+      games: { ...event.games, wolf: [...wolfArray, { id, fee: 1, participantGolferIds: eligible, wolfOrder: eligible, blindWolfEnabled: false }] }
+    });
+    setWolfSetupId(id);
+  };
+
+  const addDots = () => {
+    const id = nanoid(6);
+    updateEvent(eventId, {
+      games: { ...event.games, dots: [...dotsArray, { id, fee: 1, participantGolferIds: gameEligibleIds('nassau'), activeDots: [...DEFAULT_DOTS] }] }
+    });
+    setDotsSetupId(id);
+  };
+
   // Local UI state for bulk assignment modal
   const [bulkAssignState, setBulkAssignState] = React.useState<{ nassauId: string | null; selected: Set<string>; mode: 'assign' | 'roundRobin'; teamId?: string } | null>(null);
 
@@ -271,9 +379,12 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
   const isEventCompleted = eventStatus === 'completed' || event.isCompleted;
   const canEdit = isOwner && !isEventStarted && !isEventCompleted;
 
+  // Must declare hasAnyGames before gamesReady uses it
+  const hasAnyGames = event.games.nassau.length + skinsArray.length + pinkyArray.length + greenieArray.length + stablefordArray.length + ninePointArray.length + bbbArray.length + wolfArray.length + dotsArray.length > 0;
+
   // Check if games are ready to start
   const gamesReady = (() => {
-    if (event.games.nassau.length === 0 && skinsArray.length === 0 && pinkyArray.length === 0 && greenieArray.length === 0) {
+    if (!hasAnyGames) {
       return false;
     }
     // Check Nassau teams
@@ -321,12 +432,11 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
   };
   
   // ========== PAYOUT CALCULATIONS ==========
-  const hasAnyGames = event.games.nassau.length + skinsArray.length + pinkyArray.length + greenieArray.length > 0;
   const myGolferId = currentProfile?.id;
   
   // Calculate payouts
   const payouts = useMemo(() => {
-    if (!hasAnyGames) return { nassau: [], skins: [], pinky: [], greenie: [], totalByGolfer: {} };
+    if (!hasAnyGames) return { nassau: [], skins: [], pinky: [], greenie: [], stableford: [], ninePoint: [], bingoBangoBongo: [], wolf: [], dots: [], totals: {} } as any;
     return calculateEventPayouts(event, profiles);
   }, [event, profiles, hasAnyGames]);
   
@@ -357,12 +467,24 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
         buyin += s.fee || 0;
       }
     });
+
+    // Stableford buy-ins (pot-based like skins)
+    stablefordArray.forEach((s: any) => {
+      const participants = s.participantGolferIds?.length > 1 
+        ? s.participantGolferIds 
+        : event.golfers.map((g: any) => g.profileId || g.customName);
+      if (participants.includes(myGolferId)) {
+        buyin += s.fee || 0;
+      }
+    });
+
+    // Note: 9-Point, BBB, Wolf, Dots are peer-to-peer (no buy-in pot)
     
     const winnings = payouts.totalByGolfer[myGolferId] || 0;
     const net = winnings - buyin;
     
     return { myNet: net, myBuyin: buyin, myWinnings: winnings };
-  }, [payouts.totalByGolfer, myGolferId, event.games.nassau, skinsArray, event.golfers]);
+  }, [payouts.totalByGolfer, myGolferId, event.games.nassau, skinsArray, stablefordArray, event.golfers]);
   
   // Get settlements (what I owe / am owed)
   const allSettlements = useMemo(() => {
@@ -798,6 +920,182 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
         </button>
       ))}
 
+      {/* ========== STABLEFORD CARD ========== */}
+      {stablefordArray.length > 0 && stablefordArray.map((cfg: any) => {
+        const summary = payouts.stableford?.find((s: any) => s.configId === cfg.id);
+        const topPlayer = summary ? Object.entries(summary.pointsByGolfer).sort((a: any, b: any) => b[1] - a[1])[0] : null;
+        return (
+          <div key={cfg.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <button
+              onClick={() => setStablefordSetupId(cfg.id)}
+              className="w-full p-4 text-left hover:bg-slate-50 transition-colors"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">📊</span>
+                  <div>
+                    <div className="font-bold text-gray-900">Stableford</div>
+                    <div className="text-xs text-gray-500">
+                      {cfg.net ? 'Net' : 'Gross'} · {cfg.system === 'modified' ? 'Modified' : 'Standard'} · ${cfg.fee}/player
+                    </div>
+                  </div>
+                </div>
+                <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>
+              </div>
+            </button>
+            {summary && topPlayer && (
+              <div className="px-4 pb-3 border-t border-slate-100 pt-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-gray-500">Leader: <span className="font-bold text-gray-900">{getGolferName(topPlayer[0])}</span></span>
+                  <span className="font-bold text-green-600">{topPlayer[1] as number} pts</span>
+                </div>
+                {myGolferId && summary.pointsByGolfer[myGolferId] !== undefined && (
+                  <div className="text-[10px] text-gray-400 mt-0.5">You: {summary.pointsByGolfer[myGolferId]} pts</div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* ========== 9-POINT CARD ========== */}
+      {ninePointArray.length > 0 && ninePointArray.map((cfg: any) => {
+        const summary = payouts.ninePoint?.find((s: any) => s.configId === cfg.id);
+        return (
+          <div key={cfg.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <button
+              onClick={() => setNinePointSetupId(cfg.id)}
+              className="w-full p-4 text-left hover:bg-slate-50 transition-colors"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">9️⃣</span>
+                  <div>
+                    <div className="font-bold text-gray-900">9-Point</div>
+                    <div className="text-xs text-gray-500">
+                      {cfg.net ? 'Net' : 'Gross'} · ${cfg.fee}/point · 3 players
+                    </div>
+                  </div>
+                </div>
+                <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>
+              </div>
+            </button>
+            {summary && (
+              <div className="px-4 pb-3 border-t border-slate-100 pt-2 space-y-1">
+                {Object.entries(summary.pointsByGolfer).sort((a: any, b: any) => b[1] - a[1]).map(([gid, pts]) => (
+                  <div key={gid} className="flex items-center justify-between text-xs">
+                    <span className={`${gid === myGolferId ? 'font-bold text-gray-900 bg-primary-100 px-1.5 py-0.5 rounded' : 'text-gray-600'}`}>{getGolferName(gid)}</span>
+                    <span className="font-mono font-bold text-primary-700 bg-primary-50 px-2 py-0.5 rounded">{pts as number} pts</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* ========== BINGO BANGO BONGO CARD ========== */}
+      {bbbArray.length > 0 && bbbArray.map((cfg: any) => {
+        const summary = payouts.bingoBangoBongo?.find((s: any) => s.configId === cfg.id);
+        return (
+          <button
+            key={cfg.id}
+            onClick={() => setBbbSetupId(cfg.id)}
+            className="w-full bg-white rounded-xl border border-slate-200 p-4 text-left hover:border-slate-300 transition-colors"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-xl">🎯</span>
+                <div>
+                  <div className="font-bold text-gray-900">Bingo Bango Bongo</div>
+                  <div className="text-xs text-gray-500">${cfg.fee}/point · 3 pts/hole</div>
+                </div>
+              </div>
+              <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>
+            </div>
+            {summary && (
+              <div className="mt-2 pt-2 border-t border-slate-100 grid grid-cols-3 gap-2 text-[10px] text-center">
+                <div><span className="font-bold text-gray-700">Bingo</span></div>
+                <div><span className="font-bold text-gray-700">Bango</span></div>
+                <div><span className="font-bold text-gray-700">Bongo</span></div>
+              </div>
+            )}
+          </button>
+        );
+      })}
+
+      {/* ========== WOLF CARD ========== */}
+      {wolfArray.length > 0 && wolfArray.map((cfg: any) => {
+        const summary = payouts.wolf?.find((s: any) => s.configId === cfg.id);
+        const holesPlayed = summary?.holeResults?.length || 0;
+        return (
+          <div key={cfg.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <button
+              onClick={() => setWolfSetupId(cfg.id)}
+              className="w-full p-4 text-left hover:bg-slate-50 transition-colors"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <span className="text-xl">🐺</span>
+                  <div>
+                    <div className="font-bold text-gray-900">Wolf</div>
+                    <div className="text-xs text-gray-500">
+                      ${cfg.fee}/point · {holesPlayed}/18 holes · 4 players
+                    </div>
+                  </div>
+                </div>
+                <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>
+              </div>
+            </button>
+            {summary && Object.keys(summary.pointsByGolfer).length > 0 && (
+              <div className="px-4 pb-3 border-t border-slate-100 pt-2 space-y-1">
+                {Object.entries(summary.pointsByGolfer).sort((a: any, b: any) => b[1] - a[1]).map(([gid, pts]) => (
+                  <div key={gid} className="flex items-center justify-between text-xs">
+                    <span className={`${gid === myGolferId ? 'font-bold text-gray-900' : 'text-gray-600'}`}>{getGolferName(gid)}</span>
+                    <span className={`font-mono font-bold ${(pts as number) > 0 ? 'text-green-600' : (pts as number) < 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                      {(pts as number) > 0 ? '+' : ''}{pts as number}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* ========== DOTS/JUNK CARD ========== */}
+      {dotsArray.length > 0 && dotsArray.map((cfg: any) => {
+        const summary = payouts.dots?.find((s: any) => s.configId === cfg.id);
+        return (
+          <button
+            key={cfg.id}
+            onClick={() => setDotsSetupId(cfg.id)}
+            className="w-full bg-white rounded-xl border border-slate-200 p-4 text-left hover:border-slate-300 transition-colors"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-xl">⚡</span>
+                <div>
+                  <div className="font-bold text-gray-900">Dots / Junk</div>
+                  <div className="text-xs text-gray-500">${cfg.fee}/dot · {cfg.activeDots?.length || 0} categories active</div>
+                </div>
+              </div>
+              <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>
+            </div>
+            {summary && summary.playerResults.length > 0 && (
+              <div className="mt-2 pt-2 border-t border-slate-100 space-y-1">
+                {summary.playerResults.sort((a: any, b: any) => b.totalDots - a.totalDots).slice(0, 3).map((r: any) => (
+                  <div key={r.golferId} className="flex items-center justify-between text-xs">
+                    <span className="text-gray-600">{getGolferName(r.golferId)}</span>
+                    <span className="font-mono font-bold">{r.totalDots} dots</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </button>
+        );
+      })}
+
       {/* Admin Actions */}
       {isOwner && (
         <div className="space-y-2 pt-2">
@@ -1191,23 +1489,43 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 </svg>
               </button>
             </div>
-            <div className="p-2 space-y-1">
-              {GAME_TYPES.map((type) => (
-                <button
-                  key={type.id}
-                  onClick={() => {
-                    if (type.id === 'nassau') addNassau(false);
-                    else if (type.id === 'skins') addSkins(false);
-                    else if (type.id === 'pinky') addPinky();
-                    else if (type.id === 'greenie') addGreenie();
-                    setShowAddGame(false);
-                  }}
-                  className="w-full px-4 py-3 text-left hover:bg-slate-50 rounded-xl transition-colors"
-                >
-                  <div className="font-bold text-gray-900">{type.name}</div>
-                  <div className="text-xs text-gray-500 mt-0.5">{type.description}</div>
-                </button>
-              ))}
+            <div className="p-2 space-y-1 max-h-[60vh] overflow-y-auto">
+              {GAME_TYPES.map((type) => {
+                const playerCount = allGolfers.length;
+                const disabled = (type.minPlayers && playerCount < type.minPlayers) || (type.maxPlayers && playerCount > type.maxPlayers);
+                return (
+                  <button
+                    key={type.id}
+                    disabled={!!disabled}
+                    onClick={() => {
+                      if (type.id === 'nassau') addNassau(false);
+                      else if (type.id === 'skins') addSkins(false);
+                      else if (type.id === 'pinky') addPinky();
+                      else if (type.id === 'greenie') addGreenie();
+                      else if (type.id === 'stableford') addStableford(false);
+                      else if (type.id === 'ninePoint') addNinePoint(true);
+                      else if (type.id === 'bingoBangoBongo') addBingoBangoBongo();
+                      else if (type.id === 'wolf') addWolf();
+                      else if (type.id === 'dots') addDots();
+                      setShowAddGame(false);
+                    }}
+                    className={`w-full px-4 py-3 text-left rounded-xl transition-colors ${disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-50'}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg">{type.emoji}</span>
+                      <div>
+                        <div className="font-bold text-gray-900">{type.name}</div>
+                        <div className="text-xs text-gray-500 mt-0.5">{type.description}</div>
+                        {disabled && (
+                          <div className="text-[10px] text-red-500 mt-0.5 font-medium">
+                            Requires {type.minPlayers === type.maxPlayers ? `exactly ${type.minPlayers}` : `${type.minPlayers}+`} players ({playerCount} in event)
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -2032,6 +2350,460 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
         );
       })()}
       
+      {/* ========== STABLEFORD SETUP MODAL ========== */}
+      {stablefordSetupId && (() => {
+        const cfg = stablefordArray.find((x: any) => x.id === stablefordSetupId);
+        if (!cfg) return null;
+        const updateCfg = (patch: any) =>
+          updateEvent(eventId, { games: { ...event.games, stableford: stablefordArray.map((s: any) => (s.id === cfg.id ? { ...s, ...patch } : s)) } });
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setStablefordSetupId(null)}>
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden" onClick={e => e.stopPropagation()}>
+              <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">Stableford</div>
+                  <div className="font-extrabold text-gray-900">Setup</div>
+                </div>
+                <button onClick={() => setStablefordSetupId(null)} className="p-2 rounded-full hover:bg-slate-100">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div className="p-4 space-y-4">
+                {/* Scoring type toggle */}
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <label className="text-xs font-bold text-slate-700">Scoring</label>
+                  <div className="mt-2 flex gap-2">
+                    <button onClick={() => updateCfg({ net: false })} disabled={!canEdit}
+                      className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${!cfg.net ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-600'}`}>Gross</button>
+                    <button onClick={() => updateCfg({ net: true })} disabled={!canEdit}
+                      className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${cfg.net ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-600'}`}>Net</button>
+                  </div>
+                </div>
+                {/* System toggle */}
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <label className="text-xs font-bold text-slate-700">Point System</label>
+                  <div className="mt-2 flex gap-2">
+                    <button onClick={() => updateCfg({ system: 'standard' })} disabled={!canEdit}
+                      className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors ${(cfg.system || 'standard') === 'standard' ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                      Standard
+                    </button>
+                    <button onClick={() => updateCfg({ system: 'modified' })} disabled={!canEdit}
+                      className={`flex-1 py-2 rounded-lg text-xs font-bold transition-colors ${cfg.system === 'modified' ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                      Modified
+                    </button>
+                  </div>
+                  <div className="mt-2 text-[10px] text-slate-500">
+                    {(cfg.system || 'standard') === 'standard' 
+                      ? 'Dbl Bogey+=0, Bogey=1, Par=2, Birdie=3, Eagle=4' 
+                      : 'Dbl Bogey+=-3, Bogey=-1, Par=0, Birdie=+2, Eagle=+5'}
+                  </div>
+                </div>
+                {/* Fee */}
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <label className="text-xs text-slate-600">Entry fee per player</label>
+                  <input type="number" min="1" step="1" value={cfg.fee} onFocus={e => e.currentTarget.select()}
+                    onChange={e => updateCfg({ fee: Number(e.target.value) })} disabled={!canEdit}
+                    className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold bg-white text-gray-900" />
+                </div>
+              </div>
+              <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+                <button onClick={() => { useStore.getState().removeStableford(eventId, cfg.id); setStablefordSetupId(null); }}
+                  className="px-3 py-2 rounded-lg text-xs font-extrabold border border-red-200 bg-red-50 text-red-700" disabled={!canEdit}>Remove</button>
+                <button onClick={() => setStablefordSetupId(null)}
+                  className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200">Done</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ========== 9-POINT SETUP MODAL ========== */}
+      {ninePointSetupId && (() => {
+        const cfg = ninePointArray.find((x: any) => x.id === ninePointSetupId);
+        if (!cfg) return null;
+        const updateCfg = (patch: any) =>
+          updateEvent(eventId, { games: { ...event.games, ninePoint: ninePointArray.map((s: any) => (s.id === cfg.id ? { ...s, ...patch } : s)) } });
+        const participantIds = cfg.participantGolferIds || [];
+        const activeGolfers9 = allGolfers.filter((g: any) => participantIds.includes(g.id));
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setNinePointSetupId(null)}>
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden" onClick={e => e.stopPropagation()}>
+              <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">9-Point</div>
+                  <div className="font-extrabold text-gray-900">Setup (3 Players)</div>
+                </div>
+                <button onClick={() => setNinePointSetupId(null)} className="p-2 rounded-full hover:bg-slate-100">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div className="p-4 space-y-4">
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <label className="text-xs font-bold text-slate-700">Scoring</label>
+                  <div className="mt-2 flex gap-2">
+                    <button onClick={() => updateCfg({ net: false })} disabled={!canEdit}
+                      className={`flex-1 py-2 rounded-lg text-sm font-bold ${!cfg.net ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-600'}`}>Gross</button>
+                    <button onClick={() => updateCfg({ net: true })} disabled={!canEdit}
+                      className={`flex-1 py-2 rounded-lg text-sm font-bold ${cfg.net ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-600'}`}>Net</button>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <label className="text-xs text-slate-600">$ per point</label>
+                  <input type="number" min="0.25" step="0.25" value={cfg.fee} onFocus={e => e.currentTarget.select()}
+                    onChange={e => updateCfg({ fee: Number(e.target.value) })} disabled={!canEdit}
+                    className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold bg-white text-gray-900" />
+                  <div className="text-[10px] text-slate-400 mt-1">Max per hole: ${(cfg.fee * 9).toFixed(2)} · Max round: ${(cfg.fee * 162).toFixed(2)}</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={cfg.sweepEnabled || false} onChange={e => updateCfg({ sweepEnabled: e.target.checked })} disabled={!canEdit}
+                      className="rounded border-slate-300 text-primary-600" />
+                    <span className="text-xs font-bold text-slate-700">Sweep variant</span>
+                  </label>
+                  <div className="text-[10px] text-slate-400 mt-1">Win by 2+ strokes = all 9 points</div>
+                </div>
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <div className="text-xs font-bold text-slate-700 mb-2">Players (exactly 3)</div>
+                  <div className="flex flex-wrap gap-2">
+                    {allGolfers.map((g: any) => {
+                      const isIn = participantIds.includes(g.id);
+                      return (
+                        <button key={g.id} disabled={!canEdit || (isIn && participantIds.length <= 3) || (!isIn && participantIds.length >= 3)}
+                          onClick={() => {
+                            if (isIn) updateCfg({ participantGolferIds: participantIds.filter((id: string) => id !== g.id) });
+                            else updateCfg({ participantGolferIds: [...participantIds, g.id].slice(0, 3) });
+                          }}
+                          className={`text-xs font-bold px-3 py-1.5 rounded-full border transition-colors disabled:opacity-40 ${isIn ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-primary-700 border-primary-300'}`}>
+                          {g.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {participantIds.length !== 3 && <div className="text-[10px] text-red-500 mt-1 font-medium">Select exactly 3 players</div>}
+                </div>
+                <div className="bg-slate-50 rounded-xl p-3 text-[10px] text-slate-500">
+                  <div className="font-bold text-slate-700 text-xs mb-1">How 9-Point Works</div>
+                  Every hole: Low=5, Mid=3, High=1. All tie=3-3-3. Two tie low=4-4-1. Two tie high=5-2-2.
+                </div>
+              </div>
+              <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+                <button onClick={() => { useStore.getState().removeNinePoint(eventId, cfg.id); setNinePointSetupId(null); }}
+                  className="px-3 py-2 rounded-lg text-xs font-extrabold border border-red-200 bg-red-50 text-red-700" disabled={!canEdit}>Remove</button>
+                <button onClick={() => setNinePointSetupId(null)}
+                  className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200">Done</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ========== BINGO BANGO BONGO SETUP MODAL ========== */}
+      {bbbSetupId && (() => {
+        const cfg = bbbArray.find((x: any) => x.id === bbbSetupId);
+        if (!cfg) return null;
+        const updateCfg = (patch: any) =>
+          updateEvent(eventId, { games: { ...event.games, bingoBangoBongo: bbbArray.map((s: any) => (s.id === cfg.id ? { ...s, ...patch } : s)) } });
+        const results: BingoBangoBongoHoleResult[] = (event.bbbResults && event.bbbResults[cfg.id]) || [];
+        const participantIds = cfg.participantGolferIds && cfg.participantGolferIds.length > 1 ? cfg.participantGolferIds : allGolfers.map((g: any) => g.id);
+        const activeGolfers3B = allGolfers.filter((g: any) => participantIds.includes(g.id));
+        
+        const getHoleResult = (hole: number) => results.find((r: any) => r.hole === hole) || { hole, bingo: undefined, bango: undefined, bongo: undefined };
+        const updateHoleResult = (hole: number, field: 'bingo' | 'bango' | 'bongo', golferId: string | undefined) => {
+          const existing = results.filter((r: any) => r.hole !== hole);
+          const current = getHoleResult(hole);
+          const updated = { ...current, [field]: golferId };
+          existing.push(updated);
+          useStore.getState().setBBBResults(eventId, cfg.id, existing);
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={() => setBbbSetupId(null)}>
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+              <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between shrink-0">
+                <div>
+                  <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">Bingo Bango Bongo</div>
+                  <div className="font-extrabold text-gray-900">${cfg.fee}/point · Enter Results</div>
+                </div>
+                <button onClick={() => setBbbSetupId(null)} className="p-2 rounded-full hover:bg-slate-100">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div className="p-4 overflow-y-auto flex-1 space-y-3">
+                {/* Fee */}
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <label className="text-xs text-slate-600">$ per point</label>
+                  <input type="number" min="0.25" step="0.25" value={cfg.fee} onFocus={e => e.currentTarget.select()}
+                    onChange={e => updateCfg({ fee: Number(e.target.value) })} disabled={!canEdit}
+                    className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold bg-white text-gray-900" />
+                </div>
+                {/* Legend */}
+                <div className="bg-slate-50 rounded-xl p-2 text-[10px] text-slate-500 grid grid-cols-3 gap-1 text-center">
+                  <div><span className="font-bold text-green-700">Bingo</span><br/>First on green</div>
+                  <div><span className="font-bold text-blue-700">Bango</span><br/>Closest when all on</div>
+                  <div><span className="font-bold text-purple-700">Bongo</span><br/>First to hole out</div>
+                </div>
+                {/* Per-hole entry */}
+                {Array.from({ length: 18 }, (_, i) => i + 1).map(hole => {
+                  const hr = getHoleResult(hole);
+                  return (
+                    <div key={hole} className="rounded-lg border border-slate-200 p-2">
+                      <div className="text-xs font-bold text-slate-700 mb-1">Hole {hole}</div>
+                      <div className="grid grid-cols-3 gap-1">
+                        {(['bingo', 'bango', 'bongo'] as const).map(field => (
+                          <select key={field} value={hr[field] || ''} disabled={!canEdit}
+                            onChange={e => updateHoleResult(hole, field, e.target.value || undefined)}
+                            className="text-[10px] border border-slate-200 rounded px-1 py-1 bg-white">
+                            <option value="">-</option>
+                            {activeGolfers3B.map((g: any) => <option key={g.id} value={g.id}>{g.name?.split(' ')[0]}</option>)}
+                          </select>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
+                <button onClick={() => { useStore.getState().removeBingoBangoBongo(eventId, cfg.id); setBbbSetupId(null); }}
+                  className="px-3 py-2 rounded-lg text-xs font-extrabold border border-red-200 bg-red-50 text-red-700" disabled={!canEdit}>Remove</button>
+                <button onClick={() => setBbbSetupId(null)}
+                  className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200">Done</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ========== WOLF SETUP MODAL ========== */}
+      {wolfSetupId && (() => {
+        const cfg = wolfArray.find((x: any) => x.id === wolfSetupId);
+        if (!cfg) return null;
+        const updateCfg = (patch: any) =>
+          updateEvent(eventId, { games: { ...event.games, wolf: wolfArray.map((s: any) => (s.id === cfg.id ? { ...s, ...patch } : s)) } });
+        const wolfOrder = cfg.wolfOrder || cfg.participantGolferIds || [];
+        const holeResults: WolfHoleResult[] = (event.wolfResults && event.wolfResults[cfg.id]) || [];
+        const participantIds = cfg.participantGolferIds || [];
+        const activeGolfersW = allGolfers.filter((g: any) => participantIds.includes(g.id));
+        
+        const getHoleResult = (hole: number) => holeResults.find((r: any) => r.hole === hole);
+        const updateHoleResult = (hole: number, patch: Partial<WolfHoleResult>) => {
+          const existing = holeResults.filter((r: any) => r.hole !== hole);
+          const current = getHoleResult(hole) || { hole, wolfId: wolfOrder[(hole - 1) % 4], isLoneWolf: false, winner: 'wolf' as const, points: 1 };
+          existing.push({ ...current, ...patch });
+          useStore.getState().setWolfResults(eventId, cfg.id, existing);
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={() => setWolfSetupId(null)}>
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+              <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between shrink-0">
+                <div>
+                  <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">Wolf</div>
+                  <div className="font-extrabold text-gray-900">${cfg.fee}/point · 4 Players</div>
+                </div>
+                <button onClick={() => setWolfSetupId(null)} className="p-2 rounded-full hover:bg-slate-100">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div className="p-4 overflow-y-auto flex-1 space-y-3">
+                {/* Fee */}
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <label className="text-xs text-slate-600">$ per point</label>
+                  <input type="number" min="0.25" step="0.25" value={cfg.fee} onFocus={e => e.currentTarget.select()}
+                    onChange={e => updateCfg({ fee: Number(e.target.value) })} disabled={!canEdit}
+                    className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold bg-white text-gray-900" />
+                </div>
+                {/* Wolf order */}
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <div className="text-xs font-bold text-slate-700 mb-2">Wolf Rotation Order</div>
+                  <div className="space-y-1">
+                    {wolfOrder.map((gid: string, idx: number) => (
+                      <div key={gid} className="flex items-center justify-between bg-slate-50 rounded-lg px-3 py-1.5">
+                        <span className="text-xs font-bold text-slate-700">#{idx + 1} {getGolferName(gid)}</span>
+                        <div className="flex gap-1">
+                          {idx > 0 && canEdit && (
+                            <button onClick={() => { const o = [...wolfOrder]; [o[idx], o[idx-1]] = [o[idx-1], o[idx]]; updateCfg({ wolfOrder: o }); }}
+                              className="text-[10px] px-2 py-1 bg-white border border-slate-200 rounded">Up</button>
+                          )}
+                          {idx < wolfOrder.length - 1 && canEdit && (
+                            <button onClick={() => { const o = [...wolfOrder]; [o[idx], o[idx+1]] = [o[idx+1], o[idx]]; updateCfg({ wolfOrder: o }); }}
+                              className="text-[10px] px-2 py-1 bg-white border border-slate-200 rounded">Dn</button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                {/* Blind wolf toggle */}
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={cfg.blindWolfEnabled || false} onChange={e => updateCfg({ blindWolfEnabled: e.target.checked })} disabled={!canEdit}
+                      className="rounded border-slate-300 text-primary-600" />
+                    <span className="text-xs font-bold text-slate-700">Allow Blind Wolf</span>
+                  </label>
+                  <div className="text-[10px] text-slate-400 mt-1">Declare Lone Wolf before anyone tees off = 4x multiplier</div>
+                </div>
+                {/* Per-hole results */}
+                <div className="text-xs font-bold text-slate-700">Hole Results</div>
+                {Array.from({ length: 18 }, (_, i) => i + 1).map(hole => {
+                  const hr = getHoleResult(hole);
+                  const wolfThisHole = wolfOrder[(hole - 1) % 4];
+                  const otherPlayers = participantIds.filter((p: string) => p !== wolfThisHole);
+                  return (
+                    <div key={hole} className="rounded-lg border border-slate-200 p-2">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="text-xs font-bold text-slate-700">Hole {hole}</div>
+                        <div className="text-[10px] text-slate-500">Wolf: <span className="font-bold">{getGolferName(wolfThisHole)?.split(' ')[0]}</span></div>
+                      </div>
+                      {hr ? (
+                        <div className="flex items-center gap-2 text-[10px]">
+                          <span className={`px-2 py-0.5 rounded-full font-bold ${hr.isLoneWolf ? 'bg-purple-100 text-purple-700' : 'bg-blue-100 text-blue-700'}`}>
+                            {hr.isLoneWolf ? 'Lone Wolf' : `Partner: ${getGolferName(hr.partnerId || '')?.split(' ')[0]}`}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded-full font-bold ${hr.winner === 'wolf' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                            {hr.winner === 'wolf' ? 'Wolf wins' : 'Field wins'}
+                          </span>
+                        </div>
+                      ) : canEdit ? (
+                        <div className="flex gap-1 flex-wrap">
+                          {otherPlayers.map((pid: string) => (
+                            <button key={pid} onClick={() => updateHoleResult(hole, { wolfId: wolfThisHole, partnerId: pid, isLoneWolf: false, winner: 'wolf', points: 1 })}
+                              className="text-[10px] px-2 py-1 bg-blue-50 text-blue-700 border border-blue-200 rounded font-bold hover:bg-blue-100">
+                              Pick {getGolferName(pid)?.split(' ')[0]}
+                            </button>
+                          ))}
+                          <button onClick={() => updateHoleResult(hole, { wolfId: wolfThisHole, partnerId: undefined, isLoneWolf: true, winner: 'wolf', points: 3 })}
+                            className="text-[10px] px-2 py-1 bg-purple-50 text-purple-700 border border-purple-200 rounded font-bold hover:bg-purple-100">
+                            Lone Wolf
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="text-[10px] text-slate-400">Not played yet</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
+                <button onClick={() => { useStore.getState().removeWolf(eventId, cfg.id); setWolfSetupId(null); }}
+                  className="px-3 py-2 rounded-lg text-xs font-extrabold border border-red-200 bg-red-50 text-red-700" disabled={!canEdit}>Remove</button>
+                <button onClick={() => setWolfSetupId(null)}
+                  className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200">Done</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ========== DOTS/JUNK SETUP MODAL ========== */}
+      {dotsSetupId && (() => {
+        const cfg = dotsArray.find((x: any) => x.id === dotsSetupId);
+        if (!cfg) return null;
+        const updateCfg = (patch: any) =>
+          updateEvent(eventId, { games: { ...event.games, dots: dotsArray.map((s: any) => (s.id === cfg.id ? { ...s, ...patch } : s)) } });
+        const participantIds = cfg.participantGolferIds && cfg.participantGolferIds.length > 1 ? cfg.participantGolferIds : allGolfers.map((g: any) => g.id);
+        const activeGolfersD = allGolfers.filter((g: any) => participantIds.includes(g.id));
+        const activeDots: DotCategory[] = cfg.activeDots || [...DEFAULT_DOTS];
+        const dotResults: DotsPlayerResult[] = (event.dotsResults && event.dotsResults[cfg.id]) || [];
+        
+        const getPlayerDots = (gid: string) => dotResults.find((r: any) => r.golferId === gid);
+        const updatePlayerDotCount = (gid: string, category: DotCategory, count: number) => {
+          const existing = dotResults.filter((r: any) => r.golferId !== gid);
+          const current = getPlayerDots(gid) || { golferId: gid, dots: {}, totalDots: 0 };
+          const newDots = { ...current.dots, [category]: count };
+          // Calculate total (positive for rewards, negative for penalties)
+          let total = 0;
+          Object.entries(newDots).forEach(([cat, cnt]) => {
+            const def = DOT_DEFINITIONS[cat as DotCategory];
+            total += def?.penalty ? -(cnt as number) : (cnt as number);
+          });
+          existing.push({ golferId: gid, dots: newDots, totalDots: total });
+          useStore.getState().setDotsResults(eventId, cfg.id, existing);
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={() => setDotsSetupId(null)}>
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+              <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between shrink-0">
+                <div>
+                  <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">Dots / Junk</div>
+                  <div className="font-extrabold text-gray-900">${cfg.fee}/dot</div>
+                </div>
+                <button onClick={() => setDotsSetupId(null)} className="p-2 rounded-full hover:bg-slate-100">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div className="p-4 overflow-y-auto flex-1 space-y-3">
+                {/* Fee */}
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <label className="text-xs text-slate-600">$ per dot</label>
+                  <input type="number" min="0.25" step="0.25" value={cfg.fee} onFocus={e => e.currentTarget.select()}
+                    onChange={e => updateCfg({ fee: Number(e.target.value) })} disabled={!canEdit}
+                    className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold bg-white text-gray-900" />
+                </div>
+                {/* Active dots toggle */}
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <div className="text-xs font-bold text-slate-700 mb-2">Active Categories</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(Object.entries(DOT_DEFINITIONS) as [DotCategory, typeof DOT_DEFINITIONS[DotCategory]][]).map(([cat, def]) => {
+                      const isActive = activeDots.includes(cat);
+                      return (
+                        <button key={cat} disabled={!canEdit}
+                          onClick={() => {
+                            const next = isActive ? activeDots.filter((c: DotCategory) => c !== cat) : [...activeDots, cat];
+                            updateCfg({ activeDots: next });
+                          }}
+                          className={`text-[10px] font-bold px-2 py-1 rounded-full border transition-colors ${
+                            isActive 
+                              ? def.penalty ? 'bg-red-100 text-red-700 border-red-300' : 'bg-green-100 text-green-700 border-green-300'
+                              : 'bg-white text-slate-400 border-slate-200'
+                          }`}>
+                          {def.emoji} {def.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                {/* Per-player dot entry */}
+                <div className="rounded-xl border border-slate-200 p-3">
+                  <div className="text-xs font-bold text-slate-700 mb-2">Player Dots</div>
+                  {activeGolfersD.map((g: any) => {
+                    const pd = getPlayerDots(g.id);
+                    return (
+                      <div key={g.id} className="mb-3 last:mb-0">
+                        <div className="text-xs font-bold text-slate-800 mb-1">{g.name}</div>
+                        <div className="grid grid-cols-3 gap-1">
+                          {activeDots.map((cat: DotCategory) => {
+                            const def = DOT_DEFINITIONS[cat];
+                            const count = pd?.dots?.[cat] || 0;
+                            return (
+                              <div key={cat} className="flex items-center justify-between gap-1 rounded border border-slate-100 px-1.5 py-1">
+                                <span className="text-[9px] text-slate-500 truncate">{def?.emoji} {def?.label}</span>
+                                <input type="number" min="0" max="18" value={count}
+                                  onFocus={e => e.currentTarget.select()}
+                                  onChange={e => updatePlayerDotCount(g.id, cat, Number(e.target.value))}
+                                  disabled={!canEdit}
+                                  className="w-10 text-center text-[10px] font-bold border border-slate-200 rounded px-1 py-0.5" />
+                              </div>
+                            );
+                          })}
+                        </div>
+                        {pd && <div className="text-[10px] text-right text-slate-500 mt-0.5">Net: <span className="font-bold">{pd.totalDots}</span> dots</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
+                <button onClick={() => { useStore.getState().removeDots(eventId, cfg.id); setDotsSetupId(null); }}
+                  className="px-3 py-2 rounded-lg text-xs font-extrabold border border-red-200 bg-red-50 text-red-700" disabled={!canEdit}>Remove</button>
+                <button onClick={() => setDotsSetupId(null)}
+                  className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200">Done</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ========== PAYOUTS & BALANCE SECTION (HIDDEN - replaced by inline wheel payouts) ========== */}
       {false && hasAnyGames && (
         <div className="mt-6 space-y-4">

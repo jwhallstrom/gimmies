@@ -11,6 +11,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import useStore from '../../state/store';
 import { useCourse } from '../../hooks/useCourse';
 import { STATUS_TIERS } from '../../state/types';
@@ -20,6 +21,7 @@ type Props = { eventId: string };
 type AddModalTab = 'invite' | 'manual';
 
 const GolfersTab: React.FC<Props> = ({ eventId }) => {
+  const navigate = useNavigate();
   const event = useStore((s: any) =>
     s.events.find((e: any) => e.id === eventId) ||
     s.completedEvents.find((e: any) => e.id === eventId)
@@ -112,13 +114,97 @@ const GolfersTab: React.FC<Props> = ({ eventId }) => {
     setShowAddModal(false);
   };
 
+  // Determine if a golfer has active game participation (in any game config)
+  const golferHasActiveGames = (golferId: string) => {
+    const games = event.games || {};
+    const allGameArrays = [
+      ...(games.nassau || []),
+      ...(games.skins || []),
+      ...(games.pinky || []),
+      ...(games.greenie || []),
+      ...(games.stableford || []),
+      ...(games.ninePoint || []),
+      ...(games.bingoBangoBongo || []),
+      ...(games.wolf || []),
+      ...(games.dots || []),
+    ];
+    return allGameArrays.some((g: any) =>
+      g.participantGolferIds?.includes(golferId) ||
+      (g.teams || []).some((t: any) => t.golferIds?.includes(golferId))
+    );
+  };
+
+  const isEventStarted = event.status === 'started' || event.scorecards?.some((sc: any) => sc.scores?.some((s: any) => s.strokes != null));
+  const isEventCompleted = event.isCompleted;
+
+  // Rules for removing/leaving:
+  // 1. Completed events: no one leaves (historical record)
+  // 2. Not started: anyone can leave freely; admin can remove anyone
+  // 3. Started + no active games: user can leave freely; admin can remove
+  // 4. Started + active games: only admin can remove (user sees "ask admin")
+  const canUserLeaveSelf = () => {
+    if (isEventCompleted) return { allowed: false, reason: 'Event is completed — records are locked.' };
+    if (!isEventStarted) return { allowed: true, reason: '' };
+    const myId = currentProfile?.id;
+    if (myId && golferHasActiveGames(myId)) {
+      return { allowed: false, reason: 'You have active games. Ask the admin to remove you.' };
+    }
+    return { allowed: true, reason: '' };
+  };
+
+  const canAdminRemove = (golferId: string) => {
+    if (isEventCompleted) return { allowed: false, reason: 'Event is completed — records are locked.' };
+    return { allowed: true, reason: '' };
+  };
+
   const handleRemoveGolfer = (golferId: string, name: string) => {
-    if (event.isCompleted) return;
-    const confirmMsg = isGroupHub 
-      ? `Remove ${name} from this group?` 
+    const check = canAdminRemove(golferId);
+    if (!check.allowed) {
+      addToast(check.reason, 'error');
+      return;
+    }
+
+    let confirmMsg = isGroupHub
+      ? `Remove ${name} from this group?`
       : `Remove ${name} from this event?`;
+
+    if (isEventStarted && golferHasActiveGames(golferId)) {
+      confirmMsg += '\n\nThis player has active games — their scores and game data will be removed.';
+    }
+
     if (window.confirm(confirmMsg)) {
       removeGolferFromEvent(eventId, golferId);
+      addToast(`${name} removed`, 'success');
+    }
+  };
+
+  const handleLeave = () => {
+    if (!currentProfile) return;
+
+    if (isGroupHub) {
+      if (window.confirm(`Leave "${event.name || 'this group'}"? You can rejoin later if the group is open.`)) {
+        navigate('/', { replace: true });
+        removeGolferFromEvent(eventId, currentProfile.id);
+        addToast('You left the group', 'success');
+      }
+      return;
+    }
+
+    const check = canUserLeaveSelf();
+    if (!check.allowed) {
+      addToast(check.reason, 'error');
+      return;
+    }
+
+    let msg = `Leave "${event.name || 'this event'}"?`;
+    if (isEventStarted) {
+      msg += '\n\nThe event has started — your scores will be removed.';
+    }
+
+    if (window.confirm(msg)) {
+      navigate('/', { replace: true });
+      removeGolferFromEvent(eventId, currentProfile.id);
+      addToast('You left the event', 'success');
     }
   };
 
@@ -415,11 +501,12 @@ Code: ${event.shareCode}`,
                   </div>
                 )}
                 
-                {/* Remove Button (owner only, not self) */}
-                {isOwner && !golfer.isCurrentUser && !event.isCompleted && (
+                {/* Remove Button (owner only, not self, not completed) */}
+                {isOwner && !golfer.isCurrentUser && !isEventCompleted && (
                   <button
                     onClick={() => handleRemoveGolfer(golfer.id, golfer.name)}
                     className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                    title={`Remove ${golfer.name}`}
                   >
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -432,7 +519,52 @@ Code: ${event.shareCode}`,
         </div>
       )}
 
-      {/* Game preferences legend removed - clutters UI */}
+      {/* Leave Event / Group */}
+      {currentProfile && !isOwner && (() => {
+        const isMember = event.golfers.some((g: any) => g.profileId === currentProfile.id);
+        if (!isMember) return null;
+
+        if (isGroupHub) {
+          // Groups: always allow leaving
+          return (
+            <div className="mt-6 border-t border-gray-200 pt-4">
+              <button
+                onClick={handleLeave}
+                className="w-full py-3 px-4 bg-white border border-red-200 text-red-600 rounded-xl text-sm font-medium hover:bg-red-50 transition-colors flex items-center justify-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                Leave Group
+              </button>
+            </div>
+          );
+        }
+
+        // Events: conditional leave
+        const check = canUserLeaveSelf();
+        return (
+          <div className="mt-6 border-t border-gray-200 pt-4">
+            <button
+              onClick={handleLeave}
+              disabled={!check.allowed}
+              className={`w-full py-3 px-4 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
+                check.allowed
+                  ? 'bg-white border border-red-200 text-red-600 hover:bg-red-50'
+                  : 'bg-gray-100 border border-gray-200 text-gray-400 cursor-not-allowed'
+              }`}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Leave Event
+            </button>
+            {!check.allowed && check.reason && (
+              <p className="text-xs text-gray-500 text-center mt-2">{check.reason}</p>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Add Golfer/Member Modal */}
       {showAddModal && (

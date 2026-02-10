@@ -26,15 +26,17 @@ module.exports = {
           900: '#09243F'
         }
       },
-      // iOS Safe Area & Dynamic Viewport utilities for PWA
+      // Cross-platform Safe Area & Dynamic Viewport utilities for PWA
+      // env() returns 0 on Android (no safe areas), so fallbacks handle both platforms
       padding: {
         'safe-bottom': 'env(safe-area-inset-bottom, 0px)',
         'safe-top': 'env(safe-area-inset-top, 0px)',
       },
       height: {
-        // Dynamic viewport height - handles iOS toolbar/keyboard changes
+        // Dynamic viewport height with fallback for older Android
         'screen-d': '100dvh',
-        // Nav base height (68px) + safe area inset for iOS home indicator
+        'screen-v': 'var(--app-height, 100vh)',
+        // Nav base height (68px) + safe area inset
         'safe-nav': 'calc(68px + env(safe-area-inset-bottom, 0px))',
       },
       spacing: {
@@ -42,12 +44,13 @@ module.exports = {
         'safe-top': 'env(safe-area-inset-top, 0px)',
       },
       minHeight: {
-        // Dynamic viewport height
         'screen-d': '100dvh',
+        'screen-v': 'var(--app-height, 100vh)',
         'safe-nav': 'calc(68px + env(safe-area-inset-bottom, 0px))',
       },
       maxHeight: {
         'screen-d': '100dvh',
+        'screen-v': 'var(--app-height, 100vh)',
       }
     }
   },

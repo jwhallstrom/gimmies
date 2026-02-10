@@ -61,16 +61,37 @@ const TournamentChat: React.FC<Props> = ({
   const [showSettings, setShowSettings] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Match main chat UX: hide bottom nav when typing (mobile keyboard)
-  const handleFocus = () => {
-    document.body.classList.add('chat-input-focused');
-  };
+  // Match main chat UX: hide bottom nav only when a real virtual keyboard is visible
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
-  const handleBlur = () => {
-    setTimeout(() => {
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const onResize = () => {
+      const diff = window.innerHeight - vv.height;
+      setKeyboardHeight(Math.max(0, diff));
+    };
+    vv.addEventListener('resize', onResize);
+    vv.addEventListener('scroll', onResize);
+    return () => {
+      vv.removeEventListener('resize', onResize);
+      vv.removeEventListener('scroll', onResize);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (keyboardHeight > 0) {
+      document.body.classList.add('chat-input-focused');
+    } else {
       document.body.classList.remove('chat-input-focused');
-    }, 100);
-  };
+    }
+    return () => {
+      document.body.classList.remove('chat-input-focused');
+    };
+  }, [keyboardHeight]);
+
+  const handleFocus = () => { /* keyboard detection handles footer visibility */ };
+  const handleBlur = () => { /* keyboard detection handles footer visibility */ };
   
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {

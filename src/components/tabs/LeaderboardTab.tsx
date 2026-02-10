@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import useStore from '../../state/store';
 import { useCourse } from '../../hooks/useCourse';
+import { courseHandicap, strokesForHole } from '../../games/handicap';
 
 type Props = {
   eventId: string;
@@ -9,6 +10,7 @@ type Props = {
 
 const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
   const { profiles, currentProfile, canEditScore } = useStore() as any;
+  const [scoreMode, setScoreMode] = useState<'gross' | 'net'>('gross');
   const event = useStore((s: any) => 
     s.events.find((e: any) => e.id === eventId) || 
     s.completedEvents.find((e: any) => e.id === eventId)
@@ -230,11 +232,28 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
     // Always calculate to par if any holes played AND pars are known
     const toPar = holesPlayed > 0 && totalPlayedPar != null ? totalStrokes - totalPlayedPar : null;
 
+    // Calculate net score (gross - handicap strokes)
+    let netStrokes = 0;
+    let netToPar: number | null = null;
+    if (holesPlayed > 0) {
+      scorecard.scores.forEach((score: any) => {
+        if (score.strokes != null) {
+          const hcpStrokes = strokesForHole(event, golferId, score.hole, profiles);
+          netStrokes += score.strokes - hcpStrokes;
+        }
+      });
+      if (totalPlayedPar != null) {
+        netToPar = netStrokes - totalPlayedPar;
+      }
+    }
+
     return {
       id: golferId,
       name: displayName,
       totalStrokes,
       toPar,
+      netStrokes,
+      netToPar,
       outStrokes: front9Holes > 0 ? front9Strokes : null,
       inStrokes: back9Holes > 0 ? back9Strokes : null,
       holesPlayed,
@@ -245,22 +264,18 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
     };
   });
 
-  // Sort by score to par (ascending), then by holes played (descending)
+  // Sort by active score mode (gross or net) ascending, then by holes played
   const playersWithScores = leaderboardData
     .filter((player: any) => player.holesPlayed > 0)
     .sort((a: any, b: any) => {
-      // If both have toPar, sort by toPar (lower is better)
-      if (a.toPar !== null && b.toPar !== null) {
-        if (a.toPar !== b.toPar) {
-          return a.toPar - b.toPar;
-        }
-        // If tied on toPar, prefer more holes played
+      const aScore = scoreMode === 'net' ? a.netToPar : a.toPar;
+      const bScore = scoreMode === 'net' ? b.netToPar : b.toPar;
+      if (aScore !== null && bScore !== null) {
+        if (aScore !== bScore) return aScore - bScore;
         return b.holesPlayed - a.holesPlayed;
       }
-      // If only one has toPar, that one goes first
-      if (a.toPar !== null) return -1;
-      if (b.toPar !== null) return 1;
-      // If neither has toPar, sort by holes played
+      if (aScore !== null) return -1;
+      if (bScore !== null) return 1;
       return b.holesPlayed - a.holesPlayed;
     });
 
@@ -289,17 +304,45 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
     return 'text-gray-700';
   };
 
+  // PGA/Masters convention: Red = under par, Black = even/over
   const getToParColor = (toPar: number | null) => {
     if (toPar === null) return 'text-gray-400';
-    if (toPar < 0) return 'text-green-600';
-    if (toPar === 0) return 'text-gray-600';
-    if (toPar <= 2) return 'text-orange-500';
-    return 'text-red-600';
+    if (toPar < 0) return 'text-red-600'; // Under par = RED (golf standard)
+    if (toPar === 0) return 'text-gray-800'; // Even = dark/black
+    return 'text-gray-800'; // Over par = dark/black (+ sign shows it's over)
   };
+
+  // Check if any golfer has handicap data (to show Gross/Net toggle)
+  const hasHandicapData = useMemo(() => {
+    return event.golfers.some((g: any) => {
+      const ch = courseHandicap(event, g.profileId || g.customName, profiles);
+      return ch != null && ch !== 0;
+    });
+  }, [event, profiles]);
 
   return (
     <div className="-mx-4 sm:mx-0">
       <div className="bg-white sm:rounded-lg shadow-sm border-y sm:border border-slate-200 overflow-hidden">
+        {/* Gross / Net toggle */}
+        {hasHandicapData && (
+          <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-b border-slate-200">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Leaderboard</span>
+            <div className="flex gap-0.5 text-[11px] font-bold rounded-lg overflow-hidden border border-slate-300 bg-white">
+              <button
+                onClick={() => setScoreMode('gross')}
+                className={`px-3 py-1.5 transition-colors ${scoreMode === 'gross' ? 'bg-primary-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+              >
+                Gross
+              </button>
+              <button
+                onClick={() => setScoreMode('net')}
+                className={`px-3 py-1.5 transition-colors ${scoreMode === 'net' ? 'bg-primary-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+              >
+                Net
+              </button>
+            </div>
+          </div>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-slate-50 border-b border-slate-200">
@@ -307,8 +350,11 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
                 <th className="px-3 py-3 text-left font-semibold text-slate-700 text-xs">Pos</th>
                 <th className="px-3 py-3 text-left font-semibold text-slate-700 text-xs">Player</th>
                 {hasTeams && <th className="px-3 py-3 text-left font-semibold text-slate-700 text-xs">Team</th>}
-                <th className="px-3 py-3 text-center font-semibold text-slate-700 text-xs">Score</th>
+                <th className="px-3 py-3 text-center font-semibold text-slate-700 text-xs">
+                  {scoreMode === 'net' ? 'Net' : 'Score'}
+                </th>
                 <th className="px-3 py-3 text-center font-semibold text-slate-700 text-xs">Thru</th>
+                <th className="px-3 py-3 text-center font-semibold text-slate-700 text-xs">Tot</th>
               </tr>
             </thead>
             <tbody>
@@ -395,8 +441,8 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
                       </td>
                     )}
                     <td className="px-3 py-3 text-center">
-                      <span className={`font-mono font-bold text-xl ${getToParColor(player.toPar)}`}>
-                        {player.holesPlayed > 0 ? formatToPar(player.toPar) : '-'}
+                      <span className={`font-mono font-bold text-xl ${getToParColor(scoreMode === 'net' ? player.netToPar : player.toPar)}`}>
+                        {player.holesPlayed > 0 ? formatToPar(scoreMode === 'net' ? player.netToPar : player.toPar) : '-'}
                       </span>
                     </td>
                     <td className="px-3 py-3 text-center text-slate-600 font-medium">
@@ -406,10 +452,13 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
                         player.holesPlayed || '-'
                       )}
                     </td>
+                    <td className="px-3 py-3 text-center text-slate-500 font-mono text-sm">
+                      {player.holesPlayed > 0 ? (scoreMode === 'net' ? player.netStrokes : player.totalStrokes) : '-'}
+                    </td>
                   </tr>
                   {expandedPlayer === player.id && (
                     <tr>
-                      <td colSpan={hasTeams ? 5 : 4} className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+                      <td colSpan={hasTeams ? 6 : 5} className="px-4 py-3 bg-slate-50 border-b border-slate-200">
                         <div className="space-y-3">
                           {/* Primary CTA: enter/edit scores (when allowed) */}
                           {typeof onEnterScores === 'function' && (
@@ -479,10 +528,11 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
                                     <div key={`score-${hole.number}`} className={`text-xs py-1 text-center font-mono rounded w-8 shrink-0 ${
                                       strokes == null ? 'text-slate-400' :
                                       toPar === null ? 'text-slate-700' :
-                                      toPar < 0 ? 'text-green-600 bg-green-50 font-semibold' :
+                                      toPar <= -2 ? 'text-amber-700 bg-amber-100 font-bold' :
+                                      toPar === -1 ? 'text-red-700 bg-red-100 font-semibold' :
                                       toPar === 0 ? 'text-slate-700 bg-white' :
-                                      toPar === 1 ? 'text-orange-600 bg-orange-50 font-semibold' :
-                                      'text-red-600 bg-red-50 font-semibold'
+                                      toPar === 1 ? 'text-blue-700 bg-blue-100 font-semibold' :
+                                      'text-blue-900 bg-blue-200 font-semibold'
                                     }`}>
                                       {strokes ?? '-'}
                                     </div>
@@ -539,10 +589,11 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
                                     <div key={`score-${hole.number}`} className={`text-xs py-1 text-center font-mono rounded w-8 shrink-0 ${
                                       strokes == null ? 'text-slate-400' :
                                       toPar === null ? 'text-slate-700' :
-                                      toPar < 0 ? 'text-green-600 bg-green-50 font-semibold' :
+                                      toPar <= -2 ? 'text-amber-700 bg-amber-100 font-bold' :
+                                      toPar === -1 ? 'text-red-700 bg-red-100 font-semibold' :
                                       toPar === 0 ? 'text-slate-700 bg-white' :
-                                      toPar === 1 ? 'text-orange-600 bg-orange-50 font-semibold' :
-                                      'text-red-600 bg-red-50 font-semibold'
+                                      toPar === 1 ? 'text-blue-700 bg-blue-100 font-semibold' :
+                                      'text-blue-900 bg-blue-200 font-semibold'
                                     }`}>
                                       {strokes ?? '-'}
                                     </div>

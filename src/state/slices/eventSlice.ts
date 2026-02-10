@@ -86,8 +86,11 @@ export interface EventSliceActions {
   joinEventByCode: (shareCode: string) => Promise<{ success: boolean; error?: string; eventId?: string }>;
   
   // Chat
-  addChatMessage: (eventId: string, text: string) => Promise<void>;
+  addChatMessage: (eventId: string, text: string, options?: { replyTo?: string; type?: string; metadata?: Record<string, any>; pollQuestion?: string; pollOptions?: { id: string; text: string; votes: string[] }[] }) => Promise<void>;
   clearChat: (eventId: string) => void;
+  toggleReaction: (eventId: string, messageId: string, emoji: string) => void;
+  deleteMessage: (eventId: string, messageId: string) => void;
+  votePoll: (eventId: string, messageId: string, optionId: string) => void;
 }
 
 export type EventSlice = EventSliceState & EventSliceActions;
@@ -138,7 +141,7 @@ export const createEventSlice = (
       golfers: [eventGolfer],
       groups: [group],
       scorecards: [scorecard],
-      games: { nassau: [], skins: [], pinky: [], greenie: [] },
+      games: { nassau: [], skins: [], pinky: [], greenie: [], stableford: [], ninePoint: [], bingoBangoBongo: [], wolf: [], dots: [] },
       ownerProfileId: currentProfile.id,
       scorecardView: 'individual',
       isPublic: true,
@@ -194,12 +197,17 @@ export const createEventSlice = (
     set((state: any) => ({
       events: state.events.map((e: Event) => {
         if (e.id !== id) return e;
-        const currentGames = e.games || { nassau: [], skins: [], pinky: [], greenie: [] };
+        const currentGames = e.games || { nassau: [], skins: [], pinky: [], greenie: [], stableford: [], ninePoint: [], bingoBangoBongo: [], wolf: [], dots: [] };
         const updatedGames = patch.games ? {
           nassau: patch.games.nassau ?? currentGames.nassau ?? [],
           skins: patch.games.skins ?? currentGames.skins ?? [],
           pinky: patch.games.pinky ?? currentGames.pinky ?? [],
-          greenie: patch.games.greenie ?? currentGames.greenie ?? []
+          greenie: patch.games.greenie ?? currentGames.greenie ?? [],
+          stableford: patch.games.stableford ?? currentGames.stableford ?? [],
+          ninePoint: patch.games.ninePoint ?? currentGames.ninePoint ?? [],
+          bingoBangoBongo: patch.games.bingoBangoBongo ?? currentGames.bingoBangoBongo ?? [],
+          wolf: patch.games.wolf ?? currentGames.wolf ?? [],
+          dots: patch.games.dots ?? currentGames.dots ?? [],
         } : currentGames;
         return { ...e, ...patch, games: updatedGames, lastModified: new Date().toISOString() };
       })
@@ -514,13 +522,25 @@ export const createEventSlice = (
   },
   
   // Chat
-  addChatMessage: async (eventId: string, text: string) => {
+  addChatMessage: async (eventId: string, text: string, options?: { replyTo?: string; type?: string; metadata?: Record<string, any>; pollQuestion?: string; pollOptions?: { id: string; text: string; votes: string[] }[] }) => {
     const trimmed = text.trim();
-    if (!trimmed) return;
+    if (!trimmed && !options?.pollQuestion) return;
     const currentProfile = get().currentProfile;
     if (!currentProfile) return;
     
-    const msg: ChatMessage = { id: nanoid(10), profileId: currentProfile.id, senderName: currentProfile.name, text: trimmed.slice(0, 2000), createdAt: new Date().toISOString() };
+    const msg: ChatMessage = {
+      id: nanoid(10),
+      profileId: currentProfile.id,
+      senderName: currentProfile.name,
+      text: trimmed.slice(0, 2000),
+      createdAt: new Date().toISOString(),
+      type: (options?.type as any) || 'text',
+      replyTo: options?.replyTo,
+      metadata: options?.metadata,
+      pollQuestion: options?.pollQuestion,
+      pollOptions: options?.pollOptions,
+      reactions: {},
+    };
     
     set((state: any) => ({
       events: state.events.map((e: Event) => {
@@ -542,6 +562,78 @@ export const createEventSlice = (
   clearChat: (eventId: string) => {
     set((state: any) => ({
       events: state.events.map((e: Event) => e.id === eventId ? { ...e, chat: [], lastModified: new Date().toISOString() } : e)
+    }));
+  },
+  
+  toggleReaction: (eventId: string, messageId: string, emoji: string) => {
+    const currentProfile = get().currentProfile;
+    if (!currentProfile) return;
+    
+    set((state: any) => ({
+      events: state.events.map((e: Event) => {
+        if (e.id !== eventId) return e;
+        return {
+          ...e,
+          chat: (e.chat || []).map((m: ChatMessage) => {
+            if (m.id !== messageId) return m;
+            const reactions = { ...(m.reactions || {}) };
+            const current = reactions[emoji] || [];
+            if (current.includes(currentProfile.id)) {
+              reactions[emoji] = current.filter((id: string) => id !== currentProfile.id);
+              if (reactions[emoji].length === 0) delete reactions[emoji];
+            } else {
+              reactions[emoji] = [...current, currentProfile.id];
+            }
+            return { ...m, reactions };
+          }),
+          lastModified: new Date().toISOString(),
+        };
+      })
+    }));
+  },
+  
+  deleteMessage: (eventId: string, messageId: string) => {
+    const currentProfile = get().currentProfile;
+    if (!currentProfile) return;
+    
+    set((state: any) => ({
+      events: state.events.map((e: Event) => {
+        if (e.id !== eventId) return e;
+        return {
+          ...e,
+          chat: (e.chat || []).map((m: ChatMessage) => {
+            if (m.id !== messageId || m.profileId !== currentProfile.id) return m;
+            return { ...m, isDeleted: true, text: '' };
+          }),
+          lastModified: new Date().toISOString(),
+        };
+      })
+    }));
+  },
+  
+  votePoll: (eventId: string, messageId: string, optionId: string) => {
+    const currentProfile = get().currentProfile;
+    if (!currentProfile) return;
+    
+    set((state: any) => ({
+      events: state.events.map((e: Event) => {
+        if (e.id !== eventId) return e;
+        return {
+          ...e,
+          chat: (e.chat || []).map((m: ChatMessage) => {
+            if (m.id !== messageId || m.type !== 'poll' || m.pollClosed) return m;
+            const options = (m.pollOptions || []).map(opt => {
+              // Remove vote from all options first (single vote)
+              const votes = (opt.votes || []).filter((id: string) => id !== currentProfile.id);
+              // Add vote to selected option
+              if (opt.id === optionId) votes.push(currentProfile.id);
+              return { ...opt, votes };
+            });
+            return { ...m, pollOptions: options };
+          }),
+          lastModified: new Date().toISOString(),
+        };
+      })
     }));
   },
   

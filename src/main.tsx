@@ -6,6 +6,7 @@ import { BrowserRouter } from 'react-router-dom';
 import './amplify/configure';
 
 import App from './pages/App';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import './styles.css';
 
 // In dev, ensure SW doesn't cache stale bundles.
@@ -44,6 +45,7 @@ if (import.meta.env.PROD && typeof window !== 'undefined') {
 }
 
 if (typeof window !== 'undefined') {
+  // ---- Standalone PWA detection ----
   const mediaQuery =
     typeof window.matchMedia === 'function'
       ? window.matchMedia('(display-mode: standalone)')
@@ -66,12 +68,39 @@ if (typeof window !== 'undefined') {
       mediaQuery.addListener(listener);
     }
   }
+
+  // ---- Android viewport height fix ----
+  // On Android Chrome, 100vh includes the URL bar which causes content to overflow.
+  // This sets a CSS variable --app-height to the real visible viewport height.
+  // Uses visualViewport API (supported on Android Chrome 61+, iOS Safari 13+).
+  const setAppHeight = () => {
+    const vh = window.visualViewport
+      ? window.visualViewport.height
+      : window.innerHeight;
+    document.documentElement.style.setProperty('--app-height', `${vh}px`);
+  };
+
+  setAppHeight();
+  window.addEventListener('resize', setAppHeight);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener('resize', setAppHeight);
+  }
+
+  // ---- Android platform detection (for platform-specific CSS) ----
+  const ua = navigator.userAgent || '';
+  if (/android/i.test(ua)) {
+    document.body.classList.add('platform-android');
+  } else if (/iphone|ipad|ipod/i.test(ua) || ((navigator as any).standalone !== undefined)) {
+    document.body.classList.add('platform-ios');
+  }
 }
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
+    <ErrorBoundary>
+      <BrowserRouter>
+        <App />
+      </BrowserRouter>
+    </ErrorBoundary>
   </React.StrictMode>
 );

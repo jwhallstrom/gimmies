@@ -205,12 +205,18 @@ const JoinEventPage: React.FC = () => {
         (e: any) => e.course?.courseId === (c.courseId || c.id)
       ).length;
       
+      // Get hole count and tee count from course data
+      const holeCount = c.tees?.[0]?.holes?.length || 18;
+      const teeCount = c.tees?.length || 0;
+      
       return {
         id: c.courseId || c.id,
         name: c.name,
         location: c.location || '',
         miles,
         eventCount,
+        holeCount,
+        teeCount,
         isHome: (c.courseId || c.id) === homeCourseId,
         isFavorite: allFavoriteIds.has(c.courseId || c.id)
       };
@@ -226,6 +232,19 @@ const JoinEventPage: React.FC = () => {
     });
   }, [allCoursesFromHook, geoCoords, homeCourseId, allFavoriteIds, publicEvents]);
 
+  // Helper to count active games
+  const countActiveGames = (games: any): string[] => {
+    const active: string[] = [];
+    if (games?.nassau?.enabled) active.push('Nassau');
+    if (games?.skins?.enabled) active.push('Skins');
+    if (games?.wolf?.enabled) active.push('Wolf');
+    if (games?.stableford?.enabled) active.push('Stableford');
+    if (games?.bingoBangoBongo?.enabled) active.push('Bingo Bango');
+    if (games?.ninePoint?.enabled) active.push('9-Point');
+    if (games?.dots?.enabled) active.push('Dots');
+    return active;
+  };
+
   // All events sorted
   const sortedEvents = useMemo(() => {
     return (publicEvents || []).map((e: any) => {
@@ -236,11 +255,20 @@ const JoinEventPage: React.FC = () => {
       if (geoCoords && coords) {
         miles = haversineMiles(geoCoords, coords);
       }
+      
+      // Get player count and game info
+      const playerCount = e.golfers?.length || 0;
+      const activeGames = countActiveGames(e.games);
+      const teeTime = e.groups?.[0]?.teeTime || '';
+      
       return {
         ...e,
         courseName: course?.name || courseId || 'Unknown Course',
         courseLocation: course?.location || '',
         miles,
+        playerCount,
+        activeGames,
+        teeTime,
         isHome: courseId === homeCourseId,
         isFavorite: allFavoriteIds.has(courseId || '')
       };
@@ -475,11 +503,11 @@ const JoinEventPage: React.FC = () => {
     },
   };
 
-  // Course card component - matches Dashboard style
+  // Course card component - matches Dashboard style with rich metadata
   const CourseCard = ({ course }: { course: typeof coursesWithDistance[0] }) => (
     <button
       onClick={() => setSearchQuery(course.name)}
-      className={`w-full text-left flex items-center gap-3 p-2.5 rounded-lg border transition-all group ${
+      className={`w-full text-left flex items-center gap-3 p-3 rounded-lg border transition-all group ${
         course.isHome 
           ? 'bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30 border-amber-200 dark:border-amber-800' 
           : 'bg-gray-50 dark:bg-slate-700/50 hover:bg-gray-100 dark:hover:bg-slate-700 border-gray-200 dark:border-slate-600'
@@ -487,7 +515,7 @@ const JoinEventPage: React.FC = () => {
     >
       <button
         onClick={(e) => { e.stopPropagation(); toggleFavorite(course.id); }}
-        className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 transition ${
+        className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 transition ${
           course.isHome 
             ? 'bg-amber-100 dark:bg-amber-900/50' 
             : course.isFavorite 
@@ -495,17 +523,39 @@ const JoinEventPage: React.FC = () => {
               : 'bg-white dark:bg-slate-600 text-gray-400 hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/30 border border-gray-200 dark:border-slate-500'
         }`}
       >
-        <span className="text-sm">{course.isHome ? '🏠' : course.isFavorite ? '⭐' : '☆'}</span>
+        <span className="text-base">{course.isHome ? '🏠' : course.isFavorite ? '⭐' : '☆'}</span>
       </button>
       <div className="flex-1 min-w-0">
         <div className="font-semibold text-sm text-gray-900 dark:text-white truncate flex items-center gap-1.5">
           {course.name}
           {course.isHome && <span className="text-[8px] font-bold text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/50 px-1 py-0.5 rounded">HOME</span>}
         </div>
-        <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
-          {course.miles !== undefined && <span>{Math.round(course.miles)} mi</span>}
+        {/* Location line */}
+        {course.location && (
+          <div className="text-xs text-gray-600 dark:text-gray-300 truncate">
+            📍 {course.location}
+          </div>
+        )}
+        {/* Stats line */}
+        <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5 flex-wrap mt-0.5">
+          <span className="text-gray-400">{course.holeCount} holes</span>
+          {course.teeCount > 0 && (
+            <>
+              <span className="text-gray-300 dark:text-gray-600">•</span>
+              <span className="text-gray-400">{course.teeCount} tee{course.teeCount !== 1 ? 's' : ''}</span>
+            </>
+          )}
+          {course.miles !== undefined && (
+            <>
+              <span className="text-gray-300 dark:text-gray-600">•</span>
+              <span className="text-blue-600 dark:text-blue-400 font-medium">{Math.round(course.miles)} mi away</span>
+            </>
+          )}
           {course.eventCount > 0 && (
-            <span className="text-green-600 dark:text-green-400 font-medium">{course.eventCount} game{course.eventCount !== 1 ? 's' : ''}</span>
+            <>
+              <span className="text-gray-300 dark:text-gray-600">•</span>
+              <span className="text-green-600 dark:text-green-400 font-semibold">{course.eventCount} game{course.eventCount !== 1 ? 's' : ''}</span>
+            </>
           )}
         </div>
       </div>
@@ -515,39 +565,63 @@ const JoinEventPage: React.FC = () => {
     </button>
   );
 
-  // Event card component - matches Dashboard style
+  // Event card component - matches Dashboard style with rich metadata
   const EventCard = ({ event }: { event: any }) => {
     const alreadyJoined = (event.golfers || []).some((g: any) => g.profileId === currentProfile?.id);
     return (
-      <div className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all ${
+      <div className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
         event.isHome 
           ? 'bg-amber-50 dark:bg-amber-900/20 hover:bg-amber-100 dark:hover:bg-amber-900/30 border-amber-200 dark:border-amber-800' 
           : 'bg-white dark:bg-slate-700/50 hover:bg-primary-50 dark:hover:bg-slate-700 border-gray-200 dark:border-slate-600 hover:border-primary-300 dark:hover:border-primary-700'
       }`}>
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+        <div className={`w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 ${
           event.isHome ? 'bg-amber-100 dark:bg-amber-900/50' : 'bg-primary-100 dark:bg-primary-900/50'
         }`}>
-          <span className="text-sm">{event.isHome ? '🏠' : '⛳'}</span>
+          <span className="text-base">{event.isHome ? '🏠' : '⛳'}</span>
         </div>
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-sm text-gray-900 dark:text-white truncate">
             {event.name || 'Golf Game'}
           </div>
-          <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5">
-            <span className="truncate">{event.courseName}</span>
-            <span className="text-gray-300 dark:text-gray-600">•</span>
-            <span className="font-medium">{formatDate(event.date)}</span>
+          {/* Course & Location line */}
+          <div className="text-xs text-gray-600 dark:text-gray-300 truncate flex items-center gap-1">
+            <span>📍 {event.courseName}</span>
+            {event.courseLocation && (
+              <span className="text-gray-400">({event.courseLocation})</span>
+            )}
+          </div>
+          {/* Stats line */}
+          <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5 flex-wrap mt-0.5">
+            <span className="font-medium text-primary-600 dark:text-primary-400">{formatDate(event.date)}</span>
+            {event.teeTime && (
+              <>
+                <span className="text-gray-300 dark:text-gray-600">•</span>
+                <span className="text-gray-500">🕐 {event.teeTime}</span>
+              </>
+            )}
+            {event.playerCount > 0 && (
+              <>
+                <span className="text-gray-300 dark:text-gray-600">•</span>
+                <span className="text-gray-500">👥 {event.playerCount} player{event.playerCount !== 1 ? 's' : ''}</span>
+              </>
+            )}
             {event.miles !== undefined && (
               <>
                 <span className="text-gray-300 dark:text-gray-600">•</span>
-                <span>{Math.round(event.miles)} mi</span>
+                <span className="text-blue-600 dark:text-blue-400">{Math.round(event.miles)} mi</span>
               </>
             )}
           </div>
+          {/* Games line */}
+          {event.activeGames?.length > 0 && (
+            <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1 mt-0.5">
+              <span className="text-green-600 dark:text-green-400 font-medium">🎲 {event.activeGames.slice(0, 3).join(', ')}{event.activeGames.length > 3 ? ` +${event.activeGames.length - 3}` : ''}</span>
+            </div>
+          )}
         </div>
         <button
           onClick={(e) => { e.stopPropagation(); handleJoinEvent(event.id); }}
-          className={`px-3 py-1.5 text-xs font-bold rounded-lg transition flex-shrink-0 ${
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition flex-shrink-0 ${
             alreadyJoined
               ? 'bg-gray-100 dark:bg-slate-600 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-500'
               : 'bg-gradient-to-r from-accent to-orange-500 text-white shadow-sm hover:shadow-md'
