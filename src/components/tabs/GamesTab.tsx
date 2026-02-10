@@ -7,6 +7,8 @@ import { calculateEventPayouts } from '../../games/payouts';
 import { EventSettlement } from '../wallet';
 import { DOT_DEFINITIONS, DEFAULT_DOTS } from '../../games/dots';
 import type { DotCategory, BingoBangoBongoHoleResult, WolfHoleResult, DotsPlayerResult } from '../../state/types';
+import type { NassauPayoutSummary, NassauSegmentResult } from '../../games/nassau';
+import type { SkinsSummary } from '../../games/skins';
 
 type Props = { eventId: string };
 
@@ -517,13 +519,13 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
   // Nassau standings computation
   const nassauStandings = useMemo(() => {
     if (!payouts.nassau.length) return null;
-    return payouts.nassau.map(n => {
+    return payouts.nassau.map((n: NassauPayoutSummary) => {
       const nassauConfig = event.games.nassau.find((cfg: any) => cfg.id === n.configId);
       const teams = nassauConfig?.teams || [];
       const isMatch = nassauConfig?.scoringType === 'match';
       
       // Build standings per segment with winner payout info
-      const standings = n.segments.map(seg => {
+      const standings = n.segments.map((seg: NassauSegmentResult) => {
         const rows = Object.entries(seg.scores)
           .filter(([id, score]) => Number.isFinite(score))
           .map(([id, score]) => {
@@ -547,7 +549,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
         // Calculate winner payouts for this segment
         const winnerCount = seg.winners.length;
         const payoutPerWinner = winnerCount > 0 ? seg.pot / winnerCount : 0;
-        const winnerNames = seg.winners.map(id => {
+        const winnerNames = seg.winners.map((id: string) => {
           const team = teams.find((t: any) => t.id === id);
           return team?.name || getGolferName(id);
         });
@@ -583,19 +585,19 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
   // Skins standings computation  
   const skinsStandings = useMemo(() => {
     if (!payouts.skins.length) return null;
-    return payouts.skins.filter(Boolean).map(s => {
+    return payouts.skins.filter(Boolean).map((s: SkinsSummary | null) => {
       if (!s) return null;
       const skinsConfig = skinsArray.find((cfg: any) => cfg.id === s.configId);
       
       // Group holes by winner
       const winners = Object.entries(s.winningHolesByGolfer)
-        .filter(([_, holes]) => holes.length > 0)
-        .map(([golferId, holes]) => ({
+        .filter(([_, holes]: [string, number[]]) => holes.length > 0)
+        .map(([golferId, holes]: [string, number[]]) => ({
           name: getGolferName(golferId),
           holes,
           amount: s.winningsByGolfer[golferId] || 0
         }))
-        .sort((a, b) => b.holes.length - a.holes.length);
+        .sort((a, b) => (b.holes as number[]).length - (a.holes as number[]).length);
       
       return {
         id: s.configId,
@@ -647,10 +649,10 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
       )}
 
       {/* ========== NASSAU LEADERBOARD ========== */}
-      {nassauStandings && nassauStandings.map(nassau => {
-        const frontSeg = nassau.standings.find(s => s.segment === 'front');
-        const backSeg = nassau.standings.find(s => s.segment === 'back');
-        const totalSeg = nassau.standings.find(s => s.segment === 'total');
+      {nassauStandings && nassauStandings.map((nassau: any) => {
+        const frontSeg = nassau.standings.find((s: any) => s.segment === 'front');
+        const backSeg = nassau.standings.find((s: any) => s.segment === 'back');
+        const totalSeg = nassau.standings.find((s: any) => s.segment === 'total');
         
         const formatScore = (row: any) => {
           if (!row || !Number.isFinite(row.score)) return '—';
@@ -724,9 +726,9 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
               </thead>
               <tbody>
                 {nassau.teams.length > 0 ? nassau.teams.map((team: any) => {
-                  const frontRow = frontSeg?.rows.find(r => r.id === team.id);
-                  const backRow = backSeg?.rows.find(r => r.id === team.id);
-                  const totalRow = totalSeg?.rows.find(r => r.id === team.id);
+                  const frontRow = frontSeg?.rows.find((r: any) => r.id === team.id);
+                  const backRow = backSeg?.rows.find((r: any) => r.id === team.id);
+                  const totalRow = totalSeg?.rows.find((r: any) => r.id === team.id);
                   
                   // Calculate team's total winnings from this Nassau
                   const teamWinnings = 

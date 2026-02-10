@@ -132,6 +132,9 @@ interface State {
   joinEventByCode: EventSliceActions['joinEventByCode'];
   addChatMessage: EventSliceActions['addChatMessage'];
   clearChat: EventSliceActions['clearChat'];
+  toggleReaction: EventSliceActions['toggleReaction'];
+  deleteMessage: EventSliceActions['deleteMessage'];
+  votePoll: EventSliceActions['votePoll'];
   
   // Complex event actions (kept in store)
   loadEventsFromCloud: () => Promise<void>;
