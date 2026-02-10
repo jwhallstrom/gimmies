@@ -207,7 +207,7 @@ const EventPage: React.FC = () => {
     <div className="h-full min-h-0 -mx-4 -mt-4 flex flex-col event-page-container">
       {/* Header - Compact & Sticky */}
       <div className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 px-3 py-2 shadow-lg sticky top-0 z-30 flex-shrink-0">
-        {/* Single Row: Event Info + Actions */}
+        {/* Single Row: Event Info + Invite CTA */}
         <div className="flex items-center gap-2">
           {/* Event Title - Takes remaining space */}
           <div className="flex-1 min-w-0">
@@ -227,6 +227,20 @@ const EventPage: React.FC = () => {
               )}
             </div>
           </div>
+          
+          {/* Invite Button - Always visible, grandma-friendly */}
+          {!event.isCompleted && (
+            <button
+              onClick={() => setIsShareModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-white/15 hover:bg-white/25 border border-white/30 rounded-lg text-white text-xs font-bold transition-all flex-shrink-0"
+              title="Invite players"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+              </svg>
+              Invite
+            </button>
+          )}
         </div>
         
         {/* Tab Navigation - Icon buttons */}

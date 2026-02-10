@@ -124,21 +124,44 @@ const JoinEventPage: React.FC = () => {
   const code = useMemo(() => extractJoinCode(rawInput), [rawInput]);
   const chars = Array.from({ length: 6 }).map((_, i) => code[i] || '');
 
-  // Deep link handling
+  // Deep link handling - auto-join immediately (grandma-simple: click link -> you're in)
+  const deepLinkHandled = useRef(false);
   useEffect(() => {
-    if (!codeParam) return;
+    if (!codeParam || deepLinkHandled.current) return;
     const extracted = extractJoinCode(codeParam);
     if (!extracted) return;
 
-    setShowCodeModal(true);
     if (!currentProfile) {
+      // No profile yet — store code, they'll be auto-joined after profile setup (handled in App.tsx)
       try { sessionStorage.setItem(PENDING_JOIN_KEY, extracted); } catch {}
+      setShowCodeModal(true);
       setCodeStatus('idle');
       setCodeMessage('Set up your profile first, then we\'ll join you automatically.');
-    } else {
-      setRawInput(extracted);
-      setCodeMessage('');
+      return;
     }
+
+    // Has profile — auto-join immediately, no modal needed
+    deepLinkHandled.current = true;
+    setRawInput(extracted);
+    setCodeStatus('joining');
+    setCodeMessage('Joining...');
+    
+    (async () => {
+      const result = await joinEventByCode(extracted);
+      if (result?.success) {
+        setCodeStatus('success');
+        setCodeMessage('Joined!');
+        addToast?.('Joined event!', 'success', 2500);
+        if (result?.eventId) {
+          setTimeout(() => navigate(`/event/${result.eventId}`, { replace: true }), 300);
+        }
+      } else {
+        // Show modal only if auto-join fails
+        setShowCodeModal(true);
+        setCodeStatus('error');
+        setCodeMessage(result?.error || 'Code not found. Check with the organizer.');
+      }
+    })();
   }, [codeParam, currentProfile?.id]);
 
   // Load public events
@@ -697,6 +720,49 @@ const JoinEventPage: React.FC = () => {
         )}
       </div>
 
+      {/* Inline Code Entry - Always visible, grandma-simple */}
+      <div className="bg-gradient-to-r from-accent/10 to-orange-100 dark:from-accent/20 dark:to-orange-900/20 border-2 border-accent/30 dark:border-accent/40 rounded-2xl p-3">
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent to-orange-500 flex items-center justify-center flex-shrink-0">
+            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-bold text-gray-900 dark:text-white">Have an invite code?</p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={rawInput}
+            onChange={(e) => setRawInput(e.target.value.toUpperCase())}
+            onKeyDown={(e) => e.key === 'Enter' && code.length === 6 && attemptJoinByCode()}
+            placeholder="Enter 6-digit code"
+            inputMode="text"
+            autoCapitalize="characters"
+            autoCorrect="off"
+            spellCheck={false}
+            maxLength={8}
+            className="flex-1 px-3 py-2.5 text-base font-mono font-bold tracking-wider text-center rounded-xl border-2 border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent placeholder:text-gray-300 dark:placeholder:text-gray-600 placeholder:tracking-normal placeholder:font-normal uppercase"
+          />
+          <button
+            onClick={attemptJoinByCode}
+            disabled={codeStatus === 'joining' || code.length !== 6}
+            className="px-5 py-2.5 bg-gradient-to-r from-accent to-orange-500 text-white font-bold text-sm rounded-xl shadow-md shadow-orange-500/30 disabled:opacity-40 disabled:shadow-none transition-all hover:shadow-lg active:scale-95 flex-shrink-0"
+          >
+            {codeStatus === 'joining' ? '...' : 'Join'}
+          </button>
+        </div>
+        {codeMessage && (
+          <p className={`mt-2 text-xs font-semibold text-center ${
+            codeStatus === 'success' ? 'text-green-600' : codeStatus === 'error' ? 'text-red-500' : 'text-gray-500'
+          }`}>
+            {codeMessage}
+          </p>
+        )}
+      </div>
+
       {/* Location prompt */}
       {geoStatus === 'idle' && (
         <button
@@ -834,7 +900,7 @@ const JoinEventPage: React.FC = () => {
         <span className={`transition-transform duration-200 ${showFabMenu ? 'rotate-45' : ''}`}>+</span>
       </button>
 
-      {/* FAB Action Sheet - like Dashboard */}
+      {/* FAB Action Sheet - simplified since code entry is now inline */}
       {showFabMenu && createPortal(
         <div 
           className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm flex items-end justify-center"
@@ -851,28 +917,11 @@ const JoinEventPage: React.FC = () => {
             
             {/* Header */}
             <div className="px-5 pb-3 text-center">
-              <h2 className="text-lg font-bold text-gray-900">How would you like to join?</h2>
+              <h2 className="text-lg font-bold text-gray-900">Quick Actions</h2>
             </div>
             
             {/* Action buttons */}
             <div className="px-4 pb-4 space-y-2">
-              {/* Enter Code - Most prominent */}
-              <button
-                onClick={() => { setShowFabMenu(false); setShowCodeModal(true); }}
-                className="w-full flex items-center gap-4 p-4 bg-gradient-to-r from-accent to-orange-500 rounded-2xl text-white hover:from-orange-500 hover:to-accent transition-all shadow-md"
-              >
-                <div className="w-14 h-14 rounded-xl bg-white/20 flex items-center justify-center text-2xl flex-shrink-0">
-                  🎫
-                </div>
-                <div className="text-left flex-1">
-                  <div className="font-bold text-lg">Enter Code</div>
-                  <div className="text-orange-100 text-sm">Have an invite code? Enter it here</div>
-                </div>
-                <svg className="w-6 h-6 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
-              </button>
-
               {/* Search for Course */}
               <button
                 onClick={() => { 
@@ -887,14 +936,14 @@ const JoinEventPage: React.FC = () => {
                 }}
                 className="w-full flex items-center gap-4 p-4 bg-blue-50 rounded-2xl hover:bg-blue-100 transition-colors border border-blue-200"
               >
-                <div className="w-14 h-14 rounded-xl bg-blue-200 flex items-center justify-center text-2xl flex-shrink-0">
+                <div className="w-12 h-12 rounded-xl bg-blue-200 flex items-center justify-center text-xl flex-shrink-0">
                   📍
                 </div>
                 <div className="text-left flex-1">
                   <div className="font-bold text-gray-900">Search Courses</div>
                   <div className="text-gray-500 text-sm">Find your course by name</div>
                 </div>
-                <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </button>
@@ -913,14 +962,14 @@ const JoinEventPage: React.FC = () => {
                 }}
                 className="w-full flex items-center gap-4 p-4 bg-primary-50 rounded-2xl hover:bg-primary-100 transition-colors border border-primary-200"
               >
-                <div className="w-14 h-14 rounded-xl bg-primary-200 flex items-center justify-center text-2xl flex-shrink-0">
+                <div className="w-12 h-12 rounded-xl bg-primary-200 flex items-center justify-center text-xl flex-shrink-0">
                   ⛳
                 </div>
                 <div className="text-left flex-1">
                   <div className="font-bold text-gray-900">Search Events</div>
                   <div className="text-gray-500 text-sm">Find an event by name</div>
                 </div>
-                <svg className="w-6 h-6 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </button>

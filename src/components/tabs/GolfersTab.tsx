@@ -554,140 +554,155 @@ Code: ${event.shareCode}`,
               </button>
             </div>
 
-            {/* Tabs - Groups get invite/manual, Events just manual */}
-            {isGroupHub && (
-              <div className="flex border-b border-gray-200 flex-shrink-0">
-                <button
-                  onClick={() => setAddModalTab('invite')}
-                  className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${
-                    addModalTab === 'invite' ? 'text-purple-700' : 'text-gray-500'
-                  }`}
-                >
-                  📲 Send Invite
-                  {addModalTab === 'invite' && (
-                    <span className="absolute bottom-0 left-4 right-4 h-0.5 bg-purple-600 rounded-full" />
-                  )}
-                </button>
-                <button
-                  onClick={() => setAddModalTab('manual')}
-                  className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${
-                    addModalTab === 'manual' ? 'text-purple-700' : 'text-gray-500'
-                  }`}
-                >
-                  ✏️ Add by Name
-                  {addModalTab === 'manual' && (
-                    <span className="absolute bottom-0 left-4 right-4 h-0.5 bg-purple-600 rounded-full" />
-                  )}
-                </button>
-              </div>
-            )}
+            {/* Tabs - Both groups AND events get invite/manual */}
+            <div className="flex border-b border-gray-200 flex-shrink-0">
+              <button
+                onClick={() => setAddModalTab('invite')}
+                className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${
+                  addModalTab === 'invite' 
+                    ? isGroupHub ? 'text-purple-700' : 'text-primary-700'
+                    : 'text-gray-500'
+                }`}
+              >
+                📲 Send Invite
+                {addModalTab === 'invite' && (
+                  <span className={`absolute bottom-0 left-4 right-4 h-0.5 rounded-full ${
+                    isGroupHub ? 'bg-purple-600' : 'bg-primary-600'
+                  }`} />
+                )}
+              </button>
+              <button
+                onClick={() => setAddModalTab('manual')}
+                className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${
+                  addModalTab === 'manual'
+                    ? isGroupHub ? 'text-purple-700' : 'text-primary-700'
+                    : 'text-gray-500'
+                }`}
+              >
+                ✏️ Add by Name
+                {addModalTab === 'manual' && (
+                  <span className={`absolute bottom-0 left-4 right-4 h-0.5 rounded-full ${
+                    isGroupHub ? 'bg-purple-600' : 'bg-primary-600'
+                  }`} />
+                )}
+              </button>
+            </div>
             
             {/* Modal Content */}
             <div className="flex-1 overflow-y-auto">
-              {/* INVITE TAB - Groups only */}
-              {isGroupHub && addModalTab === 'invite' && (
+              {/* INVITE TAB - Works for both groups AND events */}
+              {addModalTab === 'invite' && (
                 <div className="p-5 space-y-5">
                   {/* Hero section */}
                   <div className="text-center py-2">
-                    <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                    <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3 ${
+                      isGroupHub ? 'bg-purple-100' : 'bg-primary-100'
+                    }`}>
                       <span className="text-3xl">📲</span>
                     </div>
-                    <h4 className="font-bold text-gray-900 mb-1">Invite friends to join</h4>
+                    <h4 className="font-bold text-gray-900 mb-1">
+                      {isGroupHub ? 'Invite friends to join' : 'Invite golfers to play'}
+                    </h4>
                     <p className="text-sm text-gray-500">
-                      Send a link - they'll get the app and join your group
+                      {isGroupHub 
+                        ? 'Send a link — they tap it and join your group'
+                        : 'Send a link — they tap it and join your game'}
                     </p>
                   </div>
 
-                  {/* Share Buttons */}
+                  {/* Share Buttons - Big & grandma-friendly */}
                   <div className="grid grid-cols-2 gap-3">
                     <button
                       onClick={handleTextInvite}
                       disabled={isGeneratingCode}
-                      className="flex flex-col items-center gap-2 p-4 bg-green-50 hover:bg-green-100 rounded-xl border border-green-200 transition-colors disabled:opacity-60"
+                      className="flex flex-col items-center gap-2 p-4 bg-green-50 hover:bg-green-100 rounded-xl border-2 border-green-200 transition-colors disabled:opacity-60"
                     >
-                      <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center">
+                      <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center shadow">
                         <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                         </svg>
                       </div>
-                      <span className="text-sm font-bold text-green-700">Text Message</span>
-                      <span className="text-[10px] text-green-600">Best for individuals</span>
+                      <span className="text-sm font-bold text-green-700">Send Text</span>
+                      <span className="text-[10px] text-green-600">iMessage / SMS</span>
                     </button>
                     
                     <button
                       onClick={handleShareInvite}
                       disabled={isGeneratingCode}
-                      className="flex flex-col items-center gap-2 p-4 bg-purple-50 hover:bg-purple-100 rounded-xl border border-purple-200 transition-colors disabled:opacity-60"
+                      className={`flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-colors disabled:opacity-60 ${
+                        isGroupHub 
+                          ? 'bg-purple-50 hover:bg-purple-100 border-purple-200' 
+                          : 'bg-primary-50 hover:bg-primary-100 border-primary-200'
+                      }`}
                     >
-                      <div className="w-12 h-12 bg-purple-500 rounded-full flex items-center justify-center">
+                      <div className={`w-12 h-12 rounded-full flex items-center justify-center shadow ${
+                        isGroupHub ? 'bg-purple-500' : 'bg-primary-600'
+                      }`}>
                         <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                         </svg>
                       </div>
-                      <span className="text-sm font-bold text-purple-700">Share Link</span>
-                      <span className="text-[10px] text-purple-600">Any app or group chat</span>
+                      <span className={`text-sm font-bold ${isGroupHub ? 'text-purple-700' : 'text-primary-700'}`}>Share Link</span>
+                      <span className={`text-[10px] ${isGroupHub ? 'text-purple-600' : 'text-primary-600'}`}>Any app or chat</span>
                     </button>
                   </div>
 
-                  {/* Or divider */}
+                  {/* Or divider + code */}
                   {event.shareCode && (
                     <>
                       <div className="flex items-center gap-3">
                         <div className="flex-1 h-px bg-gray-200" />
-                        <span className="text-xs text-gray-400 font-medium">OR SHARE MANUALLY</span>
+                        <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Or share code</span>
                         <div className="flex-1 h-px bg-gray-200" />
                       </div>
 
-                      {/* Code & Link */}
                       <div className="space-y-3">
-                        <div>
-                          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Join Code</label>
-                          <button
-                            onClick={handleCopyCode}
-                            className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-center hover:bg-gray-100 transition-colors group"
-                          >
-                            <span className="text-2xl font-mono font-black tracking-[0.15em] text-gray-800 group-hover:text-purple-600">
-                              {event.shareCode}
-                            </span>
-                            <span className="block text-[10px] text-gray-400 mt-1">Tap to copy</span>
-                          </button>
-                        </div>
+                        <button
+                          onClick={handleCopyCode}
+                          className="w-full bg-gray-50 border border-gray-200 rounded-xl p-3 text-center hover:bg-gray-100 transition-colors group"
+                        >
+                          <span className={`text-2xl font-mono font-black tracking-[0.15em] text-gray-800 ${
+                            isGroupHub ? 'group-hover:text-purple-600' : 'group-hover:text-primary-600'
+                          }`}>
+                            {event.shareCode}
+                          </span>
+                          <span className="block text-[10px] text-gray-400 mt-1">Tap to copy</span>
+                        </button>
                         
-                        <div>
-                          <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Link</label>
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              value={shareUrl}
-                              readOnly
-                              className="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm text-gray-600 font-mono truncate"
-                            />
-                            <button
-                              onClick={handleCopyLink}
-                              className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-semibold transition-colors"
-                            >
-                              Copy
-                            </button>
-                          </div>
-                        </div>
+                        <button
+                          onClick={handleCopyLink}
+                          className="w-full flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 hover:bg-gray-100 transition-colors group"
+                        >
+                          <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                          </svg>
+                          <span className="text-sm text-gray-500 font-mono truncate flex-1 text-left">{shareUrl}</span>
+                          <span className="text-xs text-gray-400 font-semibold flex-shrink-0">Copy</span>
+                        </button>
                       </div>
                     </>
                   )}
 
                   {/* What they'll see */}
-                  <div className="bg-gradient-to-br from-purple-50 to-white border border-purple-100 rounded-xl p-4">
-                    <div className="text-xs font-semibold text-purple-700 uppercase tracking-wider mb-2">What they'll receive</div>
+                  <div className={`border rounded-xl p-4 ${
+                    isGroupHub 
+                      ? 'bg-gradient-to-br from-purple-50 to-white border-purple-100' 
+                      : 'bg-gradient-to-br from-primary-50 to-white border-primary-100'
+                  }`}>
+                    <div className={`text-xs font-semibold uppercase tracking-wider mb-2 ${
+                      isGroupHub ? 'text-purple-700' : 'text-primary-700'
+                    }`}>How it works for them</div>
                     <div className="text-sm text-gray-600 space-y-1">
-                      <p>📱 A link to download Gimmies (free)</p>
-                      <p>🔗 Auto-join your group "{event.name}"</p>
-                      <p>💬 Access to group chat & events</p>
+                      <p>1. They get a link via text or share</p>
+                      <p>2. They tap the link</p>
+                      <p>3. They're in your {isGroupHub ? 'group' : 'game'} — done!</p>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* MANUAL TAB - or default for events */}
-              {(!isGroupHub || addModalTab === 'manual') && (
+              {/* MANUAL TAB */}
+              {addModalTab === 'manual' && (
                 <div className="p-4 space-y-4">
                   {/* Name */}
                   <div>

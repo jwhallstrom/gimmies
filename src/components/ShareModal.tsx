@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import useStore from '../state/store';
 import { useAuthMode } from '../hooks/useAuthMode';
 
@@ -13,6 +13,7 @@ const ShareModal: React.FC<ShareModalProps> = ({ eventId, isOpen, onClose }) => 
   const { isGuest } = useAuthMode();
   const [message, setMessage] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+  const autoGenTriggered = useRef(false);
 
   // Close on escape
   useEffect(() => {
@@ -25,33 +26,34 @@ const ShareModal: React.FC<ShareModalProps> = ({ eventId, isOpen, onClose }) => 
     }
   }, [isOpen, onClose]);
 
+  // AUTO-GENERATE share code when modal opens (grandma-simple: no extra button)
+  useEffect(() => {
+    if (!isOpen || autoGenTriggered.current) return;
+    const event = events.find(e => e.id === eventId);
+    if (!event || event.shareCode || isGuest || !currentProfile) return;
+    // Only auto-generate if the user is allowed (owner or group member)
+    const isGroupHub = event.hubType === 'group';
+    const isOwner = currentProfile?.id === event.ownerProfileId;
+    const isMember = event.golfers.some(g => g.profileId === currentProfile?.id);
+    if (!isOwner && !isGroupHub && !isMember) return;
+    
+    autoGenTriggered.current = true;
+    setIsGenerating(true);
+    generateShareCode(eventId).finally(() => setIsGenerating(false));
+  }, [isOpen, eventId, events, currentProfile, isGuest, generateShareCode]);
+
+  // Reset auto-gen flag when modal closes
+  useEffect(() => {
+    if (!isOpen) autoGenTriggered.current = false;
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   const event = events.find(e => e.id === eventId);
   if (!event) return null;
 
   const isGroupHub = event.hubType === 'group';
-  const isOwner = currentProfile?.id === event.ownerProfileId;
   const shareUrl = event.shareCode ? `${window.location.origin}/join/${event.shareCode}` : '';
-  
-  // For groups, all members can share. For events, anyone in the event can share.
-  const canShare = isGroupHub || isOwner || event.golfers.some(g => g.profileId === currentProfile?.id);
-
-  const handleGenerateCode = async () => {
-    setIsGenerating(true);
-    try {
-      const code = await generateShareCode(eventId);
-      if (code) {
-        setMessage('Invite code created!');
-        setTimeout(() => setMessage(''), 3000);
-      } else {
-        setMessage('Failed to generate code.');
-        setTimeout(() => setMessage(''), 3000);
-      }
-    } finally {
-      setIsGenerating(false);
-    }
-  };
 
   const handleCopy = (text: string, type: string) => {
     navigator.clipboard.writeText(text);
@@ -79,7 +81,6 @@ const ShareModal: React.FC<ShareModalProps> = ({ eventId, isOpen, onClose }) => 
       ? `Join my golf group "${event.name}" on Gimmies! ${shareUrl}`
       : `Join my golf event "${event.name}" on Gimmies! ${shareUrl}`;
     
-    // Use SMS URI scheme
     const smsUrl = `sms:?body=${encodeURIComponent(text)}`;
     window.open(smsUrl, '_self');
   };
@@ -129,132 +130,108 @@ const ShareModal: React.FC<ShareModalProps> = ({ eventId, isOpen, onClose }) => 
                 Sign In
               </button>
             </div>
+          ) : isGenerating ? (
+            /* Loading state while auto-generating code */
+            <div className="text-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600 mx-auto mb-3"></div>
+              <p className="text-sm text-gray-500">Creating invite link...</p>
+            </div>
           ) : (
             <>
               {/* Status Message */}
               {message && (
                 <div className="bg-green-50 text-green-700 px-4 py-2.5 rounded-xl text-sm text-center font-medium animate-fade-in">
-                  ✓ {message}
+                  {message}
                 </div>
               )}
 
-              {/* No share code yet */}
-              {!event.shareCode ? (
-                <div className="text-center space-y-4 py-4">
-                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto">
-                    <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                    </svg>
-                  </div>
-                  <div>
-                    <p className="font-semibold text-gray-900 mb-1">Create an invite link</p>
-                    <p className="text-sm text-gray-500">
-                      {isGroupHub 
-                        ? 'Generate a link so friends can join your group'
-                        : 'Generate a link so golfers can join this event'}
-                    </p>
-                  </div>
-                  {(isOwner || isGroupHub) ? (
-                    <button
-                      onClick={handleGenerateCode}
-                      disabled={isGenerating}
-                      className={`w-full py-3.5 rounded-xl font-bold text-white transition-all ${
-                        isGroupHub 
-                          ? 'bg-purple-600 hover:bg-purple-700' 
-                          : 'bg-primary-600 hover:bg-primary-700'
-                      } disabled:opacity-60 shadow-lg`}
-                    >
-                      {isGenerating ? 'Creating...' : 'Create Invite Link'}
-                    </button>
-                  ) : (
-                    <p className="text-sm text-gray-500 italic bg-gray-50 p-3 rounded-xl">
-                      Only the {isGroupHub ? 'group admin' : 'event owner'} can create an invite link.
-                    </p>
-                  )}
-                </div>
-              ) : (
-                /* Has share code - show sharing options */
+              {event.shareCode ? (
+                /* Has share code - show sharing options immediately */
                 <div className="space-y-5">
-                  {/* Quick Share Actions */}
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Quick Share</p>
-                    <div className="grid grid-cols-2 gap-3">
-                      {/* Text Message */}
-                      <button
-                        onClick={handleTextMessage}
-                        className="flex flex-col items-center gap-2 p-4 bg-green-50 hover:bg-green-100 rounded-xl border border-green-200 transition-colors"
-                      >
-                        <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center">
-                          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                          </svg>
-                        </div>
-                        <span className="text-sm font-semibold text-green-700">Text</span>
-                      </button>
-                      
-                      {/* Share Sheet */}
-                      <button
-                        onClick={handleNativeShare}
-                        className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${
-                          isGroupHub 
-                            ? 'bg-purple-50 hover:bg-purple-100 border-purple-200' 
-                            : 'bg-primary-50 hover:bg-primary-100 border-primary-200'
-                        }`}
-                      >
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                          isGroupHub ? 'bg-purple-500' : 'bg-primary-600'
-                        }`}>
-                          <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                          </svg>
-                        </div>
-                        <span className={`text-sm font-semibold ${isGroupHub ? 'text-purple-700' : 'text-primary-700'}`}>
-                          Share
-                        </span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Join Code */}
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Join Code</p>
+                  {/* Big CTA buttons - grandma friendly */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* Text Message - #1 action for grandma */}
                     <button
-                      onClick={() => handleCopy(event.shareCode!, 'Code')}
-                      className="w-full bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl p-4 hover:border-primary-400 hover:bg-primary-50 transition-all group"
+                      onClick={handleTextMessage}
+                      className="flex flex-col items-center gap-2 p-5 bg-green-50 hover:bg-green-100 rounded-2xl border-2 border-green-200 transition-colors"
                     >
-                      <span className="text-3xl font-mono font-black text-gray-800 tracking-[0.2em] group-hover:text-primary-700">
-                        {event.shareCode}
+                      <div className="w-14 h-14 bg-green-500 rounded-full flex items-center justify-center shadow-md">
+                        <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                        </svg>
+                      </div>
+                      <span className="text-sm font-bold text-green-700">Send Text</span>
+                    </button>
+                    
+                    {/* Share Sheet */}
+                    <button
+                      onClick={handleNativeShare}
+                      className={`flex flex-col items-center gap-2 p-5 rounded-2xl border-2 transition-colors ${
+                        isGroupHub 
+                          ? 'bg-purple-50 hover:bg-purple-100 border-purple-200' 
+                          : 'bg-primary-50 hover:bg-primary-100 border-primary-200'
+                      }`}
+                    >
+                      <div className={`w-14 h-14 rounded-full flex items-center justify-center shadow-md ${
+                        isGroupHub ? 'bg-purple-500' : 'bg-primary-600'
+                      }`}>
+                        <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                        </svg>
+                      </div>
+                      <span className={`text-sm font-bold ${isGroupHub ? 'text-purple-700' : 'text-primary-700'}`}>
+                        Share Link
                       </span>
-                      <p className="text-xs text-gray-400 mt-1 group-hover:text-primary-600">Tap to copy</p>
                     </button>
                   </div>
 
-                  {/* Share Link */}
-                  <div>
-                    <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Link</p>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={shareUrl}
-                        readOnly
-                        className="flex-1 bg-white text-gray-900 placeholder:text-gray-400 border border-gray-200 rounded-xl px-4 py-3 text-sm font-mono truncate"
-                      />
-                      <button
-                        onClick={() => handleCopy(shareUrl, 'Link')}
-                        className="px-4 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-semibold transition-colors"
-                      >
-                        Copy
-                      </button>
+                  {/* Copy link - one tap */}
+                  <button
+                    onClick={() => handleCopy(shareUrl, 'Link')}
+                    className="w-full flex items-center gap-3 p-3.5 bg-gray-50 border border-gray-200 rounded-xl hover:bg-gray-100 transition-colors group"
+                  >
+                    <div className="w-9 h-9 rounded-lg bg-gray-200 flex items-center justify-center group-hover:bg-primary-100">
+                      <svg className="w-4 h-4 text-gray-600 group-hover:text-primary-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                      </svg>
                     </div>
-                  </div>
+                    <div className="flex-1 min-w-0 text-left">
+                      <p className="text-xs font-semibold text-gray-600">Tap to copy link</p>
+                      <p className="text-xs text-gray-400 font-mono truncate">{shareUrl}</p>
+                    </div>
+                    <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                    </svg>
+                  </button>
 
-                  {/* Tip */}
+                  {/* Join Code - visible but secondary */}
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 h-px bg-gray-200" />
+                    <span className="text-[10px] text-gray-400 font-semibold uppercase tracking-wider">Or share the code</span>
+                    <div className="flex-1 h-px bg-gray-200" />
+                  </div>
+                  <button
+                    onClick={() => handleCopy(event.shareCode!, 'Code')}
+                    className="w-full bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl p-3 hover:border-primary-400 hover:bg-primary-50 transition-all group"
+                  >
+                    <span className="text-2xl font-mono font-black text-gray-800 tracking-[0.2em] group-hover:text-primary-700">
+                      {event.shareCode}
+                    </span>
+                    <p className="text-[10px] text-gray-400 mt-0.5 group-hover:text-primary-600">Tap to copy</p>
+                  </button>
+
+                  {/* How it works for grandma */}
                   <div className={`p-3 rounded-xl text-xs ${
                     isGroupHub ? 'bg-purple-50 text-purple-700' : 'bg-primary-50 text-primary-700'
                   }`}>
-                    <span className="font-semibold">Tip:</span> Anyone with the code or link can join. 
-                    {isGroupHub && ' All members can share this invite.'}
+                    <p className="font-semibold mb-1">How it works:</p>
+                    <p>Send the link. They tap it. They're in. That's it.</p>
                   </div>
+                </div>
+              ) : (
+                /* Fallback: code generation failed or not allowed */
+                <div className="text-center py-4">
+                  <p className="text-sm text-gray-500">Could not create invite link. Try again later.</p>
                 </div>
               )}
             </>
