@@ -17,10 +17,10 @@ import { useCourse } from '../../hooks/useCourse';
 import { STATUS_TIERS } from '../../state/types';
 import StatusLevelsInfo from '../verified/StatusLevelsInfo';
 
-type Props = { eventId: string };
+type Props = { eventId: string; isTabActive?: boolean };
 type AddModalTab = 'invite' | 'manual';
 
-const GolfersTab: React.FC<Props> = ({ eventId }) => {
+const GolfersTab: React.FC<Props> = ({ eventId, isTabActive = true }) => {
   const navigate = useNavigate();
   const event = useStore((s: any) =>
     s.events.find((e: any) => e.id === eventId) ||
@@ -347,6 +347,19 @@ Code: ${event.shareCode}`,
             {golferData.length} {isGroupHub ? 'member' : 'player'}{golferData.length !== 1 ? 's' : ''} in this {isGroupHub ? 'group' : 'event'}
           </p>
         </div>
+        
+        {/* Groups keep an inline add button (no FAB for groups) */}
+        {isGroupHub && !event.isCompleted && (
+          <button
+            onClick={() => { setAddModalTab('invite'); setShowAddModal(true); }}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all bg-purple-600 text-white hover:bg-purple-700 shadow-md shadow-purple-200"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            Add Member
+          </button>
+        )}
       </div>
 
       {/* Setup hint removed - course selection happens naturally in flow */}
@@ -928,17 +941,16 @@ Code: ${event.shareCode}`,
         />
       )}
 
-      {/* ========== FAB + Action Sheet ========== */}
-      {!event.isCompleted && (
+      {/* ========== FAB + Action Sheet (Events only, Members tab only) ========== */}
+      {!event.isCompleted && !isGroupHub && isTabActive && (
         <>
-          {/* FAB Button */}
+          {/* FAB Button - matches app-wide standard (w-16 h-16 + fab-position) */}
           <button
             onClick={() => setShowFabMenu(true)}
-            className="fixed bottom-20 right-4 z-40 w-14 h-14 rounded-full bg-gradient-to-br from-accent to-orange-500 text-white shadow-lg shadow-orange-300/40 flex items-center justify-center hover:scale-105 active:scale-95 transition-transform"
+            className="fixed right-4 z-40 w-16 h-16 bg-gradient-to-br from-accent to-orange-600 rounded-full shadow-lg shadow-accent/40 flex items-center justify-center text-white text-3xl font-bold hover:scale-105 active:scale-95 transition-transform fab-position"
+            aria-label="Add player"
           >
-            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6v12m6-6H6" />
-            </svg>
+            <span className={`transition-transform duration-200 ${showFabMenu ? 'rotate-45' : ''}`}>+</span>
           </button>
 
           {/* Bottom-up Action Sheet */}

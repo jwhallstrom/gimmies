@@ -502,7 +502,7 @@ const EventPage: React.FC = () => {
               {tab.id === 'chat' && <ChatTab eventId={event.id} isActive={isChatPage} />}
               {tab.id === 'scorecard' && <ScoreHubTab eventId={event.id} isTabActive={swipeableTabs[activePageIndex]?.id === 'scorecard'} />}
               {tab.id === 'games' && <GamesTab eventId={event.id} />}
-              {tab.id === 'golfers' && <GolfersTab eventId={event.id} />}
+              {tab.id === 'golfers' && <GolfersTab eventId={event.id} isTabActive={swipeableTabs[activePageIndex]?.id === 'golfers'} />}
               {tab.id === 'settings' && (isOwner ? <SetupTab eventId={event.id} /> : <AccessDenied />)}
             </div>
           </div>
