@@ -2,14 +2,14 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import useStore from '../state/store';
 
-type Props = { eventId: string };
+type Props = { eventId: string; nassauIdOverride?: string };
 
 type Team = { id: string; name: string; golferIds: string[] };
 
-const NassauTeamsPage: React.FC<Props> = ({ eventId }) => {
+const NassauTeamsPage: React.FC<Props> = ({ eventId, nassauIdOverride }) => {
   const navigate = useNavigate();
   const params = useParams();
-  const nassauId = params.nassauId as string | undefined;
+  const nassauId = nassauIdOverride || params.nassauId as string | undefined;
 
   const event = useStore((s: any) => s.events.find((e: any) => e.id === eventId) || s.completedEvents.find((e: any) => e.id === eventId));
   const profiles = useStore((s: any) => s.profiles);
@@ -148,7 +148,7 @@ const NassauTeamsPage: React.FC<Props> = ({ eventId }) => {
       <div className="flex items-center gap-2">
         <button
           type="button"
-          onClick={() => navigate(`/event/${eventId}/games`)}
+          onClick={() => navigate(`/event/${eventId}`)}
           className="w-9 h-9 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-700"
           title="Back"
         >

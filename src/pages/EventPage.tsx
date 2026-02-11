@@ -10,7 +10,7 @@
  */
 
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import useStore from '../state/store';
 import { useEventSync } from '../hooks/useEventSync';
 import SetupTab from '../components/tabs/SetupTab';
@@ -18,6 +18,7 @@ import ScoreHubTab from '../components/tabs/ScoreHubTab';
 import GolfersTab from '../components/tabs/GolfersTab';
 import GamesTab from '../components/tabs/GamesTab';
 import ChatTab from '../components/tabs/ChatTab';
+import NassauTeamsPage from './NassauTeamsPage';
 import EventNotifications from '../components/EventNotifications';
 import { getCourseById } from '../data/cloudCourses';
 import { LeaderboardIcon } from '../components/icons/LeaderboardIcon';
@@ -39,6 +40,7 @@ const formatDateShort = (iso: string) =>
 
 const EventPage: React.FC = () => {
   const { id } = useParams();
+  const location = useLocation();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [showEventsDropdown, setShowEventsDropdown] = useState(false);
@@ -194,7 +196,17 @@ const EventPage: React.FC = () => {
     }
   }, [isGroupHub, isChatPage, event?.id]);
 
-  
+  // Check for nassau teams sub-route: /event/:id/games/nassau/:nassauId/teams
+  const nassauTeamsMatch = location.pathname.match(/\/event\/[^/]+\/games\/nassau\/([^/]+)\/teams/);
+  if (nassauTeamsMatch && event) {
+    return (
+      <div className="h-full min-h-0 -mx-4 -mt-4 flex flex-col">
+        <div className="flex-1 overflow-y-auto px-4 py-4 pb-32">
+          <NassauTeamsPage eventId={id!} nassauIdOverride={nassauTeamsMatch[1]} />
+        </div>
+      </div>
+    );
+  }
   
   // Icon-only tabs (no labels): saves space and removes sideways scrolling.
   const tabPillClass =
