@@ -98,6 +98,30 @@ frontend:
 ```
 
 **Key points:**
+
+### 4. SPA Routing Configuration (CRITICAL for /club and other routes)
+
+For the main app to handle React Router routes like `/club`, `/events`, `/join` etc., you MUST configure rewrites in Amplify Console:
+
+**Amplify Console → App Settings → Rewrites and redirects:**
+
+| Source Address | Target Address | Type |
+|---------------|----------------|------|
+| `</^[^.]+$\|\.(?!(css\|gif\|ico\|jpg\|js\|png\|txt\|svg\|woff\|woff2\|ttf\|map\|json\|webp)$)([^.]+$)/>` | `/index.html` | 200 (Rewrite) |
+
+**What this does:**
+- Captures all routes that don't have file extensions (like `/club`, `/events/abc123`)
+- Serves `index.html` with 200 status (not 404)
+- Lets React Router handle the routing client-side
+
+**Without this:**
+- Direct access to `/club` → 404 error
+- Refresh on any route → 404 error
+- Deep links break
+
+**Status:** ✅ Should already be configured, verify in Console
+
+---
 - Uses standard `npm ci` (no custom cache flags)
 - Backend deployment via `ampx pipeline-deploy`
 - Frontend builds to `dist/` directory

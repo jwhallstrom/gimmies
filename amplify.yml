@@ -49,3 +49,14 @@ frontend:
       - node_modules/**/*
       - apps/landing/node_modules/**/*
       - apps/tournaments/node_modules/**/*
+# SPA Rewrites - redirect all routes to index.html for React Router
+# This ensures routes like /club, /events, /join work on direct access
+customHeaders:
+  - pattern: '**/*'
+    headers:
+      - key: 'Strict-Transport-Security'
+        value: 'max-age=31536000; includeSubDomains'
+      - key: 'X-Frame-Options'
+        value: 'SAMEORIGIN'
+      - key: 'X-Content-Type-Options'
+        value: 'nosniff'
