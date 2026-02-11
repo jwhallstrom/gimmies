@@ -87,6 +87,16 @@ body.chat-input-focused footer {
   display: none !important;
 }
 
+/* When footer is hidden (keyboard up), remove the footer-clearance padding
+   so the chat composer sits flush above the keyboard instead of floating. */
+body.chat-input-focused .event-page-container {
+  padding-bottom: 0 !important;
+}
+
+body.chat-input-focused .content-with-footer {
+  padding-bottom: 0 !important;
+}
+
 /* When the bottom nav is part of flex layout, content scrolls within the main area naturally.
    This class is kept for backward compat but no longer needs bottom offset. */
 .app-scroll-with-bottom-nav {
@@ -154,17 +164,17 @@ a:active,
 .pl-safe-base-0 { --pl-safe-base: 0; }
 .pr-safe-base-0 { --pr-safe-base: 0; }
 
-/* Ticker positioning - sits directly above the fixed bottom nav.
-   Footer = 68px + safe-area. Ticker sits right above. */
+/* Ticker positioning - sits flush against top of the fixed bottom nav.
+   Footer min-height = 68px + safe-area. Ticker sits right on top. */
 .ticker-above-footer {
-  bottom: 76px; /* Fallback: footer (68px) + 8px base pad */
-  bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  bottom: 68px; /* Fallback: flush with footer top */
+  bottom: calc(68px + env(safe-area-inset-bottom, 0px));
 }
 
 /* FAB positioning - sits above ticker and bottom nav */
 .fab-position {
-  bottom: 120px; /* Fallback: ticker (~44px) + footer (68px) + 8px */
-  bottom: calc(120px + env(safe-area-inset-bottom, 0px));
+  bottom: 112px; /* Fallback: ticker (~44px) + footer (68px) */
+  bottom: calc(112px + env(safe-area-inset-bottom, 0px));
 }
 
 /* Content padding - bottom space for scrollable content to clear fixed footer */
@@ -173,10 +183,11 @@ a:active,
   padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px));
 }
 
-/* Event page container - must not extend behind fixed bottom nav */
+/* Event page container - must not extend behind fixed bottom nav.
+   Matches footer min-height so content sits flush against the nav. */
 .event-page-container {
-  padding-bottom: 76px; /* footer (68px) + 8px base pad */
-  padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: 68px;
+  padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px));
 }
 
 /* PWA Safe Area Support - standalone detection (WebKit + others) */
@@ -459,6 +470,15 @@ body.pwa-standalone .fullscreen-overlay {
   100% { transform: scale(1); opacity: 1; }
 }
 
+.animate-pulse-subtle {
+  animation: pulse-subtle 2s ease-in-out infinite;
+}
+
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+
 .animate-scale-in {
   animation: scale-in 0.15s ease-out forwards;
 }
@@ -586,13 +606,13 @@ body.platform-android .content-with-footer {
 }
 
 body.platform-android .event-page-container {
-  padding-bottom: 76px;
+  padding-bottom: 68px;
 }
 
 body.platform-android .ticker-above-footer {
-  bottom: 76px;
+  bottom: 68px;
 }
 
 body.platform-android .fab-position {
-  bottom: 120px;
+  bottom: 112px;
 }

@@ -90,8 +90,20 @@ const TournamentChat: React.FC<Props> = ({
     };
   }, [keyboardHeight]);
 
-  const handleFocus = () => { /* keyboard detection handles footer visibility */ };
-  const handleBlur = () => { /* keyboard detection handles footer visibility */ };
+  const handleFocus = () => {
+    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+      document.body.classList.add('chat-input-focused');
+    }
+  };
+  const handleBlur = () => {
+    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+      setTimeout(() => {
+        if (!document.activeElement || !['TEXTAREA', 'INPUT'].includes(document.activeElement.tagName)) {
+          document.body.classList.remove('chat-input-focused');
+        }
+      }, 150);
+    }
+  };
   
   // Auto-scroll to bottom when new messages arrive
   useEffect(() => {

@@ -223,15 +223,12 @@ export const createWalletSlice = (
       // Calculate total entry for this golfer
       let totalEntry = 0;
 
-      // Nassau: per-user buy-in (once), respecting participant filters and team assignments.
+      // Nassau: per-user buy-in — use all event golfers (not stale participantGolferIds)
       (event.games.nassau || []).forEach((n: any) => {
         const group = event.groups.find((gr: any) => gr.id === n.groupId);
         if (!group) return;
 
         let players: string[] = (group.golferIds || []).slice();
-        if (n.participantGolferIds && n.participantGolferIds.length > 1) {
-          players = players.filter((id: string) => n.participantGolferIds.includes(id));
-        }
 
         const isTeam = n.teams && n.teams.length >= 2;
         if (isTeam) {
@@ -247,15 +244,12 @@ export const createWalletSlice = (
         if (players.includes(golferId)) totalEntry += Number(n.fee) || 0;
       });
 
-      // Skins: per-user buy-in (once), respecting participant filters.
+      // Skins: per-user buy-in — all event golfers participate
       const skinsConfigs: any[] = Array.isArray(event.games.skins)
         ? event.games.skins
         : (event.games.skins ? [event.games.skins] : []);
       skinsConfigs.forEach((s: any) => {
-        const participants: string[] = (s.participantGolferIds && s.participantGolferIds.length > 1)
-          ? s.participantGolferIds
-          : allGolferIds;
-        if (participants.includes(golferId)) totalEntry += Number(s.fee) || 0;
+        if (allGolferIds.includes(golferId)) totalEntry += Number(s.fee) || 0;
       });
 
       // Pinky/Greenie are performance/penalty games in this app; no buy-in.

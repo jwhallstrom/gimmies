@@ -28,13 +28,12 @@ export function computeSkins(event: Event, config: SkinsConfig, profiles: any[])
     return pref === 'all' || pref === 'skins';
   };
 
-  let players = event.golfers
+  // Use all eligible golfers — participantGolferIds is a creation-time snapshot
+  // and becomes stale when new players join the event after game setup.
+  const players = event.golfers
     .map((g: any) => g.profileId || g.customName || g.displayName)
     .filter((id: any): id is string => id !== undefined && id !== null && id !== '')
     .filter(eligible);
-  if (config.participantGolferIds && config.participantGolferIds.length > 1) {
-    players = players.filter(p => config.participantGolferIds!.includes(p));
-  }
   if (players.length < 2) return null;
   const totalPot = players.length * config.fee;
   const winningsByGolfer: Record<string, number> = {};

@@ -1,5 +1,5 @@
 import React, { useEffect, useState, Suspense, lazy, useMemo } from 'react';
-import { Routes, Route, Link, useLocation, useNavigate } from 'react-router-dom';
+import { Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { LoginPage } from '../components/auth/LoginPage';
 import { ProfileCompletion } from '../components/auth/ProfileCompletion';
 import Dashboard from './Dashboard'; // Keep eager - it's the landing page
@@ -25,8 +25,18 @@ const AuthDemoPage = lazy(() => import('./AuthDemoPage').then(m => ({ default: m
 const TournamentsPage = lazy(() => import('./TournamentsPage'));
 const TournamentPage = lazy(() => import('./TournamentPage'));
 
+// Nassau Teams page (sub-route of event)
+const NassauTeamsPage = lazy(() => import('./NassauTeamsPage'));
+
 // Club Dashboard (business accounts)
 const ClubDashboard = lazy(() => import('./ClubDashboard'));
+
+// Wrapper to extract :id param and pass as eventId prop
+const NassauTeamsRoute: React.FC = () => {
+  const { id } = useParams();
+  if (!id) return null;
+  return <NassauTeamsPage eventId={id} />;
+};
 
 const App: React.FC = () => {
   const { currentUser, currentProfile, events, switchUser, createUser, joinEventByCode, addToast, pendingLevelUp, clearPendingLevelUp } = useStore();
@@ -335,6 +345,7 @@ const App: React.FC = () => {
                 <Route path="/handicap/round/:roundId" element={<RoundDetailPage />} />
                 <Route path="/analytics" element={<AnalyticsPage />} />
                 <Route path="/wallet/*" element={<WalletPage />} />
+                <Route path="/event/:id/games/nassau/:nassauId/teams" element={<NassauTeamsRoute />} />
                 <Route path="/event/:id/*" element={<EventPage />} />
                 <Route path="/join" element={<JoinEventPage />} />
                 <Route path="/join/:code" element={<JoinEventPage />} />

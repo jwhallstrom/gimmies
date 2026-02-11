@@ -85,7 +85,7 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
     const golferId = eventGolfer.profileId || eventGolfer.customName;
     if (golferId) buyinByGolfer[golferId] = 0; 
   });
-  // Nassau: each paying participant contributes its fee once (if configuration valid)
+  // Nassau: each paying participant contributes its fee once — use all eligible golfers
   payouts.nassau.forEach(n => {
     const cfg = event.games.nassau.find((c: any) => c.id === n.configId);
     if (!cfg) return;
@@ -98,9 +98,6 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
       const pref: 'all' | 'nassau' | 'skins' | 'none' = (eg?.gamePreference as any) || 'all';
       return pref === 'all' || pref === 'nassau';
     });
-    if (cfg.participantGolferIds && cfg.participantGolferIds.length > 1) {
-      players = players.filter(p => cfg.participantGolferIds!.includes(p));
-    }
     const isTeam = cfg.teams && cfg.teams.length >= 2;
     if (isTeam) {
       const assigned = new Set<string>();
@@ -112,7 +109,7 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
     const perPlayer = (fees.out || 0) + (fees.in || 0) + (fees.total || 0);
     players.forEach(pid => { buyinByGolfer[pid] += perPlayer; });
   });
-  // Skins: every golfer pays each skins config fee
+  // Skins: every eligible golfer pays each skins config fee
   const skinsConfigs: any[] = Array.isArray(event.games.skins) ? event.games.skins : (event.games.skins ? [event.games.skins] : []);
   skinsConfigs.forEach(sk => {
     const eligible = (gid: string) => {
@@ -120,11 +117,10 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
       const pref: 'all' | 'nassau' | 'skins' | 'none' = (eg?.gamePreference as any) || 'all';
       return pref === 'all' || pref === 'skins';
     };
-    const base = event.golfers
+    const skinParticipants = event.golfers
       .map((g: any) => g.profileId || g.customName || g.displayName)
       .filter((id: any) => !!id)
       .filter((id: string) => eligible(id));
-    const skinParticipants = sk.participantGolferIds && sk.participantGolferIds.length > 1 ? sk.participantGolferIds.filter((id: string) => eligible(id)) : base;
     skinParticipants.forEach((gid: string) => { buyinByGolfer[gid] += sk.fee; });
   });
   // Pinky: NO buy-in - players only pay if they get pinkys (penalty game)
