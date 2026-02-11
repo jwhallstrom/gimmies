@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import useStore from '../../state/store';
 // Skins preview (holes won) moved to OverviewTab.
@@ -9,7 +9,7 @@ import { EventSettlement } from '../wallet';
 import { DOT_DEFINITIONS, DEFAULT_DOTS } from '../../games/dots';
 import type { DotCategory, BingoBangoBongoHoleResult, WolfHoleResult, DotsPlayerResult } from '../../state/types';
 
-type Props = { eventId: string; isTabActive?: boolean };
+type Props = { eventId: string; isTabActive?: boolean; autoOpenAddGame?: number };
 
 const GAME_TYPES = [
   {
@@ -88,7 +88,7 @@ const GAME_TYPES = [
   }
 ];
 
-const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
+const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGame }) => {
   const navigate = useNavigate();
   const event = useStore((s: any) => 
     s.events.find((e: any) => e.id === eventId) || 
@@ -103,6 +103,11 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
   
   const [showAddGame, setShowAddGame] = useState(false);
   const [showFabMenu, setShowFabMenu] = useState(false);
+
+  // Auto-open the Add Game modal when triggered from Game Control
+  useEffect(() => {
+    if (autoOpenAddGame && autoOpenAddGame > 0) setShowAddGame(true);
+  }, [autoOpenAddGame]);
   const [expandedDescription, setExpandedDescription] = useState<string | null>(null);
   const [nassauSetupId, setNassauSetupId] = useState<string | null>(null);
   const [skinsSetupId, setSkinsSetupId] = useState<string | null>(null);
@@ -695,8 +700,35 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
         </div>
       )}
 
+      {/* ========== NASSAU PREVIEW CARDS (pre-start / no standings yet) ========== */}
+      {(!nassauStandings || nassauStandings.length === 0) && event.games.nassau.map((n: any) => {
+        const fees = n.fees ?? { out: n.fee, in: n.fee, total: n.fee };
+        const hasTeams = (n.teams || []).filter((t: any) => t.golferIds?.length > 0).length >= 2;
+        const nassauPot = allGolfers.length * ((fees.out || 0) + (fees.in || 0) + (fees.total || 0));
+        return (
+          <div
+            key={n.id}
+            onClick={isOwner ? () => setNassauSetupId(n.id) : undefined}
+            className={`w-full bg-white rounded-xl border border-slate-200 p-4 text-left transition-colors ${isOwner ? 'cursor-pointer hover:border-slate-300' : ''}`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-xl">🏌️</span>
+                <div>
+                  <div className="font-bold text-gray-900">Nassau</div>
+                  <div className="text-xs text-gray-500">
+                    ${fees.out}/${fees.in}/${fees.total} · {n.net ? 'Net' : 'Gross'} · {hasTeams ? 'Teams' : 'Individual'} · Total Pot: {currency(nassauPot)}
+                  </div>
+                </div>
+              </div>
+              {isOwner && <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>}
+            </div>
+          </div>
+        );
+      })}
+
       {/* ========== NASSAU LEADERBOARD ========== */}
-      {nassauStandings && nassauStandings.map(nassau => {
+      {nassauStandings && nassauStandings.length > 0 && nassauStandings.map(nassau => {
         const frontSeg = nassau.standings.find(s => s.segment === 'front');
         const backSeg = nassau.standings.find(s => s.segment === 'back');
         const totalSeg = nassau.standings.find(s => s.segment === 'total');
@@ -844,8 +876,33 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
         );
       })}
 
+      {/* ========== SKINS PREVIEW CARDS (pre-start / no standings yet) ========== */}
+      {(!skinsStandings || skinsStandings.length === 0) && skinsArray.map((s: any) => {
+        const skinsPot = allGolfers.length * (s.fee || 0);
+        return (
+          <div
+            key={s.id}
+            onClick={isOwner ? () => setSkinsSetupId(s.id) : undefined}
+            className={`w-full bg-white rounded-xl border border-slate-200 p-4 text-left transition-colors ${isOwner ? 'cursor-pointer hover:border-slate-300' : ''}`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-xl">💰</span>
+                <div>
+                  <div className="font-bold text-gray-900">Skins</div>
+                  <div className="text-xs text-gray-500">
+                    {s.net ? 'Net' : 'Gross'} · ${s.fee || 0} · Total Pot: {currency(skinsPot)}
+                  </div>
+                </div>
+              </div>
+              {isOwner && <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>}
+            </div>
+          </div>
+        );
+      })}
+
       {/* ========== SKINS LEADERBOARD ========== */}
-      {skinsStandings && skinsStandings.map((skins: any) => (
+      {skinsStandings && skinsStandings.length > 0 && skinsStandings.map((skins: any) => (
         <div key={skins.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           {/* Header */}
           <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
@@ -854,7 +911,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
               <div>
                 <div className="font-bold text-gray-900">Skins</div>
                 <div className="text-[10px] text-gray-500">
-                  {skins.isNet ? 'Net' : 'Gross'} · Total Pot: {currency(skins.totalPot)}
+                  {skins.isNet ? 'Net' : 'Gross'} · ${skins.fee} · Total Pot: {currency(skins.totalPot)}
                 </div>
               </div>
             </div>
@@ -1247,7 +1304,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
 
               {/* Skins Games */}
               {skinsArray.map((s: any, i: number) => {
-                const skinsPot = allGolfers.length * (s.fee || 0) * 18;
+                const skinsPot = allGolfers.length * (s.fee || 0);
                 return (
                   <div
                     key={s.id}
@@ -1260,7 +1317,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
                         <div>
                           <div className="font-bold text-gray-900">Skins</div>
                           <div className="text-xs text-gray-500">
-                            {s.net ? 'Net' : 'Gross'} · Total Pot: {currency(skinsPot)}
+                            {s.net ? 'Net' : 'Gross'} · ${s.fee || 0} · Total Pot: {currency(skinsPot)}
                           </div>
                         </div>
                       </div>
@@ -1449,7 +1506,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
       {/* FAB Action Sheet */}
       {showFabMenu && createPortal(
         <div
-          className="fixed inset-0 z-50 flex items-end justify-center"
+          className="fixed inset-0 z-[9999] flex items-end justify-center"
           onClick={() => setShowFabMenu(false)}
         >
           <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
@@ -1594,10 +1651,10 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
 
       {/* ========== MODALS (Keep existing) ========== */}
       
-      {/* Add Game Dropdown */}
-      {showAddGame && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={() => setShowAddGame(false)}>
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden" onClick={e => e.stopPropagation()}>
+      {/* Add Game Modal — portaled to body so it sits above swipeable tabs */}
+      {showAddGame && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowAddGame(false)}>
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
             <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
               <span className="font-bold text-gray-900">Add Game</span>
               <button onClick={() => setShowAddGame(false)} className="p-2 hover:bg-slate-100 rounded-lg">
@@ -1644,7 +1701,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
               })}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ========== SETUP MODALS ========== */}
@@ -1857,9 +1915,9 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
           });
         const setFees = (next: { out: number; in: number; total: number }) => updateCfg({ fees: next });
 
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-xl border border-slate-200 flex flex-col overflow-hidden">
+        return createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setNassauSetupId(null)}>
+            <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
               <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                 <div>
                   <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">Nassau setup</div>
@@ -1996,7 +2054,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         );
       })()}
 
@@ -2025,9 +2084,9 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
           }
         };
 
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-xl border border-slate-200 flex flex-col overflow-hidden">
+        return createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setSkinsSetupId(null)}>
+            <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
               <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                 <div>
                   <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">Skins setup</div>
@@ -2151,7 +2210,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         );
       })()}
 
@@ -2183,9 +2243,9 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
         const results = (event.pinkyResults && event.pinkyResults[cfg.id]) || [];
         const getCount = (gid: string) => results.find((r: any) => r.golferId === gid)?.count || 0;
 
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-xl border border-slate-200 flex flex-col overflow-hidden">
+        return createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setPinkySetupId(null)}>
+            <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
               <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                 <div>
                   <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">Pinky</div>
@@ -2306,7 +2366,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         );
       })()}
 
@@ -2338,9 +2399,9 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
         const results = (event.greenieResults && event.greenieResults[cfg.id]) || [];
         const getCount = (gid: string) => results.find((r: any) => r.golferId === gid)?.count || 0;
 
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-xl border border-slate-200 flex flex-col overflow-hidden">
+        return createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setGreenieSetupId(null)}>
+            <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
               <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                 <div>
                   <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">Greenie</div>
@@ -2462,7 +2523,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         );
       })()}
       
@@ -2472,9 +2534,9 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
         if (!cfg) return null;
         const updateCfg = (patch: any) =>
           updateEvent(eventId, { games: { ...event.games, stableford: stablefordArray.map((s: any) => (s.id === cfg.id ? { ...s, ...patch } : s)) } });
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setStablefordSetupId(null)}>
-            <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-xl flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+        return createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setStablefordSetupId(null)}>
+            <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
               <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                 <div>
                   <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">Stableford</div>
@@ -2529,7 +2591,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
                   className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200">Done</button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         );
       })()}
 
@@ -2541,9 +2604,9 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
           updateEvent(eventId, { games: { ...event.games, ninePoint: ninePointArray.map((s: any) => (s.id === cfg.id ? { ...s, ...patch } : s)) } });
         const participantIds = cfg.participantGolferIds || [];
         const activeGolfers9 = allGolfers.filter((g: any) => participantIds.includes(g.id));
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setNinePointSetupId(null)}>
-            <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-xl flex flex-col overflow-hidden" onClick={e => e.stopPropagation()}>
+        return createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setNinePointSetupId(null)}>
+            <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
               <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                 <div>
                   <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">9-Point</div>
@@ -2609,7 +2672,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
                   className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200">Done</button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         );
       })()}
 
@@ -2632,8 +2696,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
           useStore.getState().setBBBResults(eventId, cfg.id, existing);
         };
 
-        return (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={() => setBbbSetupId(null)}>
+        return createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setBbbSetupId(null)}>
             <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
               <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between shrink-0">
                 <div>
@@ -2685,7 +2749,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
                   className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200">Done</button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         );
       })()}
 
@@ -2708,8 +2773,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
           useStore.getState().setWolfResults(eventId, cfg.id, existing);
         };
 
-        return (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={() => setWolfSetupId(null)}>
+        return createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setWolfSetupId(null)}>
             <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
               <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between shrink-0">
                 <div>
@@ -2806,7 +2871,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
                   className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200">Done</button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         );
       })()}
 
@@ -2836,8 +2902,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
           useStore.getState().setDotsResults(eventId, cfg.id, existing);
         };
 
-        return (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={() => setDotsSetupId(null)}>
+        return createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setDotsSetupId(null)}>
             <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
               <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between shrink-0">
                 <div>
@@ -2916,7 +2982,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
                   className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200">Done</button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         );
       })()}
 
@@ -3070,9 +3137,9 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
             return { ...s, selected: next };
           });
         };
-        return (
-          <div className="fixed inset-0 z-50 flex items-start justify-center p-4 bg-black/40">
-            <div className="bg-white rounded shadow-lg w-full max-w-md p-4 flex flex-col gap-3 text-xs">
+        return createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-start justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={closeBulk}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-4 flex flex-col gap-3 text-xs animate-slide-up" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold text-sm">Bulk Assign Golfers</h3>
                 <button onClick={closeBulk} className="text-[10px] px-2 py-0.5 rounded border">Close</button>
@@ -3110,7 +3177,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false }) => {
                 </div>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         );
       })()}
     </div>

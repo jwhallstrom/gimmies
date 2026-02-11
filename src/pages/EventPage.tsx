@@ -45,6 +45,8 @@ const EventPage: React.FC = () => {
   const [showMenu, setShowMenu] = useState(false);
   const [showEventsDropdown, setShowEventsDropdown] = useState(false);
   const [showCommandCenter, setShowCommandCenter] = useState(false);
+  const [showPlayerGuide, setShowPlayerGuide] = useState(false);
+  const [triggerAddGame, setTriggerAddGame] = useState(0);
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [dismissedBannerIds, setDismissedBannerIds] = useState<Set<string>>(new Set());
   const [joiningEventId, setJoiningEventId] = useState<string | null>(null);
@@ -401,6 +403,14 @@ const EventPage: React.FC = () => {
                 <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-primary-800 animate-pulse-subtle" />
               )}
             </button>
+          ) : !isGroupHub ? (
+            <button
+              onClick={() => setShowPlayerGuide(true)}
+              className="relative flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-extrabold shadow-lg transition-all active:scale-95 flex-shrink-0 bg-gradient-to-r from-accent to-orange-500 text-white"
+            >
+              <span className="text-base leading-none">🎛️</span>
+              <span className="leading-none">Game Control</span>
+            </button>
           ) : (
             <div className="w-0" />
           )}
@@ -747,7 +757,7 @@ const EventPage: React.FC = () => {
             <div className={tab.id === 'chat' ? 'h-full px-2 pt-1' : 'px-4 py-2 pb-32'}>
               {tab.id === 'chat' && <ChatTab eventId={event.id} isActive={isChatPage} />}
               {tab.id === 'scorecard' && <ScoreHubTab eventId={event.id} isTabActive={swipeableTabs[activePageIndex]?.id === 'scorecard'} />}
-              {tab.id === 'games' && <GamesTab eventId={event.id} isTabActive={swipeableTabs[activePageIndex]?.id === 'games'} />}
+              {tab.id === 'games' && <GamesTab eventId={event.id} isTabActive={swipeableTabs[activePageIndex]?.id === 'games'} autoOpenAddGame={triggerAddGame} />}
               {tab.id === 'golfers' && <GolfersTab eventId={event.id} isTabActive={swipeableTabs[activePageIndex]?.id === 'golfers'} />}
               {tab.id === 'settings' && (isOwner ? <SetupTab eventId={event.id} /> : <AccessDenied />)}
             </div>
@@ -762,6 +772,207 @@ const EventPage: React.FC = () => {
           event={event}
           onClose={() => setShowNotifications(false)}
         />
+      )}
+
+      {/* ========== PLAYER GAME GUIDE MODAL ========== */}
+      {showPlayerGuide && !isGroupHub && createPortal(
+        <div
+          className="fixed inset-0 z-[9998] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => setShowPlayerGuide(false)}
+        >
+          <div
+            className="bg-white sm:rounded-3xl rounded-t-3xl shadow-2xl w-full sm:max-w-md max-h-[90vh] overflow-hidden animate-slide-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className={`px-5 pt-5 pb-4 ${
+              event.isCompleted
+                ? 'bg-gradient-to-br from-green-600 to-emerald-700'
+                : event.status === 'started'
+                  ? 'bg-gradient-to-br from-primary-600 to-primary-800'
+                  : 'bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900'
+            }`}>
+              <div className="flex items-center justify-between mb-3">
+                <div>
+                  <div className="text-[10px] font-bold tracking-[0.15em] text-white/60 uppercase">Game Control</div>
+                  <div className="text-lg font-extrabold text-white">{event.name || 'Event'}</div>
+                </div>
+                <button onClick={() => setShowPlayerGuide(false)} className="p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className={`px-3 py-1 rounded-full text-[11px] font-extrabold ${
+                  event.isCompleted
+                    ? 'bg-white/20 text-white'
+                    : event.status === 'started'
+                      ? 'bg-red-500/30 text-red-200'
+                      : 'bg-amber-400/20 text-amber-200'
+                }`}>
+                  {event.status === 'started' && !event.isCompleted && (
+                    <span className="inline-block w-2 h-2 rounded-full bg-red-400 animate-pulse mr-1 align-middle" />
+                  )}
+                  {event.isCompleted ? 'COMPLETE' : event.status === 'started' ? 'LIVE' : 'SETTING UP'}
+                </div>
+                <span className="text-white/50 text-xs">
+                  {(event.golfers?.length || 0)} player{(event.golfers?.length || 0) !== 1 ? 's' : ''}
+                  {(() => {
+                    const gameCount = (event.games?.nassau?.length || 0) + (Array.isArray(event.games?.skins) ? event.games.skins.length : 0) +
+                      (Array.isArray(event.games?.pinky) ? event.games.pinky.length : 0) + (Array.isArray(event.games?.greenie) ? event.games.greenie.length : 0) +
+                      (Array.isArray(event.games?.stableford) ? event.games.stableford.length : 0) + (Array.isArray(event.games?.ninePoint) ? event.games.ninePoint.length : 0) +
+                      (Array.isArray(event.games?.bingoBangoBongo) ? event.games.bingoBangoBongo.length : 0) + (Array.isArray(event.games?.wolf) ? event.games.wolf.length : 0) +
+                      (Array.isArray(event.games?.dots) ? event.games.dots.length : 0);
+                    return gameCount > 0 ? ` · ${gameCount} game${gameCount !== 1 ? 's' : ''}` : '';
+                  })()}
+                </span>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="divide-y divide-slate-100 max-h-[55vh] overflow-y-auto">
+
+              {/* Pre-start: Setting up */}
+              {event.status !== 'started' && !event.isCompleted && (
+                <div className="p-4">
+                  <div className="flex items-center gap-3 p-4 bg-amber-50 rounded-xl border border-amber-100">
+                    <span className="text-2xl">⏳</span>
+                    <div>
+                      <div className="font-bold text-amber-800">Event is being set up</div>
+                      <div className="text-xs text-amber-600">The admin is configuring games and teams. You'll be notified when the round starts.</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Enter Scores — only when live */}
+              {event.status === 'started' && !event.isCompleted && (
+                <button
+                  onClick={() => {
+                    setShowPlayerGuide(false);
+                    const idx = swipeableTabs.findIndex(t => t.id === 'scorecard');
+                    if (idx >= 0) scrollToPage(idx);
+                  }}
+                  className="w-full p-4 flex items-center gap-4 hover:bg-green-50 active:bg-green-100 transition text-left"
+                >
+                  <div className="w-11 h-11 rounded-xl bg-green-500 flex items-center justify-center text-lg shadow-sm">
+                    <span className="text-white">✏️</span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-extrabold text-green-700">Enter Scores</div>
+                    <div className="text-xs text-gray-500">Tap the + button on the leaderboard to enter your scores hole-by-hole</div>
+                  </div>
+                  <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              )}
+
+              {/* Leaderboard */}
+              <button
+                onClick={() => {
+                  setShowPlayerGuide(false);
+                  const idx = swipeableTabs.findIndex(t => t.id === 'scorecard');
+                  if (idx >= 0) scrollToPage(idx);
+                }}
+                className="w-full p-4 flex items-center gap-4 hover:bg-slate-50 active:bg-slate-100 transition text-left"
+              >
+                <div className="w-11 h-11 rounded-xl bg-slate-700 flex items-center justify-center text-lg shadow-sm">
+                  <span className="text-white">📊</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-extrabold text-gray-900">Leaderboard</div>
+                  <div className="text-xs text-gray-500">
+                    {event.isCompleted ? 'View final standings and positions' : event.status === 'started' ? 'Live standings — see where you rank' : 'Standings will appear when the round starts'}
+                  </div>
+                </div>
+                <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+
+              {/* Games & Payouts */}
+              <button
+                onClick={() => {
+                  setShowPlayerGuide(false);
+                  const idx = swipeableTabs.findIndex(t => t.id === 'games');
+                  if (idx >= 0) scrollToPage(idx);
+                }}
+                className="w-full p-4 flex items-center gap-4 hover:bg-slate-50 active:bg-slate-100 transition text-left"
+              >
+                <div className="w-11 h-11 rounded-xl bg-amber-500 flex items-center justify-center text-lg shadow-sm">
+                  <span className="text-white">💰</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-extrabold text-gray-900">Games & Payouts</div>
+                  <div className="text-xs text-gray-500">
+                    {event.isCompleted ? 'Final payouts — who owes what' : event.status === 'started' ? 'Your side games, matchups & running totals' : 'Games will show here once the admin sets them up'}
+                  </div>
+                </div>
+                <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+
+              {/* Chat */}
+              <button
+                onClick={() => {
+                  setShowPlayerGuide(false);
+                  const idx = swipeableTabs.findIndex(t => t.id === 'chat');
+                  if (idx >= 0) scrollToPage(idx);
+                }}
+                className="w-full p-4 flex items-center gap-4 hover:bg-slate-50 active:bg-slate-100 transition text-left"
+              >
+                <div className="w-11 h-11 rounded-xl bg-blue-500 flex items-center justify-center text-lg shadow-sm">
+                  <span className="text-white">💬</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-extrabold text-gray-900">Chat</div>
+                  <div className="text-xs text-gray-500">Talk trash, share photos & coordinate with the group</div>
+                </div>
+                <svg className="w-5 h-5 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+
+              {/* My Team — show if nassau teams exist */}
+              {event.games?.nassau?.some((n: any) => n.teams?.length >= 2) && (
+                <div className="p-4">
+                  <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Your Team</div>
+                  {event.games.nassau.map((n: any, nIdx: number) => {
+                    const myTeam = (n.teams || []).find((t: any) => (t.golferIds || []).includes(currentProfile?.id));
+                    if (!myTeam) return null;
+                    const teammates = (myTeam.golferIds || [])
+                      .filter((gid: string) => gid !== currentProfile?.id)
+                      .map((gid: string) => {
+                        const eg = event.golfers?.find((g: any) => (g.profileId || g.customName) === gid);
+                        const profile = profiles.find((p: any) => p.id === gid);
+                        return profile?.name || eg?.displayName || eg?.customName || gid;
+                      });
+                    return (
+                      <div key={n.id} className="flex items-center gap-2 bg-primary-50 rounded-xl px-3 py-2 border border-primary-100">
+                        <span className="text-lg">👥</span>
+                        <div>
+                          <div className="font-bold text-primary-800 text-sm">{myTeam.name || `Team ${nIdx + 1}`}</div>
+                          <div className="text-[10px] text-primary-600">
+                            {teammates.length > 0 ? `with ${teammates.join(', ')}` : 'Just you so far'}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-5 py-3 bg-slate-50 border-t border-slate-100">
+              <button onClick={() => setShowPlayerGuide(false)} className="w-full py-2.5 text-center text-sm font-bold text-gray-500 hover:text-gray-700 transition">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* ========== FIRST-TIME EVENT HELP MODAL ========== */}
@@ -1013,6 +1224,8 @@ const EventPage: React.FC = () => {
                   setShowCommandCenter(false);
                   const gamesIdx = swipeableTabs.findIndex(t => t.id === 'games');
                   if (gamesIdx >= 0) scrollToPage(gamesIdx);
+                  // Auto-open the Add Game selector
+                  setTriggerAddGame(prev => prev + 1);
                 }}
                 className="w-full p-4 flex items-center gap-4 hover:bg-slate-50 active:bg-slate-100 transition text-left"
               >
