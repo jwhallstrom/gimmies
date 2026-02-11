@@ -9,11 +9,13 @@
 | **Landing Page** | https://golfwithgimmies.com | `landing` |
 | **Landing (www)** | https://www.golfwithgimmies.com | `landing` |
 | **Tournaments** | https://play.golfwithgimmies.com | `tournaments` |
+| **Club Dashboard** | https://club.golfwithgimmies.com | `club` |
 
 ### Legacy Amplify URLs (still work)
 - Main: https://master.dtsoc1sfk1bk8.amplifyapp.com
 - Landing: https://landing.dtsoc1sfk1bk8.amplifyapp.com
 - Tournaments: https://tournaments.dtsoc1sfk1bk8.amplifyapp.com
+- Club: https://club.dtsoc1sfk1bk8.amplifyapp.com
 
 **App ID:** dtsoc1sfk1bk8  
 **Service Role:** AmplifyGimmiesGolfServiceRole  
@@ -37,8 +39,10 @@ golfwithgimmies.com/
 │   └── Build output: dist/
 ├── landing branch → golfwithgimmies.com + www (Marketing Landing Page)  
 │   └── Build output: apps/landing/dist/
-└── tournaments branch → play.golfwithgimmies.com (Tournaments PWA)
-    └── Build output: apps/tournaments/dist/
+├── tournaments branch → play.golfwithgimmies.com (Tournaments PWA)
+│   └── Build output: apps/tournaments/dist/
+└── club branch → club.golfwithgimmies.com (Club Dashboard PWA)
+    └── Build output: apps/club/dist/
 ```
 
 ### Branch-specific amplify.yml
@@ -46,6 +50,7 @@ Each branch has its own build configuration:
 - `master`: Builds root app, outputs to `dist/`
 - `landing`: Builds `apps/landing/`, outputs to `apps/landing/dist/`
 - `tournaments`: Builds `apps/tournaments/`, outputs to `apps/tournaments/dist/`
+- `club`: Builds `apps/club/`, outputs to `apps/club/dist/`
 
 ---
 

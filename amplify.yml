@@ -36,6 +36,18 @@ frontend:
             cd ../..
             rm -rf dist
             mv dist-tournaments dist
+          elif [ "$AWS_BRANCH" = "club" ]; then
+            echo "=== Building Club App ==="
+            cd apps/club
+            # Copy Amplify config
+            cp ../../amplify_outputs.json ./
+            npm install
+            npm run build
+            # Move dist up for Amplify to find it
+            mv dist ../../dist-club
+            cd ../..
+            rm -rf dist
+            mv dist-club dist
           else
             echo "=== Building Main App ==="
             npm run build
@@ -49,6 +61,7 @@ frontend:
       - node_modules/**/*
       - apps/landing/node_modules/**/*
       - apps/tournaments/node_modules/**/*
+      - apps/club/node_modules/**/*
 # SPA Rewrites - redirect all routes to index.html for React Router
 # This ensures routes like /club, /events, /join work on direct access
 customHeaders:
