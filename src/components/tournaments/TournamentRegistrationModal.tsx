@@ -32,6 +32,9 @@ interface RegistrationData {
   // Games
   gamePreference: 'all' | 'skins' | 'none';
   
+  // Marketing
+  marketingConsent: boolean;
+  
   // Payment
   paymentMethod: 'card' | 'cash' | 'later' | null;
   agreedToTerms: boolean;
@@ -55,6 +58,7 @@ const TournamentRegistrationModal: React.FC<Props> = ({ tournament, onClose, onC
     handicapIndex: currentProfile?.handicapIndex ?? null,
     divisionId: null,
     gamePreference: 'all',
+    marketingConsent: true,
     paymentMethod: null,
     agreedToTerms: false,
     cardData: null,
@@ -167,9 +171,12 @@ const TournamentRegistrationModal: React.FC<Props> = ({ tournament, onClose, onC
       const registrationId = registerForTournament(tournament.id, {
         profileId: currentProfile.id,
         displayName: data.displayName,
+        email: data.email || undefined,
+        phone: data.phone || undefined,
         handicapSnapshot: data.handicapIndex,
         divisionId: data.divisionId || undefined,
         gamePreference: data.gamePreference,
+        marketingConsent: data.marketingConsent,
         paymentStatus: 
           tournament.entryFeeCents === 0 ? 'paid' :
           data.paymentMethod === 'card' ? 'paid' :
@@ -284,6 +291,22 @@ const TournamentRegistrationModal: React.FC<Props> = ({ tournament, onClose, onC
                   </p>
                 )}
               </div>
+              
+              {/* Marketing Consent */}
+              <label className="flex items-start gap-3 p-4 bg-primary-50 rounded-xl cursor-pointer border border-primary-100">
+                <input
+                  type="checkbox"
+                  checked={data.marketingConsent}
+                  onChange={e => updateData({ marketingConsent: e.target.checked })}
+                  className="mt-0.5 h-5 w-5 text-primary-600 border-gray-300 rounded focus:ring-primary-500"
+                />
+                <div>
+                  <div className="text-sm font-medium text-gray-900">Keep me in the loop</div>
+                  <div className="text-xs text-gray-500 mt-0.5">
+                    Get notified about future events and tournaments from this organizer. You can unsubscribe anytime.
+                  </div>
+                </div>
+              </label>
             </div>
           )}
           
@@ -404,6 +427,36 @@ const TournamentRegistrationModal: React.FC<Props> = ({ tournament, onClose, onC
               <div className="text-center mb-6">
                 <h3 className="text-xl font-semibold text-gray-900">Payment</h3>
                 <p className="text-sm text-gray-500 mt-1">Entry fee: ${entryFee.toFixed(2)}</p>
+              </div>
+              
+              {/* Express Checkout — Apple Pay / Google Pay */}
+              <div className="space-y-2 mb-2">
+                <button
+                  onClick={() => updateData({ paymentMethod: 'card', agreedToTerms: true })}
+                  className="w-full py-3.5 bg-black text-white rounded-xl font-semibold text-base hover:bg-gray-900 transition-colors flex items-center justify-center gap-2"
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.52-3.23 0-1.44.64-2.2.52-3.08-.4C3.11 15.55 3.77 8.43 8.78 8.17c1.28.07 2.17.74 2.92.79.84-.17 1.65-.85 2.56-.77 1.48.12 2.59.72 3.31 1.78-3.35 2.02-2.56 6.47.51 7.71-.63 1.64-1.4 3.24-3.03 4.6zM12.03 8.1C11.86 5.93 13.62 4.16 15.67 4c.31 2.42-2.15 4.28-3.64 4.1z"/>
+                  </svg>
+                  Pay
+                </button>
+                <button
+                  onClick={() => updateData({ paymentMethod: 'card', agreedToTerms: true })}
+                  className="w-full py-3.5 bg-white border-2 border-gray-300 text-gray-900 rounded-xl font-semibold text-base hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+                >
+                  <svg className="w-5 h-5" viewBox="0 0 24 24">
+                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
+                    <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                    <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                    <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                  </svg>
+                  Pay
+                </button>
+                <div className="relative flex items-center">
+                  <div className="flex-grow border-t border-gray-200" />
+                  <span className="mx-3 text-xs text-gray-400 font-medium">or pay another way</span>
+                  <div className="flex-grow border-t border-gray-200" />
+                </div>
               </div>
               
               {/* Payment Method Selection */}
@@ -547,6 +600,18 @@ const TournamentRegistrationModal: React.FC<Props> = ({ tournament, onClose, onC
                     <span className="font-medium text-gray-700">
                       {data.gamePreference === 'all' ? 'All games' : 
                        data.gamePreference === 'skins' ? 'Skins only' : 'None'}
+                    </span>
+                  </div>
+                )}
+                
+                {data.marketingConsent && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Email Updates</span>
+                    <span className="font-medium text-green-600 flex items-center gap-1">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      Opted in
                     </span>
                   </div>
                 )}

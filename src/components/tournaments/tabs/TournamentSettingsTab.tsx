@@ -2,12 +2,13 @@
  * TournamentSettingsTab - Organizer-only tournament settings
  */
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { nanoid } from 'nanoid/non-secure';
 import useStore from '../../../state/store';
 import { CourseSearch } from '../../CourseSearch';
 import { useCourses } from '../../../hooks/useCourses';
-import type { TournamentFormat, TournamentVisibility, TournamentStatus } from '../../../state/types';
+import type { TournamentFormat, TournamentVisibility, TournamentStatus, TournamentSponsor } from '../../../state/types';
 
 interface Props {
   tournamentId: string;
@@ -30,6 +31,10 @@ const TournamentSettingsTab: React.FC<Props> = ({ tournamentId }) => {
   
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showCourseSearch, setShowCourseSearch] = useState(false);
+  const [showAddSponsor, setShowAddSponsor] = useState(false);
+  const [sponsorForm, setSponsorForm] = useState({ name: '', websiteUrl: '', tier: 'gold' as TournamentSponsor['tier'], holeNumber: '' });
+  const bannerInputRef = useRef<HTMLInputElement>(null);
+  const sponsorLogoInputRef = useRef<HTMLInputElement>(null);
   
   if (!tournament) return null;
   
@@ -76,6 +81,37 @@ const TournamentSettingsTab: React.FC<Props> = ({ tournamentId }) => {
     // Update tee name in rounds data
     const updatedRoundsData = tournament.roundsData.map(r => ({ ...r, teeName }));
     updateTournament(tournamentId, { roundsData: updatedRoundsData });
+  };
+  
+  // ─── Branding ───
+  const handleBannerUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      updateTournament(tournamentId, { bannerImage: reader.result as string });
+    };
+    reader.readAsDataURL(file);
+  };
+  
+  const handleAddSponsor = (logoDataUrl: string) => {
+    const newSponsor: TournamentSponsor = {
+      id: nanoid(8),
+      name: sponsorForm.name,
+      logoUrl: logoDataUrl,
+      websiteUrl: sponsorForm.websiteUrl || undefined,
+      tier: sponsorForm.tier,
+      holeNumber: sponsorForm.holeNumber ? parseInt(sponsorForm.holeNumber, 10) : undefined,
+    };
+    const current = tournament.sponsors || [];
+    updateTournament(tournamentId, { sponsors: [...current, newSponsor] });
+    setSponsorForm({ name: '', websiteUrl: '', tier: 'gold', holeNumber: '' });
+    setShowAddSponsor(false);
+  };
+  
+  const handleRemoveSponsor = (sponsorId: string) => {
+    const current = tournament.sponsors || [];
+    updateTournament(tournamentId, { sponsors: current.filter(s => s.id !== sponsorId) });
   };
   
   const handleCancel = () => {
@@ -281,6 +317,209 @@ const TournamentSettingsTab: React.FC<Props> = ({ tournamentId }) => {
             />
           </div>
         )}
+      </div>
+      
+      {/* Branding & Sponsors */}
+      <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-4">
+        <h3 className="font-semibold text-gray-900">Branding & Sponsors</h3>
+        
+        {/* Banner Image */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">Event Banner</label>
+          {tournament.bannerImage ? (
+            <div className="relative rounded-xl overflow-hidden border border-gray-200">
+              <img 
+                src={tournament.bannerImage} 
+                alt="Event banner" 
+                className="w-full h-32 object-cover"
+              />
+              <div className="absolute inset-0 bg-black/0 hover:bg-black/30 transition-colors flex items-center justify-center opacity-0 hover:opacity-100">
+                <button
+                  onClick={() => bannerInputRef.current?.click()}
+                  className="px-3 py-1.5 bg-white rounded-lg text-sm font-medium shadow"
+                >
+                  Change
+                </button>
+                <button
+                  onClick={() => updateTournament(tournamentId, { bannerImage: undefined })}
+                  className="ml-2 px-3 py-1.5 bg-red-500 text-white rounded-lg text-sm font-medium shadow"
+                >
+                  Remove
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => bannerInputRef.current?.click()}
+              disabled={!canEdit}
+              className="w-full h-28 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center gap-2 hover:border-primary-400 hover:bg-primary-50/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <span className="text-sm text-gray-500 font-medium">Upload Banner Image</span>
+            </button>
+          )}
+          <input 
+            ref={bannerInputRef} 
+            type="file" 
+            accept="image/*" 
+            className="hidden" 
+            onChange={handleBannerUpload} 
+          />
+        </div>
+        
+        {/* Sponsors */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Sponsors {tournament.sponsors?.length ? `(${tournament.sponsors.length})` : ''}
+          </label>
+          
+          {/* Existing sponsors */}
+          {tournament.sponsors && tournament.sponsors.length > 0 && (
+            <div className="space-y-2 mb-3">
+              {tournament.sponsors.map(sponsor => (
+                <div key={sponsor.id} className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg border border-gray-100">
+                  <img 
+                    src={sponsor.logoUrl} 
+                    alt={sponsor.name} 
+                    className="w-10 h-10 object-contain rounded bg-white border border-gray-200 p-0.5"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-gray-900 truncate">{sponsor.name}</div>
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <span className={`px-1.5 py-0.5 rounded font-medium ${
+                        sponsor.tier === 'title' ? 'bg-yellow-100 text-yellow-700' :
+                        sponsor.tier === 'gold' ? 'bg-amber-100 text-amber-700' :
+                        sponsor.tier === 'silver' ? 'bg-gray-200 text-gray-600' :
+                        'bg-green-100 text-green-700'
+                      }`}>
+                        {sponsor.tier || 'gold'}
+                      </span>
+                      {sponsor.holeNumber && <span>Hole {sponsor.holeNumber}</span>}
+                    </div>
+                  </div>
+                  {canEdit && (
+                    <button
+                      onClick={() => handleRemoveSponsor(sponsor.id)}
+                      className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          
+          {/* Add sponsor form */}
+          {showAddSponsor ? (
+            <div className="space-y-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
+              <input
+                type="text"
+                placeholder="Sponsor name"
+                value={sponsorForm.name}
+                onChange={e => setSponsorForm(prev => ({ ...prev, name: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+              />
+              <input
+                type="url"
+                placeholder="Website URL (optional)"
+                value={sponsorForm.websiteUrl}
+                onChange={e => setSponsorForm(prev => ({ ...prev, websiteUrl: e.target.value }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+              />
+              <div className="grid grid-cols-2 gap-2">
+                <select
+                  value={sponsorForm.tier}
+                  onChange={e => setSponsorForm(prev => ({ ...prev, tier: e.target.value as any }))}
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                >
+                  <option value="title">Title Sponsor</option>
+                  <option value="gold">Gold Sponsor</option>
+                  <option value="silver">Silver Sponsor</option>
+                  <option value="hole">Hole Sponsor</option>
+                </select>
+                <input
+                  type="number"
+                  placeholder="Hole # (optional)"
+                  value={sponsorForm.holeNumber}
+                  onChange={e => setSponsorForm(prev => ({ ...prev, holeNumber: e.target.value }))}
+                  min="1"
+                  max="18"
+                  className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <button
+                onClick={() => sponsorLogoInputRef.current?.click()}
+                className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-sm text-gray-600 hover:border-primary-400 hover:bg-primary-50/30 transition-colors flex items-center justify-center gap-2"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Upload Logo & Save
+              </button>
+              <input 
+                ref={sponsorLogoInputRef} 
+                type="file" 
+                accept="image/*" 
+                className="hidden" 
+                onChange={e => {
+                  const file = e.target.files?.[0];
+                  if (!file || !sponsorForm.name.trim()) return;
+                  const reader = new FileReader();
+                  reader.onload = () => handleAddSponsor(reader.result as string);
+                  reader.readAsDataURL(file);
+                }} 
+              />
+              <button
+                onClick={() => setShowAddSponsor(false)}
+                className="w-full py-2 text-sm text-gray-500 hover:text-gray-700"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={() => canEdit && setShowAddSponsor(true)}
+              disabled={!canEdit}
+              className="w-full py-2.5 border-2 border-dashed border-gray-300 rounded-xl text-sm text-gray-600 font-medium hover:border-primary-400 hover:bg-primary-50/30 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Add Sponsor
+            </button>
+          )}
+        </div>
+        
+        {/* Contact Info */}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Contact Email</label>
+            <input
+              type="email"
+              value={tournament.contactEmail || ''}
+              onChange={e => updateTournament(tournamentId, { contactEmail: e.target.value })}
+              disabled={!canEdit}
+              placeholder="pro@golfclub.com"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Contact Phone</label>
+            <input
+              type="tel"
+              value={tournament.contactPhone || ''}
+              onChange={e => updateTournament(tournamentId, { contactPhone: e.target.value })}
+              disabled={!canEdit}
+              placeholder="(555) 123-4567"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 disabled:bg-gray-100"
+            />
+          </div>
+        </div>
       </div>
       
       {/* Status Actions */}

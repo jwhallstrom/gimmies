@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+﻿import React, { useState, useEffect, useMemo } from 'react';
 import useStore from '../../state/store';
 import { useCourse } from '../../hooks/useCourse';
 import { courseHandicap, strokesForHole } from '../../games/handicap';
@@ -364,7 +364,15 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
                     className={`border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors ${
                       player.position && player.position <= 3 ? 'bg-gradient-to-r from-yellow-50 to-transparent' : ''
                     } ${expandedPlayer === player.id ? 'bg-blue-50' : ''}`}
-                    onClick={() => togglePlayerExpanded(player.id)}
+                    onClick={() => {
+                      // If we can edit and onEnterScores is available, go directly to edit mode
+                      if (typeof onEnterScores === 'function' && !event.isCompleted && canEditScore?.(eventId, player.id)) {
+                        onEnterScores(player.id);
+                      } else {
+                        // Otherwise, toggle expand to view scorecard (read-only)
+                        togglePlayerExpanded(player.id);
+                      }
+                    }}
                   >
                     <td className={`px-3 py-3 font-mono text-center ${getPositionColor(player.position || 0)}`}>
                       {player.position ? (
@@ -460,30 +468,10 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
                     <tr>
                       <td colSpan={hasTeams ? 6 : 5} className="px-4 py-3 bg-slate-50 border-b border-slate-200">
                         <div className="space-y-3">
-                          {/* Primary CTA: enter/edit scores (when allowed) */}
-                          {typeof onEnterScores === 'function' && (
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="text-[11px] text-slate-600">
-                                {event.isCompleted
-                                  ? 'Event completed (read-only)'
-                                  : (canEditScore?.(eventId, player.id) ? 'You can edit this player’s scores.' : 'You can only edit your own (or your team).')}
-                              </div>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  onEnterScores(player.id);
-                                }}
-                                disabled={event.isCompleted || !canEditScore?.(eventId, player.id)}
-                                className="px-3 py-2 rounded-lg text-xs font-extrabold bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                                title={event.isCompleted ? 'Read-only' : 'Enter scores'}
-                              >
-                                Enter score
-                              </button>
-                            </div>
-                          )}
-
+                          {/* Read-only notice */}
+                          <div className="text-[11px] text-slate-500 italic">
+                            {event.isCompleted ? 'Event completed' : 'Viewing scorecard (read-only)'}
+                          </div>
                           {/* Front 9 */}
                           <div>
                             <div className="text-xs font-semibold text-slate-500 mb-1">Front Nine</div>
@@ -766,3 +754,4 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
 };
 
 export default LeaderboardTab;
+

@@ -793,8 +793,38 @@ export interface Club {
   
   // Ownership
   ownerProfileId: string; // Primary owner's profile
+  
+  // Email List (auto-built from registrations)
+  emailList?: ClubEmailContact[];
+  
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * Club Email Contact - Auto-built from tournament registrations
+ */
+export interface ClubEmailContact {
+  email: string;
+  name: string;
+  phone?: string;
+  source: string;          // e.g. "Spring Open 2026"
+  tags: string[];          // e.g. ["member", "charity-event", "blue-tee"]
+  marketingConsent: boolean;
+  addedAt: string;
+  lastEventDate?: string;
+}
+
+/**
+ * Tournament Sponsor - for branded event pages
+ */
+export interface TournamentSponsor {
+  id: string;
+  name: string;
+  logoUrl: string;         // base64 or URL
+  websiteUrl?: string;
+  holeNumber?: number;     // Hole sponsorship assignment
+  tier?: 'title' | 'gold' | 'silver' | 'hole';
 }
 
 /**
@@ -1005,12 +1035,15 @@ export interface TournamentRegistration {
   profileId?: string;           // null for guest
   guestName?: string;           // For non-registered players
   displayName?: string;         // Snapshot of name at join time
+  email?: string;               // Captured at registration
+  phone?: string;               // Captured at registration
   handicapSnapshot?: number | null;
   divisionId?: string;
   teamId?: string;
   gamePreference?: 'all' | 'nassau' | 'skins' | 'none';
   paymentStatus: 'pending' | 'paid' | 'refunded';
   waitingListPosition?: number;
+  marketingConsent?: boolean;    // Opted in to club email list
   createdAt: string;
 }
 
@@ -1104,6 +1137,7 @@ export interface Tournament {
   // Branding
   bannerImage?: string;
   sponsorLogos?: string[];
+  sponsors?: TournamentSponsor[];
   
   createdAt: string;
   updatedAt: string;

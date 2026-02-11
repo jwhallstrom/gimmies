@@ -8,7 +8,7 @@
  * - Status badges for quick scanning
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuthMode } from '../hooks/useAuthMode';
@@ -110,10 +110,45 @@ const Dashboard: React.FC = () => {
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
   
-  // Section order (draggable) - persisted to localStorage
+  // Section order - persisted to localStorage
   const [sectionOrder, setSectionOrder] = useState<SectionId[]>(getSavedSectionOrder);
-  const [draggedSection, setDraggedSection] = useState<SectionId | null>(null);
-  const [dragOverSection, setDragOverSection] = useState<SectionId | null>(null);
+  const [isReorderMode, setIsReorderMode] = useState(false);
+  
+  // Long-press to activate reorder mode
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autoExitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressTriggered = useRef(false);
+  const LONG_PRESS_MS = 500;
+  const AUTO_EXIT_MS = 6000;
+
+  const resetAutoExit = useCallback(() => {
+    if (autoExitTimer.current) clearTimeout(autoExitTimer.current);
+    autoExitTimer.current = setTimeout(() => setIsReorderMode(false), AUTO_EXIT_MS);
+  }, []);
+
+  const startLongPress = useCallback(() => {
+    longPressTriggered.current = false;
+    longPressTimer.current = setTimeout(() => {
+      longPressTriggered.current = true;
+      setIsReorderMode(true);
+      resetAutoExit();
+    }, LONG_PRESS_MS);
+  }, [resetAutoExit]);
+
+  const cancelLongPress = useCallback(() => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  }, []);
+
+  // Cleanup timers on unmount
+  useEffect(() => {
+    return () => {
+      if (longPressTimer.current) clearTimeout(longPressTimer.current);
+      if (autoExitTimer.current) clearTimeout(autoExitTimer.current);
+    };
+  }, []);
   
   // Accordion states - LIVE, UPCOMING, GROUPS expanded by default; HISTORY collapsed
   const [showLive, setShowLive] = useState(true);
@@ -127,50 +162,18 @@ const Dashboard: React.FC = () => {
   const [showAllGroups, setShowAllGroups] = useState(false);
   const [showAllHistory, setShowAllHistory] = useState(false);
   
-  // Drag handlers
-  const handleDragStart = (e: React.DragEvent, sectionId: SectionId) => {
-    setDraggedSection(sectionId);
-    e.dataTransfer.effectAllowed = 'move';
-    // Add a slight delay for visual feedback
-    setTimeout(() => {
-      (e.target as HTMLElement).style.opacity = '0.5';
-    }, 0);
-  };
-  
-  const handleDragEnd = (e: React.DragEvent) => {
-    (e.target as HTMLElement).style.opacity = '1';
-    setDraggedSection(null);
-    setDragOverSection(null);
-  };
-  
-  const handleDragOver = (e: React.DragEvent, sectionId: SectionId) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-    if (draggedSection && draggedSection !== sectionId) {
-      setDragOverSection(sectionId);
-    }
-  };
-  
-  const handleDragLeave = () => {
-    setDragOverSection(null);
-  };
-  
-  const handleDrop = (e: React.DragEvent, targetSectionId: SectionId) => {
-    e.preventDefault();
-    if (!draggedSection || draggedSection === targetSectionId) return;
-    
+  // Move section up/down (works on all platforms including iOS)
+  const moveSection = (sectionId: SectionId, direction: 'up' | 'down') => {
     const newOrder = [...sectionOrder];
-    const draggedIdx = newOrder.indexOf(draggedSection);
-    const targetIdx = newOrder.indexOf(targetSectionId);
-    
-    // Remove dragged item and insert at target position
-    newOrder.splice(draggedIdx, 1);
-    newOrder.splice(targetIdx, 0, draggedSection);
-    
+    const idx = newOrder.indexOf(sectionId);
+    if (direction === 'up' && idx > 0) {
+      [newOrder[idx - 1], newOrder[idx]] = [newOrder[idx], newOrder[idx - 1]];
+    } else if (direction === 'down' && idx < newOrder.length - 1) {
+      [newOrder[idx + 1], newOrder[idx]] = [newOrder[idx], newOrder[idx + 1]];
+    }
     setSectionOrder(newOrder);
     saveSectionOrder(newOrder);
-    setDraggedSection(null);
-    setDragOverSection(null);
+    resetAutoExit(); // Reset auto-exit timer on each move
   };
   
   // Prevent multiple wizards from opening simultaneously
@@ -266,6 +269,18 @@ const Dashboard: React.FC = () => {
     };
   }, [userEvents, searchQuery]);
 
+
+  // Which sections are visible (for up/down arrow boundary checks)
+  const visibleSections = useMemo(() => 
+    sectionOrder.filter(sid => {
+      if (sid === 'live') return liveEvents.length > 0;
+      if (sid === 'upcoming') return upcomingEvents.length > 0;
+      if (sid === 'groups') return groups.length > 0;
+      if (sid === 'history') return completedEvents.length > 0;
+      return true;
+    }),
+    [sectionOrder, liveEvents.length, upcomingEvents.length, groups.length, completedEvents.length]
+  );
 
   // Quick stats
   const stats = useMemo(() => {
@@ -759,8 +774,9 @@ const Dashboard: React.FC = () => {
           const config = sectionConfig[sectionId];
           if (!config.show) return null;
           
-          const isDragging = draggedSection === sectionId;
-          const isDragOver = dragOverSection === sectionId;
+          const sectionIdx = visibleSections.indexOf(sectionId);
+          const isFirst = sectionIdx === 0;
+          const isLast = sectionIdx === visibleSections.length - 1;
           
           // Determine which items to show (limited or all)
           const hasMoreItems = config.items.length > DEFAULT_ITEMS_LIMIT;
@@ -770,45 +786,81 @@ const Dashboard: React.FC = () => {
           return (
             <div
               key={sectionId}
-              draggable
-              onDragStart={(e) => handleDragStart(e, sectionId)}
-              onDragEnd={handleDragEnd}
-              onDragOver={(e) => handleDragOver(e, sectionId)}
-              onDragLeave={handleDragLeave}
-              onDrop={(e) => handleDrop(e, sectionId)}
               className={`bg-white rounded-2xl border-2 shadow-sm overflow-hidden transition-all duration-200 ${
-                isDragging ? 'opacity-50 scale-[0.98]' : ''
-              } ${
-                isDragOver ? 'border-primary-400 border-dashed bg-primary-50' : 'border-gray-200'
+                isReorderMode ? 'border-dashed border-primary-300' : 'border-gray-200'
               }`}
             >
               <div className={`flex items-center bg-gradient-to-r ${config.gradient} transition-colors`}>
-                {/* Drag Handle */}
-                <div 
-                  className="px-2 py-3 cursor-grab active:cursor-grabbing text-gray-400 hover:text-gray-600 touch-none"
-                  title="Drag to reorder"
-                >
-                  <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M7 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM7 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 8a2 2 0 1 0 0 4 2 2 0 0 0 0-4zM13 14a2 2 0 1 0 0 4 2 2 0 0 0 0-4z" />
-                  </svg>
-                </div>
+                {/* Reorder Arrows - only visible in edit mode */}
+                {isReorderMode && (
+                  <div className="flex flex-col pl-1.5 -mr-1">
+                    <button
+                      onClick={() => moveSection(sectionId, 'up')}
+                      disabled={isFirst}
+                      className={`p-0.5 rounded transition-colors ${isFirst ? 'text-gray-300' : 'text-gray-500 hover:text-gray-700 active:bg-white/40'}`}
+                      aria-label="Move section up"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+                      </svg>
+                    </button>
+                    <button
+                      onClick={() => moveSection(sectionId, 'down')}
+                      disabled={isLast}
+                      className={`p-0.5 rounded transition-colors ${isLast ? 'text-gray-300' : 'text-gray-500 hover:text-gray-700 active:bg-white/40'}`}
+                      aria-label="Move section down"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                  </div>
+                )}
                 
-                {/* Accordion Header Button */}
+                {/* Accordion Header - long-press to reorder, tap to expand/collapse */}
                 <button
-                  onClick={() => config.setExpanded(!config.isExpanded)}
-                  className="flex-1 flex items-center gap-2 pr-4 py-3"
+                  onClick={() => {
+                    // If long-press just activated reorder, don't also toggle accordion
+                    if (longPressTriggered.current) {
+                      longPressTriggered.current = false;
+                      return;
+                    }
+                    if (isReorderMode) {
+                      setIsReorderMode(false);
+                      if (autoExitTimer.current) clearTimeout(autoExitTimer.current);
+                    } else {
+                      config.setExpanded(!config.isExpanded);
+                    }
+                  }}
+                  onTouchStart={(e) => {
+                    if (!isReorderMode) startLongPress();
+                  }}
+                  onTouchEnd={cancelLongPress}
+                  onTouchMove={cancelLongPress}
+                  onMouseDown={() => {
+                    if (!isReorderMode) startLongPress();
+                  }}
+                  onMouseUp={cancelLongPress}
+                  onMouseLeave={cancelLongPress}
+                  className={`flex-1 flex items-center gap-2 pr-4 py-3 select-none ${isReorderMode ? 'pl-1' : 'pl-3'}`}
                 >
                   {config.icon}
                   <h3 className={`font-bold ${config.labelColor} text-sm uppercase tracking-wide`}>{config.label}</h3>
                   <span className={`text-xs text-gray-500 ${config.badgeBg} px-2 py-0.5 rounded-full font-medium`}>{config.count}</span>
-                  <svg 
-                    className={`w-4 h-4 text-gray-400 ml-auto transition-transform duration-200 ${config.isExpanded ? 'rotate-180' : ''}`} 
-                    fill="none" 
-                    stroke="currentColor" 
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
+                  {isReorderMode ? (
+                    <span className="ml-auto text-[10px] font-bold text-primary-600 bg-primary-100 px-2 py-0.5 rounded-full">
+                      DONE
+                    </span>
+                  ) : (
+                    <svg 
+                      className={`w-4 h-4 text-gray-400 ml-auto transition-transform duration-200 ${config.isExpanded ? 'rotate-180' : ''}`} 
+                      fill="none" 
+                      stroke="currentColor" 
+                      viewBox="0 0 24 24"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  )}
                 </button>
               </div>
               
