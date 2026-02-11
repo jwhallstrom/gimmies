@@ -1491,7 +1491,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 </svg>
               </button>
             </div>
-            <div className="p-2 space-y-1 max-h-[60vh] overflow-y-auto">
+            <div className="p-2 space-y-1 max-h-[calc(90dvh-12rem)] overflow-y-auto">
               {GAME_TYPES.map((type) => {
                 const playerCount = allGolfers.length;
                 const disabled = (type.minPlayers && playerCount < type.minPlayers) || (type.maxPlayers && playerCount > type.maxPlayers);
@@ -2520,7 +2520,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
 
         return (
           <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={() => setBbbSetupId(null)}>
-            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden max-h-[calc(100dvh-2rem)] sm:max-h-[90dvh] flex flex-col" onClick={e => e.stopPropagation()}>
               <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between shrink-0">
                 <div>
                   <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">Bingo Bango Bongo</div>
@@ -2596,7 +2596,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
 
         return (
           <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={() => setWolfSetupId(null)}>
-            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden max-h-[calc(100dvh-2rem)] sm:max-h-[90dvh] flex flex-col" onClick={e => e.stopPropagation()}>
               <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between shrink-0">
                 <div>
                   <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">Wolf</div>
@@ -2724,7 +2724,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
 
         return (
           <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={() => setDotsSetupId(null)}>
-            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden max-h-[calc(100dvh-2rem)] sm:max-h-[90dvh] flex flex-col" onClick={e => e.stopPropagation()}>
               <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between shrink-0">
                 <div>
                   <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">Dots / Junk</div>
