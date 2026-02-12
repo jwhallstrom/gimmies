@@ -2047,7 +2047,19 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
               </div>
 
               {/* Footer */}
-              <div className="flex-shrink-0 px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-end">
+              <div className="flex-shrink-0 px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isEventStarted && !window.confirm('This event is in progress. Remove this Nassau game?')) return;
+                    removeNassau(n.id);
+                    setNassauSetupId(null);
+                  }}
+                  className="px-3 py-2 rounded-lg text-xs font-extrabold border border-red-200 bg-red-50 text-red-700 disabled:opacity-50"
+                  disabled={!canModify}
+                >
+                  Remove
+                </button>
                 <button
                   type="button"
                   onClick={() => setNassauSetupId(null)}
