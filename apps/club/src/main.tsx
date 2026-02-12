@@ -5,9 +5,9 @@ import { Amplify } from 'aws-amplify';
 import App from './App';
 import './styles.css';
 
-// Amplify configuration will be loaded from amplify_outputs.json
+// Amplify configuration - loaded from root amplify_outputs.json
 try {
-  const outputs = await import('../../amplify_outputs.json');
+  const outputs = await import('../../../amplify_outputs.json');
   Amplify.configure(outputs.default);
 } catch (e) {
   console.warn('Amplify outputs not found, running without backend');
