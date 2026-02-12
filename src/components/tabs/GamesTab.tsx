@@ -119,6 +119,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   const [wolfSetupId, setWolfSetupId] = useState<string | null>(null);
   const [dotsSetupId, setDotsSetupId] = useState<string | null>(null);
   const [showSettlements, setShowSettlements] = useState(false);
+  const [expandBalance, setExpandBalance] = useState(false);
   
   const completeEvent = useStore((s) => s.completeEvent);
   const getEventSettlements = useStore((s) => s.getEventSettlements);
@@ -495,34 +496,41 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   }, [event, profiles, hasAnyGames]);
   
   // My balance calculations - calculate from totalByGolfer
-  const { myNet, myBuyin, myWinnings } = useMemo(() => {
-    if (!myGolferId || !payouts.totalByGolfer) return { myNet: null, myBuyin: 0, myWinnings: 0 };
+  const { myNet, myBuyin, myWinnings, buyinBreakdown } = useMemo(() => {
+    if (!myGolferId || !payouts.totalByGolfer) return { myNet: null, myBuyin: 0, myWinnings: 0, buyinBreakdown: [] };
     
     // Calculate buy-in from all games this golfer is in
     let buyin = 0;
+    const breakdown: { name: string; amount: number }[] = [];
     
     // All eligible event golfer IDs (used for all pot-based games)
     const allGolferIds = event.golfers.map((g: any) => g.profileId || g.customName);
 
     // Nassau buy-ins — include all eligible golfers, not stale participantGolferIds
-    event.games.nassau.forEach((n: any) => {
+    event.games.nassau.forEach((n: any, idx: number) => {
       if (allGolferIds.includes(myGolferId)) {
         const fees = n.fees ?? { out: n.fee, in: n.fee, total: n.fee };
-        buyin += (fees.out || 0) + (fees.in || 0) + (fees.total || 0);
+        const cost = (fees.out || 0) + (fees.in || 0) + (fees.total || 0);
+        buyin += cost;
+        breakdown.push({ name: event.games.nassau.length > 1 ? `Nassau ${idx + 1}` : 'Nassau', amount: cost });
       }
     });
     
     // Skins buy-ins
-    skinsArray.forEach((s: any) => {
+    skinsArray.forEach((s: any, idx: number) => {
       if (allGolferIds.includes(myGolferId)) {
-        buyin += s.fee || 0;
+        const cost = s.fee || 0;
+        buyin += cost;
+        breakdown.push({ name: skinsArray.length > 1 ? `Skins ${idx + 1}` : 'Skins', amount: cost });
       }
     });
 
     // Stableford buy-ins (pot-based like skins)
-    stablefordArray.forEach((s: any) => {
+    stablefordArray.forEach((s: any, idx: number) => {
       if (allGolferIds.includes(myGolferId)) {
-        buyin += s.fee || 0;
+        const cost = s.fee || 0;
+        buyin += cost;
+        breakdown.push({ name: stablefordArray.length > 1 ? `Stableford ${idx + 1}` : 'Stableford', amount: cost });
       }
     });
 
@@ -531,7 +539,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
     const winnings = payouts.totalByGolfer[myGolferId] || 0;
     const net = winnings - buyin;
     
-    return { myNet: net, myBuyin: buyin, myWinnings: winnings };
+    return { myNet: net, myBuyin: buyin, myWinnings: winnings, buyinBreakdown: breakdown };
   }, [payouts.totalByGolfer, myGolferId, event.games.nassau, skinsArray, stablefordArray, event.golfers]);
   
   // Get settlements (what I owe / am owed)
@@ -3083,10 +3091,18 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
           
           {/* Running balance - In progress events */}
           {isEventStarted && !isEventCompleted && myNet != null && (
-            <div className={`rounded-xl p-4 ${myNet >= 0 ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-              <div className="flex items-center justify-between">
+            <div className={`rounded-xl overflow-hidden border ${myNet >= 0 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+              <div 
+                className="p-4 flex items-center justify-between cursor-pointer"
+                onClick={() => setExpandBalance(!expandBalance)}
+              >
                 <div>
-                  <div className="text-xs font-bold text-gray-500 uppercase tracking-wide">Your Balance</div>
+                  <div className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                    Your Balance
+                    <svg className={`w-3 h-3 transition-transform ${expandBalance ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
                   <div className={`text-2xl font-black ${myNet >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {signedCurrency(myNet)}
                   </div>
@@ -3096,6 +3112,29 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                   <div>Winnings: {signedCurrency(myWinnings)}</div>
                 </div>
               </div>
+              
+              {/* Expanded Breakdown */}
+              {expandBalance && (
+                <div className={`px-4 pb-4 pt-0 border-t ${myNet >= 0 ? 'border-green-100' : 'border-red-100'}`}>
+                  <div className="mt-3 text-xs font-bold text-gray-500 uppercase tracking-wide">Buy-in Breakdown</div>
+                  <div className="mt-1 space-y-1">
+                    {buyinBreakdown.length > 0 ? (
+                      buyinBreakdown.map((item, idx) => (
+                        <div key={idx} className="flex justify-between text-sm text-gray-700">
+                          <span>{item.name}</span>
+                          <span className="font-medium">{currency(item.amount)}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-xs text-gray-400 italic">No buy-ins</div>
+                    )}
+                    <div className="border-t border-gray-200/50 mt-2 pt-1 flex justify-between text-sm font-bold text-gray-900">
+                      <span>Total</span>
+                      <span>{currency(myBuyin)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
           
