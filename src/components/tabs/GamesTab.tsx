@@ -8,6 +8,7 @@ import { calculateEventPayouts } from '../../games/payouts';
 import { EventSettlement } from '../wallet';
 import { DOT_DEFINITIONS, DEFAULT_DOTS } from '../../games/dots';
 import type { DotCategory, BingoBangoBongoHoleResult, WolfHoleResult, DotsPlayerResult } from '../../state/types';
+import { useKeyboardHandler } from '../../hooks/useKeyboardHandler';
 
 type Props = { eventId: string; isTabActive?: boolean; autoOpenAddGame?: number };
 
@@ -120,6 +121,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   const [dotsSetupId, setDotsSetupId] = useState<string | null>(null);
   const [showSettlements, setShowSettlements] = useState(false);
   const [expandBalance, setExpandBalance] = useState(false);
+  const { handleFocus, handleBlur } = useKeyboardHandler();
   
   const completeEvent = useStore((s) => s.completeEvent);
   const getEventSettlements = useStore((s) => s.getEventSettlements);
@@ -1985,7 +1987,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                         step="0.25"
                         className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white text-gray-900 font-bold"
                         value={fees.out}
-                        onFocus={(e) => e.currentTarget.select()}
+                        onFocus={(e) => { e.currentTarget.select(); handleFocus(); }}
+                        onBlur={handleBlur}
                         onChange={(e) => setFees({ ...fees, out: Number(e.target.value) })}
                         disabled={!canEdit}
                       />
@@ -1998,7 +2001,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                         step="0.25"
                         className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white text-gray-900 font-bold"
                         value={fees.in}
-                        onFocus={(e) => e.currentTarget.select()}
+                        onFocus={(e) => { e.currentTarget.select(); handleFocus(); }}
+                        onBlur={handleBlur}
                         onChange={(e) => setFees({ ...fees, in: Number(e.target.value) })}
                         disabled={!canEdit}
                       />
@@ -2011,7 +2015,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                         step="0.25"
                         className="mt-1 w-full border border-slate-300 rounded-lg px-2 py-2 text-sm bg-white text-gray-900 font-bold"
                         value={fees.total}
-                        onFocus={(e) => e.currentTarget.select()}
+                        onFocus={(e) => { e.currentTarget.select(); handleFocus(); }}
+                        onBlur={handleBlur}
                         onChange={(e) => setFees({ ...fees, total: Number(e.target.value) })}
                         disabled={!canEdit}
                       />
@@ -2164,7 +2169,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                       min="0"
                       step="1"
                       value={sk.fee}
-                      onFocus={(e) => e.currentTarget.select()}
+                      onFocus={(e) => { e.currentTarget.select(); handleFocus(); }}
+                      onBlur={handleBlur}
                       onChange={(e) => updateCfg({ fee: Number(e.target.value) })}
                       disabled={!canEdit}
                       className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold bg-white text-gray-900"
@@ -2328,7 +2334,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                           type="number"
                           min="0"
                           value={getCount(g.id)}
-                          onFocus={(e) => e.currentTarget.select()}
+                          onFocus={(e) => { e.currentTarget.select(); handleFocus(); }}
+                          onBlur={handleBlur}
                           onChange={(e) => setPinkyCount(cfg.id, g.id, Number(e.target.value))}
                           disabled={!canModify}
                           className="w-16 border border-slate-300 rounded-lg px-2 py-1.5 text-center text-sm font-bold"
@@ -2486,7 +2493,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                           min="0"
                           max="4"
                           value={getCount(g.id)}
-                          onFocus={(e) => e.currentTarget.select()}
+                          onFocus={(e) => { e.currentTarget.select(); handleFocus(); }}
+                          onBlur={handleBlur}
                           onChange={(e) => setGreenieCount(cfg.id, g.id, Number(e.target.value))}
                           disabled={!canModify}
                           className="w-16 border border-slate-300 rounded-lg px-2 py-1.5 text-center text-sm font-bold"
@@ -2616,7 +2624,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                 {/* Fee */}
                 <div className="rounded-xl border border-slate-200 p-3">
                   <label className="text-xs text-slate-600">Entry fee per player</label>
-                  <input type="number" min="1" step="1" value={cfg.fee} onFocus={e => e.currentTarget.select()}
+                  <input type="number" min="1" step="1" value={cfg.fee} onFocus={e => { e.currentTarget.select(); handleFocus(); }} onBlur={handleBlur}
                     onChange={e => updateCfg({ fee: Number(e.target.value) })} disabled={!canEdit}
                     className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold bg-white text-gray-900" />
                 </div>
@@ -2665,7 +2673,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                 </div>
                 <div className="rounded-xl border border-slate-200 p-3">
                   <label className="text-xs text-slate-600">$ per point</label>
-                  <input type="number" min="0.25" step="0.25" value={cfg.fee} onFocus={e => e.currentTarget.select()}
+                  <input type="number" min="0.25" step="0.25" value={cfg.fee} onFocus={e => { e.currentTarget.select(); handleFocus(); }} onBlur={handleBlur}
                     onChange={e => updateCfg({ fee: Number(e.target.value) })} disabled={!canEdit}
                     className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold bg-white text-gray-900" />
                   <div className="text-[10px] text-slate-400 mt-1">Max per hole: ${(cfg.fee * 9).toFixed(2)} · Max round: ${(cfg.fee * 162).toFixed(2)}</div>
@@ -2826,7 +2834,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                 {/* Fee */}
                 <div className="rounded-xl border border-slate-200 p-3">
                   <label className="text-xs text-slate-600">$ per point</label>
-                  <input type="number" min="0.25" step="0.25" value={cfg.fee} onFocus={e => e.currentTarget.select()}
+                  <input type="number" min="0.25" step="0.25" value={cfg.fee} onFocus={e => { e.currentTarget.select(); handleFocus(); }} onBlur={handleBlur}
                     onChange={e => updateCfg({ fee: Number(e.target.value) })} disabled={!canEdit}
                     className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold bg-white text-gray-900" />
                 </div>
@@ -2955,7 +2963,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                 {/* Fee */}
                 <div className="rounded-xl border border-slate-200 p-3">
                   <label className="text-xs text-slate-600">$ per dot</label>
-                  <input type="number" min="0.25" step="0.25" value={cfg.fee} onFocus={e => e.currentTarget.select()}
+                  <input type="number" min="0.25" step="0.25" value={cfg.fee} onFocus={e => { e.currentTarget.select(); handleFocus(); }} onBlur={handleBlur}
                     onChange={e => updateCfg({ fee: Number(e.target.value) })} disabled={!canEdit}
                     className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold bg-white text-gray-900" />
                 </div>
@@ -2998,7 +3006,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                               <div key={cat} className="flex items-center justify-between gap-1 rounded border border-slate-100 px-1.5 py-1">
                                 <span className="text-[9px] text-slate-500 truncate">{def?.emoji} {def?.label}</span>
                                 <input type="number" min="0" max="18" value={count}
-                                  onFocus={e => e.currentTarget.select()}
+                                  onFocus={e => { e.currentTarget.select(); handleFocus(); }}
+                                  onBlur={handleBlur}
                                   onChange={e => updatePlayerDotCount(g.id, cat, Number(e.target.value))}
                                   disabled={!canEdit}
                                   className="w-10 text-center text-[10px] font-bold border border-slate-200 rounded px-1 py-0.5" />

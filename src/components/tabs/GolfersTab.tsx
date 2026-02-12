@@ -16,6 +16,7 @@ import useStore from '../../state/store';
 import { useCourse } from '../../hooks/useCourse';
 import { STATUS_TIERS } from '../../state/types';
 import StatusLevelsInfo from '../verified/StatusLevelsInfo';
+import { useKeyboardHandler } from '../../hooks/useKeyboardHandler';
 
 type Props = { eventId: string; isTabActive?: boolean };
 type AddModalTab = 'invite' | 'manual';
@@ -40,6 +41,7 @@ const GolfersTab: React.FC<Props> = ({ eventId, isTabActive = true }) => {
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [showStatusLevels, setShowStatusLevels] = useState(false);
+  const { handleFocus, handleBlur } = useKeyboardHandler();
 
   if (!event) return null;
 
@@ -700,6 +702,8 @@ Code: ${event.shareCode}`,
                       type="text"
                       value={golferName}
                       onChange={e => setGolferName(e.target.value)}
+                      onFocus={handleFocus}
+                      onBlur={handleBlur}
                       placeholder="Enter name"
                       className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base bg-white text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                       autoFocus={!isGroupHub || addModalTab === 'manual'}
@@ -736,6 +740,8 @@ Code: ${event.shareCode}`,
                         step="0.1"
                         value={customHandicap}
                         onChange={e => setCustomHandicap(e.target.value)}
+                        onFocus={handleFocus}
+                        onBlur={handleBlur}
                         placeholder="e.g., 15.2"
                         className="w-full px-4 py-3 border border-gray-300 rounded-xl text-base bg-white text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                       />

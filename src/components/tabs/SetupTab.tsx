@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import useStore from '../../state/store';
 import { CourseSearch } from '../CourseSearch';
 import { useCourses } from '../../hooks/useCourses';
+import { useKeyboardHandler } from '../../hooks/useKeyboardHandler';
 
 type Props = { eventId: string };
 
@@ -14,6 +15,7 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
   );
   const { currentProfile, profiles } = useStore();
   const { courses } = useCourses();
+  const { handleFocus, handleBlur } = useKeyboardHandler();
   
   if (!event) return null;
 
@@ -71,6 +73,8 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
                 rows={2}
                 value={groupSettings.description || ''}
                 onChange={(e) => updateGroupSettings({ description: e.target.value })}
+                onFocus={handleFocus}
+                onBlur={handleBlur}
                 placeholder="What's this group about?"
                 disabled={!isOwner}
               />
@@ -299,6 +303,8 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
               className="w-full bg-white text-gray-900 placeholder:text-gray-500 disabled:text-gray-700 disabled:bg-gray-50 disabled:opacity-100 border border-gray-300 rounded-xl px-3 py-2.5 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20"
               value={event.name}
               onChange={e => useStore.getState().updateEvent(eventId, { name: e.target.value })}
+              onFocus={handleFocus}
+              onBlur={handleBlur}
               placeholder="Event name"
               disabled={event.isCompleted || !isOwner}
             />
