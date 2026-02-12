@@ -5,13 +5,10 @@ import { Amplify } from 'aws-amplify';
 import App from './App';
 import './styles.css';
 
-// Amplify configuration - loaded from root amplify_outputs.json
-try {
-  const outputs = await import('../../../amplify_outputs.json');
-  Amplify.configure(outputs.default);
-} catch (e) {
-  console.warn('Amplify outputs not found, running without backend');
-}
+// Configure Amplify - using root config (3 levels up from apps/club/src/)
+import amplifyOutputs from '../../../amplify_outputs.json';
+
+Amplify.configure(amplifyOutputs);
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
