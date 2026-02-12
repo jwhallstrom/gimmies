@@ -11,6 +11,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../../state/store';
 import { useCourse } from '../../hooks/useCourse';
@@ -536,9 +537,9 @@ Code: ${event.shareCode}`,
       })()}
 
       {/* Add Golfer/Member Modal */}
-      {showAddModal && (
+      {showAddModal && createPortal(
         <div 
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm"
+          className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm"
           onClick={() => setShowAddModal(false)}
         >
           <div 
@@ -785,13 +786,14 @@ Code: ${event.shareCode}`,
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ========== PLAYER CARD MODAL ========== */}
-      {selectedPlayer && (
+      {selectedPlayer && createPortal(
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4"
           onClick={() => setSelectedPlayerId(null)}
         >
           <div 
@@ -930,7 +932,8 @@ Code: ${event.shareCode}`,
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Status Levels Info Modal */}
@@ -1049,7 +1052,8 @@ Code: ${event.shareCode}`,
                   </button>
                 </div>
               </div>
-            </div>
+            </div>,
+            document.body
           )}
         </>
       )}
