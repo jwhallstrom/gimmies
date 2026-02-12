@@ -906,7 +906,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = tr
         )}
 
         {/* Text input + send */}
-        <div className="flex items-end gap-2 px-3 pb-3 pt-1">
+        <div className="flex items-end gap-2 px-3 pb-2 pt-1">
           <textarea
             ref={inputRef}
             value={text}
