@@ -41,11 +41,9 @@ export function computeNassauForConfig(event: Event, config: NassauConfig, profi
     const pref = prefFor(gid);
     return pref === 'all' || pref === 'nassau';
   };
-  // Allow restricting golfers for this Nassau (subset scenario)
-  const base = group.golferIds.filter(eligible);
-  const players = (config.participantGolferIds && config.participantGolferIds.length > 1)
-    ? base.filter(id => config.participantGolferIds!.includes(id))
-    : base;
+  // Use all eligible golfers — participantGolferIds is a creation-time snapshot
+  // and becomes stale when new players join the event after game setup.
+  const players = group.golferIds.filter(eligible);
   if (players.length < 2) return null;
   const isTeam = !!(config.teams && config.teams.length >= 2);
 

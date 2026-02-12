@@ -58,6 +58,9 @@ const DOUBLE_TAP_DELAY = 300; // ms window for second tap
 // Keyboard handling - visualViewport API for PWA/iOS
 // ============================================================================
 
+const isTouchDevice = () =>
+  'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
 const useKeyboardHandler = () => {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
 
@@ -78,9 +81,7 @@ const useKeyboardHandler = () => {
     };
   }, []);
 
-  // Only hide footer when a real virtual keyboard is visible (keyboardHeight > 0).
-  // On desktop there's no virtual keyboard so footer stays visible.
-  // Always clean up on unmount so the class never gets stuck.
+  // Hide footer when virtual keyboard is visible (visualViewport detection).
   useEffect(() => {
     if (keyboardHeight > 0) {
       document.body.classList.add('chat-input-focused');
@@ -92,9 +93,26 @@ const useKeyboardHandler = () => {
     };
   }, [keyboardHeight]);
 
-  // Keep focus/blur for any future non-class-toggle needs
-  const handleFocus = useCallback(() => { /* keyboard detection handles footer */ }, []);
-  const handleBlur = useCallback(() => { /* keyboard detection handles footer */ }, []);
+  // Fallback: on touch devices, hide footer on focus / restore on blur.
+  // visualViewport detection can be unreliable on some iOS versions,
+  // so this ensures the bottom nav always hides when the keyboard appears.
+  const handleFocus = useCallback(() => {
+    if (isTouchDevice()) {
+      document.body.classList.add('chat-input-focused');
+    }
+  }, []);
+
+  const handleBlur = useCallback(() => {
+    if (isTouchDevice()) {
+      // Short delay: let visualViewport resize fire first so we don't
+      // flash the footer between field switches.
+      setTimeout(() => {
+        if (!document.activeElement || document.activeElement.tagName !== 'TEXTAREA') {
+          document.body.classList.remove('chat-input-focused');
+        }
+      }, 150);
+    }
+  }, []);
 
   return { keyboardHeight, handleFocus, handleBlur };
 };
@@ -893,7 +911,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = tr
         )}
 
         {/* Text input + send */}
-        <div className="flex items-end gap-2 px-3 pb-2 pt-1">
+        <div className="flex items-end gap-2 px-3 pb-3 pt-1">
           <textarea
             ref={inputRef}
             value={text}

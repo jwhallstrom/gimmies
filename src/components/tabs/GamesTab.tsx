@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import useStore from '../../state/store';
 // Skins preview (holes won) moved to OverviewTab.
 import { nanoid } from 'nanoid/non-secure';
@@ -10,7 +11,7 @@ import type { DotCategory, BingoBangoBongoHoleResult, WolfHoleResult, DotsPlayer
 import type { NassauPayoutSummary, NassauSegmentResult } from '../../games/nassau';
 import type { SkinsSummary } from '../../games/skins';
 
-type Props = { eventId: string };
+type Props = { eventId: string; isTabActive?: boolean; autoOpenAddGame?: number };
 
 const GAME_TYPES = [
   {
@@ -89,7 +90,7 @@ const GAME_TYPES = [
   }
 ];
 
-const GamesTab: React.FC<Props> = ({ eventId }) => {
+const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGame }) => {
   const navigate = useNavigate();
   const event = useStore((s: any) => 
     s.events.find((e: any) => e.id === eventId) || 
@@ -103,6 +104,12 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
   const [subTab, setSubTab] = useState<'games' | 'payouts'>('games');
   
   const [showAddGame, setShowAddGame] = useState(false);
+  const [showFabMenu, setShowFabMenu] = useState(false);
+
+  // Auto-open the Add Game modal when triggered from Game Control
+  useEffect(() => {
+    if (autoOpenAddGame && autoOpenAddGame > 0) setShowAddGame(true);
+  }, [autoOpenAddGame]);
   const [expandedDescription, setExpandedDescription] = useState<string | null>(null);
   const [nassauSetupId, setNassauSetupId] = useState<string | null>(null);
   const [skinsSetupId, setSkinsSetupId] = useState<string | null>(null);
@@ -328,8 +335,8 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
   };
 
   const randomizeTeams = (nassau: any, golfers: any[]) => {
-    // Respect participant subset if defined
-    const active = golfers.filter(g => !nassau.participantGolferIds || nassau.participantGolferIds.includes(g.id));
+    // Use all eligible golfers — participantGolferIds may be stale
+    const active = golfers;
     if (active.length < 2) return;
     const teams = ensureTeams(nassau, Math.min(4, Math.max(2, nassau.teams?.length || 2))); // keep existing count if present
     const shuffled = shuffle(active.map(g => g.id));
@@ -384,25 +391,70 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
   // Must declare hasAnyGames before gamesReady uses it
   const hasAnyGames = event.games.nassau.length + skinsArray.length + pinkyArray.length + greenieArray.length + stablefordArray.length + ninePointArray.length + bbbArray.length + wolfArray.length + dotsArray.length > 0;
 
-  // Check if games are ready to start
-  const gamesReady = (() => {
+  // Check if games are ready to start — collect issues for admin
+  const startIssues = useMemo(() => {
+    const issues: string[] = [];
     if (!hasAnyGames) {
-      return false;
+      issues.push('No games added yet');
+      return issues;
     }
+    const playerCount = allGolfers.length;
     // Check Nassau teams
     for (const n of event.games.nassau) {
       const teams = n.teams || [];
       const teamsWithPlayers = teams.filter((t: any) => (t.golferIds || []).length > 0);
       if (teams.length > 0 && teamsWithPlayers.length < 2) {
-        return false;
+        issues.push('Nassau: Teams need to be picked');
+      }
+      if (playerCount < 2) {
+        issues.push('Nassau: Needs at least 2 players');
       }
     }
-    return true;
-  })();
+    // Check participant count for special games (use game's own player list, not total event)
+    ninePointArray.forEach((np: any, idx: number) => {
+      const npCount = (np.participantGolferIds || []).length;
+      if (npCount !== 3) {
+        issues.push(`9-Point${ninePointArray.length > 1 ? ` #${idx + 1}` : ''}: Needs exactly 3 players (${npCount} selected)`);
+      }
+    });
+    wolfArray.forEach((w: any, idx: number) => {
+      const wCount = (w.participantGolferIds || []).length;
+      if (wCount !== 4) {
+        issues.push(`Wolf${wolfArray.length > 1 ? ` #${idx + 1}` : ''}: Needs exactly 4 players (${wCount} selected)`);
+      }
+    });
+    // Generic min-2 check for other games
+    const needsTwo = skinsArray.length + pinkyArray.length + greenieArray.length + stablefordArray.length + bbbArray.length + dotsArray.length;
+    if (needsTwo > 0 && playerCount < 2) {
+      issues.push(`Games require at least 2 players (${playerCount} in event)`);
+    }
+    return issues;
+  }, [hasAnyGames, allGolfers.length, event.games.nassau, ninePointArray, wolfArray, skinsArray, pinkyArray, greenieArray, stablefordArray, bbbArray, dotsArray]);
+  const gamesReady = startIssues.length === 0;
+
+  // Suggest optimal team count based on player count
+  const suggestedTeamCount = useMemo(() => {
+    const pc = allGolfers.length;
+    if (pc <= 4) return 2;
+    if (pc <= 6) return 2;
+    if (pc <= 8) return 2;    // 2 teams of 4
+    if (pc <= 12) return 3;   // 3 teams of 4
+    if (pc <= 16) return 4;   // 4 teams of 4
+    if (pc <= 20) return 4;   // 4 teams of 5
+    return 4;                  // cap at 4 teams — fewer is better
+  }, [allGolfers.length]);
+
+  // Determine which admin steps are available/done
+  const hasNassauGames = event.games.nassau.length > 0;
+  const nassauNeedsTeams = event.games.nassau.some((n: any) => {
+    const teams = n.teams || [];
+    const teamsWithPlayers = teams.filter((t: any) => (t.golferIds || []).length > 0);
+    return teams.length === 0 || teamsWithPlayers.length < 2;
+  });
 
   const handleStartEvent = () => {
     if (!gamesReady) {
-      alert('Games are not ready. Please pick teams for Nassau games first.');
+      alert('Cannot start event:\n\n' + startIssues.map(i => '• ' + i).join('\n'));
       return;
     }
     if (window.confirm('Start the event? This will lock the games. You can unlock later if needed.')) {
@@ -449,12 +501,12 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
     // Calculate buy-in from all games this golfer is in
     let buyin = 0;
     
-    // Nassau buy-ins
+    // All eligible event golfer IDs (used for all pot-based games)
+    const allGolferIds = event.golfers.map((g: any) => g.profileId || g.customName);
+
+    // Nassau buy-ins — include all eligible golfers, not stale participantGolferIds
     event.games.nassau.forEach((n: any) => {
-      const participants = n.participantGolferIds?.length > 1 
-        ? n.participantGolferIds 
-        : event.golfers.map((g: any) => g.profileId || g.customName);
-      if (participants.includes(myGolferId)) {
+      if (allGolferIds.includes(myGolferId)) {
         const fees = n.fees ?? { out: n.fee, in: n.fee, total: n.fee };
         buyin += (fees.out || 0) + (fees.in || 0) + (fees.total || 0);
       }
@@ -462,20 +514,14 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
     
     // Skins buy-ins
     skinsArray.forEach((s: any) => {
-      const participants = s.participantGolferIds?.length > 1 
-        ? s.participantGolferIds 
-        : event.golfers.map((g: any) => g.profileId || g.customName);
-      if (participants.includes(myGolferId)) {
+      if (allGolferIds.includes(myGolferId)) {
         buyin += s.fee || 0;
       }
     });
 
     // Stableford buy-ins (pot-based like skins)
     stablefordArray.forEach((s: any) => {
-      const participants = s.participantGolferIds?.length > 1 
-        ? s.participantGolferIds 
-        : event.golfers.map((g: any) => g.profileId || g.customName);
-      if (participants.includes(myGolferId)) {
+      if (allGolferIds.includes(myGolferId)) {
         buyin += s.fee || 0;
       }
     });
@@ -632,24 +678,61 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
       {/* No Games State */}
       {!hasAnyGames && (
         <div className="bg-white rounded-xl border border-slate-200 p-6 text-center">
-          <div className="text-3xl mb-2">{isOwner ? '🎲' : '⛳'}</div>
-          <div className="font-bold text-gray-900">{isOwner ? 'Add a Side Game' : 'No Games Yet'}</div>
-          <p className="text-sm text-gray-500 mt-1">
-            {isOwner ? 'Nassau, Skins, or other bets' : 'Admin hasn\'t set up games yet'}
-          </p>
-          {isOwner && canEdit && (
-            <button
-              onClick={() => setShowAddGame(true)}
-              className="mt-3 px-5 py-2 bg-primary-600 text-white rounded-lg font-bold text-sm hover:bg-primary-700"
-            >
-              + Add Game
-            </button>
+          {isOwner ? (
+            <>
+              <div className="text-3xl mb-2">💰</div>
+              <div className="font-bold text-gray-900">Games & Payouts</div>
+              <p className="text-sm text-gray-500 mt-2">
+                This is where your side games and payouts live.
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                Tap the <span className="inline-block w-5 h-5 rounded-full bg-orange-500 text-white text-[10px] font-bold leading-5 align-middle">+</span> button to add Nassau, Skins, and more.
+              </p>
+            </>
+          ) : (
+            <>
+              <div className="text-3xl mb-2">⛳</div>
+              <div className="font-bold text-gray-900">Games & Payouts</div>
+              <p className="text-sm text-gray-500 mt-2">
+                Once the admin sets up side games, you'll see your matchups, standings, and payouts here.
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                Hang tight — the fun is coming!
+              </p>
+            </>
           )}
         </div>
       )}
 
+      {/* ========== NASSAU PREVIEW CARDS (pre-start / no standings yet) ========== */}
+      {(!nassauStandings || nassauStandings.length === 0) && event.games.nassau.map((n: any) => {
+        const fees = n.fees ?? { out: n.fee, in: n.fee, total: n.fee };
+        const hasTeams = (n.teams || []).filter((t: any) => t.golferIds?.length > 0).length >= 2;
+        const nassauPot = allGolfers.length * ((fees.out || 0) + (fees.in || 0) + (fees.total || 0));
+        return (
+          <div
+            key={n.id}
+            onClick={isOwner ? () => setNassauSetupId(n.id) : undefined}
+            className={`w-full bg-white rounded-xl border border-slate-200 p-4 text-left transition-colors ${isOwner ? 'cursor-pointer hover:border-slate-300' : ''}`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-xl">🏌️</span>
+                <div>
+                  <div className="font-bold text-gray-900">Nassau</div>
+                  <div className="text-xs text-gray-500">
+                    ${fees.out}/${fees.in}/${fees.total} · {n.net ? 'Net' : 'Gross'} · {hasTeams ? 'Teams' : 'Individual'} · Total Pot: {currency(nassauPot)}
+                  </div>
+                </div>
+              </div>
+              {isOwner && <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>}
+            </div>
+          </div>
+        );
+      })}
+
       {/* ========== NASSAU LEADERBOARD ========== */}
-      {nassauStandings && nassauStandings.map((nassau: any) => {
+      {nassauStandings && nassauStandings.length > 0 && nassauStandings.map((nassau: any) => {
         const frontSeg = nassau.standings.find((s: any) => s.segment === 'front');
         const backSeg = nassau.standings.find((s: any) => s.segment === 'back');
         const totalSeg = nassau.standings.find((s: any) => s.segment === 'total');
@@ -675,7 +758,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 </div>
               </div>
             </div>
-            {(isOwner || !isEventStarted) && (
+            {isOwner && (
               <button
                 onClick={() => setNassauSetupId(nassau.id)}
                 className="text-xs text-primary-600 font-bold"
@@ -797,8 +880,33 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
         );
       })}
 
+      {/* ========== SKINS PREVIEW CARDS (pre-start / no standings yet) ========== */}
+      {(!skinsStandings || skinsStandings.length === 0) && skinsArray.map((s: any) => {
+        const skinsPot = allGolfers.length * (s.fee || 0);
+        return (
+          <div
+            key={s.id}
+            onClick={isOwner ? () => setSkinsSetupId(s.id) : undefined}
+            className={`w-full bg-white rounded-xl border border-slate-200 p-4 text-left transition-colors ${isOwner ? 'cursor-pointer hover:border-slate-300' : ''}`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <span className="text-xl">💰</span>
+                <div>
+                  <div className="font-bold text-gray-900">Skins</div>
+                  <div className="text-xs text-gray-500">
+                    {s.net ? 'Net' : 'Gross'} · ${s.fee || 0} · Total Pot: {currency(skinsPot)}
+                  </div>
+                </div>
+              </div>
+              {isOwner && <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>}
+            </div>
+          </div>
+        );
+      })}
+
       {/* ========== SKINS LEADERBOARD ========== */}
-      {skinsStandings && skinsStandings.map((skins: any) => (
+      {skinsStandings && skinsStandings.length > 0 && skinsStandings.map((skins: any) => (
         <div key={skins.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           {/* Header */}
           <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
@@ -807,11 +915,11 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
               <div>
                 <div className="font-bold text-gray-900">Skins</div>
                 <div className="text-[10px] text-gray-500">
-                  ${skins.fee}/hole · {skins.isNet ? 'Net' : 'Gross'} · {skins.carryovers ? 'Carryovers' : 'No carry'}
+                  {skins.isNet ? 'Net' : 'Gross'} · ${skins.fee} · Total Pot: {currency(skins.totalPot)}
                 </div>
               </div>
             </div>
-            {(isOwner || !isEventStarted) && (
+            {isOwner && (
               <button
                 onClick={() => setSkinsSetupId(skins.id)}
                 className="text-xs text-primary-600 font-bold"
@@ -885,10 +993,10 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
 
       {/* Pinky & Greenie - Compact cards */}
       {pinkyArray.length > 0 && pinkyArray.map((p: any) => (
-        <button
+        <div
           key={p.id}
-          onClick={() => setPinkySetupId(p.id)}
-          className="w-full bg-white rounded-xl border border-slate-200 p-4 text-left hover:border-slate-300 transition-colors"
+          onClick={isOwner ? () => setPinkySetupId(p.id) : undefined}
+          className={`w-full bg-white rounded-xl border border-slate-200 p-4 text-left transition-colors ${isOwner ? 'cursor-pointer hover:border-slate-300' : ''}`}
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -898,16 +1006,16 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 <div className="text-xs text-gray-500">${p.fee} per pinky</div>
               </div>
             </div>
-            <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>
+            {isOwner && <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>}
           </div>
-        </button>
+        </div>
       ))}
       
       {greenieArray.length > 0 && greenieArray.map((g: any) => (
-        <button
+        <div
           key={g.id}
-          onClick={() => setGreenieSetupId(g.id)}
-          className="w-full bg-white rounded-xl border border-slate-200 p-4 text-left hover:border-slate-300 transition-colors"
+          onClick={isOwner ? () => setGreenieSetupId(g.id) : undefined}
+          className={`w-full bg-white rounded-xl border border-slate-200 p-4 text-left transition-colors ${isOwner ? 'cursor-pointer hover:border-slate-300' : ''}`}
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -917,9 +1025,9 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 <div className="text-xs text-gray-500">${g.fee} per greenie</div>
               </div>
             </div>
-            <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>
+            {isOwner && <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>}
           </div>
-        </button>
+        </div>
       ))}
 
       {/* ========== STABLEFORD CARD ========== */}
@@ -928,9 +1036,9 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
         const topPlayer = summary ? Object.entries(summary.pointsByGolfer).sort((a: any, b: any) => b[1] - a[1])[0] : null;
         return (
           <div key={cfg.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <button
-              onClick={() => setStablefordSetupId(cfg.id)}
-              className="w-full p-4 text-left hover:bg-slate-50 transition-colors"
+            <div
+              onClick={isOwner ? () => setStablefordSetupId(cfg.id) : undefined}
+              className={`w-full p-4 text-left transition-colors ${isOwner ? 'cursor-pointer hover:bg-slate-50' : ''}`}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -942,9 +1050,9 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                     </div>
                   </div>
                 </div>
-                <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>
+                {isOwner && <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>}
               </div>
-            </button>
+            </div>
             {summary && topPlayer && (
               <div className="px-4 pb-3 border-t border-slate-100 pt-2">
                 <div className="flex items-center justify-between text-xs">
@@ -965,9 +1073,9 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
         const summary = payouts.ninePoint?.find((s: any) => s.configId === cfg.id);
         return (
           <div key={cfg.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <button
-              onClick={() => setNinePointSetupId(cfg.id)}
-              className="w-full p-4 text-left hover:bg-slate-50 transition-colors"
+            <div
+              onClick={isOwner ? () => setNinePointSetupId(cfg.id) : undefined}
+              className={`w-full p-4 text-left transition-colors ${isOwner ? 'cursor-pointer hover:bg-slate-50' : ''}`}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -979,9 +1087,9 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                     </div>
                   </div>
                 </div>
-                <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>
+                {isOwner && <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>}
               </div>
-            </button>
+            </div>
             {summary && (
               <div className="px-4 pb-3 border-t border-slate-100 pt-2 space-y-1">
                 {Object.entries(summary.pointsByGolfer).sort((a: any, b: any) => b[1] - a[1]).map(([gid, pts]) => (
@@ -1000,10 +1108,10 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
       {bbbArray.length > 0 && bbbArray.map((cfg: any) => {
         const summary = payouts.bingoBangoBongo?.find((s: any) => s.configId === cfg.id);
         return (
-          <button
+          <div
             key={cfg.id}
-            onClick={() => setBbbSetupId(cfg.id)}
-            className="w-full bg-white rounded-xl border border-slate-200 p-4 text-left hover:border-slate-300 transition-colors"
+            onClick={isOwner ? () => setBbbSetupId(cfg.id) : undefined}
+            className={`w-full bg-white rounded-xl border border-slate-200 p-4 text-left transition-colors ${isOwner ? 'cursor-pointer hover:border-slate-300' : ''}`}
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -1013,7 +1121,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                   <div className="text-xs text-gray-500">${cfg.fee}/point · 3 pts/hole</div>
                 </div>
               </div>
-              <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>
+              {isOwner && <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>}
             </div>
             {summary && (
               <div className="mt-2 pt-2 border-t border-slate-100 grid grid-cols-3 gap-2 text-[10px] text-center">
@@ -1022,7 +1130,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 <div><span className="font-bold text-gray-700">Bongo</span></div>
               </div>
             )}
-          </button>
+          </div>
         );
       })}
 
@@ -1032,9 +1140,9 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
         const holesPlayed = summary?.holeResults?.length || 0;
         return (
           <div key={cfg.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <button
-              onClick={() => setWolfSetupId(cfg.id)}
-              className="w-full p-4 text-left hover:bg-slate-50 transition-colors"
+            <div
+              onClick={isOwner ? () => setWolfSetupId(cfg.id) : undefined}
+              className={`w-full p-4 text-left transition-colors ${isOwner ? 'cursor-pointer hover:bg-slate-50' : ''}`}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -1046,9 +1154,9 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                     </div>
                   </div>
                 </div>
-                <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>
+                {isOwner && <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>}
               </div>
-            </button>
+            </div>
             {summary && Object.keys(summary.pointsByGolfer).length > 0 && (
               <div className="px-4 pb-3 border-t border-slate-100 pt-2 space-y-1">
                 {Object.entries(summary.pointsByGolfer).sort((a: any, b: any) => b[1] - a[1]).map(([gid, pts]) => (
@@ -1069,10 +1177,10 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
       {dotsArray.length > 0 && dotsArray.map((cfg: any) => {
         const summary = payouts.dots?.find((s: any) => s.configId === cfg.id);
         return (
-          <button
+          <div
             key={cfg.id}
-            onClick={() => setDotsSetupId(cfg.id)}
-            className="w-full bg-white rounded-xl border border-slate-200 p-4 text-left hover:border-slate-300 transition-colors"
+            onClick={isOwner ? () => setDotsSetupId(cfg.id) : undefined}
+            className={`w-full bg-white rounded-xl border border-slate-200 p-4 text-left transition-colors ${isOwner ? 'cursor-pointer hover:border-slate-300' : ''}`}
           >
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -1082,7 +1190,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                   <div className="text-xs text-gray-500">${cfg.fee}/dot · {cfg.activeDots?.length || 0} categories active</div>
                 </div>
               </div>
-              <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>
+              {isOwner && <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>}
             </div>
             {summary && summary.playerResults.length > 0 && (
               <div className="mt-2 pt-2 border-t border-slate-100 space-y-1">
@@ -1094,59 +1202,11 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 ))}
               </div>
             )}
-          </button>
+          </div>
         );
       })}
 
-      {/* Admin Actions */}
-      {isOwner && (
-        <div className="space-y-2 pt-2">
-          {/* Add Game - only in setup */}
-          {canEdit && hasAnyGames && (
-            <button
-              onClick={() => setShowAddGame(true)}
-              className="w-full py-3 border-2 border-dashed border-slate-300 rounded-xl text-slate-600 font-medium hover:bg-slate-50 hover:border-slate-400 transition-colors flex items-center justify-center gap-2"
-            >
-              <span>+</span> Add Game
-            </button>
-          )}
-          
-          {/* Start Event */}
-          {!isEventStarted && !isEventCompleted && hasAnyGames && gamesReady && (
-            <button
-              onClick={handleStartEvent}
-              className="w-full py-4 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl font-bold shadow-lg hover:from-green-700 hover:to-green-800"
-            >
-              🚀 Start Event
-            </button>
-          )}
-          
-          {/* Unlock (when in progress) */}
-          {isEventStarted && !isEventCompleted && (
-            <button
-              onClick={handleUnlockEvent}
-              className="w-full py-3 border border-amber-300 bg-amber-50 text-amber-700 rounded-xl font-medium hover:bg-amber-100"
-            >
-              🔓 Unlock Games
-            </button>
-          )}
-          
-          {/* Complete Event - Only when all scores are in */}
-          {isEventStarted && !isEventCompleted && (
-            <button
-              onClick={handleCompleteEvent}
-              disabled={!allScoresComplete}
-              className={`w-full py-4 rounded-xl font-bold shadow-lg transition-all ${
-                allScoresComplete
-                  ? 'bg-gradient-to-r from-green-600 to-green-700 text-white hover:from-green-700 hover:to-green-800'
-                  : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-              }`}
-            >
-              {allScoresComplete ? '✓ Complete Event & Finalize Payouts' : '⏳ Waiting for All Scores...'}
-            </button>
-          )}
-        </div>
-      )}
+      {/* Admin Control Panel moved to Event Header Command Center */}
 
       {/* ========== OLD SUB-TAB CODE (hidden - keeping modals) ========== */}
       {false && (
@@ -1212,19 +1272,11 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
           {/* Games List - Compact Cards */}
           {!hasAnyGames ? (
             <div className="bg-white rounded-xl border border-slate-200 p-6 text-center">
-              <div className="text-3xl mb-2">{isOwner ? '🎲' : '⛳'}</div>
-              <div className="font-bold text-gray-900">{isOwner ? 'Add a Side Game' : 'No Games Yet'}</div>
+              <div className="text-3xl mb-2">💰</div>
+              <div className="font-bold text-gray-900">Games & Payouts</div>
               <p className="text-sm text-gray-500 mt-1">
-                {isOwner ? 'Nassau, Skins, or other bets' : 'Admin hasn\'t set up games yet'}
+                {isOwner ? 'Use the Command Center to add games' : 'The admin hasn\'t set up games yet'}
               </p>
-              {isOwner && canEdit && (
-                <button
-                  onClick={() => setShowAddGame(true)}
-                  className="mt-3 px-5 py-2 bg-primary-600 text-white rounded-lg font-bold text-sm hover:bg-primary-700"
-                >
-                  + Add Game
-                </button>
-              )}
             </div>
           ) : (
             <>
@@ -1233,10 +1285,10 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 const fees = n.fees ?? { out: n.fee, in: n.fee, total: n.fee };
                 const hasTeams = (n.teams || []).filter((t: any) => t.golferIds?.length > 0).length >= 2;
                 return (
-                  <button
+                  <div
                     key={n.id}
-                    onClick={() => setNassauSetupId(n.id)}
-                    className="w-full bg-white rounded-xl border border-slate-200 p-4 text-left hover:border-slate-300 transition-colors"
+                    onClick={isOwner ? () => setNassauSetupId(n.id) : undefined}
+                    className={`w-full bg-white rounded-xl border border-slate-200 p-4 text-left transition-colors ${isOwner ? 'cursor-pointer hover:border-slate-300' : ''}`}
                   >
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-3">
@@ -1248,40 +1300,43 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                           </div>
                         </div>
                       </div>
-                      <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>
+                      {isOwner && <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>}
                     </div>
-                  </button>
+                  </div>
                 );
               })}
 
               {/* Skins Games */}
-              {skinsArray.map((s: any, i: number) => (
-                <button
-                  key={s.id}
-                  onClick={() => setSkinsSetupId(s.id)}
-                  className="w-full bg-white rounded-xl border border-slate-200 p-4 text-left hover:border-slate-300 transition-colors"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="text-xl">💰</span>
-                      <div>
-                        <div className="font-bold text-gray-900">Skins</div>
-                        <div className="text-xs text-gray-500">
-                          ${s.fee}/hole · {s.net ? 'Net' : 'Gross'} · {s.carryovers ? 'Carryovers' : 'No carry'}
+              {skinsArray.map((s: any, i: number) => {
+                const skinsPot = allGolfers.length * (s.fee || 0);
+                return (
+                  <div
+                    key={s.id}
+                    onClick={isOwner ? () => setSkinsSetupId(s.id) : undefined}
+                    className={`w-full bg-white rounded-xl border border-slate-200 p-4 text-left transition-colors ${isOwner ? 'cursor-pointer hover:border-slate-300' : ''}`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xl">💰</span>
+                        <div>
+                          <div className="font-bold text-gray-900">Skins</div>
+                          <div className="text-xs text-gray-500">
+                            {s.net ? 'Net' : 'Gross'} · ${s.fee || 0} · Total Pot: {currency(skinsPot)}
+                          </div>
                         </div>
                       </div>
+                      {isOwner && <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>}
                     </div>
-                    <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>
                   </div>
-                </button>
-              ))}
+                );
+              })}
 
               {/* Pinky Games */}
               {pinkyArray.map((p: any, i: number) => (
-                <button
+                <div
                   key={p.id}
-                  onClick={() => setPinkySetupId(p.id)}
-                  className="w-full bg-white rounded-xl border border-slate-200 p-4 text-left hover:border-slate-300 transition-colors"
+                  onClick={isOwner ? () => setPinkySetupId(p.id) : undefined}
+                  className={`w-full bg-white rounded-xl border border-slate-200 p-4 text-left transition-colors ${isOwner ? 'cursor-pointer hover:border-slate-300' : ''}`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -1291,17 +1346,17 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                         <div className="text-xs text-gray-500">${p.fee} per pinky</div>
                       </div>
                     </div>
-                    <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>
+                    {isOwner && <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>}
                   </div>
-                </button>
+                </div>
               ))}
 
               {/* Greenie Games */}
               {greenieArray.map((g: any, i: number) => (
-                <button
+                <div
                   key={g.id}
-                  onClick={() => setGreenieSetupId(g.id)}
-                  className="w-full bg-white rounded-xl border border-slate-200 p-4 text-left hover:border-slate-300 transition-colors"
+                  onClick={isOwner ? () => setGreenieSetupId(g.id) : undefined}
+                  className={`w-full bg-white rounded-xl border border-slate-200 p-4 text-left transition-colors ${isOwner ? 'cursor-pointer hover:border-slate-300' : ''}`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -1311,31 +1366,12 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                         <div className="text-xs text-gray-500">${g.fee} per greenie</div>
                       </div>
                     </div>
-                    <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>
+                    {isOwner && <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>}
                   </div>
-                </button>
+                </div>
               ))}
 
-              {/* Add Game Button - Admin only */}
-              {isOwner && canEdit && (
-                <button
-                  onClick={() => setShowAddGame(true)}
-                  className="w-full py-3 border-2 border-dashed border-slate-300 rounded-xl text-slate-600 font-medium hover:bg-slate-50 hover:border-slate-400 transition-colors flex items-center justify-center gap-2"
-                >
-                  <span>+</span> Add Game
-                </button>
-              )}
             </>
-          )}
-
-          {/* Admin Action: Start Event */}
-          {isOwner && !isEventStarted && !isEventCompleted && hasAnyGames && gamesReady && (
-            <button
-              onClick={handleStartEvent}
-              className="w-full py-4 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-xl font-bold shadow-lg hover:from-green-700 hover:to-green-800"
-            >
-              🚀 Start Event
-            </button>
           )}
         </div>
       )}
@@ -1440,49 +1476,187 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
             </div>
           )}
 
-          {/* Admin Actions */}
-          {isOwner && (
-            <div className="space-y-3 pt-2">
-              {/* Complete Event */}
-              {isEventStarted && !isEventCompleted && (
-                <button
-                  onClick={handleCompleteEvent}
-                  disabled={!allScoresComplete}
-                  className={`w-full py-4 rounded-xl font-bold ${
-                    allScoresComplete
-                      ? 'bg-gradient-to-r from-green-600 to-green-700 text-white shadow-lg hover:from-green-700 hover:to-green-800'
-                      : 'bg-gray-200 text-gray-500 cursor-not-allowed'
-                  }`}
-                >
-                  {allScoresComplete ? '✓ Complete Event' : 'Complete All Scores First'}
-                </button>
-              )}
-
-              {/* Send Recap - After completion */}
-              {isEventCompleted && (
-                <button
-                  onClick={() => {
-                    // TODO: Implement send recap notification
-                    alert('Recap notification sent to all players!');
-                  }}
-                  className="w-full py-3 bg-primary-600 text-white rounded-xl font-bold hover:bg-primary-700"
-                >
-                  📤 Send Recap to Players
-                </button>
-              )}
-            </div>
+          {/* Send Recap - After completion */}
+          {isOwner && isEventCompleted && (
+            <button
+              onClick={() => {
+                // TODO: Implement send recap notification
+                alert('Recap notification sent to all players!');
+              }}
+              className="w-full py-3 bg-primary-600 text-white rounded-xl font-bold hover:bg-primary-700"
+            >
+              📤 Send Recap to Players
+            </button>
           )}
         </div>
       )}
       </>
       )}
 
+      {/* ========== ADMIN FAB ========== */}
+      {isOwner && canEdit && isTabActive && (
+        <button
+          onClick={() => setShowFabMenu(true)}
+          className="fixed right-4 z-40 w-16 h-16 bg-gradient-to-br from-accent to-orange-600 rounded-full shadow-lg shadow-accent/40 flex items-center justify-center text-white text-3xl font-bold hover:scale-105 active:scale-95 transition-transform fab-position"
+          title="Game actions"
+          aria-label="Game actions"
+        >
+          <span className={`transition-transform duration-200 ${showFabMenu ? 'rotate-45' : ''}`}>+</span>
+        </button>
+      )}
+
+      {/* FAB Action Sheet */}
+      {showFabMenu && createPortal(
+        <div
+          className="fixed inset-0 z-[9999] flex items-end justify-center"
+          onClick={() => setShowFabMenu(false)}
+        >
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+          <div
+            className="relative w-full max-w-md mx-4 mb-4 bg-white rounded-3xl shadow-2xl overflow-hidden animate-slide-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="p-4 bg-gradient-to-br from-slate-700 to-slate-800">
+              <div className="text-white">
+                <div className="text-xs font-medium opacity-80">Admin Actions</div>
+                <div className="text-lg font-black">Games Setup</div>
+              </div>
+            </div>
+
+            {/* Add Game */}
+            <button
+              onClick={() => { setShowFabMenu(false); setShowAddGame(true); }}
+              className="w-full p-4 flex items-center gap-4 hover:bg-slate-50 active:bg-slate-100 transition border-b border-slate-100"
+            >
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary-400 to-primary-600 flex items-center justify-center shadow-md">
+                <span className="text-xl">🎲</span>
+              </div>
+              <div className="text-left flex-1">
+                <div className="font-bold text-gray-900">Add Game</div>
+                <div className="text-xs text-gray-500">Nassau, Skins, Dots & more</div>
+              </div>
+              <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+
+            {/* Pick Teams — only if nassau exists */}
+            {hasNassauGames && event.games.nassau.length === 1 && (
+              <button
+                onClick={() => {
+                  setShowFabMenu(false);
+                  const firstNassau = event.games.nassau[0];
+                  if (firstNassau) navigate(`/event/${eventId}/games/nassau/${firstNassau.id}/teams`);
+                }}
+                className="w-full p-4 flex items-center gap-4 hover:bg-slate-50 active:bg-slate-100 transition border-b border-slate-100"
+              >
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-400 to-indigo-600 flex items-center justify-center shadow-md">
+                  <span className="text-xl">👥</span>
+                </div>
+                <div className="text-left flex-1">
+                  <div className="font-bold text-gray-900">Pick Teams</div>
+                  <div className="text-xs text-gray-500">
+                    {nassauNeedsTeams
+                      ? allGolfers.length > 1
+                        ? `${allGolfers.length} players — suggest ${suggestedTeamCount} teams`
+                        : 'Waiting for players to join'
+                      : 'Teams assigned ✓'}
+                  </div>
+                </div>
+                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            )}
+            {/* Multiple Nassau games — list each for team picking */}
+            {hasNassauGames && event.games.nassau.length > 1 && (
+              <div className="border-b border-slate-100">
+                <div className="px-4 pt-4 pb-2 flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-400 to-indigo-600 flex items-center justify-center shadow-md">
+                    <span className="text-xl">👥</span>
+                  </div>
+                  <div className="text-left">
+                    <div className="font-bold text-gray-900">Pick Teams</div>
+                    <div className="text-xs text-gray-500">{event.games.nassau.length} Nassau games</div>
+                  </div>
+                </div>
+                <div className="px-4 pb-3 space-y-1.5">
+                  {event.games.nassau.map((n: any, idx: number) => {
+                    const teams = n.teams || [];
+                    const filled = teams.filter((t: any) => (t.golferIds || []).length > 0);
+                    const done = filled.length >= 2;
+                    return (
+                      <button
+                        key={n.id}
+                        onClick={() => {
+                          setShowFabMenu(false);
+                          navigate(`/event/${eventId}/games/nassau/${n.id}/teams`);
+                        }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl bg-slate-50 hover:bg-slate-100 active:bg-slate-200 transition text-left"
+                      >
+                        <span className={`w-6 h-6 rounded-full text-[10px] font-bold flex items-center justify-center ${done ? 'bg-green-500 text-white' : 'bg-slate-300 text-white'}`}>
+                          {done ? '✓' : idx + 1}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm font-bold text-gray-900">Nassau {idx + 1}</div>
+                          <div className="text-[10px] text-gray-500">
+                            {done ? `${filled.length} teams set` : `${teams.length || 0} teams — needs assignment`}
+                          </div>
+                        </div>
+                        <svg className="w-4 h-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Start Event */}
+            {!isEventStarted && hasAnyGames && (
+              <button
+                onClick={() => { setShowFabMenu(false); handleStartEvent(); }}
+                disabled={!gamesReady}
+                className={`w-full p-4 flex items-center gap-4 transition border-b border-slate-100 ${
+                  gamesReady ? 'hover:bg-green-50 active:bg-green-100' : 'opacity-50 cursor-not-allowed'
+                }`}
+              >
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center shadow-md ${
+                  gamesReady
+                    ? 'bg-gradient-to-br from-green-400 to-emerald-600'
+                    : 'bg-gray-200'
+                }`}>
+                  <span className="text-xl">🚀</span>
+                </div>
+                <div className="text-left flex-1">
+                  <div className={`font-bold ${gamesReady ? 'text-green-700' : 'text-gray-400'}`}>Start Event</div>
+                  <div className="text-xs text-gray-500">
+                    {gamesReady ? 'Lock games & begin play' : startIssues[0] || 'Complete setup first'}
+                  </div>
+                </div>
+              </button>
+            )}
+
+            {/* Cancel */}
+            <button
+              onClick={() => setShowFabMenu(false)}
+              className="w-full p-4 flex items-center justify-center hover:bg-slate-50 active:bg-slate-100 transition"
+            >
+              <span className="font-bold text-gray-500">Cancel</span>
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+
       {/* ========== MODALS (Keep existing) ========== */}
       
-      {/* Add Game Dropdown */}
-      {showAddGame && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={() => setShowAddGame(false)}>
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden" onClick={e => e.stopPropagation()}>
+      {/* Add Game Modal — portaled to body so it sits above swipeable tabs */}
+      {showAddGame && createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setShowAddGame(false)}>
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
             <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
               <span className="font-bold text-gray-900">Add Game</span>
               <button onClick={() => setShowAddGame(false)} className="p-2 hover:bg-slate-100 rounded-lg">
@@ -1494,11 +1668,10 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
             <div className="p-2 space-y-1 max-h-[calc(90dvh-12rem)] overflow-y-auto">
               {GAME_TYPES.map((type) => {
                 const playerCount = allGolfers.length;
-                const disabled = (type.minPlayers && playerCount < type.minPlayers) || (type.maxPlayers && playerCount > type.maxPlayers);
+                const needsMore = (type.minPlayers && playerCount < type.minPlayers) || (type.maxPlayers && playerCount > type.maxPlayers);
                 return (
                   <button
                     key={type.id}
-                    disabled={!!disabled}
                     onClick={() => {
                       if (type.id === 'nassau') addNassau(false);
                       else if (type.id === 'skins') addSkins(false);
@@ -1511,16 +1684,16 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                       else if (type.id === 'dots') addDots();
                       setShowAddGame(false);
                     }}
-                    className={`w-full px-4 py-3 text-left rounded-xl transition-colors ${disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-slate-50'}`}
+                    className="w-full px-4 py-3 text-left rounded-xl transition-colors hover:bg-slate-50"
                   >
                     <div className="flex items-center gap-2">
                       <span className="text-lg">{type.emoji}</span>
                       <div>
                         <div className="font-bold text-gray-900">{type.name}</div>
                         <div className="text-xs text-gray-500 mt-0.5">{type.description}</div>
-                        {disabled && (
-                          <div className="text-[10px] text-red-500 mt-0.5 font-medium">
-                            Requires {type.minPlayers === type.maxPlayers ? `exactly ${type.minPlayers}` : `${type.minPlayers}+`} players ({playerCount} in event)
+                        {needsMore && (
+                          <div className="text-[10px] text-amber-600 mt-0.5 font-medium">
+                            Needs {type.minPlayers === type.maxPlayers ? `exactly ${type.minPlayers}` : `${type.minPlayers}+`} players — you can add now, validate at start
                           </div>
                         )}
                       </div>
@@ -1530,7 +1703,8 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
               })}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ========== SETUP MODALS ========== */}
@@ -1743,10 +1917,10 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
           });
         const setFees = (next: { out: number; in: number; total: number }) => updateCfg({ fees: next });
 
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+        return createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setNassauSetupId(null)}>
+            <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
+              <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                 <div>
                   <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">Nassau setup</div>
                   <div className="font-extrabold text-gray-900">Set wagers</div>
@@ -1764,7 +1938,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 </button>
               </div>
 
-              <div className="p-4 space-y-4">
+              <div className="p-4 space-y-4 overflow-y-auto flex-1 min-h-0">
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <div className="text-xs font-bold text-slate-700 mb-2">Gross vs Net</div>
                   <div className="flex gap-2">
@@ -1872,7 +2046,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
               </div>
 
               {/* Footer */}
-              <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-end">
+              <div className="flex-shrink-0 px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-end">
                 <button
                   type="button"
                   onClick={() => setNassauSetupId(null)}
@@ -1882,7 +2056,8 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         );
       })()}
 
@@ -1911,10 +2086,10 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
           }
         };
 
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+        return createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setSkinsSetupId(null)}>
+            <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
+              <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                 <div>
                   <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">Skins setup</div>
                   <div className="font-extrabold text-gray-900">Quick settings</div>
@@ -1932,7 +2107,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 </button>
               </div>
 
-              <div className="p-4 space-y-4">
+              <div className="p-4 space-y-4 overflow-y-auto flex-1 min-h-0">
                 <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
                   <div className="text-xs font-bold text-slate-700 mb-2">Gross vs Net</div>
                   <div className="flex gap-2">
@@ -2037,7 +2212,8 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         );
       })()}
 
@@ -2069,10 +2245,10 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
         const results = (event.pinkyResults && event.pinkyResults[cfg.id]) || [];
         const getCount = (gid: string) => results.find((r: any) => r.golferId === gid)?.count || 0;
 
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+        return createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setPinkySetupId(null)}>
+            <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
+              <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                 <div>
                   <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">Pinky</div>
                   <div className="font-extrabold text-gray-900">Enter counts</div>
@@ -2090,7 +2266,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 </button>
               </div>
 
-              <div className="p-4 space-y-4">
+              <div className="p-4 space-y-4 overflow-y-auto flex-1 min-h-0">
                 <div className="rounded-xl border border-slate-200 bg-white p-3">
                   <label className="text-xs text-slate-600">Fee per pinky</label>
                   <div className="mt-1">
@@ -2171,7 +2347,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 </details>
               </div>
 
-              <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+              <div className="flex-shrink-0 px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
                 <button
                   type="button"
                   onClick={() => {
@@ -2192,7 +2368,8 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         );
       })()}
 
@@ -2224,10 +2401,10 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
         const results = (event.greenieResults && event.greenieResults[cfg.id]) || [];
         const getCount = (gid: string) => results.find((r: any) => r.golferId === gid)?.count || 0;
 
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+        return createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setGreenieSetupId(null)}>
+            <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
+              <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                 <div>
                   <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">Greenie</div>
                   <div className="font-extrabold text-gray-900">Enter counts</div>
@@ -2245,7 +2422,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 </button>
               </div>
 
-              <div className="p-4 space-y-4">
+              <div className="p-4 space-y-4 overflow-y-auto flex-1 min-h-0">
                 <div className="rounded-xl border border-slate-200 bg-white p-3">
                   <label className="text-xs text-slate-600">Fee per greenie</label>
                   <div className="mt-1">
@@ -2327,7 +2504,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 </details>
               </div>
 
-              <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+              <div className="flex-shrink-0 px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
                 <button
                   type="button"
                   onClick={() => {
@@ -2348,7 +2525,8 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 </button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         );
       })()}
       
@@ -2358,10 +2536,10 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
         if (!cfg) return null;
         const updateCfg = (patch: any) =>
           updateEvent(eventId, { games: { ...event.games, stableford: stablefordArray.map((s: any) => (s.id === cfg.id ? { ...s, ...patch } : s)) } });
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setStablefordSetupId(null)}>
-            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden" onClick={e => e.stopPropagation()}>
-              <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+        return createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setStablefordSetupId(null)}>
+            <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
+              <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                 <div>
                   <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">Stableford</div>
                   <div className="font-extrabold text-gray-900">Setup</div>
@@ -2370,7 +2548,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
-              <div className="p-4 space-y-4">
+              <div className="p-4 space-y-4 overflow-y-auto flex-1 min-h-0">
                 {/* Scoring type toggle */}
                 <div className="rounded-xl border border-slate-200 p-3">
                   <label className="text-xs font-bold text-slate-700">Scoring</label>
@@ -2408,14 +2586,15 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                     className="w-full mt-1 border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold bg-white text-gray-900" />
                 </div>
               </div>
-              <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+              <div className="flex-shrink-0 px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
                 <button onClick={() => { useStore.getState().removeStableford(eventId, cfg.id); setStablefordSetupId(null); }}
                   className="px-3 py-2 rounded-lg text-xs font-extrabold border border-red-200 bg-red-50 text-red-700" disabled={!canEdit}>Remove</button>
                 <button onClick={() => setStablefordSetupId(null)}
                   className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200">Done</button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         );
       })()}
 
@@ -2427,10 +2606,10 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
           updateEvent(eventId, { games: { ...event.games, ninePoint: ninePointArray.map((s: any) => (s.id === cfg.id ? { ...s, ...patch } : s)) } });
         const participantIds = cfg.participantGolferIds || [];
         const activeGolfers9 = allGolfers.filter((g: any) => participantIds.includes(g.id));
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setNinePointSetupId(null)}>
-            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden" onClick={e => e.stopPropagation()}>
-              <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+        return createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setNinePointSetupId(null)}>
+            <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
+              <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                 <div>
                   <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">9-Point</div>
                   <div className="font-extrabold text-gray-900">Setup (3 Players)</div>
@@ -2439,7 +2618,7 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                   <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
                 </button>
               </div>
-              <div className="p-4 space-y-4">
+              <div className="p-4 space-y-4 overflow-y-auto flex-1 min-h-0">
                 <div className="rounded-xl border border-slate-200 p-3">
                   <label className="text-xs font-bold text-slate-700">Scoring</label>
                   <div className="mt-2 flex gap-2">
@@ -2488,14 +2667,15 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                   Every hole: Low=5, Mid=3, High=1. All tie=3-3-3. Two tie low=4-4-1. Two tie high=5-2-2.
                 </div>
               </div>
-              <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+              <div className="flex-shrink-0 px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
                 <button onClick={() => { useStore.getState().removeNinePoint(eventId, cfg.id); setNinePointSetupId(null); }}
                   className="px-3 py-2 rounded-lg text-xs font-extrabold border border-red-200 bg-red-50 text-red-700" disabled={!canEdit}>Remove</button>
                 <button onClick={() => setNinePointSetupId(null)}
                   className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200">Done</button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         );
       })()}
 
@@ -2518,9 +2698,9 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
           useStore.getState().setBBBResults(eventId, cfg.id, existing);
         };
 
-        return (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={() => setBbbSetupId(null)}>
-            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden max-h-[calc(100dvh-2rem)] sm:max-h-[90dvh] flex flex-col" onClick={e => e.stopPropagation()}>
+        return createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setBbbSetupId(null)}>
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
               <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between shrink-0">
                 <div>
                   <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">Bingo Bango Bongo</div>
@@ -2571,7 +2751,8 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                   className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200">Done</button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         );
       })()}
 
@@ -2594,9 +2775,9 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
           useStore.getState().setWolfResults(eventId, cfg.id, existing);
         };
 
-        return (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={() => setWolfSetupId(null)}>
-            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden max-h-[calc(100dvh-2rem)] sm:max-h-[90dvh] flex flex-col" onClick={e => e.stopPropagation()}>
+        return createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setWolfSetupId(null)}>
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
               <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between shrink-0">
                 <div>
                   <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">Wolf</div>
@@ -2692,7 +2873,8 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                   className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200">Done</button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         );
       })()}
 
@@ -2722,9 +2904,9 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
           useStore.getState().setDotsResults(eventId, cfg.id, existing);
         };
 
-        return (
-          <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 p-4" onClick={() => setDotsSetupId(null)}>
-            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden max-h-[calc(100dvh-2rem)] sm:max-h-[90dvh] flex flex-col" onClick={e => e.stopPropagation()}>
+        return createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setDotsSetupId(null)}>
+            <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
               <div className="px-4 py-3 border-b border-slate-200 flex items-center justify-between shrink-0">
                 <div>
                   <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">Dots / Junk</div>
@@ -2802,7 +2984,8 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                   className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200">Done</button>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         );
       })()}
 
@@ -2940,8 +3123,8 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
       {bulkAssignState && (() => {
         const nassau = event.games.nassau.find((nn: any) => nn.id === bulkAssignState.nassauId);
         if (!nassau) return null;
-        const participantIds = nassau.participantGolferIds && nassau.participantGolferIds.length > 1 ? nassau.participantGolferIds : allGolfers.map((gg:any)=>gg.id);
-        const activeGolfers = allGolfers.filter((g:any)=> participantIds.includes(g.id));
+        // Use all event golfers — participantGolferIds may be stale after new players join
+        const activeGolfers = allGolfers;
         const teams = nassau.teams || [];
         const allAssignedIds = new Set(teams.flatMap((t:any)=> t.golferIds));
         // Only show unassigned golfers to streamline repeated assignments
@@ -2954,9 +3137,9 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
             return { ...s, selected: next };
           });
         };
-        return (
-          <div className="fixed inset-0 z-50 flex items-start justify-center p-4 bg-black/40">
-            <div className="bg-white rounded shadow-lg w-full max-w-md p-4 flex flex-col gap-3 text-xs">
+        return createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-start justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={closeBulk}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-4 flex flex-col gap-3 text-xs animate-slide-up" onClick={e => e.stopPropagation()}>
               <div className="flex items-center justify-between">
                 <h3 className="font-semibold text-sm">Bulk Assign Golfers</h3>
                 <button onClick={closeBulk} className="text-[10px] px-2 py-0.5 rounded border">Close</button>
@@ -2994,7 +3177,8 @@ const GamesTab: React.FC<Props> = ({ eventId }) => {
                 </div>
               </div>
             </div>
-          </div>
+          </div>,
+          document.body
         );
       })()}
     </div>

@@ -342,8 +342,8 @@ Code: ${event.shareCode}`,
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-lg font-bold text-gray-900">{isGroupHub ? 'Members' : 'Golfers'}</h2>
-          <p className="text-sm text-gray-500">
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">{isGroupHub ? 'Members' : 'Golfers'}</h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
             {golferData.length} {isGroupHub ? 'member' : 'player'}{golferData.length !== 1 ? 's' : ''} in this {isGroupHub ? 'group' : 'event'}
           </p>
         </div>
@@ -366,12 +366,12 @@ Code: ${event.shareCode}`,
 
       {/* Golfer/Member List */}
       {golferData.length === 0 ? (
-        <div className="bg-gray-50 rounded-xl p-8 text-center">
+        <div className="bg-gray-50 dark:bg-white/5 rounded-xl p-8 text-center">
           <div className="text-4xl mb-3">👥</div>
-          <div className="font-semibold text-gray-700 mb-1">
+          <div className="font-semibold text-gray-700 dark:text-gray-200 mb-1">
             {isGroupHub ? 'No members yet' : 'No golfers yet'}
           </div>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
             {isGroupHub ? 'Add members to your group' : 'Add golfers to start the event'}
           </p>
         </div>
@@ -380,8 +380,8 @@ Code: ${event.shareCode}`,
           {golferData.map((golfer: any) => (
             <div
               key={golfer.id}
-              className={`bg-white rounded-xl border p-4 ${
-                golfer.isCurrentUser ? 'border-primary-300 bg-primary-50/30' : 'border-gray-200'
+              className={`bg-white dark:bg-slate-800 rounded-xl border p-4 ${
+                golfer.isCurrentUser ? 'border-primary-300 bg-primary-50/30 dark:bg-primary-900/20' : 'border-gray-200 dark:border-slate-700'
               }`}
             >
               <div className="flex items-center gap-3">
@@ -409,7 +409,7 @@ Code: ${event.shareCode}`,
                   className="flex-1 min-w-0 text-left hover:opacity-80 transition-opacity"
                 >
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-gray-900 truncate">{golfer.name}</span>
+                    <span className="font-semibold text-gray-900 dark:text-white truncate">{golfer.name}</span>
                     {/* Status badge */}
                     {golfer.hasProfile && golfer.statusTier && (
                       <span className="text-sm" title={golfer.statusTier.name}>
@@ -429,7 +429,7 @@ Code: ${event.shareCode}`,
                   </div>
                   {/* Show handicap/tee only for events */}
                   {!isGroupHub && (
-                    <div className="flex items-center gap-3 text-sm text-gray-500 mt-0.5">
+                    <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400 mt-0.5">
                       {golfer.handicap != null && (
                         <span>HCP: {typeof golfer.handicap === 'number' ? golfer.handicap.toFixed(1) : golfer.handicap}</span>
                       )}
@@ -496,10 +496,10 @@ Code: ${event.shareCode}`,
         if (isGroupHub) {
           // Groups: always allow leaving
           return (
-            <div className="mt-6 border-t border-gray-200 pt-4">
+            <div className="mt-6 border-t border-gray-200 dark:border-slate-700 pt-4">
               <button
                 onClick={handleLeave}
-                className="w-full py-3 px-4 bg-white border border-red-200 text-red-600 rounded-xl text-sm font-medium hover:bg-red-50 transition-colors flex items-center justify-center gap-2"
+                className="w-full py-3 px-4 bg-white dark:bg-slate-800 border border-red-200 dark:border-red-800 text-red-600 rounded-xl text-sm font-medium hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center justify-center gap-2"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
@@ -513,14 +513,14 @@ Code: ${event.shareCode}`,
         // Events: conditional leave
         const check = canUserLeaveSelf();
         return (
-          <div className="mt-6 border-t border-gray-200 pt-4">
+          <div className="mt-6 border-t border-gray-200 dark:border-slate-700 pt-4">
             <button
               onClick={handleLeave}
               disabled={!check.allowed}
               className={`w-full py-3 px-4 rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2 ${
                 check.allowed
-                  ? 'bg-white border border-red-200 text-red-600 hover:bg-red-50'
-                  : 'bg-gray-100 border border-gray-200 text-gray-400 cursor-not-allowed'
+                  ? 'bg-white dark:bg-slate-800 border border-red-200 dark:border-red-800 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20'
+                  : 'bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-400 cursor-not-allowed'
               }`}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -529,7 +529,7 @@ Code: ${event.shareCode}`,
               Leave Event
             </button>
             {!check.allowed && check.reason && (
-              <p className="text-xs text-gray-500 text-center mt-2">{check.reason}</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 text-center mt-2">{check.reason}</p>
             )}
           </div>
         );
