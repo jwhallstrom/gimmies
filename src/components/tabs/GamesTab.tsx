@@ -669,17 +669,48 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
     <div className="space-y-4">
       {/* Personal Summary - Always visible if games exist */}
       {hasAnyGames && myNet !== null && (
-        <div className={`rounded-xl px-4 py-3 flex items-center justify-between ${
-          myNet >= 0 ? 'bg-green-500' : 'bg-red-500'
-        }`}>
-          <div className="text-white">
-            <div className="text-xs font-medium opacity-90">YOUR BALANCE</div>
-            <div className="text-2xl font-black">{signedCurrency(myNet)}</div>
+        <div className={`rounded-xl overflow-hidden ${myNet >= 0 ? 'bg-green-500' : 'bg-red-500'}`}>
+          <div 
+            className="px-4 py-3 flex items-center justify-between cursor-pointer"
+            onClick={() => setExpandBalance(!expandBalance)}
+          >
+            <div className="text-white">
+              <div className="text-xs font-medium opacity-90 flex items-center gap-1">
+                YOUR BALANCE
+                <svg className={`w-3 h-3 transition-transform ${expandBalance ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+              <div className="text-2xl font-black">{signedCurrency(myNet)}</div>
+            </div>
+            <div className="text-right text-white text-xs opacity-90">
+              <div>Buy-in: {currency(myBuyin)}</div>
+              <div>Winnings: +{currency(myWinnings)}</div>
+            </div>
           </div>
-          <div className="text-right text-white text-xs opacity-90">
-            <div>Buy-in: {currency(myBuyin)}</div>
-            <div>Winnings: +{currency(myWinnings)}</div>
-          </div>
+          
+          {/* Expanded Breakdown */}
+          {expandBalance && (
+            <div className="px-4 pb-4 pt-0 border-t border-white/20">
+              <div className="mt-3 text-xs font-bold text-white/90 uppercase tracking-wide">Buy-in Breakdown</div>
+              <div className="mt-1 space-y-1">
+                {buyinBreakdown.length > 0 ? (
+                  buyinBreakdown.map((item, idx) => (
+                    <div key={idx} className="flex justify-between text-sm text-white">
+                      <span>{item.name}</span>
+                      <span className="font-medium">{currency(item.amount)}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-xs text-white/60 italic">No buy-ins</div>
+                )}
+                <div className="border-t border-white/20 mt-2 pt-1 flex justify-between text-sm font-bold text-white">
+                  <span>Total</span>
+                  <span>{currency(myBuyin)}</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
