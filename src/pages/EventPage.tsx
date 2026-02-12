@@ -359,7 +359,7 @@ const EventPage: React.FC = () => {
   const tabBarClass = 'flex gap-1.5 px-3 pb-1 -mx-3 justify-center';
 
   return (
-    <div className="h-full min-h-0 -mx-4 -mt-4 flex flex-col event-page-container">
+    <div className="h-full min-h-0 -mx-4 -mt-4 flex flex-col">
       {/* Header - Compact & Sticky */}
       <div className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 px-3 py-2 shadow-lg sticky top-0 z-30 flex-shrink-0">
         {/* Event Info Row */}

@@ -42,16 +42,29 @@ header {
   padding-top: max(10px, env(safe-area-inset-top, 10px));
 }
 
+/* CSS custom property for footer height - single source of truth.
+   Ticker, chat composer, and footer all reference this so they're always in sync. */
+:root {
+  --footer-nav-height: 68px;
+  --footer-total-height: 68px;
+}
+@supports (padding: env(safe-area-inset-bottom, 0px)) {
+  :root {
+    --footer-total-height: calc(68px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 /* Fixed footer - extends into home indicator area (iOS) / gesture bar (Android) */
 footer {
   /* Fallback for browsers that don't support env() */
   padding-bottom: 8px;
   /* On iOS: adds home indicator inset. On Android: env() is 0 so just 8px base. */
   padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
-  /* Base nav height. On iOS: taller for home indicator. */
-  min-height: 68px;
-  min-height: calc(68px + env(safe-area-inset-bottom, 0px));
+  /* Fixed height to ensure perfect alignment with ticker. */
+  height: var(--footer-total-height);
   background-color: inherit;
+  /* Ensure padding doesn't add to height */
+  box-sizing: border-box;
 }
 
 /* ==========================================================================
@@ -165,29 +178,25 @@ a:active,
 .pr-safe-base-0 { --pr-safe-base: 0; }
 
 /* Ticker positioning - sits flush against top of the fixed bottom nav.
-   Footer min-height = 68px + safe-area. Ticker sits right on top. */
+   Uses the same CSS variable as the footer so they always match. */
 .ticker-above-footer {
-  bottom: 68px; /* Fallback: flush with footer top */
-  bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+  bottom: var(--footer-total-height);
 }
 
 /* FAB positioning - sits above ticker and bottom nav */
 .fab-position {
-  bottom: 112px; /* Fallback: ticker (~44px) + footer (68px) */
-  bottom: calc(112px + env(safe-area-inset-bottom, 0px));
+  bottom: calc(var(--footer-total-height) + 44px);
 }
 
-/* Content padding - bottom space for scrollable content to clear fixed footer */
+/* Content padding - bottom space for scrollable content to clear fixed footer + ticker */
 .content-with-footer {
-  padding-bottom: 92px; /* Fallback: footer(68px) + 8px pad + 16px breathing room */
-  padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(var(--footer-total-height) + 60px);
 }
 
 /* Event page container - must not extend behind fixed bottom nav.
-   Matches footer min-height so content sits flush against the nav. */
+   Matches footer height so content sits flush against the nav. */
 .event-page-container {
-  padding-bottom: 68px;
-  padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: var(--footer-total-height);
 }
 
 /* PWA Safe Area Support - standalone detection (WebKit + others) */
@@ -583,9 +592,13 @@ body.pwa-standalone .fullscreen-overlay {
    ========================================================================== */
 
 /* Android doesn't have iOS home indicator, so footer doesn't need extra bottom padding */
+body.platform-android {
+  --footer-total-height: 68px;
+}
+
 body.platform-android footer {
   padding-bottom: 8px;
-  min-height: 68px;
+  height: 68px;
 }
 
 /* Android header: no notch on most devices, but ensure readable spacing */
@@ -597,22 +610,4 @@ body.platform-android header {
    so safe-area-inset-top is 0. Ensure the header still has comfortable padding. */
 body.platform-android.pwa-standalone header {
   padding-top: 10px;
-}
-
-/* Android gesture nav: some devices report safe-area-inset-bottom,
-   handled by the calc() rules above. This is just a safety net. */
-body.platform-android .content-with-footer {
-  padding-bottom: 92px;
-}
-
-body.platform-android .event-page-container {
-  padding-bottom: 68px;
-}
-
-body.platform-android .ticker-above-footer {
-  bottom: 68px;
-}
-
-body.platform-android .fab-position {
-  bottom: 112px;
 }
