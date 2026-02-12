@@ -963,9 +963,9 @@ Code: ${event.shareCode}`,
           </button>
 
           {/* Bottom-up Action Sheet */}
-          {showFabMenu && (
+          {showFabMenu && createPortal(
             <div
-              className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm"
+              className="fixed inset-0 z-[9999] flex items-end justify-center bg-black/40 backdrop-blur-sm"
               onClick={() => setShowFabMenu(false)}
             >
               <div
