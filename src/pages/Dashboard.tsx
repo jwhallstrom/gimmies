@@ -896,11 +896,11 @@ const Dashboard: React.FC = () => {
         })}
       </section>
 
-      {/* Score Ticker - Fixed at bottom, full width on mobile, above footer with safe area */}
+      {/* Score Ticker - Fixed at bottom, full width on mobile, anchored flush to footer */}
       <div className="fixed left-0 right-0 sm:left-4 sm:right-4 ticker-above-footer z-30 px-0 sm:px-0">
         <button
           onClick={() => tickerEvent ? navigate(`/event/${tickerEvent.id}`) : navigate('/events')}
-          className="w-full gimmies-ticker rounded-none sm:rounded-xl bg-[#1561AE] border-y sm:border border-white/10 px-4 py-2.5 shadow-lg shadow-primary-900/25"
+          className="w-full gimmies-ticker rounded-none sm:rounded-xl bg-[#1561AE] border-t sm:border border-white/10 px-4 py-2.5 shadow-none sm:shadow-lg sm:shadow-primary-900/25"
           aria-label="Activity ticker"
           style={{ ['--gimmies-ticker-duration' as any]: `${tickerDurationSeconds}s` }}
         >

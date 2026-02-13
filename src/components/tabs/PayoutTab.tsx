@@ -559,7 +559,7 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
               )}
               
               {/* Carryover indicator */}
-              {carryovers.length > 0 && (
+              {hasCarryovers && carryovers.length > 0 && (
                 <div className="bg-amber-50 rounded-lg p-2 border border-amber-200 flex items-center gap-2">
                   <span className="text-amber-500">🔥</span>
                   <div className="text-sm">

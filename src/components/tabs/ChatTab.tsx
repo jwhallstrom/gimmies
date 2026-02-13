@@ -63,6 +63,7 @@ const isTouchDevice = () =>
 
 const useKeyboardHandler = () => {
   const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isFocused, setIsFocused] = useState(false);
 
   useEffect(() => {
     const vv = window.visualViewport;
@@ -81,9 +82,11 @@ const useKeyboardHandler = () => {
     };
   }, []);
 
-  // Hide footer when virtual keyboard is visible (visualViewport detection).
+  // Hide footer when virtual keyboard is visible OR input is focused.
+  // This handles both overlay keyboards (keyboardHeight > 0) and 
+  // resizing viewports (keyboardHeight ~ 0 but focused).
   useEffect(() => {
-    if (keyboardHeight > 0) {
+    if (keyboardHeight > 0 || isFocused) {
       document.body.classList.add('chat-input-focused');
     } else {
       document.body.classList.remove('chat-input-focused');
@@ -91,27 +94,19 @@ const useKeyboardHandler = () => {
     return () => {
       document.body.classList.remove('chat-input-focused');
     };
-  }, [keyboardHeight]);
+  }, [keyboardHeight, isFocused]);
 
-  // Fallback: on touch devices, hide footer on focus / restore on blur.
-  // visualViewport detection can be unreliable on some iOS versions,
-  // so this ensures the bottom nav always hides when the keyboard appears.
   const handleFocus = useCallback(() => {
-    if (isTouchDevice()) {
-      document.body.classList.add('chat-input-focused');
-    }
+    setIsFocused(true);
   }, []);
 
   const handleBlur = useCallback(() => {
-    if (isTouchDevice()) {
-      // Short delay: let visualViewport resize fire first so we don't
-      // flash the footer between field switches.
-      setTimeout(() => {
-        if (!document.activeElement || document.activeElement.tagName !== 'TEXTAREA') {
-          document.body.classList.remove('chat-input-focused');
-        }
-      }, 150);
-    }
+    // Short delay to prevent flickering when switching focus
+    setTimeout(() => {
+      if (!document.activeElement || document.activeElement.tagName !== 'TEXTAREA') {
+        setIsFocused(false);
+      }
+    }, 150);
   }, []);
 
   return { keyboardHeight, handleFocus, handleBlur };
@@ -599,7 +594,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = tr
 
   return (
     <div
-      className="flex flex-col h-full min-h-0 bg-slate-50 dark:bg-slate-900 rounded-t-xl overflow-hidden -mx-4"
+      className="flex flex-col h-full min-h-0 bg-slate-50 dark:bg-slate-900 rounded-t-xl overflow-hidden -mx-4 event-page-container"
       style={keyboardHeight > 0 ? { paddingBottom: keyboardHeight } : undefined}
     >
       {/* Messages Area */}
@@ -911,7 +906,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = tr
         )}
 
         {/* Text input + send */}
-        <div className="flex items-end gap-2 px-3 pb-3 pt-1">
+        <div className="flex items-end gap-2 px-3 pb-2 pt-1">
           <textarea
             ref={inputRef}
             value={text}

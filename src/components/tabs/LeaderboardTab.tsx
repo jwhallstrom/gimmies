@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import useStore from '../../state/store';
 import { useCourse } from '../../hooks/useCourse';
 import { courseHandicap, strokesForHole } from '../../games/handicap';
@@ -18,32 +18,6 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
   const [expandedPlayer, setExpandedPlayer] = useState<string | null>(null);
   const [teamModal, setTeamModal] = useState<null | { id: string; name: string; golferIds: string[] }>(null);
   
-  // Favorites - persisted in localStorage
-  const [favorites, setFavorites] = useState<Set<string>>(() => {
-    try {
-      const stored = localStorage.getItem(`leaderboard-favorites-${eventId}`);
-      return stored ? new Set(JSON.parse(stored)) : new Set();
-    } catch {
-      return new Set();
-    }
-  });
-  
-  useEffect(() => {
-    localStorage.setItem(`leaderboard-favorites-${eventId}`, JSON.stringify([...favorites]));
-  }, [favorites, eventId]);
-  
-  const toggleFavorite = (playerId: string) => {
-    setFavorites(prev => {
-      const next = new Set(prev);
-      if (next.has(playerId)) {
-        next.delete(playerId);
-      } else {
-        next.add(playerId);
-      }
-      return next;
-    });
-  };
-
   if (!event) return null;
 
   const togglePlayerExpanded = (playerId: string) => {
@@ -390,19 +364,6 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
                     </td>
                     <td className="px-3 py-3 font-medium text-slate-900">
                       <div className="flex items-center gap-2">
-                        {/* Favorite star */}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            toggleFavorite(player.id);
-                          }}
-                          className={`flex-shrink-0 transition-colors ${favorites.has(player.id) ? 'text-yellow-500' : 'text-slate-300 hover:text-yellow-400'}`}
-                          title={favorites.has(player.id) ? 'Remove from favorites' : 'Add to favorites'}
-                        >
-                          {favorites.has(player.id) ? '★' : '☆'}
-                        </button>
                         {typeof onEnterScores === 'function' ? (
                           <button
                             type="button"
