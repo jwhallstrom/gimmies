@@ -121,6 +121,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   const [wolfSetupId, setWolfSetupId] = useState<string | null>(null);
   const [dotsSetupId, setDotsSetupId] = useState<string | null>(null);
   const [showSettlements, setShowSettlements] = useState(false);
+  const [expandBalance, setExpandBalance] = useState(false);
   
   const completeEvent = useStore((s) => s.completeEvent);
   const getEventSettlements = useStore((s) => s.getEventSettlements);
@@ -387,6 +388,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   const isEventStarted = eventStatus === 'started';
   const isEventCompleted = eventStatus === 'completed' || event.isCompleted;
   const canEdit = isOwner && !isEventStarted && !isEventCompleted;
+  // canModify: allows admin to remove games & manage participants even after event starts
+  const canModify = isOwner && !isEventCompleted;
 
   // Must declare hasAnyGames before gamesReady uses it
   const hasAnyGames = event.games.nassau.length + skinsArray.length + pinkyArray.length + greenieArray.length + stablefordArray.length + ninePointArray.length + bbbArray.length + wolfArray.length + dotsArray.length > 0;
@@ -495,34 +498,41 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   }, [event, profiles, hasAnyGames]);
   
   // My balance calculations - calculate from totalByGolfer
-  const { myNet, myBuyin, myWinnings } = useMemo(() => {
-    if (!myGolferId || !payouts.totalByGolfer) return { myNet: null, myBuyin: 0, myWinnings: 0 };
+  const { myNet, myBuyin, myWinnings, buyinBreakdown } = useMemo(() => {
+    if (!myGolferId || !payouts.totalByGolfer) return { myNet: null, myBuyin: 0, myWinnings: 0, buyinBreakdown: [] };
     
     // Calculate buy-in from all games this golfer is in
     let buyin = 0;
+    const breakdown: { name: string; amount: number }[] = [];
     
     // All eligible event golfer IDs (used for all pot-based games)
     const allGolferIds = event.golfers.map((g: any) => g.profileId || g.customName);
 
     // Nassau buy-ins — include all eligible golfers, not stale participantGolferIds
-    event.games.nassau.forEach((n: any) => {
+    event.games.nassau.forEach((n: any, idx: number) => {
       if (allGolferIds.includes(myGolferId)) {
         const fees = n.fees ?? { out: n.fee, in: n.fee, total: n.fee };
-        buyin += (fees.out || 0) + (fees.in || 0) + (fees.total || 0);
+        const cost = (fees.out || 0) + (fees.in || 0) + (fees.total || 0);
+        buyin += cost;
+        breakdown.push({ name: event.games.nassau.length > 1 ? `Nassau ${idx + 1}` : 'Nassau', amount: cost });
       }
     });
     
     // Skins buy-ins
-    skinsArray.forEach((s: any) => {
+    skinsArray.forEach((s: any, idx: number) => {
       if (allGolferIds.includes(myGolferId)) {
-        buyin += s.fee || 0;
+        const cost = s.fee || 0;
+        buyin += cost;
+        breakdown.push({ name: skinsArray.length > 1 ? `Skins ${idx + 1}` : 'Skins', amount: cost });
       }
     });
 
     // Stableford buy-ins (pot-based like skins)
-    stablefordArray.forEach((s: any) => {
+    stablefordArray.forEach((s: any, idx: number) => {
       if (allGolferIds.includes(myGolferId)) {
-        buyin += s.fee || 0;
+        const cost = s.fee || 0;
+        buyin += cost;
+        breakdown.push({ name: stablefordArray.length > 1 ? `Stableford ${idx + 1}` : 'Stableford', amount: cost });
       }
     });
 
@@ -531,7 +541,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
     const winnings = payouts.totalByGolfer[myGolferId] || 0;
     const net = winnings - buyin;
     
-    return { myNet: net, myBuyin: buyin, myWinnings: winnings };
+    return { myNet: net, myBuyin: buyin, myWinnings: winnings, buyinBreakdown: breakdown };
   }, [payouts.totalByGolfer, myGolferId, event.games.nassau, skinsArray, stablefordArray, event.golfers]);
   
   // Get settlements (what I owe / am owed)
@@ -661,17 +671,48 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
     <div className="space-y-4">
       {/* Personal Summary - Always visible if games exist */}
       {hasAnyGames && myNet !== null && (
-        <div className={`rounded-xl px-4 py-3 flex items-center justify-between ${
-          myNetValue >= 0 ? 'bg-green-500' : 'bg-red-500'
-        }`}>
-          <div className="text-white">
-            <div className="text-xs font-medium opacity-90">YOUR BALANCE</div>
-            <div className="text-2xl font-black">{signedCurrency(myNetValue)}</div>
+        <div className={`rounded-xl overflow-hidden ${myNetValue >= 0 ? 'bg-green-500' : 'bg-red-500'}`}>
+          <div 
+            className="px-4 py-3 flex items-center justify-between cursor-pointer"
+            onClick={() => setExpandBalance(!expandBalance)}
+          >
+            <div className="text-white">
+              <div className="text-xs font-medium opacity-90 flex items-center gap-1">
+                YOUR BALANCE
+                <svg className={`w-3 h-3 transition-transform ${expandBalance ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                </svg>
+              </div>
+              <div className="text-2xl font-black">{signedCurrency(myNetValue)}</div>
+            </div>
+            <div className="text-right text-white text-xs opacity-90">
+              <div>Buy-in: {currency(myBuyin)}</div>
+              <div>Winnings: +{currency(myWinnings)}</div>
+            </div>
           </div>
-          <div className="text-right text-white text-xs opacity-90">
-            <div>Buy-in: {currency(myBuyin)}</div>
-            <div>Winnings: +{currency(myWinnings)}</div>
-          </div>
+          
+          {/* Expanded Breakdown */}
+          {expandBalance && (
+            <div className="px-4 pb-4 pt-0 border-t border-white/20">
+              <div className="mt-3 text-xs font-bold text-white/90 uppercase tracking-wide">Buy-in Breakdown</div>
+              <div className="mt-1 space-y-1">
+                {buyinBreakdown.length > 0 ? (
+                  buyinBreakdown.map((item, idx) => (
+                    <div key={idx} className="flex justify-between text-sm text-white">
+                      <span>{item.name}</span>
+                      <span className="font-medium">{currency(item.amount)}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-xs text-white/60 italic">No buy-ins</div>
+                )}
+                <div className="border-t border-white/20 mt-2 pt-1 flex justify-between text-sm font-bold text-white">
+                  <span>Total</span>
+                  <span>{currency(myBuyin)}</span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1494,7 +1535,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
       )}
 
       {/* ========== ADMIN FAB ========== */}
-      {isOwner && canEdit && isTabActive && (
+      {isOwner && canModify && isTabActive && (
         <button
           onClick={() => setShowFabMenu(true)}
           className="fixed right-4 z-40 w-16 h-16 bg-gradient-to-br from-accent to-orange-600 rounded-full shadow-lg shadow-accent/40 flex items-center justify-center text-white text-3xl font-bold hover:scale-105 active:scale-95 transition-transform fab-position"
@@ -1862,10 +1903,11 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
+                        if (isEventStarted && !window.confirm('This event is in progress. Remove this Nassau game?')) return;
                         removeNassau(n.id);
                       }}
                       className="text-[11px] px-2 py-1 rounded-lg border border-red-200 bg-red-50 text-red-700 font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-                      disabled={!canEdit}
+                      disabled={!canModify}
                       title="Remove Nassau"
                     >
                       Remove
@@ -1881,7 +1923,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                         navigate(`/event/${eventId}/games/nassau/${n.id}/teams`);
                       }}
                       className="text-xs font-extrabold px-3 py-2 rounded-lg bg-primary-600 text-white hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                      disabled={!canEdit}
+                      disabled={!canModify}
                     >
                       Pick teams
                     </button>
@@ -2038,7 +2080,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                       navigate(`/event/${eventId}/games/nassau/${n.id}/teams`);
                     }}
                     className="mt-3 w-full bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-lg font-extrabold"
-                    disabled={!canEdit}
+                    disabled={!canModify}
                   >
                     Pick teams
                   </button>
@@ -2046,7 +2088,19 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
               </div>
 
               {/* Footer */}
-              <div className="flex-shrink-0 px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-end">
+              <div className="flex-shrink-0 px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isEventStarted && !window.confirm('This event is in progress. Remove this Nassau game?')) return;
+                    removeNassau(n.id);
+                    setNassauSetupId(null);
+                  }}
+                  className="px-3 py-2 rounded-lg text-xs font-extrabold border border-red-200 bg-red-50 text-red-700 disabled:opacity-50"
+                  disabled={!canModify}
+                >
+                  Remove
+                </button>
                 <button
                   type="button"
                   onClick={() => setNassauSetupId(null)}
@@ -2170,7 +2224,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                       type="button"
                       onClick={() => setList(allGolfers.map((g: any) => g.id))}
                       className="text-[11px] font-extrabold px-3 py-1.5 rounded-full border border-slate-200 bg-slate-50 hover:bg-slate-100 disabled:opacity-50"
-                      disabled={!canEdit || activeGolfers.length === allGolfers.length}
+                      disabled={!canModify || activeGolfers.length === allGolfers.length}
                     >
                       All
                     </button>
@@ -2181,7 +2235,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                         key={g.id}
                         type="button"
                         onClick={() => toggleGolfer(g.id)}
-                        disabled={!canEdit}
+                        disabled={!canModify}
                         className="text-xs font-extrabold px-3 py-1.5 rounded-full bg-primary-600 text-white border border-primary-600 disabled:opacity-50"
                       >
                         {g.name}
@@ -2192,7 +2246,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                         key={g.id}
                         type="button"
                         onClick={() => toggleGolfer(g.id)}
-                        disabled={!canEdit}
+                        disabled={!canModify}
                         className="text-xs font-bold px-3 py-1.5 rounded-full bg-white text-primary-700 border border-primary-300 disabled:opacity-50"
                       >
                         {g.name}
@@ -2202,7 +2256,19 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                 </div>
               </div>
 
-              <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-end">
+              <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isEventStarted && !window.confirm('This event is in progress. Remove this Skins game?')) return;
+                    removeSkins(sk.id);
+                    setSkinsSetupId(null);
+                  }}
+                  className="px-3 py-2 rounded-lg text-xs font-extrabold border border-red-200 bg-red-50 text-red-700 disabled:opacity-50"
+                  disabled={!canModify}
+                >
+                  Remove
+                </button>
                 <button
                   type="button"
                   onClick={() => setSkinsSetupId(null)}
@@ -2297,7 +2363,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                           value={getCount(g.id)}
                           onFocus={(e) => e.currentTarget.select()}
                           onChange={(e) => setPinkyCount(cfg.id, g.id, Number(e.target.value))}
-                          disabled={!canEdit}
+                          disabled={!canModify}
                           className="w-16 border border-slate-300 rounded-lg px-2 py-1.5 text-center text-sm font-bold"
                         />
                       </label>
@@ -2314,7 +2380,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                         type="button"
                         onClick={() => setList(allGolfers.map((g: any) => g.id))}
                         className="text-[11px] font-extrabold px-3 py-1.5 rounded-full border border-slate-200 bg-slate-50 hover:bg-slate-100 disabled:opacity-50"
-                        disabled={!canEdit || activeGolfers.length === allGolfers.length}
+                        disabled={!canModify || activeGolfers.length === allGolfers.length}
                       >
                         All
                       </button>
@@ -2325,7 +2391,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                           key={g.id}
                           type="button"
                           onClick={() => toggleGolfer(g.id)}
-                          disabled={!canEdit}
+                          disabled={!canModify}
                           className="text-xs font-extrabold px-3 py-1.5 rounded-full bg-primary-600 text-white border border-primary-600 disabled:opacity-50"
                         >
                           {g.name}
@@ -2336,7 +2402,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                           key={g.id}
                           type="button"
                           onClick={() => toggleGolfer(g.id)}
-                          disabled={!canEdit}
+                          disabled={!canModify}
                           className="text-xs font-bold px-3 py-1.5 rounded-full bg-white text-primary-700 border border-primary-300 disabled:opacity-50"
                         >
                           {g.name}
@@ -2351,11 +2417,12 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                 <button
                   type="button"
                   onClick={() => {
+                    if (isEventStarted && !window.confirm('This event is in progress. Remove this Pinky game?')) return;
                     removePinky(cfg.id);
                     setPinkySetupId(null);
                   }}
                   className="px-3 py-2 rounded-lg text-xs font-extrabold border border-red-200 bg-red-50 text-red-700 disabled:opacity-50"
-                  disabled={!canEdit}
+                  disabled={!canModify}
                 >
                   Remove
                 </button>
@@ -2454,7 +2521,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                           value={getCount(g.id)}
                           onFocus={(e) => e.currentTarget.select()}
                           onChange={(e) => setGreenieCount(cfg.id, g.id, Number(e.target.value))}
-                          disabled={!canEdit}
+                          disabled={!canModify}
                           className="w-16 border border-slate-300 rounded-lg px-2 py-1.5 text-center text-sm font-bold"
                         />
                       </label>
@@ -2471,7 +2538,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                         type="button"
                         onClick={() => setList(allGolfers.map((g: any) => g.id))}
                         className="text-[11px] font-extrabold px-3 py-1.5 rounded-full border border-slate-200 bg-slate-50 hover:bg-slate-100 disabled:opacity-50"
-                        disabled={!canEdit || activeGolfers.length === allGolfers.length}
+                        disabled={!canModify || activeGolfers.length === allGolfers.length}
                       >
                         All
                       </button>
@@ -2482,7 +2549,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                           key={g.id}
                           type="button"
                           onClick={() => toggleGolfer(g.id)}
-                          disabled={!canEdit}
+                          disabled={!canModify}
                           className="text-xs font-extrabold px-3 py-1.5 rounded-full bg-primary-600 text-white border border-primary-600 disabled:opacity-50"
                         >
                           {g.name}
@@ -2493,7 +2560,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                           key={g.id}
                           type="button"
                           onClick={() => toggleGolfer(g.id)}
-                          disabled={!canEdit}
+                          disabled={!canModify}
                           className="text-xs font-bold px-3 py-1.5 rounded-full bg-white text-primary-700 border border-primary-300 disabled:opacity-50"
                         >
                           {g.name}
@@ -2508,11 +2575,12 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                 <button
                   type="button"
                   onClick={() => {
+                    if (isEventStarted && !window.confirm('This event is in progress. Remove this Greenie game?')) return;
                     removeGreenie(cfg.id);
                     setGreenieSetupId(null);
                   }}
                   className="px-3 py-2 rounded-lg text-xs font-extrabold border border-red-200 bg-red-50 text-red-700 disabled:opacity-50"
-                  disabled={!canEdit}
+                  disabled={!canModify}
                 >
                   Remove
                 </button>
@@ -2587,8 +2655,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                 </div>
               </div>
               <div className="flex-shrink-0 px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
-                <button onClick={() => { useStore.getState().removeStableford(eventId, cfg.id); setStablefordSetupId(null); }}
-                  className="px-3 py-2 rounded-lg text-xs font-extrabold border border-red-200 bg-red-50 text-red-700" disabled={!canEdit}>Remove</button>
+                <button onClick={() => { if (isEventStarted && !window.confirm('This event is in progress. Remove this Stableford game?')) return; useStore.getState().removeStableford(eventId, cfg.id); setStablefordSetupId(null); }}
+                  className="px-3 py-2 rounded-lg text-xs font-extrabold border border-red-200 bg-red-50 text-red-700 disabled:opacity-50" disabled={!canModify}>Remove</button>
                 <button onClick={() => setStablefordSetupId(null)}
                   className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200">Done</button>
               </div>
@@ -2668,8 +2736,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                 </div>
               </div>
               <div className="flex-shrink-0 px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between">
-                <button onClick={() => { useStore.getState().removeNinePoint(eventId, cfg.id); setNinePointSetupId(null); }}
-                  className="px-3 py-2 rounded-lg text-xs font-extrabold border border-red-200 bg-red-50 text-red-700" disabled={!canEdit}>Remove</button>
+                <button onClick={() => { if (isEventStarted && !window.confirm('This event is in progress. Remove this 9-Point game?')) return; useStore.getState().removeNinePoint(eventId, cfg.id); setNinePointSetupId(null); }}
+                  className="px-3 py-2 rounded-lg text-xs font-extrabold border border-red-200 bg-red-50 text-red-700 disabled:opacity-50" disabled={!canModify}>Remove</button>
                 <button onClick={() => setNinePointSetupId(null)}
                   className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200">Done</button>
               </div>
@@ -2745,8 +2813,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                 })}
               </div>
               <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
-                <button onClick={() => { useStore.getState().removeBingoBangoBongo(eventId, cfg.id); setBbbSetupId(null); }}
-                  className="px-3 py-2 rounded-lg text-xs font-extrabold border border-red-200 bg-red-50 text-red-700" disabled={!canEdit}>Remove</button>
+                <button onClick={() => { if (isEventStarted && !window.confirm('This event is in progress. Remove this Bingo Bango Bongo game?')) return; useStore.getState().removeBingoBangoBongo(eventId, cfg.id); setBbbSetupId(null); }}
+                  className="px-3 py-2 rounded-lg text-xs font-extrabold border border-red-200 bg-red-50 text-red-700 disabled:opacity-50" disabled={!canModify}>Remove</button>
                 <button onClick={() => setBbbSetupId(null)}
                   className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200">Done</button>
               </div>
@@ -2867,8 +2935,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                 })}
               </div>
               <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
-                <button onClick={() => { useStore.getState().removeWolf(eventId, cfg.id); setWolfSetupId(null); }}
-                  className="px-3 py-2 rounded-lg text-xs font-extrabold border border-red-200 bg-red-50 text-red-700" disabled={!canEdit}>Remove</button>
+                <button onClick={() => { if (isEventStarted && !window.confirm('This event is in progress. Remove this Wolf game?')) return; useStore.getState().removeWolf(eventId, cfg.id); setWolfSetupId(null); }}
+                  className="px-3 py-2 rounded-lg text-xs font-extrabold border border-red-200 bg-red-50 text-red-700 disabled:opacity-50" disabled={!canModify}>Remove</button>
                 <button onClick={() => setWolfSetupId(null)}
                   className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200">Done</button>
               </div>
@@ -2978,8 +3046,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                 </div>
               </div>
               <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
-                <button onClick={() => { useStore.getState().removeDots(eventId, cfg.id); setDotsSetupId(null); }}
-                  className="px-3 py-2 rounded-lg text-xs font-extrabold border border-red-200 bg-red-50 text-red-700" disabled={!canEdit}>Remove</button>
+                <button onClick={() => { if (isEventStarted && !window.confirm('This event is in progress. Remove this Dots game?')) return; useStore.getState().removeDots(eventId, cfg.id); setDotsSetupId(null); }}
+                  className="px-3 py-2 rounded-lg text-xs font-extrabold border border-red-200 bg-red-50 text-red-700 disabled:opacity-50" disabled={!canModify}>Remove</button>
                 <button onClick={() => setDotsSetupId(null)}
                   className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200">Done</button>
               </div>
@@ -3056,10 +3124,18 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
           
           {/* Running balance - In progress events */}
           {isEventStarted && !isEventCompleted && myNet != null && (
-            <div className={`rounded-xl p-4 ${myNetValue >= 0 ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
-              <div className="flex items-center justify-between">
+            <div className={`rounded-xl overflow-hidden border ${myNetValue >= 0 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+              <div 
+                className="p-4 flex items-center justify-between cursor-pointer"
+                onClick={() => setExpandBalance(!expandBalance)}
+              >
                 <div>
-                  <div className="text-xs font-bold text-gray-500 uppercase tracking-wide">Your Balance</div>
+                  <div className="text-xs font-bold text-gray-500 uppercase tracking-wide flex items-center gap-1">
+                    Your Balance
+                    <svg className={`w-3 h-3 transition-transform ${expandBalance ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
                   <div className={`text-2xl font-black ${myNetValue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {signedCurrency(myNetValue)}
                   </div>
@@ -3069,6 +3145,29 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                   <div>Winnings: {signedCurrency(myWinnings)}</div>
                 </div>
               </div>
+              
+              {/* Expanded Breakdown */}
+              {expandBalance && (
+                <div className={`px-4 pb-4 pt-0 border-t ${myNetValue >= 0 ? 'border-green-100' : 'border-red-100'}`}>
+                  <div className="mt-3 text-xs font-bold text-gray-500 uppercase tracking-wide">Buy-in Breakdown</div>
+                  <div className="mt-1 space-y-1">
+                    {buyinBreakdown.length > 0 ? (
+                      buyinBreakdown.map((item, idx) => (
+                        <div key={idx} className="flex justify-between text-sm text-gray-700">
+                          <span>{item.name}</span>
+                          <span className="font-medium">{currency(item.amount)}</span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-xs text-gray-400 italic">No buy-ins</div>
+                    )}
+                    <div className="border-t border-gray-200/50 mt-2 pt-1 flex justify-between text-sm font-bold text-gray-900">
+                      <span>Total</span>
+                      <span>{currency(myBuyin)}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
           
