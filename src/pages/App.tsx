@@ -22,16 +22,21 @@ const WalletPage = lazy(() => import('./WalletPage'));
 const AuthDemoPage = lazy(() => import('./AuthDemoPage').then(m => ({ default: m.AuthDemoPage })));
 
 // Tournament pages (prototype feature)
-const TournamentsPage = lazy(() => import('./TournamentsPage'));
 const TournamentPage = lazy(() => import('./TournamentPage'));
+
+// External app redirects
+const ExternalRedirect: React.FC<{ url: string; label: string }> = ({ url, label }) => {
+  React.useEffect(() => { window.location.href = url; }, [url]);
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-4 text-white">
+      <div className="text-lg">Redirecting to {label}...</div>
+      <a href={url} className="text-green-400 underline">Click here if not redirected</a>
+    </div>
+  );
+};
 
 // Nassau Teams page (sub-route of event)
 const NassauTeamsPage = lazy(() => import('./NassauTeamsPage'));
-
-// Club Dashboard (business accounts)
-const ClubDashboard = lazy(() => import('./ClubDashboard'));
-
-// Wrapper to extract :id param and pass as eventId prop
 const NassauTeamsRoute: React.FC = () => {
   const { id } = useParams();
   if (!id) return null;
@@ -351,13 +356,12 @@ const App: React.FC = () => {
                 <Route path="/join/:code" element={<JoinEventPage />} />
                 <Route path="/auth-demo" element={<AuthDemoPage />} />
                 
-                {/* Tournament routes (prototype feature) */}
-                <Route path="/tournaments" element={<TournamentsPage />} />
+                {/* Tournament & Club - redirect to standalone apps */}
+                <Route path="/tournaments" element={<ExternalRedirect url="https://play.golfwithgimmies.com" label="Gimmies Tournaments" />} />
                 <Route path="/tournament/:id/*" element={<TournamentPage />} />
                 
-                {/* Club Dashboard (business accounts) */}
-                <Route path="/club" element={<ClubDashboard />} />
-                <Route path="/club/*" element={<ClubDashboard />} />
+                <Route path="/club" element={<ExternalRedirect url="https://club.golfwithgimmies.com" label="Gimmies Club" />} />
+                <Route path="/club/*" element={<ExternalRedirect url="https://club.golfwithgimmies.com" label="Gimmies Club" />} />
               </Routes>
             </Suspense>
           </div>
