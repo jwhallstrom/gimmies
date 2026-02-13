@@ -398,7 +398,6 @@ const EventPage: React.FC = () => {
               }`}
             >
               <span className="text-base leading-none">🎛️</span>
-              <span className="leading-none">Game Control</span>
               {ccData.isStarted && !ccData.isCompleted && (
                 <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-primary-800 animate-pulse-subtle" />
               )}
@@ -409,7 +408,6 @@ const EventPage: React.FC = () => {
               className="relative flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-extrabold shadow-lg transition-all active:scale-95 flex-shrink-0 bg-gradient-to-r from-accent to-orange-500 text-white"
             >
               <span className="text-base leading-none">🎛️</span>
-              <span className="leading-none">Game Control</span>
             </button>
           ) : (
             <div className="w-0" />
