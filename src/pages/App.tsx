@@ -304,16 +304,18 @@ const App: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col bg-gradient-to-b from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 text-gray-900 dark:text-slate-100">
-      {/* ⚠️ CRITICAL: Header - body CSS handles safe area top padding, no pt-safe-top needed */}
-      <header className="flex-shrink-0 bg-primary-900/85 backdrop-blur text-white px-4 py-3 flex items-center justify-between shadow-md z-40 border-b border-white/10">
-        <Link to="/">
-          <img src="/gimmies-logo.png" alt="Gimmies" className="h-10 w-auto" />
-        </Link>
-        
-        <div className="flex items-center gap-2">
-          <UserMenu />
-        </div>
-      </header>
+      {/* Header — only visible on the Home screen to maximise real estate elsewhere */}
+      {location.pathname === '/' && (
+        <header className="flex-shrink-0 bg-primary-900/85 backdrop-blur text-white px-4 py-3 flex items-center justify-between shadow-md z-40 border-b border-white/10">
+          <Link to="/">
+            <img src="/gimmies-logo.png" alt="Gimmies" className="h-10 w-auto" />
+          </Link>
+          
+          <div className="flex items-center gap-2">
+            <UserMenu />
+          </div>
+        </header>
+      )}
       
       {/* Messages Panel */}
       <MessagesPanel 

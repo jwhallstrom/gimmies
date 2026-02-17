@@ -729,7 +729,7 @@ export const useStore = create<State>()(
         const autoRecapDisabled = completedEvent.settings?.disableAutoRecap === true;
         if (!autoRecapDisabled) {
           try {
-            const recap = generateRoundRecap(completedEvent);
+            const recap = generateRoundRecap(completedEvent, get().profiles);
             const recapMsg = generateRecapPushMessage(recap);
             
             // Build a nice recap message for chat

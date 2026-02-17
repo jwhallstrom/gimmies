@@ -43,6 +43,12 @@ export function isEventMuted(eventId: string): boolean {
  * Event chat adapter (event-level chat).
  *
  * Backed by Zustand today; can be reimplemented against BE/services later.
+ *
+ * **Phase 2 – Unified Group Chat:**
+ * When an event has a `parentGroupId`, all chat operations (read & write)
+ * are routed to the parent group's `chat[]`. This means every child event
+ * of a group shares a single, persistent conversation.
+ * Standalone events (no `parentGroupId`) continue to use their own `chat[]`.
  */
 export function useEventChatAdapter(eventId: string) {
   const event = useStore(
@@ -50,6 +56,19 @@ export function useEventChatAdapter(eventId: string) {
       | Event
       | undefined
   );
+
+  // Resolve parent group for unified chat routing
+  const parentGroupId = event?.parentGroupId;
+  const parentGroup = useStore(
+    (s) => parentGroupId
+      ? (s.events.find((e) => e.id === parentGroupId) as Event | undefined)
+      : undefined
+  );
+
+  // Chat target: parent group (if child event) or the event itself
+  const chatTargetId = parentGroupId || eventId;
+  const chatTargetEvent = parentGroup || event;
+
   const currentProfile = useStore((s) => s.currentProfile) as GolferProfile | null;
   const profiles = useStore((s) => s.profiles) as GolferProfile[];
 
@@ -59,7 +78,8 @@ export function useEventChatAdapter(eventId: string) {
   const deleteMessage = useStore((s) => s.deleteMessage);
   const votePoll = useStore((s) => s.votePoll);
 
-  const messages: ChatMessage[] = event?.chat || [];
+  // Read messages from the chat target (parent group or own event)
+  const messages: ChatMessage[] = chatTargetEvent?.chat || [];
 
   const profilesById = useMemo(() => {
     const map = new Map<string, GolferProfile>();
@@ -86,54 +106,54 @@ export function useEventChatAdapter(eventId: string) {
   // Reply-to state
   const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
 
-  // Mute state
-  const [muted, setMutedState] = useState(() => isEventMuted(eventId));
+  // Mute state — keyed on the chat target (group or event)
+  const [muted, setMutedState] = useState(() => isEventMuted(chatTargetId));
 
   const toggleMute = useCallback((duration: 'forever' | '1h' | '8h' | '24h' | 'unmute') => {
     if (duration === 'unmute') {
-      setMuteForEvent(eventId, null);
+      setMuteForEvent(chatTargetId, null);
       setMutedState(false);
     } else if (duration === 'forever') {
-      setMuteForEvent(eventId, 'forever');
+      setMuteForEvent(chatTargetId, 'forever');
       setMutedState(true);
     } else {
       const hours = duration === '1h' ? 1 : duration === '8h' ? 8 : 24;
       const until = new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
-      setMuteForEvent(eventId, until);
+      setMuteForEvent(chatTargetId, until);
       setMutedState(true);
     }
-  }, [eventId]);
+  }, [chatTargetId]);
 
-  // Send message with optional reply/type
+  // Send message with optional reply/type — routed to chat target
   const send = useCallback(async (text: string, options?: { replyTo?: string; type?: string; metadata?: Record<string, any>; pollQuestion?: string; pollOptions?: ChatPollOption[] }) => {
     setIsTyping(false);
     setReplyTo(null);
-    await addChatMessage(eventId, text, options);
-  }, [eventId, addChatMessage]);
+    await addChatMessage(chatTargetId, text, options);
+  }, [chatTargetId, addChatMessage]);
 
-  // Create a poll
+  // Create a poll — routed to chat target
   const createPoll = useCallback(async (question: string, optionTexts: string[]) => {
     const options: ChatPollOption[] = optionTexts.map(t => ({
       id: nanoid(6),
       text: t,
       votes: [],
     }));
-    await addChatMessage(eventId, question, {
+    await addChatMessage(chatTargetId, question, {
       type: 'poll',
       pollQuestion: question,
       pollOptions: options,
     });
-  }, [eventId, addChatMessage]);
+  }, [chatTargetId, addChatMessage]);
 
-  // Share join code to chat
+  // Share join code to chat — shares the current event's code to the chat target
   const shareJoinCode = useCallback(async () => {
     const code = event?.shareCode;
     if (!code) return;
-    await addChatMessage(eventId, `Join code: ${code}`, {
+    await addChatMessage(chatTargetId, `Join code: ${code}`, {
       type: 'invite',
       metadata: { shareCode: code, eventName: event?.name },
     });
-  }, [eventId, event?.shareCode, event?.name, addChatMessage]);
+  }, [chatTargetId, event?.shareCode, event?.name, addChatMessage]);
 
   return {
     event,
@@ -141,10 +161,10 @@ export function useEventChatAdapter(eventId: string) {
     messages,
     profilesById,
     send,
-    clear: () => clearChat(eventId),
-    toggleReaction: (messageId: string, emoji: string) => toggleReaction(eventId, messageId, emoji),
-    deleteMessage: (messageId: string) => deleteMessage(eventId, messageId),
-    votePoll: (messageId: string, optionId: string) => votePoll(eventId, messageId, optionId),
+    clear: () => clearChat(chatTargetId),
+    toggleReaction: (messageId: string, emoji: string) => toggleReaction(chatTargetId, messageId, emoji),
+    deleteMessage: (messageId: string) => deleteMessage(chatTargetId, messageId),
+    votePoll: (messageId: string, optionId: string) => votePoll(chatTargetId, messageId, optionId),
     createPoll,
     shareJoinCode,
     // Typing
@@ -156,5 +176,9 @@ export function useEventChatAdapter(eventId: string) {
     // Mute
     muted,
     toggleMute,
+    // Group chat context (Phase 2)
+    isGroupChat: Boolean(parentGroupId),
+    parentGroupName: parentGroup?.name,
+    chatTargetId,
   };
 }
