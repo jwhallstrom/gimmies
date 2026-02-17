@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useEventChatAdapter } from '../../adapters';
+import useStore from '../../state/store';
 import type { ChatMessage } from '../../state/types';
 import { CHAT_REACTIONS } from '../../state/types';
 import { nanoid } from 'nanoid/non-secure';
@@ -410,9 +411,22 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = tr
     isTyping, reportTyping,
     replyTo, setReplyTo,
     muted, toggleMute,
+    isGroupChat, parentGroupName,
   } = useEventChatAdapter(eventId);
 
   const navigate = useNavigate();
+
+  // Pinned event banners for group hubs (Phase 3C)
+  const isGroupHub = event?.hubType === 'group';
+  const activeChildEvents = useStore((s) => {
+    if (!isGroupHub || !event) return [];
+    return [...(s.events || [])]
+      .filter((e: any) => e.hubType !== 'group' && e.parentGroupId === event.id && !e.isCompleted)
+      .sort((a: any, b: any) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
+  });
+  const [dismissedBannerIds, setDismissedBannerIds] = useState<Set<string>>(new Set());
+  const visibleBanners = activeChildEvents.filter((e: any) => !dismissedBannerIds.has(e.id));
+
   const [text, setText] = useState('');
   const [showPollCreator, setShowPollCreator] = useState(false);
   const [activeReactionId, setActiveReactionId] = useState<string | null>(null);
@@ -581,8 +595,76 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = tr
   return (
     <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900 pb-[var(--footer-total-height)]">
       {/* Messages - scrollable area, fills available space above composer */}
+      {/* Pinned active event banners — group hubs only (Phase 3C) */}
+      {isGroupHub && visibleBanners.length > 0 && (
+        <div className="flex-shrink-0 px-3 pt-2 space-y-1.5">
+          {visibleBanners.map((evt: any) => {
+            const playerCount = evt.golfers?.length || 0;
+            const hasScores = (evt.scorecards || []).some((sc: any) =>
+              (sc.scores || []).some((s: any) => s?.strokes != null)
+            );
+            return (
+              <div
+                key={evt.id}
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-colors ${
+                  hasScores
+                    ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                    : 'bg-primary-50 dark:bg-primary-900/20 border-primary-200 dark:border-primary-800'
+                }`}
+              >
+                {hasScores && (
+                  <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse flex-shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-bold text-gray-900 dark:text-white truncate">
+                    {evt.name || 'Event'}
+                  </div>
+                  <div className="text-[10px] text-gray-500 dark:text-gray-400">
+                    {playerCount} player{playerCount !== 1 ? 's' : ''}
+                    {hasScores ? ' · In Progress' : ''}
+                  </div>
+                </div>
+                <button
+                  onClick={() => navigate(`/event/${evt.id}`)}
+                  className={`px-2.5 py-1 text-[10px] font-bold rounded-lg flex-shrink-0 transition-colors ${
+                    hasScores
+                      ? 'bg-red-500 hover:bg-red-600 text-white'
+                      : 'bg-primary-600 hover:bg-primary-700 text-white'
+                  }`}
+                >
+                  Open
+                </button>
+                <button
+                  onClick={() => setDismissedBannerIds((prev) => new Set(prev).add(evt.id))}
+                  className="p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0"
+                  aria-label="Dismiss"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       <div ref={messagesRef} className="flex-1 min-h-0 overflow-y-auto">
         <div className="flex flex-col justify-end min-h-full px-3 py-3 space-y-1">
+        {/* Group chat banner — shown when viewing from a child event */}
+        {isGroupChat && parentGroupName && (
+          <div className="flex items-center justify-center gap-2 py-2 px-3 mb-2">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-50 dark:bg-primary-900/20 rounded-full border border-primary-200/60 dark:border-primary-800">
+              <svg className="w-3.5 h-3.5 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <span className="text-xs font-semibold text-primary-700 dark:text-primary-400">
+                Group Chat — {parentGroupName}
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Empty state */}
         {visibleMessages.length === 0 && (
           <div className="flex flex-col items-center justify-center flex-1 text-center px-4">

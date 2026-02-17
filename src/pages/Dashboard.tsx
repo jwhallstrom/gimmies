@@ -14,7 +14,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuthMode } from '../hooks/useAuthMode';
 import { CreateEventWizard } from '../components/CreateEventWizard';
 import { CreateGroupWizard } from '../components/CreateGroupWizard';
-import { DiscoverGroupsModal } from '../components/DiscoverGroupsModal';
 import SettingsPanel from '../components/SettingsPanel';
 import { SignInRequired } from '../components/SignInRequired';
 import { useEventsAdapter, useWalletAdapter } from '../adapters';
@@ -103,7 +102,6 @@ const Dashboard: React.FC = () => {
 
   const [showCreateWizard, setShowCreateWizard] = useState(false);
   const [showCreateGroupWizard, setShowCreateGroupWizard] = useState(false);
-  const [showDiscoverGroups, setShowDiscoverGroups] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showFabMenu, setShowFabMenu] = useState(false);
   
@@ -183,7 +181,6 @@ const Dashboard: React.FC = () => {
       return;
     }
     setShowCreateGroupWizard(false);
-    setShowDiscoverGroups(false);
     setShowCreateWizard(true);
   };
   
@@ -193,7 +190,6 @@ const Dashboard: React.FC = () => {
       return;
     }
     setShowCreateWizard(false);
-    setShowDiscoverGroups(false);
     setShowCreateGroupWizard(true);
   };
   
@@ -464,7 +460,6 @@ const Dashboard: React.FC = () => {
           onAction={() => {
             setShowCreateWizard(false);
             setShowCreateGroupWizard(false);
-            setShowDiscoverGroups(false);
             setShowSettings(false);
             logout();
           }}
@@ -1091,11 +1086,6 @@ const Dashboard: React.FC = () => {
         }}
       />
 
-      <DiscoverGroupsModal
-        isOpen={showDiscoverGroups}
-        onClose={() => setShowDiscoverGroups(false)}
-      />
-      
       <SettingsPanel
         isOpen={showSettings}
         onClose={() => setShowSettings(false)}

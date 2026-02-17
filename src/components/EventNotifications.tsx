@@ -29,6 +29,7 @@ const EventNotifications: React.FC<Props> = ({ event, onClose }) => {
   const [sent, setSent] = useState(false);
   
   const updateEvent = useStore(s => s.updateEvent);
+  const profiles = useStore(s => s.profiles);
   const autoRecapDisabled = event.settings?.disableAutoRecap ?? false;
   
   const handleToggleAutoRecap = () => {
@@ -43,7 +44,7 @@ const EventNotifications: React.FC<Props> = ({ event, onClose }) => {
   const golferCount = event.golfers.length;
   
   // Generate round recap
-  const recap = useMemo(() => generateRoundRecap(event), [event]);
+  const recap = useMemo(() => generateRoundRecap(event, profiles), [event, profiles]);
   const recapPush = useMemo(() => generateRecapPushMessage(recap), [recap]);
   
   // Check if round has scores

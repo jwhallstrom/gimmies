@@ -132,6 +132,8 @@ export const createEventSlice = (
     };
     const group = { id: nanoid(5), golferIds: [currentProfile.id] };
     
+    const isGroup = ((initialData as any)?.hubType || 'event') === 'group';
+    
     const newEvent: Event = {
       id,
       hubType: (initialData as any)?.hubType || 'event',
@@ -148,6 +150,14 @@ export const createEventSlice = (
       createdAt: new Date().toISOString(),
       lastModified: new Date().toISOString(),
       chat: [],
+      // Groups default to private + invite-only (Phase 1)
+      ...(isGroup ? {
+        groupSettings: {
+          visibility: 'private' as const,
+          joinPolicy: 'invite_only' as const,
+          membersCanInvite: true,
+        },
+      } : {}),
       ...initialData
     };
     set((state: any) => ({ events: [...state.events, newEvent] }));

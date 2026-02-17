@@ -298,7 +298,7 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
       {/* Round Recap - Show when event has scores */}
       {event.golfers.some((g: any) => g.scores?.length > 0) && (
         <RoundRecapCard
-          recap={generateRoundRecap(event)}
+          recap={generateRoundRecap(event, profiles)}
           compact={!event.isCompleted}
         />
       )}

@@ -111,9 +111,9 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
 
   if (isGuest) {
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-        <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
-          <div className="bg-primary-900 p-4 text-white flex justify-between items-center">
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 1rem))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 1rem))' }}>
+        <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-full">
+          <div className="bg-primary-900 p-4 text-white flex justify-between items-center flex-shrink-0">
             <h2 className="text-lg font-bold">New Event</h2>
             <button onClick={onClose} className="text-white/80 hover:text-white" aria-label="Close">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -198,11 +198,11 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
   const canCreate = Boolean(eventName.trim() && eventDate && selectedCourseId && selectedTeeName);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 1rem))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 1rem))' }}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-full">
         
         {/* Header */}
-        <div className="bg-primary-600 p-4 text-white flex justify-between items-center">
+        <div className="bg-primary-600 p-4 text-white flex justify-between items-center flex-shrink-0">
           <h2 className="text-lg font-bold">New Event Setup</h2>
           <button onClick={onClose} className="text-white/80 hover:text-white" aria-label="Close Wizard">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -212,7 +212,7 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
         </div>
 
         {/* Progress Bar */}
-        <div className="flex gap-1 p-2 bg-gray-50">
+        <div className="flex gap-1 p-2 bg-gray-50 flex-shrink-0">
           <div className={`h-1 flex-1 rounded-full ${step === 'details' || step === 'course' ? 'bg-primary-500' : 'bg-gray-200'}`} />
           <div className={`h-1 flex-1 rounded-full ${step === 'course' ? 'bg-primary-500' : 'bg-gray-200'}`} />
         </div>
@@ -461,7 +461,7 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 border-t bg-gray-50 flex justify-between items-center">
+        <div className="p-4 border-t bg-gray-50 flex justify-between items-center flex-shrink-0">
           {step !== 'details' ? (
             <button
               onClick={handleBack}
