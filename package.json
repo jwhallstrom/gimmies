@@ -1,7 +1,7 @@
 {
   "name": "gimmies-golf",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -23,6 +23,7 @@
   "dependencies": {
     "@aws-amplify/backend": "^1.16.1",
     "@aws-amplify/ui-react": "^6.13.0",
+    "@stripe/stripe-js": "^8.7.0",
     "aws-amplify": "^6.15.7",
     "idb-keyval": "^6.2.1",
     "nanoid": "^5.0.7",
@@ -47,7 +48,7 @@
     "eslint": "^8.57.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-react-hooks": "^5.1.0-rc.0",
-    "eslint-plugin-react-refresh": "^0.4.12",
+    "eslint-plugin-react-refresh": "0.4.12",
     "fake-indexeddb": "^6.0.0",
     "jsdom": "^24.1.1",
     "playwright": "^1.46.1",

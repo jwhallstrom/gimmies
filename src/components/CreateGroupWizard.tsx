@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../state/store';
 import { generateFunnyEventName } from '../utils/nameGenerator';
+import { useAuthMode } from '../hooks/useAuthMode';
+import { SignInRequired } from './SignInRequired';
 
 interface Props {
   isOpen: boolean;
@@ -17,6 +19,7 @@ export const CreateGroupWizard: React.FC<Props> = ({ isOpen, onClose, onCreated 
   const navigate = useNavigate();
   const createEvent = useStore((s) => s.createEvent);
   const updateEvent = useStore((s) => s.updateEvent);
+  const { isGuest } = useAuthMode();
 
   const [name, setName] = useState('');
   const [isCreating, setIsCreating] = useState(false);
@@ -28,6 +31,30 @@ export const CreateGroupWizard: React.FC<Props> = ({ isOpen, onClose, onCreated 
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  if (isGuest) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+        <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col">
+          <div className="bg-purple-600 p-4 text-white flex justify-between items-center">
+            <h2 className="text-lg font-bold">New Group</h2>
+            <button onClick={onClose} className="text-white/80 hover:text-white" aria-label="Close">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div className="p-5">
+            <SignInRequired
+              title="🔒 Sign in to create groups"
+              message="Groups are shared chat hubs and require an account. Sign in to create or join groups."
+              onAction={onClose}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleCreate = async () => {
     if (!name.trim()) return;

@@ -92,6 +92,9 @@ const schema = a.schema({
     // Scorecard view permission
     scorecardView: a.enum(['individual', 'team', 'admin']),
     
+    // Event lifecycle status: 'setup' (configuring), 'started' (locked/in progress), 'completed' (final)
+    status: a.enum(['setup', 'started', 'completed']),
+    
     // Related data (stored as JSON for flexibility)
     golfersJson: a.json(), // EventGolfer[]
     groupsJson: a.json(), // Group[]

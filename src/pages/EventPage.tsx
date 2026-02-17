@@ -19,6 +19,7 @@ import ScoreHubTab from '../components/tabs/ScoreHubTab';
 import GolfersTab from '../components/tabs/GolfersTab';
 import GamesTab from '../components/tabs/GamesTab';
 import ChatTab from '../components/tabs/ChatTab';
+import GroupEventsTab from '../components/tabs/GroupEventsTab';
 import EventNotifications from '../components/EventNotifications';
 import { CreateEventWizard } from '../components/CreateEventWizard';
 import { getCourseById } from '../data/cloudCourses';
@@ -48,7 +49,6 @@ const EventPage: React.FC = () => {
   const [showPlayerGuide, setShowPlayerGuide] = useState(false);
   const [triggerAddGame, setTriggerAddGame] = useState(0);
   const [activePageIndex, setActivePageIndex] = useState(0);
-  const [dismissedBannerIds, setDismissedBannerIds] = useState<Set<string>>(new Set());
   const [joiningEventId, setJoiningEventId] = useState<string | null>(null);
   const [showCreateEvent, setShowCreateEvent] = useState(false);
 
@@ -92,6 +92,13 @@ const EventPage: React.FC = () => {
   const isGroupHub = event.hubType === 'group';
   const isOwner = Boolean(currentProfile && event.ownerProfileId === currentProfile.id);
   const courseName = event.course.courseId ? getCourseById(event.course.courseId)?.name : null;
+  
+  // Parent group context (Phase 4) — for child events within groups
+  const parentGroup = useStore((s) =>
+    event.parentGroupId
+      ? (s.events.find((e: any) => e.id === event.parentGroupId) as any | undefined)
+      : undefined
+  );
   
   // Get child events for this group (both active and completed)
   const { activeChildEvents, completedChildEvents } = useStore((s) => {
@@ -149,10 +156,9 @@ const EventPage: React.FC = () => {
   const tabs = isGroupHub
     ? [
         { id: 'chat', label: 'Chat', icon: '💬' },
+        { id: 'events', label: 'Events', icon: '🎯', badge: activeChildEvents.length || undefined },
         { id: 'golfers', label: 'Members', icon: '👥', badge: stats.golferCount },
-        { id: 'events', label: 'Events', icon: '🎯', badge: activeChildEvents.length || undefined, isModal: true },
         ...(isOwner ? [
-          { id: 'alerts', label: 'Alerts', icon: '🔔', isModal: true },
           { id: 'settings', label: 'Settings', icon: '⚙️' },
         ] : []),
       ]
@@ -168,7 +174,7 @@ const EventPage: React.FC = () => {
       ];
   
   // Filter out modal-only tabs for swipeable pages
-  const swipeableTabs = tabs.filter(t => !t.isModal);
+  const swipeableTabs = tabs.filter(t => !(t as any).isModal);
   
   // Handle scroll to update active page index
   const handleScroll = useCallback(() => {
@@ -204,12 +210,19 @@ const EventPage: React.FC = () => {
   const chatSwipeIndex = isGroupHub ? 0 : swipeableTabs.findIndex(t => t.id === 'chat');
   const isChatPage = activePageIndex === chatSwipeIndex;
   
-  // Mark group chat as read when viewing chat tab
+  // Mark group chat as read when viewing chat tab.
+  // For group hubs, mark this group's chat. For child events of a group,
+  // mark the parent group's chat (since Phase 2 unified chat routing means
+  // child events display the parent group's conversation).
   useEffect(() => {
-    if (isGroupHub && isChatPage && event?.id) {
-      markChatAsRead(event.id);
+    if (isChatPage) {
+      if (isGroupHub && event?.id) {
+        markChatAsRead(event.id);
+      } else if (event?.parentGroupId) {
+        markChatAsRead(event.parentGroupId);
+      }
     }
-  }, [isGroupHub, isChatPage, event?.id]);
+  }, [isGroupHub, isChatPage, event?.id, event?.parentGroupId]);
 
   
   
@@ -348,10 +361,8 @@ const EventPage: React.FC = () => {
     }
   };
 
-  // Events that should show as banners (active, not dismissed)
-  const bannerEvents = isGroupHub
-    ? activeChildEvents.filter((e: any) => !dismissedBannerIds.has(e.id))
-    : [];
+  // Event banners now live inside ChatTab (Phase 3C) — this var kept for old events dropdown compat
+  const bannerEvents: any[] = [];
 
   // Icon-only tabs (no labels): saves space and removes sideways scrolling.
   const tabPillClass =
@@ -364,11 +375,30 @@ const EventPage: React.FC = () => {
       <div className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 px-3 py-2 shadow-lg sticky top-0 z-30 flex-shrink-0">
         {/* Event Info Row */}
         <div className="flex items-center gap-2">
+          {/* Back button — child events navigate back to parent group */}
+          {parentGroup && (
+            <button
+              onClick={() => navigate(`/event/${parentGroup.id}`)}
+              className="flex-shrink-0 p-1.5 -ml-1 rounded-lg hover:bg-white/10 transition-colors"
+              aria-label="Back to group"
+            >
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+          )}
           <div className="flex-1 min-w-0">
             <h1 className="text-sm font-bold text-white truncate leading-tight">
               {event.name || 'Untitled Event'}
             </h1>
             <div className="flex items-center gap-1.5 text-[10px] text-primary-200">
+              {/* Breadcrumb: show parent group name for child events */}
+              {parentGroup && (
+                <>
+                  <span className="truncate max-w-[120px] text-primary-300">{parentGroup.name}</span>
+                  <span className="text-primary-400">·</span>
+                </>
+              )}
               {courseName && <span className="truncate max-w-[120px]">{courseName}</span>}
               {courseName && <span className="text-primary-400">•</span>}
               <span className="flex-shrink-0">
@@ -398,7 +428,6 @@ const EventPage: React.FC = () => {
               }`}
             >
               <span className="text-base leading-none">🎛️</span>
-              <span className="leading-none">Game Control</span>
               {ccData.isStarted && !ccData.isCompleted && (
                 <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-primary-800 animate-pulse-subtle" />
               )}
@@ -409,7 +438,6 @@ const EventPage: React.FC = () => {
               className="relative flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-extrabold shadow-lg transition-all active:scale-95 flex-shrink-0 bg-gradient-to-r from-accent to-orange-500 text-white"
             >
               <span className="text-base leading-none">🎛️</span>
-              <span className="leading-none">Game Control</span>
             </button>
           ) : (
             <div className="w-0" />
@@ -671,71 +699,9 @@ const EventPage: React.FC = () => {
         </>
       )}
       
-      {/* Group Event Banners - Show active events prominently so members can join easily */}
-      {isGroupHub && bannerEvents.length > 0 && (
-        <div className="flex-shrink-0 px-3 py-2 space-y-2 bg-gradient-to-b from-primary-900/50 to-transparent">
-          {bannerEvents.map((evt: any) => {
-            const isJoined = currentProfile && evt.golfers?.some((g: any) => g.profileId === currentProfile.id);
-            const isJoining = joiningEventId === evt.id;
-            const playerCount = evt.golfers?.length || 0;
-            const evtDate = evt.date ? new Date(evt.date) : null;
-            const isToday = evtDate && new Date().toDateString() === evtDate.toDateString();
-            const isFuture = evtDate && evtDate > new Date();
-            const statusLabel = isToday ? 'TODAY' : (evt.isCompleted ? 'FINAL' : (isFuture ? 'UPCOMING' : 'LIVE'));
-            const statusColor = isToday ? 'bg-orange-500' : (evt.isCompleted ? 'bg-gray-500' : (isFuture ? 'bg-blue-500' : 'bg-red-500'));
-
-            return (
-              <div
-                key={evt.id}
-                className="relative bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl px-3 py-2.5 flex items-center gap-3"
-              >
-                {/* Dismiss button */}
-                <button
-                  onClick={() => setDismissedBannerIds(prev => new Set([...prev, evt.id]))}
-                  className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center rounded-full text-white/40 hover:text-white/80 hover:bg-white/10"
-                  aria-label="Dismiss"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-
-                {/* Event info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className={`${statusColor} text-white text-[8px] font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-wide`}>
-                      {statusLabel}
-                    </span>
-                    <span className="text-white font-bold text-sm truncate">{evt.name || 'Event'}</span>
-                  </div>
-                  <div className="text-[10px] text-white/60 mt-0.5">
-                    {evtDate ? evtDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : ''}
-                    {playerCount > 0 && <> · {playerCount} player{playerCount !== 1 ? 's' : ''}</>}
-                    {evt.course?.teeName && <> · {evt.course.teeName}</>}
-                  </div>
-                </div>
-
-                {/* Action button */}
-                {isJoined ? (
-                  <button
-                    onClick={() => navigate(`/event/${evt.id}`)}
-                    className="flex-shrink-0 bg-white text-primary-700 font-extrabold text-xs px-4 py-2 rounded-lg shadow-sm hover:bg-primary-50 transition-colors"
-                  >
-                    Open →
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleInlineJoin(evt)}
-                    disabled={isJoining}
-                    className="flex-shrink-0 bg-green-500 hover:bg-green-600 disabled:opacity-60 text-white font-extrabold text-xs px-4 py-2 rounded-lg shadow-sm transition-colors"
-                  >
-                    {isJoining ? 'Joining...' : 'Join'}
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
+      {/* Group event banners moved into ChatTab (Phase 3C) and Events into GroupEventsTab (Phase 3B) */}
+      {false && (
+        <div></div>
       )}
 
       {/* Swipeable Content Area - Horizontal scroll-snap */}
@@ -751,11 +717,12 @@ const EventPage: React.FC = () => {
         {swipeableTabs.map((tab) => (
           <div 
             key={tab.id}
-            className={`w-full flex-shrink-0 snap-center ${tab.id === 'chat' ? 'overflow-hidden' : 'overflow-y-auto'}`}
+            className="w-full flex-shrink-0 snap-center overflow-y-auto"
             style={{ minWidth: '100%' }}
           >
-            <div className={tab.id === 'chat' ? 'h-full px-2 pt-1' : 'px-4 py-2 pb-32'}>
+            <div className={tab.id === 'chat' ? 'h-full' : 'px-4 py-2 pb-32'}>
               {tab.id === 'chat' && <ChatTab eventId={event.id} isActive={isChatPage} />}
+              {tab.id === 'events' && <GroupEventsTab eventId={event.id} />}
               {tab.id === 'scorecard' && <ScoreHubTab eventId={event.id} isTabActive={swipeableTabs[activePageIndex]?.id === 'scorecard'} />}
               {tab.id === 'games' && <GamesTab eventId={event.id} isTabActive={swipeableTabs[activePageIndex]?.id === 'games'} autoOpenAddGame={triggerAddGame} />}
               {tab.id === 'golfers' && <GolfersTab eventId={event.id} isTabActive={swipeableTabs[activePageIndex]?.id === 'golfers'} />}
@@ -945,8 +912,7 @@ const EventPage: React.FC = () => {
                       .filter((gid: string) => gid !== currentProfile?.id)
                       .map((gid: string) => {
                         const eg = event.golfers?.find((g: any) => (g.profileId || g.customName) === gid);
-                        const profile = profiles.find((p: any) => p.id === gid);
-                        return profile?.name || eg?.displayName || eg?.customName || gid;
+                        return eg?.displayName || eg?.customName || gid;
                       });
                     return (
                       <div key={n.id} className="flex items-center gap-2 bg-primary-50 rounded-xl px-3 py-2 border border-primary-100">

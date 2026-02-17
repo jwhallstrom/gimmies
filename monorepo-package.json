@@ -1,0 +1,25 @@
+{
+  "name": "gimmies-golf-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=apps/main",
+    "dev:tournaments": "npm run dev --workspace=apps/tournaments",
+    "build": "npm run build --workspace=apps/main",
+    "build:tournaments": "npm run build --workspace=apps/tournaments",
+    "build:all": "npm run build -ws",
+    "lint": "npm run lint -ws --if-present",
+    "test": "npm run test -ws --if-present",
+    "clean": "rimraf **/node_modules **/dist **/.turbo"
+  },
+  "devDependencies": {
+    "rimraf": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

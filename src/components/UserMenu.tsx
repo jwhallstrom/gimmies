@@ -5,7 +5,7 @@ import SettingsPanel from './SettingsPanel';
 import { useAuthMode } from '../hooks/useAuthMode';
 
 const UserMenu: React.FC = () => {
-  const { currentUser, currentProfile, events, wallet, notificationReadAt } = useStore();
+  const { currentUser, currentProfile, events, settlements, notificationReadAt } = useStore();
   const { isGuest } = useAuthMode();
   const [showSettings, setShowSettings] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
@@ -24,7 +24,7 @@ const UserMenu: React.FC = () => {
     let count = 0;
 
     // Pending settlements (same id scheme as NotificationCenter)
-    (wallet?.settlements || []).forEach((s: any, idx: number) => {
+    (settlements || []).forEach((s: any, idx: number) => {
       if (s.status !== 'pending') return;
       const id = `settle-${s.id || idx}`;
       if (!isRead(id)) count++;
@@ -94,7 +94,7 @@ const UserMenu: React.FC = () => {
 
     // Cap for badge display
     return Math.min(count, 99);
-  }, [currentProfile, events, wallet, notificationReadAt]);
+  }, [currentProfile, events, settlements, notificationReadAt]);
 
   if (!currentUser || !currentProfile) return null;
 

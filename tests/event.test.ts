@@ -117,6 +117,27 @@ describe('Event Slice', () => {
       // Note: timestamps may be same in fast execution, so just verify it exists
       expect(event?.lastModified).toBeTruthy();
     });
+
+    it('updates event status', async () => {
+      setupUserWithProfile();
+      const eventId = useStore.getState().createEvent()!;
+      
+      // Initially, status should be undefined or 'setup'
+      let event = useStore.getState().events.find(e => e.id === eventId);
+      expect(event?.status).toBeUndefined();
+      
+      // Update status to 'started'
+      await useStore.getState().updateEvent(eventId, { status: 'started' });
+      
+      event = useStore.getState().events.find(e => e.id === eventId);
+      expect(event?.status).toBe('started');
+      
+      // Update status to 'completed'
+      await useStore.getState().updateEvent(eventId, { status: 'completed' });
+      
+      event = useStore.getState().events.find(e => e.id === eventId);
+      expect(event?.status).toBe('completed');
+    });
   });
 
   describe('deleteEvent', () => {

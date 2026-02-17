@@ -9,6 +9,8 @@ import { EventSettlement } from '../wallet';
 import { DOT_DEFINITIONS, DEFAULT_DOTS } from '../../games/dots';
 import type { DotCategory, BingoBangoBongoHoleResult, WolfHoleResult, DotsPlayerResult } from '../../state/types';
 import { useKeyboardHandler } from '../../hooks/useKeyboardHandler';
+import type { NassauPayoutSummary, NassauSegmentResult } from '../../games/nassau';
+import type { SkinsSummary } from '../../games/skins';
 
 type Props = { eventId: string; isTabActive?: boolean; autoOpenAddGame?: number };
 
@@ -563,6 +565,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   const currency = (n: number) => '$' + n.toFixed(2);
   const signedCurrency = (n: number) => (n > 0 ? '+' : n < 0 ? '−' : '') + currency(Math.abs(n));
 
+  const myNetValue = myNet ?? 0;
+
   // Helper to get golfer name
   const getGolferName = (golferId: string) => {
     const golfer = allGolfers.find((g: any) => g.id === golferId);
@@ -573,13 +577,13 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   // Nassau standings computation
   const nassauStandings = useMemo(() => {
     if (!payouts.nassau.length) return null;
-    return payouts.nassau.map(n => {
+    return payouts.nassau.map((n: NassauPayoutSummary) => {
       const nassauConfig = event.games.nassau.find((cfg: any) => cfg.id === n.configId);
       const teams = nassauConfig?.teams || [];
       const isMatch = nassauConfig?.scoringType === 'match';
       
       // Build standings per segment with winner payout info
-      const standings = n.segments.map(seg => {
+      const standings = n.segments.map((seg: NassauSegmentResult) => {
         const rows = Object.entries(seg.scores)
           .filter(([id, score]) => Number.isFinite(score))
           .map(([id, score]) => {
@@ -603,7 +607,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
         // Calculate winner payouts for this segment
         const winnerCount = seg.winners.length;
         const payoutPerWinner = winnerCount > 0 ? seg.pot / winnerCount : 0;
-        const winnerNames = seg.winners.map(id => {
+        const winnerNames = seg.winners.map((id: string) => {
           const team = teams.find((t: any) => t.id === id);
           return team?.name || getGolferName(id);
         });
@@ -639,19 +643,19 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   // Skins standings computation  
   const skinsStandings = useMemo(() => {
     if (!payouts.skins.length) return null;
-    return payouts.skins.filter(Boolean).map(s => {
+    return payouts.skins.filter(Boolean).map((s: SkinsSummary | null) => {
       if (!s) return null;
       const skinsConfig = skinsArray.find((cfg: any) => cfg.id === s.configId);
       
       // Group holes by winner
       const winners = Object.entries(s.winningHolesByGolfer)
-        .filter(([_, holes]) => holes.length > 0)
-        .map(([golferId, holes]) => ({
+        .filter(([_, holes]: [string, number[]]) => holes.length > 0)
+        .map(([golferId, holes]: [string, number[]]) => ({
           name: getGolferName(golferId),
           holes,
           amount: s.winningsByGolfer[golferId] || 0
         }))
-        .sort((a, b) => b.holes.length - a.holes.length);
+        .sort((a, b) => (b.holes as number[]).length - (a.holes as number[]).length);
       
       return {
         id: s.configId,
@@ -669,7 +673,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
     <div className="space-y-4">
       {/* Personal Summary - Always visible if games exist */}
       {hasAnyGames && myNet !== null && (
-        <div className={`rounded-xl overflow-hidden ${myNet >= 0 ? 'bg-green-500' : 'bg-red-500'}`}>
+        <div className={`rounded-xl overflow-hidden ${myNetValue >= 0 ? 'bg-green-500' : 'bg-red-500'}`}>
           <div 
             className="px-4 py-3 flex items-center justify-between cursor-pointer"
             onClick={() => setExpandBalance(!expandBalance)}
@@ -681,7 +685,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </div>
-              <div className="text-2xl font-black">{signedCurrency(myNet)}</div>
+              <div className="text-2xl font-black">{signedCurrency(myNetValue)}</div>
             </div>
             <div className="text-right text-white text-xs opacity-90">
               <div>Buy-in: {currency(myBuyin)}</div>
@@ -771,10 +775,10 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
       })}
 
       {/* ========== NASSAU LEADERBOARD ========== */}
-      {nassauStandings && nassauStandings.length > 0 && nassauStandings.map(nassau => {
-        const frontSeg = nassau.standings.find(s => s.segment === 'front');
-        const backSeg = nassau.standings.find(s => s.segment === 'back');
-        const totalSeg = nassau.standings.find(s => s.segment === 'total');
+      {nassauStandings && nassauStandings.length > 0 && nassauStandings.map((nassau: any) => {
+        const frontSeg = nassau.standings.find((s: any) => s.segment === 'front');
+        const backSeg = nassau.standings.find((s: any) => s.segment === 'back');
+        const totalSeg = nassau.standings.find((s: any) => s.segment === 'total');
         
         const formatScore = (row: any) => {
           if (!row || !Number.isFinite(row.score)) return '—';
@@ -848,9 +852,9 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
               </thead>
               <tbody>
                 {nassau.teams.length > 0 ? nassau.teams.map((team: any) => {
-                  const frontRow = frontSeg?.rows.find(r => r.id === team.id);
-                  const backRow = backSeg?.rows.find(r => r.id === team.id);
-                  const totalRow = totalSeg?.rows.find(r => r.id === team.id);
+                  const frontRow = frontSeg?.rows.find((r: any) => r.id === team.id);
+                  const backRow = backSeg?.rows.find((r: any) => r.id === team.id);
+                  const totalRow = totalSeg?.rows.find((r: any) => r.id === team.id);
                   
                   // Calculate team's total winnings from this Nassau
                   const teamWinnings = 
@@ -1272,8 +1276,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
         >
           💰 Payouts
           {(isEventStarted || isEventCompleted) && myNet !== null && (
-            <span className={`ml-2 text-xs ${myNet >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {signedCurrency(myNet)}
+            <span className={`ml-2 text-xs ${myNetValue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {signedCurrency(myNetValue)}
             </span>
           )}
         </button>
@@ -1420,7 +1424,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
         <div className="space-y-4">
           {/* Your Position Summary */}
           {myNet !== null && (
-            <div className={`rounded-xl p-4 ${myNet >= 0 ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+            <div className={`rounded-xl p-4 ${myNetValue >= 0 ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
               <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Your Position</div>
               <div className="grid grid-cols-3 gap-3 text-center">
                 <div>
@@ -1433,8 +1437,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                 </div>
                 <div>
                   <div className="text-xs text-gray-500">Net</div>
-                  <div className={`font-black text-xl ${myNet >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {signedCurrency(myNet)}
+                  <div className={`font-black text-xl ${myNetValue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {signedCurrency(myNetValue)}
                   </div>
                 </div>
               </div>
@@ -1509,9 +1513,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
               </button>
               {showSettlements && (
                 <div className="p-4 space-y-2">
-                  {allSettlements.map((settlement: any, i: number) => (
-                    <EventSettlement key={i} settlement={settlement} eventId={eventId} />
-                  ))}
+                  <EventSettlement eventId={eventId} />
                 </div>
               )}
             </div>
@@ -1706,7 +1708,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                 </svg>
               </button>
             </div>
-            <div className="p-2 space-y-1 max-h-[60vh] overflow-y-auto">
+            <div className="p-2 space-y-1 max-h-[calc(90dvh-12rem)] overflow-y-auto">
               {GAME_TYPES.map((type) => {
                 const playerCount = allGolfers.length;
                 const needsMore = (type.minPlayers && playerCount < type.minPlayers) || (type.maxPlayers && playerCount > type.maxPlayers);
@@ -3122,16 +3124,16 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
           
           {/* Big Net Result - Completed events */}
           {isEventCompleted && myNet != null && (
-            <div className={`rounded-2xl p-6 text-center ${myNet >= 0 ? 'bg-gradient-to-br from-green-500 to-green-600' : 'bg-gradient-to-br from-red-500 to-red-600'} text-white shadow-lg`}>
+            <div className={`rounded-2xl p-6 text-center ${myNetValue >= 0 ? 'bg-gradient-to-br from-green-500 to-green-600' : 'bg-gradient-to-br from-red-500 to-red-600'} text-white shadow-lg`}>
               <div className="text-sm opacity-80 font-medium mb-1">Your Final Result</div>
-              <div className="text-5xl font-black">{signedCurrency(myNet)}</div>
+              <div className="text-5xl font-black">{signedCurrency(myNetValue)}</div>
               <div className="text-sm opacity-80 mt-2">Buy-in: {currency(myBuyin)}</div>
             </div>
           )}
           
           {/* Running balance - In progress events */}
           {isEventStarted && !isEventCompleted && myNet != null && (
-            <div className={`rounded-xl overflow-hidden border ${myNet >= 0 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+            <div className={`rounded-xl overflow-hidden border ${myNetValue >= 0 ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
               <div 
                 className="p-4 flex items-center justify-between cursor-pointer"
                 onClick={() => setExpandBalance(!expandBalance)}
@@ -3143,8 +3145,8 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
                   </div>
-                  <div className={`text-2xl font-black ${myNet >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                    {signedCurrency(myNet)}
+                  <div className={`text-2xl font-black ${myNetValue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {signedCurrency(myNetValue)}
                   </div>
                 </div>
                 <div className="text-right text-xs text-gray-500">
@@ -3155,7 +3157,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
               
               {/* Expanded Breakdown */}
               {expandBalance && (
-                <div className={`px-4 pb-4 pt-0 border-t ${myNet >= 0 ? 'border-green-100' : 'border-red-100'}`}>
+                <div className={`px-4 pb-4 pt-0 border-t ${myNetValue >= 0 ? 'border-green-100' : 'border-red-100'}`}>
                   <div className="mt-3 text-xs font-bold text-gray-500 uppercase tracking-wide">Buy-in Breakdown</div>
                   <div className="mt-1 space-y-1">
                     {buyinBreakdown.length > 0 ? (
@@ -3196,9 +3198,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
               </button>
               {showSettlements && (
                 <div className="px-4 pb-4 space-y-2">
-                  {allSettlements.map((settlement: any, i: number) => (
-                    <EventSettlement key={i} settlement={settlement} eventId={eventId} />
-                  ))}
+                  <EventSettlement eventId={eventId} />
                 </div>
               )}
             </div>

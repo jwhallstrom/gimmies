@@ -4,6 +4,8 @@ import useStore from '../state/store';
 import { CourseSearch } from './CourseSearch';
 import { generateFunnyEventName } from '../utils/nameGenerator';
 import { useCourses } from '../hooks/useCourses';
+import { useAuthMode } from '../hooks/useAuthMode';
+import { SignInRequired } from './SignInRequired';
 
 interface Props {
   isOpen: boolean;
@@ -21,6 +23,7 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
     useStore();
   const updateProfile = useStore((s) => s.updateProfile);
   const { courses } = useCourses();
+  const { isGuest } = useAuthMode();
   
   const [step, setStep] = useState<WizardStep>('details');
   const [eventName, setEventName] = useState('');
@@ -75,11 +78,24 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
     });
   }, [courses, favoriteCourseIds, currentProfile?.preferences?.homeCourseId]);
 
-  const toggleFavoriteCourse = (courseId: string) => {
+  const toggleFavoriteCourse = async (courseId: string) => {
     if (!currentProfile) return;
     const current = currentProfile.preferences?.favoriteCourseIds || [];
     const next = current.includes(courseId) ? current.filter((id) => id !== courseId) : [courseId, ...current];
     updateProfile(currentProfile.id, { preferences: { ...currentProfile.preferences, favoriteCourseIds: next } });
+    // Sync favorite courses to cloud (signed-in only)
+    if (!isGuest) {
+      try {
+        const { saveCloudProfile } = await import('../utils/profileSync');
+        const { profiles } = useStore.getState();
+        const updatedProfile = profiles.find((p) => p.id === currentProfile.id);
+        if (updatedProfile) {
+          await saveCloudProfile(updatedProfile as any);
+        }
+      } catch (e) {
+        console.error('Failed to sync favorite courses to cloud:', e);
+      }
+    }
   };
 
   // Hydrate course name when we have an id (home course default) and courses are loaded.
@@ -92,6 +108,30 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
   }, [isOpen, selectedCourseId, selectedCourseName, courses]);
 
   if (!isOpen) return null;
+
+  if (isGuest) {
+    return (
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 1rem))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 1rem))' }}>
+        <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-full">
+          <div className="bg-primary-900 p-4 text-white flex justify-between items-center flex-shrink-0">
+            <h2 className="text-lg font-bold">New Event</h2>
+            <button onClick={onClose} className="text-white/80 hover:text-white" aria-label="Close">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div className="p-5">
+            <SignInRequired
+              title="🔒 Sign in to create events"
+              message="Guest Mode is browse-only right now. Sign in to create events, invite players, and sync across devices."
+              onAction={onClose}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const handleNext = () => {
     if (step === 'details') setStep('course');
@@ -158,11 +198,11 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
   const canCreate = Boolean(eventName.trim() && eventDate && selectedCourseId && selectedTeeName);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 1rem))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 1rem))' }}>
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-full">
         
         {/* Header */}
-        <div className="bg-primary-600 p-4 text-white flex justify-between items-center">
+        <div className="bg-primary-600 p-4 text-white flex justify-between items-center flex-shrink-0">
           <h2 className="text-lg font-bold">New Event Setup</h2>
           <button onClick={onClose} className="text-white/80 hover:text-white" aria-label="Close Wizard">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -172,7 +212,7 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
         </div>
 
         {/* Progress Bar */}
-        <div className="flex gap-1 p-2 bg-gray-50">
+        <div className="flex gap-1 p-2 bg-gray-50 flex-shrink-0">
           <div className={`h-1 flex-1 rounded-full ${step === 'details' || step === 'course' ? 'bg-primary-500' : 'bg-gray-200'}`} />
           <div className={`h-1 flex-1 rounded-full ${step === 'course' ? 'bg-primary-500' : 'bg-gray-200'}`} />
         </div>
@@ -421,7 +461,7 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 border-t bg-gray-50 flex justify-between items-center">
+        <div className="p-4 border-t bg-gray-50 flex justify-between items-center flex-shrink-0">
           {step !== 'details' ? (
             <button
               onClick={handleBack}

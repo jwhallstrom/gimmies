@@ -22,16 +22,21 @@ const WalletPage = lazy(() => import('./WalletPage'));
 const AuthDemoPage = lazy(() => import('./AuthDemoPage').then(m => ({ default: m.AuthDemoPage })));
 
 // Tournament pages (prototype feature)
-const TournamentsPage = lazy(() => import('./TournamentsPage'));
 const TournamentPage = lazy(() => import('./TournamentPage'));
+
+// External app redirects
+const ExternalRedirect: React.FC<{ url: string; label: string }> = ({ url, label }) => {
+  React.useEffect(() => { window.location.href = url; }, [url]);
+  return (
+    <div className="flex flex-col items-center justify-center h-full gap-4 text-white">
+      <div className="text-lg">Redirecting to {label}...</div>
+      <a href={url} className="text-green-400 underline">Click here if not redirected</a>
+    </div>
+  );
+};
 
 // Nassau Teams page (sub-route of event)
 const NassauTeamsPage = lazy(() => import('./NassauTeamsPage'));
-
-// Club Dashboard (business accounts)
-const ClubDashboard = lazy(() => import('./ClubDashboard'));
-
-// Wrapper to extract :id param and pass as eventId prop
 const NassauTeamsRoute: React.FC = () => {
   const { id } = useParams();
   if (!id) return null;
@@ -47,9 +52,6 @@ const App: React.FC = () => {
   const [pendingJoinHandled, setPendingJoinHandled] = useState(false);
   const [showMessagesPanel, setShowMessagesPanel] = useState(false);
   const isEventRoute = location.pathname.startsWith('/event/');
-  const isEventChatRoute =
-    isEventRoute &&
-    (location.pathname.endsWith('/chat') || /^\/event\/[^/]+\/?$/.test(location.pathname));
   
   // Calculate unread message count for header badge
   const unreadMessageCount = useMemo(() => {
@@ -302,16 +304,18 @@ const App: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col bg-gradient-to-b from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 text-gray-900 dark:text-slate-100">
-      {/* Header - flex child, CSS handles safe area padding */}
-      <header className="flex-shrink-0 bg-primary-900/85 backdrop-blur text-white px-4 py-2.5 flex items-center justify-between shadow-md z-40 border-b border-white/10">
-        <Link to="/">
-          <img src="/gimmies-logo.png" alt="Gimmies" className="h-10 w-auto" />
-        </Link>
-        
-        <div className="flex items-center gap-2">
-          <UserMenu />
-        </div>
-      </header>
+      {/* Header — only visible on the Home screen to maximise real estate elsewhere */}
+      {location.pathname === '/' && (
+        <header className="flex-shrink-0 bg-primary-900/85 backdrop-blur text-white px-4 py-3 flex items-center justify-between shadow-md z-40 border-b border-white/10">
+          <Link to="/">
+            <img src="/gimmies-logo.png" alt="Gimmies" className="h-10 w-auto" />
+          </Link>
+          
+          <div className="flex items-center gap-2">
+            <UserMenu />
+          </div>
+        </header>
+      )}
       
       {/* Messages Panel */}
       <MessagesPanel 
@@ -321,18 +325,12 @@ const App: React.FC = () => {
       {/* Main content area */}
       <main className="flex-1 min-h-0 overflow-hidden relative w-full">
         <div
-          className={`absolute inset-0 ${
-            isEventRoute
-              ? `${isEventChatRoute ? 'overflow-hidden' : 'overflow-y-auto'}`
-              : 'overflow-y-auto'
-          }`}
+          className={`absolute inset-0 ${isEventRoute ? 'overflow-hidden' : 'overflow-y-auto'}`}
         >
           <div
             className={
               isEventRoute
-                ? (isEventChatRoute
-                    ? 'px-4 pt-4 h-full max-w-5xl w-full mx-auto'
-                    : 'px-4 pt-4 content-with-footer max-w-5xl w-full mx-auto')
+                ? 'px-4 pt-4 h-full max-w-5xl w-full mx-auto'
                 : 'px-4 pt-4 content-with-footer max-w-5xl w-full mx-auto'
             }
           >
@@ -351,20 +349,21 @@ const App: React.FC = () => {
                 <Route path="/join/:code" element={<JoinEventPage />} />
                 <Route path="/auth-demo" element={<AuthDemoPage />} />
                 
-                {/* Tournament routes (prototype feature) */}
-                <Route path="/tournaments" element={<TournamentsPage />} />
+                {/* Tournament & Club - redirect to standalone apps */}
+                <Route path="/tournaments" element={<ExternalRedirect url="https://play.golfwithgimmies.com" label="Gimmies Tournaments" />} />
                 <Route path="/tournament/:id/*" element={<TournamentPage />} />
                 
-                {/* Club Dashboard (business accounts) */}
-                <Route path="/club" element={<ClubDashboard />} />
-                <Route path="/club/*" element={<ClubDashboard />} />
+                <Route path="/club" element={<ExternalRedirect url="https://club.golfwithgimmies.com" label="Gimmies Club" />} />
+                <Route path="/club/*" element={<ExternalRedirect url="https://club.golfwithgimmies.com" label="Gimmies Club" />} />
               </Routes>
             </Suspense>
           </div>
         </div>
       </main>
-      {/* Fixed bottom nav - CSS handles padding-bottom for iOS home indicator safe area */}
-      <footer className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-[#09243F] border-t border-gray-200 dark:border-white/10 flex items-center justify-around px-2 pt-2">
+      {/* Footer nav - height & safe-area padding controlled by CSS (styles.css footer rule).
+          CSS sets height: var(--footer-total-height) = 68px + safe-area-inset-bottom.
+          Ticker uses the same variable so it always sits flush above this. */}
+      <footer className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-[#09243F] border-t border-gray-200 dark:border-white/10 flex items-start justify-around px-2 pt-1">
         <Link
           to="/"
           className={`flex flex-col items-center justify-center gap-0.5 min-w-[56px] min-h-[52px] py-1.5 rounded-xl transition-all ${
@@ -448,8 +447,8 @@ const App: React.FC = () => {
         <LevelUpModal
           isOpen={true}
           onClose={clearPendingLevelUp}
-          oldLevel={pendingLevelUp.oldLevel}
-          newLevel={pendingLevelUp.newLevel}
+          oldTier={pendingLevelUp.oldTier}
+          newTier={pendingLevelUp.newTier}
           verifiedRounds={pendingLevelUp.verifiedRounds}
         />
       )}

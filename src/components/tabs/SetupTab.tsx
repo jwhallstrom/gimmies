@@ -93,130 +93,44 @@ const SetupTab: React.FC<Props> = ({ eventId }) => {
           </div>
         </div>
 
-        {/* Privacy & Access */}
-        {isOwner && (
-          <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
-              <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-              <h3 className="text-sm font-bold text-gray-900">Privacy & Access</h3>
-            </div>
-            
-            {/* Visibility */}
-            <div className="mb-4">
-              <label className="block text-xs font-semibold text-gray-700 mb-2">Group Visibility</label>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={() => updateGroupSettings({ visibility: 'private' })}
-                  className={`p-3 rounded-xl border-2 text-left transition-all ${
-                    groupSettings.visibility === 'private'
-                      ? 'border-purple-500 bg-purple-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <span>🔒</span>
-                    <span className="font-semibold text-sm text-gray-900">Private</span>
-                  </div>
-                  <p className="text-xs text-gray-600">Only members can see</p>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => updateGroupSettings({ visibility: 'public' })}
-                  className={`p-3 rounded-xl border-2 text-left transition-all ${
-                    groupSettings.visibility === 'public'
-                      ? 'border-purple-500 bg-purple-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <span>🌐</span>
-                    <span className="font-semibold text-sm text-gray-900">Public</span>
-                  </div>
-                  <p className="text-xs text-gray-600">Anyone can find it</p>
-                </button>
-              </div>
-            </div>
-            
-            {/* Join Policy */}
-            <div className="mb-4">
-              <label className="block text-xs font-semibold text-gray-700 mb-2">How People Join</label>
-              <div className="space-y-2">
-                <button
-                  type="button"
-                  onClick={() => updateGroupSettings({ joinPolicy: 'open', membersCanInvite: true })}
-                  className={`w-full p-3 rounded-xl border-2 text-left transition-all ${
-                    groupSettings.joinPolicy === 'open'
-                      ? 'border-purple-500 bg-purple-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <span>✨</span>
-                    <span className="font-semibold text-sm text-gray-900">Open</span>
-                    <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">Recommended</span>
-                  </div>
-                  <p className="text-xs text-gray-600">Anyone with the link can join instantly</p>
-                </button>
-                
-                <button
-                  type="button"
-                  onClick={() => updateGroupSettings({ joinPolicy: 'request' })}
-                  className={`w-full p-3 rounded-xl border-2 text-left transition-all ${
-                    groupSettings.joinPolicy === 'request'
-                      ? 'border-purple-500 bg-purple-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <span>✋</span>
-                    <span className="font-semibold text-sm text-gray-900">Request to Join</span>
-                  </div>
-                  <p className="text-xs text-gray-600">People request, you approve</p>
-                </button>
-                
-                <button
-                  type="button"
-                  onClick={() => updateGroupSettings({ joinPolicy: 'invite_only', membersCanInvite: false })}
-                  className={`w-full p-3 rounded-xl border-2 text-left transition-all ${
-                    groupSettings.joinPolicy === 'invite_only'
-                      ? 'border-purple-500 bg-purple-50'
-                      : 'border-gray-200 hover:border-gray-300'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <span>🔐</span>
-                    <span className="font-semibold text-sm text-gray-900">Invite Only</span>
-                  </div>
-                  <p className="text-xs text-gray-600">Only you can add members</p>
-                </button>
-              </div>
-            </div>
-            
-            {/* Members Can Invite Toggle */}
-            {groupSettings.joinPolicy !== 'invite_only' && (
-              <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-                <div>
-                  <div className="text-sm font-medium text-gray-900">Members can share invites</div>
-                  <p className="text-xs text-gray-600">Let everyone invite friends</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => updateGroupSettings({ membersCanInvite: !groupSettings.membersCanInvite })}
-                  className={`relative w-11 h-6 rounded-full transition-colors ${
-                    groupSettings.membersCanInvite ? 'bg-purple-600' : 'bg-gray-300'
-                  }`}
-                >
-                  <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
-                    groupSettings.membersCanInvite ? 'translate-x-5' : ''
-                  }`} />
-                </button>
-              </div>
-            )}
+        {/* Privacy & Access — Simplified (groups are always private + invite-only) */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+          <div className="flex items-center gap-2 mb-3">
+            <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
+            <h3 className="text-sm font-bold text-gray-900">Privacy & Access</h3>
           </div>
-        )}
+          
+          <div className="flex items-center gap-3 p-3 bg-purple-50 rounded-xl border border-purple-200">
+            <span className="text-xl">🔐</span>
+            <div className="flex-1">
+              <div className="text-sm font-semibold text-gray-900">Invite Only</div>
+              <p className="text-xs text-gray-600">Members join via invite link or code shared by existing members.</p>
+            </div>
+          </div>
+          
+          {/* Members Can Invite Toggle */}
+          {isOwner && (
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl mt-3">
+              <div>
+                <div className="text-sm font-medium text-gray-900">Members can share invites</div>
+                <p className="text-xs text-gray-600">Let everyone invite friends</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => updateGroupSettings({ membersCanInvite: !groupSettings.membersCanInvite })}
+                className={`relative w-11 h-6 rounded-full transition-colors ${
+                  groupSettings.membersCanInvite ? 'bg-purple-600' : 'bg-gray-300'
+                }`}
+              >
+                <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                  groupSettings.membersCanInvite ? 'translate-x-5' : ''
+                }`} />
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Create Event */}
         <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">

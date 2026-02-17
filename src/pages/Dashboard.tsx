@@ -14,8 +14,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuthMode } from '../hooks/useAuthMode';
 import { CreateEventWizard } from '../components/CreateEventWizard';
 import { CreateGroupWizard } from '../components/CreateGroupWizard';
-import { DiscoverGroupsModal } from '../components/DiscoverGroupsModal';
 import SettingsPanel from '../components/SettingsPanel';
+import { SignInRequired } from '../components/SignInRequired';
 import { useEventsAdapter, useWalletAdapter } from '../adapters';
 import type { Event } from '../state/types';
 import useStore from '../state/store';
@@ -97,10 +97,11 @@ const Dashboard: React.FC = () => {
   const { wallet } = useWalletAdapter();
   const { isGuest } = useAuthMode();
   const navigate = useNavigate();
+  const addToast = useStore((s: any) => s.addToast);
+  const logout = useStore((s: any) => s.logout);
 
   const [showCreateWizard, setShowCreateWizard] = useState(false);
   const [showCreateGroupWizard, setShowCreateGroupWizard] = useState(false);
-  const [showDiscoverGroups, setShowDiscoverGroups] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showFabMenu, setShowFabMenu] = useState(false);
   
@@ -175,14 +176,20 @@ const Dashboard: React.FC = () => {
   
   // Prevent multiple wizards from opening simultaneously
   const openEventWizard = () => {
+    if (isGuest) {
+      addToast?.('Sign in to create events', 'error', 2500);
+      return;
+    }
     setShowCreateGroupWizard(false);
-    setShowDiscoverGroups(false);
     setShowCreateWizard(true);
   };
   
   const openGroupWizard = () => {
+    if (isGuest) {
+      addToast?.('Sign in to create groups', 'error', 2500);
+      return;
+    }
     setShowCreateWizard(false);
-    setShowDiscoverGroups(false);
     setShowCreateGroupWizard(true);
   };
   
@@ -209,8 +216,9 @@ const Dashboard: React.FC = () => {
   // Load events on mount
   useEffect(() => {
     if (!currentProfile) return;
+    if (isGuest) return;
     loadEventsFromCloud().catch(() => {});
-  }, [currentProfile?.id]);
+  }, [currentProfile?.id, isGuest]);
 
   // Separate events into categories: live, upcoming, completed, groups
   const { liveEvents, upcomingEvents, completedEvents, groups, activeEvents, filteredLive, filteredUpcoming, filteredGroups, filteredHistory } = useMemo(() => {
@@ -444,6 +452,19 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-4 pb-32">
+      {isGuest && (
+        <SignInRequired
+          title="You're in Guest Mode"
+          message="Browse the app, but creating/joining games is locked until you sign in so everything stays cloud-synced."
+          actionLabel="Sign In / Create Account"
+          onAction={() => {
+            setShowCreateWizard(false);
+            setShowCreateGroupWizard(false);
+            setShowSettings(false);
+            logout();
+          }}
+        />
+      )}
       {/* Compact Header - Avatar + Name + Quick Stats in one row */}
       <header className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 -mx-4 -mt-4 px-4 pt-4 pb-3 shadow-lg">
         <div className="flex items-center gap-3">
@@ -585,7 +606,15 @@ const Dashboard: React.FC = () => {
                   <span>👥</span> Start a Group
                 </button>
                 <button
-                  onClick={() => { navigate('/join'); dismissOnboarding(false); }}
+                  onClick={() => {
+                    if (isGuest) {
+                      addToast?.('Sign in to join events', 'error', 2500);
+                      dismissOnboarding(false);
+                      return;
+                    }
+                    navigate('/join');
+                    dismissOnboarding(false);
+                  }}
                   className="flex-1 py-3.5 bg-gray-100 text-gray-700 rounded-xl font-bold text-sm hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
                 >
                   <span>🎫</span> Join with Code
@@ -949,7 +978,15 @@ const Dashboard: React.FC = () => {
             <div className="px-4 pb-4 space-y-2">
               {/* Join Event - Most prominent (grandma's #1) */}
               <button
-                onClick={() => { setShowFabMenu(false); navigate('/join'); }}
+                onClick={() => {
+                  if (isGuest) {
+                    addToast?.('Sign in to join events', 'error', 2500);
+                    setShowFabMenu(false);
+                    return;
+                  }
+                  setShowFabMenu(false);
+                  navigate('/join');
+                }}
                 className="w-full flex items-center gap-4 p-4 bg-gradient-to-r from-accent to-orange-500 rounded-2xl text-white hover:from-orange-500 hover:to-accent transition-all shadow-md"
               >
                 <div className="w-14 h-14 rounded-xl bg-white/20 flex items-center justify-center text-2xl flex-shrink-0">
@@ -1049,11 +1086,6 @@ const Dashboard: React.FC = () => {
         }}
       />
 
-      <DiscoverGroupsModal
-        isOpen={showDiscoverGroups}
-        onClose={() => setShowDiscoverGroups(false)}
-      />
-      
       <SettingsPanel
         isOpen={showSettings}
         onClose={() => setShowSettings(false)}

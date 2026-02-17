@@ -14,6 +14,8 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../state/store';
 import type { Event } from '../state/types';
+import { calculateEventPayouts } from '../games/payouts';
+import { computeSkins } from '../games/skins';
 
 // Notification types for categorization
 type NotificationType = 'money' | 'live' | 'social' | 'personal' | 'system';
@@ -45,7 +47,16 @@ type FilterTab = 'all' | 'money' | 'activity' | 'social';
 
 const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
   const navigate = useNavigate();
-  const { events, completedEvents, currentProfile, profiles, wallet, notificationReadAt, markNotificationRead, markNotificationsRead } = useStore();
+  const {
+    events,
+    completedEvents,
+    currentProfile,
+    profiles,
+    settlements,
+    notificationReadAt,
+    markNotificationRead,
+    markNotificationsRead,
+  } = useStore();
   const [activeTab, setActiveTab] = useState<FilterTab>('all');
 
   // Generate notifications from app state
@@ -70,9 +81,8 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
 
     // === MONEY NOTIFICATIONS ===
     
-    // Check wallet for recent transactions/settlements (only pending ones)
-    const settlements = wallet?.settlements || [];
-    settlements.forEach((s: any, idx: number) => {
+    // Check wallet for pending settlements
+    (settlements || []).forEach((s: any, idx: number) => {
       if (s.status !== 'pending') return; // Only show pending settlements
       
       const id = `settle-${s.id || idx}`;
@@ -91,12 +101,12 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
         priority: 'high',
         icon: isOwed ? '💵' : '⚠️',
         title: isOwed ? `${otherName} owes you` : `You owe ${otherName}`,
-        body: `$${(s.amount / 100).toFixed(0)} from ${s.eventName || 'recent games'}`,
+        body: `$${Number(s.roundedAmount || 0).toFixed(0)} from ${s.eventName || 'recent games'}`,
         timestamp,
         read: Boolean(notificationReadAt?.[id]),
         actionLabel: isOwed ? 'Send reminder' : 'Settle up',
         actionPath: '/wallet',
-        amount: s.amount,
+        amount: Math.abs(Number(s.roundedAmount || 0)),
         isPositive: isOwed,
       });
     });
@@ -112,22 +122,23 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
         // Skip if dismissed
         if (wasDismissed(id, timestamp)) return;
         
-        const myPayout = event.payouts?.find((p: any) => p.profileId === currentProfile.id);
-        if (myPayout && myPayout.net !== 0) {
-          const isWin = myPayout.net > 0;
+        const payouts = calculateEventPayouts(event as any, profiles);
+        const myNet = payouts.totalByGolfer?.[currentProfile.id] ?? 0;
+        if (myNet !== 0) {
+          const isWin = myNet > 0;
           notifs.push({
             id,
             type: 'money',
             priority: 'normal',
             icon: isWin ? '💰' : '📉',
             title: isWin ? 'You won!' : 'Better luck next time',
-            body: `${isWin ? '+' : ''}$${(myPayout.net / 100).toFixed(0)} from ${event.name}`,
+            body: `${isWin ? '+' : ''}$${Math.abs(myNet).toFixed(0)} from ${event.name}`,
             timestamp,
             read: Boolean(notificationReadAt?.[id]),
             actionLabel: 'View details',
             actionPath: `/event/${event.id}/payout`,
             eventId: event.id,
-            amount: Math.abs(myPayout.net),
+            amount: Math.abs(myNet),
             isPositive: isWin,
           });
         }
@@ -193,14 +204,12 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
         }
       }
 
-      // Recent skins wins
-      const skinsGame = event.games?.skins?.[0];
-      if (skinsGame?.results) {
-        const mySkins = Object.entries(skinsGame.results)
-          .filter(([_, winner]: [string, any]) => winner === currentProfile.id)
-          .slice(-2);
-        
-        mySkins.forEach(([hole]: [string, any]) => {
+      // Recent skins wins (derived from scorecards)
+      const skinsCfg = event.games?.skins?.[0];
+      if (skinsCfg) {
+        const summary = computeSkins(event as any, skinsCfg as any, profiles);
+        const holes = summary?.winningHolesByGolfer?.[currentProfile.id] || [];
+        holes.slice(-2).forEach((hole: number) => {
           const id = `skin-${event.id}-${hole}`;
           notifs.push({
             id,
@@ -313,7 +322,7 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
       if (pDiff !== 0) return pDiff;
       return b.timestamp.getTime() - a.timestamp.getTime();
     });
-  }, [events, completedEvents, currentProfile, profiles, wallet, notificationReadAt]);
+  }, [events, completedEvents, currentProfile, profiles, settlements, notificationReadAt]);
 
   // Filter notifications by tab
   const filteredNotifications = useMemo(() => {

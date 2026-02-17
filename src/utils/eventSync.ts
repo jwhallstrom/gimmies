@@ -114,6 +114,8 @@ export async function saveEventToCloud(event: Event, currentProfileId: string): 
       isCompleted: event.isCompleted || false,
       shareCode,
       scorecardView: event.scorecardView || 'individual',
+      // Event lifecycle status - preserve undefined/null to maintain data integrity
+      status: event.status || null,
       // Hub type: 'event' (default) or 'group' (chat crew)
       hubType: event.hubType || 'event',
       // Parent group ID - links events created from groups
@@ -216,6 +218,7 @@ export async function loadEventById(eventId: string): Promise<Event | null> {
       isCompleted: cloudEvent.isCompleted || false,
       shareCode: cloudEvent.shareCode || undefined,
       scorecardView: cloudEvent.scorecardView as any || 'individual',
+      status: (cloudEvent as any).status as 'setup' | 'started' | 'completed' | undefined,
       hubType: ((cloudEvent as any).hubType as 'event' | 'group') || 'event',
       parentGroupId: (cloudEvent as any).parentGroupId || undefined,
       
@@ -250,12 +253,13 @@ export async function loadEventByShareCode(shareCode: string): Promise<Event | n
     const client = getClient();
     if (!client) return null;
 
-    console.log('Loading event from cloud with code:', shareCode);
+    const normalized = String(shareCode || '').trim().toUpperCase();
+    console.log('Loading event from cloud with code:', normalized);
 
     // Query events by shareCode
     const { data: events, errors } = await client.models.Event.list({
       filter: {
-        shareCode: { eq: shareCode },
+        shareCode: { eq: normalized },
       },
     });
 
@@ -280,6 +284,7 @@ export async function loadEventByShareCode(shareCode: string): Promise<Event | n
       isCompleted: cloudEvent.isCompleted || false,
       shareCode: cloudEvent.shareCode || undefined,
       scorecardView: cloudEvent.scorecardView as any || 'individual',
+      status: (cloudEvent as any).status as 'setup' | 'started' | 'completed' | undefined,
       hubType: ((cloudEvent as any).hubType as 'event' | 'group') || 'event',
       parentGroupId: (cloudEvent as any).parentGroupId || undefined,
       
@@ -336,6 +341,7 @@ export async function loadUserEventsFromCloud(): Promise<Event[]> {
       isCompleted: cloudEvent.isCompleted || false,
       shareCode: cloudEvent.shareCode || undefined,
       scorecardView: cloudEvent.scorecardView as any || 'individual',
+      status: (cloudEvent as any).status as 'setup' | 'started' | 'completed' | undefined,
       hubType: ((cloudEvent as any).hubType as 'event' | 'group') || 'event',
       parentGroupId: (cloudEvent as any).parentGroupId || undefined,
       
@@ -381,6 +387,9 @@ export async function loadPublicEventsFromCloud(): Promise<Event[]> {
 
     const localEvents: Event[] = (events || [])
       .filter((cloudEvent) => !cloudEvent.isCompleted)
+      // Exclude groups (hubType === 'group') and group child events (have parentGroupId)
+      .filter((cloudEvent) => (cloudEvent as any).hubType !== 'group')
+      .filter((cloudEvent) => !(cloudEvent as any).parentGroupId)
       .map((cloudEvent) => ({
         id: cloudEvent.id,
         name: cloudEvent.name,
@@ -394,6 +403,7 @@ export async function loadPublicEventsFromCloud(): Promise<Event[]> {
         isCompleted: cloudEvent.isCompleted || false,
         shareCode: cloudEvent.shareCode || undefined,
         scorecardView: (cloudEvent.scorecardView as any) || 'individual',
+        status: (cloudEvent as any).status as 'setup' | 'started' | 'completed' | undefined,
         hubType: ((cloudEvent as any).hubType as 'event' | 'group') || 'event',
 
         golfers: cloudEvent.golfersJson ? JSON.parse(cloudEvent.golfersJson as string) : [],

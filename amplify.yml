@@ -12,7 +12,46 @@ frontend:
         - npm ci
     build:
       commands:
-        - npm run build
+        - |
+          echo "Building for branch: $AWS_BRANCH"
+          if [ "$AWS_BRANCH" = "landing" ]; then
+            echo "=== Building Landing Page ==="
+            cd apps/landing
+            npm install
+            npm run build
+            # Move dist up for Amplify to find it
+            mv dist ../../dist-landing
+            cd ../..
+            rm -rf dist
+            mv dist-landing dist
+          elif [ "$AWS_BRANCH" = "tournaments" ]; then
+            echo "=== Building Tournament App ==="
+            cd apps/tournaments
+            # Copy Amplify config
+            cp ../../amplify_outputs.json ./
+            npm install
+            npm run build
+            # Move dist up for Amplify to find it
+            mv dist ../../dist-tournaments
+            cd ../..
+            rm -rf dist
+            mv dist-tournaments dist
+          elif [ "$AWS_BRANCH" = "club" ]; then
+            echo "=== Building Club App ==="
+            cd apps/club
+            # Copy Amplify config
+            cp ../../amplify_outputs.json ./
+            npm install
+            npm run build
+            # Move dist up for Amplify to find it
+            mv dist ../../dist-club
+            cd ../..
+            rm -rf dist
+            mv dist-club dist
+          else
+            echo "=== Building Main App ==="
+            npm run build
+          fi
   artifacts:
     baseDirectory: dist
     files:
@@ -20,3 +59,17 @@ frontend:
   cache:
     paths:
       - node_modules/**/*
+      - apps/landing/node_modules/**/*
+      - apps/tournaments/node_modules/**/*
+      - apps/club/node_modules/**/*
+# SPA Rewrites - redirect all routes to index.html for React Router
+# This ensures routes like /club, /events, /join work on direct access
+customHeaders:
+  - pattern: '**/*'
+    headers:
+      - key: 'Strict-Transport-Security'
+        value: 'max-age=31536000; includeSubDomains'
+      - key: 'X-Frame-Options'
+        value: 'SAMEORIGIN'
+      - key: 'X-Content-Type-Options'
+        value: 'nosniff'

@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../../state/store';
+import { useAuthMode } from '../../hooks/useAuthMode';
 import { calculateEventPayouts } from '../../games/payouts';
 import { netScore } from '../../games/handicap';
 import { courseMap } from '../../data/courses';
@@ -16,6 +17,7 @@ const signedCurrency = (n: number) => (n > 0 ? '+' : n < 0 ? '−' : '') + curre
 
 const OverviewTab: React.FC<Props> = ({ eventId }) => {
   const { profiles, completeEvent, currentProfile, getEventSettlements } = useStore();
+  const { isGuest } = useAuthMode();
   const navigate = useNavigate();
   const [showSettlements, setShowSettlements] = useState(false);
   const event = useStore((s: any) => 
@@ -169,7 +171,7 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
                   Complete Event
                 </button>
                 {/* Debug helper button - keep DEV only */}
-                {import.meta.env.DEV && incomplete && currentProfile && event.ownerProfileId === currentProfile.id && (
+                {import.meta.env.DEV && !isGuest && incomplete && currentProfile && event.ownerProfileId === currentProfile.id && (
                   <button
                     onClick={() => {
                       const mode = window.prompt(
@@ -296,7 +298,7 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
       {/* Round Recap - Show when event has scores */}
       {event.golfers.some((g: any) => g.scores?.length > 0) && (
         <RoundRecapCard
-          recap={generateRoundRecap(event)}
+          recap={generateRoundRecap(event, profiles)}
           compact={!event.isCompleted}
         />
       )}

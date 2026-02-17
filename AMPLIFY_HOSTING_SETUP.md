@@ -1,18 +1,56 @@
 # 🚀 Amplify Hosting Deployment Guide
 
-## ✅ DEPLOYMENT COMPLETE (Nov 2, 2025)
+## ✅ MULTI-APP DEPLOYMENT COMPLETE (Feb 1, 2026)
 
-**Production URL:** https://master.dtsoc1s7k1bk8.amplifyapp.com  
+### Production URLs (Custom Domain)
+| App | URL | Branch |
+|-----|-----|--------|
+| **Main App** | https://app.golfwithgimmies.com | `master` |
+| **Landing Page** | https://golfwithgimmies.com | `landing` |
+| **Landing (www)** | https://www.golfwithgimmies.com | `landing` |
+| **Tournaments** | https://play.golfwithgimmies.com | `tournaments` |
+| **Club Dashboard** | https://club.golfwithgimmies.com | `club` |
+
+### Legacy Amplify URLs (still work)
+- Main: https://master.dtsoc1sfk1bk8.amplifyapp.com
+- Landing: https://landing.dtsoc1sfk1bk8.amplifyapp.com
+- Tournaments: https://tournaments.dtsoc1sfk1bk8.amplifyapp.com
+- Club: https://club.dtsoc1sfk1bk8.amplifyapp.com
+
 **App ID:** dtsoc1sfk1bk8  
-**Service Role:** AmplifyGimmiesGolfServiceRole
+**Service Role:** AmplifyGimmiesGolfServiceRole  
+**CloudFront Distribution:** d3kbgj2v1dsd9d.cloudfront.net
 
 ### Current Status
 - ✅ Amplify Gen 2 Backend deployed (Cognito, AppSync, DynamoDB)
-- ✅ GitHub repository connected
-- ✅ amplify.yml build config working
-- ✅ IAM service role configured with proper permissions
-- ✅ Latest analytics fixes deployed (Oct 10-14 session)
-- ✅ Amplify Hosting active with CloudFront CDN
+- ✅ GitHub repository connected with 3 branches
+- ✅ Custom domain golfwithgimmies.com configured
+- ✅ All subdomains verified and SSL active
+- ✅ Route 53 DNS configured with CloudFront CNAME
+- ✅ Each branch auto-deploys to its subdomain
+
+---
+
+## Multi-App Architecture
+
+```
+golfwithgimmies.com/
+├── master branch → app.golfwithgimmies.com (Main Gimmies App)
+│   └── Build output: dist/
+├── landing branch → golfwithgimmies.com + www (Marketing Landing Page)  
+│   └── Build output: apps/landing/dist/
+├── tournaments branch → play.golfwithgimmies.com (Tournaments PWA)
+│   └── Build output: apps/tournaments/dist/
+└── club branch → club.golfwithgimmies.com (Club Dashboard PWA)
+    └── Build output: apps/club/dist/
+```
+
+### Branch-specific amplify.yml
+Each branch has its own build configuration:
+- `master`: Builds root app, outputs to `dist/`
+- `landing`: Builds `apps/landing/`, outputs to `apps/landing/dist/`
+- `tournaments`: Builds `apps/tournaments/`, outputs to `apps/tournaments/dist/`
+- `club`: Builds `apps/club/`, outputs to `apps/club/dist/`
 
 ---
 
@@ -65,6 +103,30 @@ frontend:
 ```
 
 **Key points:**
+
+### 4. SPA Routing Configuration (CRITICAL for /club and other routes)
+
+For the main app to handle React Router routes like `/club`, `/events`, `/join` etc., you MUST configure rewrites in Amplify Console:
+
+**Amplify Console → App Settings → Rewrites and redirects:**
+
+| Source Address | Target Address | Type |
+|---------------|----------------|------|
+| `</^[^.]+$\|\.(?!(css\|gif\|ico\|jpg\|js\|png\|txt\|svg\|woff\|woff2\|ttf\|map\|json\|webp)$)([^.]+$)/>` | `/index.html` | 200 (Rewrite) |
+
+**What this does:**
+- Captures all routes that don't have file extensions (like `/club`, `/events/abc123`)
+- Serves `index.html` with 200 status (not 404)
+- Lets React Router handle the routing client-side
+
+**Without this:**
+- Direct access to `/club` → 404 error
+- Refresh on any route → 404 error
+- Deep links break
+
+**Status:** ✅ Should already be configured, verify in Console
+
+---
 - Uses standard `npm ci` (no custom cache flags)
 - Backend deployment via `ampx pipeline-deploy`
 - Frontend builds to `dist/` directory
