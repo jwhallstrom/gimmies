@@ -749,10 +749,10 @@ const EventPage: React.FC = () => {
         {swipeableTabs.map((tab) => (
           <div 
             key={tab.id}
-            className={`w-full flex-shrink-0 snap-center ${tab.id === 'chat' ? 'overflow-hidden' : 'overflow-y-auto'}`}
+            className="w-full flex-shrink-0 snap-center overflow-y-auto"
             style={{ minWidth: '100%' }}
           >
-            <div className={tab.id === 'chat' ? 'h-full px-2 pt-1' : 'px-4 py-2 pb-32'}>
+            <div className={tab.id === 'chat' ? 'h-full' : 'px-4 py-2 pb-32'}>
               {tab.id === 'chat' && <ChatTab eventId={event.id} isActive={isChatPage} />}
               {tab.id === 'scorecard' && <ScoreHubTab eventId={event.id} isTabActive={swipeableTabs[activePageIndex]?.id === 'scorecard'} />}
               {tab.id === 'games' && <GamesTab eventId={event.id} isTabActive={swipeableTabs[activePageIndex]?.id === 'games'} autoOpenAddGame={triggerAddGame} />}

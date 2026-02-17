@@ -52,9 +52,6 @@ const App: React.FC = () => {
   const [pendingJoinHandled, setPendingJoinHandled] = useState(false);
   const [showMessagesPanel, setShowMessagesPanel] = useState(false);
   const isEventRoute = location.pathname.startsWith('/event/');
-  const isEventChatRoute =
-    isEventRoute &&
-    (location.pathname.endsWith('/chat') || /^\/event\/[^/]+\/?$/.test(location.pathname));
   
   // Calculate unread message count for header badge
   const unreadMessageCount = useMemo(() => {
@@ -326,18 +323,12 @@ const App: React.FC = () => {
       {/* Main content area */}
       <main className="flex-1 min-h-0 overflow-hidden relative w-full">
         <div
-          className={`absolute inset-0 ${
-            isEventRoute
-              ? `${isEventChatRoute ? 'overflow-hidden' : 'overflow-y-auto'}`
-              : 'overflow-y-auto'
-          }`}
+          className={`absolute inset-0 ${isEventRoute ? 'overflow-hidden' : 'overflow-y-auto'}`}
         >
           <div
             className={
               isEventRoute
-                ? (isEventChatRoute
-                    ? 'px-4 pt-4 h-full max-w-5xl w-full mx-auto'
-                    : 'px-4 pt-4 content-with-footer max-w-5xl w-full mx-auto')
+                ? 'px-4 pt-4 h-full max-w-5xl w-full mx-auto'
                 : 'px-4 pt-4 content-with-footer max-w-5xl w-full mx-auto'
             }
           >
@@ -367,13 +358,10 @@ const App: React.FC = () => {
           </div>
         </div>
       </main>
-      {/* ⚠️ CRITICAL iOS PWA Layout - DO NOT MODIFY without testing on iOS 26.2+
-          - h-[68px]: Fixed height prevents expansion
-          - pb-safe-bottom: Extends into safe area (Tailwind utility)
-          - -mb-4: 16px negative margin (sweet spot - tested -3 to -6)
-          - pt-1: Minimal padding (4px) prevents text cutoff
-          See docs/IOS_PWA_LAYOUT_CRITICAL.md for full details */}
-      <footer className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-[#09243F] border-t border-gray-200 dark:border-white/10 h-[68px] pb-safe-bottom -mb-4 flex items-start justify-around px-2 pt-1">
+      {/* Footer nav - height & safe-area padding controlled by CSS (styles.css footer rule).
+          CSS sets height: var(--footer-total-height) = 68px + safe-area-inset-bottom.
+          Ticker uses the same variable so it always sits flush above this. */}
+      <footer className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-[#09243F] border-t border-gray-200 dark:border-white/10 flex items-start justify-around px-2 pt-1">
         <Link
           to="/"
           className={`flex flex-col items-center justify-center gap-0.5 min-w-[56px] min-h-[52px] py-1.5 rounded-xl transition-all ${
