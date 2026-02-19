@@ -664,7 +664,6 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = tr
             </div>
           </div>
         )}
-
         {/* Empty state */}
         {visibleMessages.length === 0 && (
           <div className="flex flex-col items-center justify-center flex-1 text-center px-4">
