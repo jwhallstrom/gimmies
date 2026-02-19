@@ -22,14 +22,19 @@ html {
 
 body {
   font-family: ui-sans-serif, system-ui, sans-serif;
-  height: 100%;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 100dvh;
   margin: 0;
   padding-top: env(safe-area-inset-top, 0px);
   padding-left: env(safe-area-inset-left, 0px);
   padding-right: env(safe-area-inset-right, 0px);
+  /* NO padding-bottom — footer handles bottom safe area */
   background-color: #09243F;
   overflow: hidden;
-  position: relative;
   box-sizing: border-box;
   -webkit-overflow-scrolling: touch;
 }
@@ -43,33 +48,30 @@ body {
   overflow: hidden;
 }
 
-/* Header - safe area padding for notch/Dynamic Island (iOS) and status bar (Android).
-   Uses max() to guarantee a minimum 10px pad even when env() returns 0 (Android non-notch). */
+/* Header - minimum top padding for status bar clearance.
+   NOTE: Body padding-top already handles env(safe-area-inset-top) for notch/Dynamic Island.
+   Do NOT add env(safe-area-inset-top) here — it would double-count with body padding. */
 header {
-  /* Ancient browser fallback */
   padding-top: 10px;
-  /* Modern: at least 10px, or the safe-area value for devices with notches */
-  padding-top: max(10px, env(safe-area-inset-top, 10px));
 }
 
-/* CSS custom property for footer height - single source of truth.
-   Ticker, chat composer, and footer all reference this so they're always in sync. */
+/* Footer height variables — single source of truth.
+   Footer uses h-[68px] with -mb-4 (16px) negative margin, so 52px is visible
+   above the viewport bottom. Add safe-area-inset-bottom for content/ticker clearance. */
 :root {
   --footer-nav-height: 68px;
-  --footer-total-height: 68px;
+  --footer-total-height: 52px;
 }
 @supports (padding: env(safe-area-inset-bottom, 0px)) {
   :root {
-    --footer-total-height: calc(68px + env(safe-area-inset-bottom, 0px));
+    --footer-total-height: calc(52px + env(safe-area-inset-bottom, 0px));
   }
 }
 
-/* Fixed footer - extends into home indicator area (iOS) / gesture bar (Android).
-   Height = 68px nav content + safe-area-inset-bottom (home indicator).
-   Ticker positions at bottom: var(--footer-total-height) to sit flush above this. */
+/* Fixed footer — height and safe-area padding are controlled by Tailwind classes
+   in App.tsx (h-[68px] pb-safe-bottom -mb-4). Do NOT add height or padding-bottom
+   here — it conflicts with Tailwind and causes double safe-area on iOS. */
 footer {
-  height: var(--footer-total-height);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
   background-color: inherit;
   box-sizing: border-box;
 }
@@ -174,10 +176,11 @@ a:active,
 .pl-safe-base-0 { --pl-safe-base: 0; }
 .pr-safe-base-0 { --pr-safe-base: 0; }
 
-/* Ticker positioning - sits flush against top of the fixed bottom nav.
-   Uses the same CSS variable as the footer so they always match. */
+/* Ticker positioning - sits flush against top of the visible footer nav.
+   Footer is 68px with -mb-4 (16px pushdown), so visible top edge = 52px from bottom.
+   We skip the safe-area offset here since the footer's -mb-4 already accounts for it. */
 .ticker-above-footer {
-  bottom: var(--footer-total-height);
+  bottom: 52px;
 }
 
 /* FAB positioning - sits above ticker and bottom nav */
@@ -585,7 +588,7 @@ body.pwa-standalone .fullscreen-overlay {
    Applied via JS-set body class 'platform-android'
    ========================================================================== */
 
-/* Android doesn't have iOS home indicator, so footer doesn't need extra bottom padding */
+/* Android doesn't have iOS home indicator — footer is full 68px with no negative margin */
 body.platform-android {
   --footer-total-height: 68px;
 }
@@ -593,6 +596,7 @@ body.platform-android {
 body.platform-android footer {
   padding-bottom: 0;
   height: 68px;
+  margin-bottom: 0;
 }
 
 /* Android header: no notch on most devices, but ensure readable spacing */

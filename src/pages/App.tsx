@@ -360,10 +360,9 @@ const App: React.FC = () => {
           </div>
         </div>
       </main>
-      {/* Footer nav - height & safe-area padding controlled by CSS (styles.css footer rule).
-          CSS sets height: var(--footer-total-height) = 68px + safe-area-inset-bottom.
-          Ticker uses the same variable so it always sits flush above this. */}
-      <footer className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-[#09243F] border-t border-gray-200 dark:border-white/10 flex items-start justify-around px-2 pt-1">
+      {/* Footer nav — h-[68px] with pb-safe-bottom and -mb-4 pushes 16px into
+          home indicator zone (iOS). Ticker/FAB use --footer-total-height. */}
+      <footer className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-[#09243F] border-t border-gray-200 dark:border-white/10 h-[68px] pb-safe-bottom -mb-4 flex items-start justify-around px-2 pt-1">
         <Link
           to="/"
           className={`flex flex-col items-center justify-center gap-0.5 min-w-[56px] min-h-[52px] py-1.5 rounded-xl transition-all ${
