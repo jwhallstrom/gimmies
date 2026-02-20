@@ -124,8 +124,8 @@ export function useEventChatAdapter(eventId: string) {
     }
   }, [chatTargetId]);
 
-  // Send message with optional reply/type — routed to chat target
-  const send = useCallback(async (text: string, options?: { replyTo?: string; type?: string; metadata?: Record<string, any>; pollQuestion?: string; pollOptions?: ChatPollOption[] }) => {
+  // Send message with optional reply/type/mentions — routed to chat target
+  const send = useCallback(async (text: string, options?: { replyTo?: string; type?: string; metadata?: Record<string, any>; pollQuestion?: string; pollOptions?: ChatPollOption[]; mentions?: string[] }) => {
     setIsTyping(false);
     setReplyTo(null);
     await addChatMessage(chatTargetId, text, options);
