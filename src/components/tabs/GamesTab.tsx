@@ -1960,7 +1960,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
         const setFees = (next: { out: number; in: number; total: number }) => updateCfg({ fees: next });
 
         return createPortal(
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setNassauSetupId(null)}>
+          <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setNassauSetupId(null)}>
             <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
               <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                 <div>
@@ -2141,7 +2141,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
         };
 
         return createPortal(
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setSkinsSetupId(null)}>
+          <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setSkinsSetupId(null)}>
             <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
               <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                 <div>
@@ -2312,7 +2312,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
         const getCount = (gid: string) => results.find((r: any) => r.golferId === gid)?.count || 0;
 
         return createPortal(
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setPinkySetupId(null)}>
+          <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setPinkySetupId(null)}>
             <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
               <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                 <div>
@@ -2469,7 +2469,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
         const getCount = (gid: string) => results.find((r: any) => r.golferId === gid)?.count || 0;
 
         return createPortal(
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setGreenieSetupId(null)}>
+          <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setGreenieSetupId(null)}>
             <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
               <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                 <div>
@@ -2605,7 +2605,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
         const updateCfg = (patch: any) =>
           updateEvent(eventId, { games: { ...event.games, stableford: stablefordArray.map((s: any) => (s.id === cfg.id ? { ...s, ...patch } : s)) } });
         return createPortal(
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setStablefordSetupId(null)}>
+          <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setStablefordSetupId(null)}>
             <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
               <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                 <div>
@@ -2675,7 +2675,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
         const participantIds = cfg.participantGolferIds || [];
         const activeGolfers9 = allGolfers.filter((g: any) => participantIds.includes(g.id));
         return createPortal(
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setNinePointSetupId(null)}>
+          <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setNinePointSetupId(null)}>
             <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
               <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                 <div>
