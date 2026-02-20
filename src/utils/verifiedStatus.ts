@@ -7,6 +7,8 @@
 
 import { STATUS_TIERS, StatusTier, VerifiedStatus, Event, GolferProfile } from '../state/types';
 
+const EARNABLE_STATUS_TIERS = STATUS_TIERS.filter(t => !t.isManualOnly);
+
 // ============================================================================
 // Status Calculation
 // ============================================================================
@@ -16,12 +18,12 @@ import { STATUS_TIERS, StatusTier, VerifiedStatus, Event, GolferProfile } from '
  */
 export function getStatusTier(verifiedRounds: number): StatusTier {
   // Find the highest tier the user qualifies for
-  for (let i = STATUS_TIERS.length - 1; i >= 0; i--) {
-    if (verifiedRounds >= STATUS_TIERS[i].minRounds) {
-      return STATUS_TIERS[i];
+  for (let i = EARNABLE_STATUS_TIERS.length - 1; i >= 0; i--) {
+    if (verifiedRounds >= EARNABLE_STATUS_TIERS[i].minRounds) {
+      return EARNABLE_STATUS_TIERS[i];
     }
   }
-  return STATUS_TIERS[0]; // Default to Bogey Beginner
+  return EARNABLE_STATUS_TIERS[0];
 }
 
 /**
@@ -41,9 +43,10 @@ export function getProgressToNextTier(verifiedRounds: number): {
   progressPercent: number;
 } {
   const currentTier = getStatusTier(verifiedRounds);
-  const nextTierIndex = currentTier.level + 1;
+  const currentEarnableTierIndex = EARNABLE_STATUS_TIERS.findIndex((t) => t.level === currentTier.level);
+  const nextTierIndex = currentEarnableTierIndex + 1;
   
-  if (nextTierIndex >= STATUS_TIERS.length) {
+  if (nextTierIndex >= EARNABLE_STATUS_TIERS.length) {
     // Already at max level
     return {
       currentTier,
@@ -53,7 +56,7 @@ export function getProgressToNextTier(verifiedRounds: number): {
     };
   }
   
-  const nextTier = STATUS_TIERS[nextTierIndex];
+  const nextTier = EARNABLE_STATUS_TIERS[nextTierIndex];
   const roundsToNext = nextTier.minRounds - verifiedRounds;
   const tierRange = nextTier.minRounds - currentTier.minRounds;
   const progressInTier = verifiedRounds - currentTier.minRounds;
@@ -254,6 +257,7 @@ export function getBadgeInfo(badgeId: string): { name: string; emoji: string; de
     platinum_contender: { name: 'Platinum Contender', emoji: '💎', description: 'Reached Established Level' },
     elite_member: { name: 'Elite Member', emoji: '🦅', description: 'Reached Elite Level' },
     gold_jacket: { name: 'Gold Jacket', emoji: '🧥', description: 'Achieved Hall of Fame status' },
+    founder: { name: 'Founder', emoji: '\u{1F451}', description: 'Reserved platform architect status' },
     milestone_10: { name: '10 Rounds', emoji: '🔟', description: '10 verified rounds played' },
     milestone_25: { name: '25 Rounds', emoji: '🎯', description: '25 verified rounds played' },
     milestone_50: { name: '50 Rounds', emoji: '🌟', description: '50 verified rounds played' },
@@ -263,3 +267,4 @@ export function getBadgeInfo(badgeId: string): { name: string; emoji: string; de
   
   return badges[badgeId] || { name: badgeId, emoji: '🏷️', description: 'Achievement unlocked' };
 }
+

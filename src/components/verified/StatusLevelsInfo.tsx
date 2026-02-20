@@ -36,7 +36,7 @@ const StatusLevelsInfo: React.FC<Props> = ({ onClose, currentLevel = 0 }) => {
                 🏆 Status Levels
               </h2>
               <p className="text-emerald-100 text-sm mt-0.5">
-                Your journey to the Gold Jacket
+                Your journey through Gimmies status tiers
               </p>
             </div>
             <button
@@ -129,11 +129,13 @@ const StatusLevelsInfo: React.FC<Props> = ({ onClose, currentLevel = 0 }) => {
                           )}
                         </div>
                         <div className="text-xs text-gray-500">
-                          {tier.minRounds === 0 
-                            ? `0-${tier.maxRounds} verified rounds`
-                            : tier.maxRounds 
-                              ? `${tier.minRounds}-${tier.maxRounds} verified rounds`
-                              : `${tier.minRounds}+ verified rounds`
+                          {tier.isManualOnly
+                            ? 'Manual assignment only'
+                            : tier.minRounds === 0
+                              ? `0-${tier.maxRounds} verified rounds`
+                              : tier.maxRounds
+                                ? `${tier.minRounds}-${tier.maxRounds} verified rounds`
+                                : `${tier.minRounds}+ verified rounds`
                           }
                         </div>
                       </div>

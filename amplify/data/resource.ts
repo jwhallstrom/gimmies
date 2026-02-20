@@ -19,6 +19,7 @@ const schema = a.schema({
     // Stats (stored as JSON for flexibility) - made optional
     statsJson: a.string(), // Store as JSON string instead of json type
     preferencesJson: a.string(), // Store as JSON string instead of json type
+    verifiedStatusJson: a.string(), // Store verified status as JSON string
     
     // Individual handicap rounds
     individualRounds: a.hasMany('IndividualRound', 'profileId'),
