@@ -18,6 +18,7 @@ import { useEventSync } from '../hooks/useEventSync';
 import ChatTab from '../components/tabs/ChatTab';
 import GroupInfoPanel from '../components/group/GroupInfoPanel';
 import GroupAvatar from '../components/group/GroupAvatar';
+import { getCourseById } from '../data/cloudCourses';
 import PlayerCardModal from '../components/PlayerCardModal';
 import type { PlayerCardData } from '../components/PlayerCardModal';
 import { CreateEventWizard } from '../components/CreateEventWizard';
@@ -122,53 +123,286 @@ const MemberAvatarStrip: React.FC<{
 };
 
 // ============================================================================
-// PinnedEventCard (inline)
+// Helpers — relative time
 // ============================================================================
 
-const PinnedEventCard: React.FC<{
-  event: any;
-  isJoined: boolean;
-  onOpen: () => void;
-  onJoin: () => void;
-  joining: boolean;
-}> = ({ event, isJoined, onOpen, onJoin, joining }) => {
-  const hasScores = countStrokesEntered(event) > 0;
-  const playerCount = event.golfers?.length || 0;
+const getRelativeTime = (iso: string): { label: string; urgency: 'live' | 'today' | 'soon' | 'future' } => {
+  const now = new Date();
+  const date = new Date(iso);
+  const diffMs = date.getTime() - now.getTime();
+  const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays <= 0) return { label: 'Today', urgency: 'today' };
+  if (diffDays === 1) return { label: 'Tomorrow', urgency: 'soon' };
+  if (diffDays <= 7) return { label: `In ${diffDays} days`, urgency: 'future' };
+  return { label: formatDateShort(iso), urgency: 'future' };
+};
+
+// ============================================================================
+// MiniAvatarStack — overlapping player avatars
+// ============================================================================
+
+const MiniAvatarStack: React.FC<{
+  golfers: any[];
+  profiles: any[];
+  max?: number;
+}> = ({ golfers, profiles, max = 4 }) => {
+  const visible = golfers.slice(0, max);
+  const overflow = golfers.length - max;
 
   return (
-    <div className="flex-shrink-0 px-3 py-2">
-      <button
-        onClick={onOpen}
-        className={`w-full text-left flex items-center gap-3 px-3.5 py-2.5 rounded-xl border transition-all active:scale-[0.99] ${
-          hasScores
-            ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
-            : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 shadow-sm'
-        }`}
-      >
-        {hasScores && <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse flex-shrink-0" />}
-        {!hasScores && <span className="text-base flex-shrink-0">⛳</span>}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-gray-900 dark:text-white text-sm truncate">{event.name}</span>
-            {hasScores && (
-              <span className="px-1.5 py-0.5 text-[8px] font-extrabold bg-red-500 text-white rounded-full">LIVE</span>
+    <div className="flex items-center -space-x-1.5">
+      {visible.map((g: any, i: number) => {
+        const profile = g.profileId ? profiles.find((p: any) => p.id === g.profileId) : null;
+        return (
+          <div
+            key={g.profileId || g.customName || i}
+            className="w-6 h-6 rounded-full border-2 border-white dark:border-slate-800 overflow-hidden flex-shrink-0"
+            style={{ zIndex: max - i }}
+          >
+            {profile?.avatar ? (
+              <img src={profile.avatar} alt="" className="w-full h-full object-cover" />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-slate-400 to-slate-600 text-white text-[8px] font-bold flex items-center justify-center">
+                {(profile?.name || g.displayName || g.customName || '?').charAt(0).toUpperCase()}
+              </div>
             )}
           </div>
-          <div className="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">
-            {formatDateShort(event.date)} · {playerCount} player{playerCount !== 1 ? 's' : ''}
+        );
+      })}
+      {overflow > 0 && (
+        <div
+          className="w-6 h-6 rounded-full border-2 border-white dark:border-slate-800 bg-gray-200 dark:bg-slate-600 text-[8px] font-bold text-gray-600 dark:text-gray-300 flex items-center justify-center flex-shrink-0"
+          style={{ zIndex: 0 }}
+        >
+          +{overflow}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ============================================================================
+// EventsHub — replaces the old single PinnedEventCard
+// ============================================================================
+
+const EventsHub: React.FC<{
+  activeEvents: any[];
+  completedEvents: any[];
+  profiles: any[];
+  currentProfileId?: string;
+  joiningId: string | null;
+  onJoin: (evt: any) => void;
+  onOpen: (eventId: string) => void;
+  onSchedule: () => void;
+}> = ({ activeEvents, completedEvents, profiles, currentProfileId, joiningId, onJoin, onOpen, onSchedule }) => {
+  const [showRecent, setShowRecent] = useState(false);
+  const recentCompleted = completedEvents.slice(0, 3);
+  const hasAny = activeEvents.length > 0 || recentCompleted.length > 0;
+
+  // Empty state — no events ever
+  if (!hasAny) {
+    return (
+      <div className="flex-shrink-0 px-3 pt-2 pb-1">
+        <div className="bg-gradient-to-br from-primary-50 to-green-50 dark:from-primary-900/20 dark:to-green-900/20 rounded-xl border border-primary-200/60 dark:border-primary-800/40 p-4">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary-100 dark:bg-primary-900/40 flex items-center justify-center flex-shrink-0">
+              <span className="text-lg">📅</span>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-gray-900 dark:text-white">No tee times yet</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                Groups come alive when you schedule rounds together. Pick a course, set a date, and the crew gets notified.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onSchedule}
+            className="w-full mt-3 flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-bold rounded-xl transition-colors active:scale-[0.98]"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            Schedule First Event
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-shrink-0">
+      {/* Upcoming events */}
+      {activeEvents.length > 0 && (
+        <div className="px-3 pt-2 pb-1">
+          {/* Section header */}
+          <div className="flex items-center justify-between mb-1.5">
+            <h3 className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+              Upcoming Events
+            </h3>
+            <button
+              onClick={onSchedule}
+              className="flex items-center gap-1 text-[10px] font-bold text-primary-600 dark:text-primary-400 hover:text-primary-700 transition-colors"
+            >
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+              Schedule
+            </button>
+          </div>
+
+          {/* Event cards — horizontal scroll if multiple */}
+          <div className={activeEvents.length > 1 ? 'flex gap-2.5 overflow-x-auto pb-1' : ''} style={activeEvents.length > 1 ? { scrollbarWidth: 'none' } : undefined}>
+            {activeEvents.map((evt: any) => {
+              const hasScores = countStrokesEntered(evt) > 0;
+              const playerCount = evt.golfers?.length || 0;
+              const isJoined = evt.golfers?.some((g: any) => g.profileId === currentProfileId);
+              const courseName = evt.course?.courseId ? getCourseById(evt.course.courseId)?.name : null;
+              const { label: timeLabel, urgency } = hasScores
+                ? { label: 'Live Now', urgency: 'live' as const }
+                : getRelativeTime(evt.date);
+
+              return (
+                <button
+                  key={evt.id}
+                  onClick={() => onOpen(evt.id)}
+                  className={`${activeEvents.length > 1 ? 'min-w-[260px] flex-shrink-0' : 'w-full'} text-left rounded-xl border transition-all active:scale-[0.98] overflow-hidden ${
+                    urgency === 'live'
+                      ? 'bg-red-50 dark:bg-red-900/15 border-red-200 dark:border-red-800/60'
+                      : urgency === 'today'
+                        ? 'bg-green-50 dark:bg-green-900/15 border-green-200 dark:border-green-800/60'
+                        : 'bg-white dark:bg-slate-800 border-gray-200 dark:border-slate-700 shadow-sm'
+                  }`}
+                >
+                  {/* Time badge strip */}
+                  <div className={`px-3.5 py-1.5 flex items-center justify-between ${
+                    urgency === 'live'
+                      ? 'bg-red-500/10 dark:bg-red-500/10'
+                      : urgency === 'today'
+                        ? 'bg-green-500/10 dark:bg-green-500/10'
+                        : 'bg-gray-50 dark:bg-slate-700/50'
+                  }`}>
+                    <div className="flex items-center gap-1.5">
+                      {urgency === 'live' && <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />}
+                      {urgency === 'today' && <span className="w-2 h-2 bg-green-500 rounded-full" />}
+                      <span className={`text-[10px] font-extrabold uppercase tracking-wide ${
+                        urgency === 'live' ? 'text-red-600 dark:text-red-400'
+                          : urgency === 'today' ? 'text-green-600 dark:text-green-400'
+                            : 'text-gray-500 dark:text-gray-400'
+                      }`}>
+                        {timeLabel}
+                      </span>
+                    </div>
+                    {!isJoined && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); onJoin(evt); }}
+                        disabled={joiningId === evt.id}
+                        className="px-2.5 py-1 bg-primary-600 hover:bg-primary-700 text-white text-[10px] font-bold rounded-md disabled:opacity-50 transition-colors"
+                      >
+                        {joiningId === evt.id ? '...' : 'Join'}
+                      </button>
+                    )}
+                    {isJoined && (
+                      <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 text-[9px] font-bold rounded-md">
+                        JOINED
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Card body */}
+                  <div className="px-3.5 py-2.5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-bold text-gray-900 dark:text-white text-sm truncate">{evt.name}</span>
+                    </div>
+                    {courseName && (
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate mb-2">
+                        ⛳ {courseName}
+                      </p>
+                    )}
+                    {!courseName && (
+                      <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-2">
+                        {formatDateShort(evt.date)}
+                      </p>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <MiniAvatarStack golfers={evt.golfers || []} profiles={profiles} />
+                      <span className="text-[10px] text-gray-400 dark:text-gray-500">
+                        {playerCount} player{playerCount !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
-        {!isJoined && (
+      )}
+
+      {/* Upcoming is empty but completed exist — show schedule CTA */}
+      {activeEvents.length === 0 && recentCompleted.length > 0 && (
+        <div className="px-3 pt-2 pb-1">
           <button
-            onClick={(e) => { e.stopPropagation(); onJoin(); }}
-            disabled={joining}
-            className="px-3 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-[11px] font-bold rounded-lg disabled:opacity-50 flex-shrink-0"
+            onClick={onSchedule}
+            className="w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border border-dashed border-primary-300 dark:border-primary-700 bg-primary-50/30 dark:bg-primary-900/10 hover:bg-primary-100 dark:hover:bg-primary-900/20 transition-colors active:scale-[0.99]"
           >
-            {joining ? '...' : 'Join'}
+            <span className="text-base">📅</span>
+            <div className="flex-1 text-left">
+              <span className="text-sm font-semibold text-primary-700 dark:text-primary-400">Schedule next round</span>
+              <p className="text-[10px] text-gray-500 dark:text-gray-400">Keep the momentum going</p>
+            </div>
+            <svg className="w-4 h-4 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
           </button>
-        )}
-        <span className="text-[11px] font-bold text-primary-600 dark:text-primary-400 flex-shrink-0">Open →</span>
-      </button>
+        </div>
+      )}
+
+      {/* Recent Rounds — collapsible */}
+      {recentCompleted.length > 0 && (
+        <div className="px-3 pt-1 pb-1">
+          <button
+            onClick={() => setShowRecent(!showRecent)}
+            className="w-full flex items-center justify-between py-1"
+          >
+            <h3 className="text-[10px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+              Recent Rounds ({recentCompleted.length})
+            </h3>
+            <svg
+              className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showRecent ? 'rotate-180' : ''}`}
+              fill="none" stroke="currentColor" viewBox="0 0 24 24"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+
+          {showRecent && (
+            <div className="space-y-1 mt-1">
+              {recentCompleted.map((evt: any) => {
+                const courseName = evt.course?.courseId ? getCourseById(evt.course.courseId)?.name : null;
+                const playerCount = evt.golfers?.length || 0;
+                return (
+                  <button
+                    key={evt.id}
+                    onClick={() => onOpen(evt.id)}
+                    className="w-full text-left flex items-center gap-3 px-3 py-2 rounded-lg bg-gray-50 dark:bg-slate-800/50 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    <span className="text-sm flex-shrink-0">🏁</span>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-xs font-semibold text-gray-700 dark:text-gray-300 truncate block">{evt.name}</span>
+                      <span className="text-[10px] text-gray-400 dark:text-gray-500">
+                        {courseName || formatDateShort(evt.date)} · {playerCount} player{playerCount !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                    <svg className="w-3.5 h-3.5 text-gray-300 dark:text-gray-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -258,7 +492,7 @@ const GroupPage: React.FC = () => {
     setSelectedPlayerId(memberId);
   }, []);
 
-  // Child events — pick the best one to pin
+  // Active child events (live first, then soonest)
   const activeChildEvents = useStore((s) => {
     const allEvents = [...(s.events || []), ...(s.completedEvents || [])];
     return allEvents
@@ -271,21 +505,24 @@ const GroupPage: React.FC = () => {
       });
   });
 
-  const pinnedEvent = activeChildEvents[0] || null;
-  const isPinnedJoined = pinnedEvent && currentProfile
-    ? pinnedEvent.golfers?.some((g: any) => g.profileId === currentProfile.id)
-    : false;
+  // Completed child events (most recent first)
+  const completedChildEvents = useStore((s) => {
+    const allEvents = [...(s.events || []), ...(s.completedEvents || [])];
+    return allEvents
+      .filter((e: any) => e.hubType !== 'group' && e.parentGroupId === id && e.isCompleted)
+      .sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  });
 
-  const handleJoinPinned = async () => {
-    if (!pinnedEvent || joiningEventId) return;
-    setJoiningEventId(pinnedEvent.id);
+  const handleJoinEvent = async (evt: any) => {
+    if (!evt || joiningEventId) return;
+    setJoiningEventId(evt.id);
     try {
-      const code = pinnedEvent.shareCode || (await generateShareCode(pinnedEvent.id));
+      const code = evt.shareCode || (await generateShareCode(evt.id));
       if (!code) throw new Error('Missing join code');
       const result = await joinEventByCode(code);
       if (!result.success) throw new Error(result.error || 'Failed to join');
       addToast('Joined event!', 'success');
-      navigate(`/event/${pinnedEvent.id}`);
+      navigate(`/event/${evt.id}`);
     } catch (e: any) {
       addToast(e?.message || 'Could not join event', 'error');
     } finally {
@@ -359,35 +596,17 @@ const GroupPage: React.FC = () => {
         onOverflowTap={() => setShowInfoPanel(true)}
       />
 
-      {/* ===== PINNED EVENT CARD ===== */}
-      {pinnedEvent && (
-        <PinnedEventCard
-          event={pinnedEvent}
-          isJoined={!!isPinnedJoined}
-          onOpen={() => navigate(`/event/${pinnedEvent.id}`)}
-          onJoin={handleJoinPinned}
-          joining={joiningEventId === pinnedEvent.id}
-        />
-      )}
-
-      {/* ===== EMPTY-STATE CTA (no upcoming events) ===== */}
-      {!pinnedEvent && (
-        <div className="flex-shrink-0 px-3 py-2">
-          <button
-            onClick={() => setShowCreateEvent(true)}
-            className="w-full flex items-center gap-3 px-3.5 py-3 rounded-xl border border-dashed border-primary-300 dark:border-primary-700 bg-primary-50/50 dark:bg-primary-900/10 hover:bg-primary-100 dark:hover:bg-primary-900/20 transition-colors active:scale-[0.99]"
-          >
-            <span className="text-xl">📅</span>
-            <div className="flex-1 text-left">
-              <span className="text-sm font-semibold text-primary-700 dark:text-primary-400">Schedule an event</span>
-              <p className="text-[11px] text-gray-500 dark:text-gray-400">Get the crew on the course</p>
-            </div>
-            <svg className="w-4 h-4 text-primary-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-          </button>
-        </div>
-      )}
+      {/* ===== EVENTS HUB ===== */}
+      <EventsHub
+        activeEvents={activeChildEvents}
+        completedEvents={completedChildEvents}
+        profiles={profiles}
+        currentProfileId={currentProfile?.id}
+        joiningId={joiningEventId}
+        onJoin={handleJoinEvent}
+        onOpen={(eventId) => navigate(`/event/${eventId}`)}
+        onSchedule={() => setShowCreateEvent(true)}
+      />
 
       {/* ===== CHAT (fills remaining space) ===== */}
       <div className="flex-1 min-h-0">
