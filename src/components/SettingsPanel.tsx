@@ -16,6 +16,7 @@ import { useNavigate } from 'react-router-dom';
 import useStore from '../state/store';
 import { useAuthMode } from '../hooks/useAuthMode';
 import { fileToAvatarDataUrl } from '../utils/avatarImage';
+import { getStatusDisplay } from '../utils/verifiedStatus';
 import { CourseSearch } from './CourseSearch';
 import { StatusBadge, StatusProgress } from './verified';
 import StatusLevelsInfo from './verified/StatusLevelsInfo';
@@ -687,12 +688,12 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
         )}
 
         {/* Status Levels Info Modal */}
-        {showStatusLevels && (
-          <StatusLevelsInfo 
-            onClose={() => setShowStatusLevels(false)}
-            currentLevel={currentProfile?.verifiedStatus?.statusLevel || 0}
-          />
-        )}
+      {showStatusLevels && (
+        <StatusLevelsInfo 
+          onClose={() => setShowStatusLevels(false)}
+          currentLevel={getStatusDisplay(currentProfile).tier.level}
+        />
+      )}
       </div>
     </div>,
     document.body

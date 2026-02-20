@@ -27,6 +27,8 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
   const [showInfo, setShowInfo] = useState(false);
   const { tier, verifiedRounds } = getStatusDisplay(profile);
   const progress = getProgressToNextTier(verifiedRounds);
+  const nextTier = progress.nextTier;
+  const showProgressToNext = !tier.isManualOnly && nextTier !== null;
   
   const sizeClasses = {
     sm: 'text-xs px-1.5 py-0.5',
@@ -79,10 +81,10 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({
               <p className="text-sm text-gray-600">{tier.description}</p>
               
               {/* Progress to next */}
-              {progress.nextTier && (
+              {showProgressToNext && (
                 <div>
                   <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-                    <span>Progress to {progress.nextTier.name}</span>
+                    <span>Progress to {nextTier.name}</span>
                     <span>{progress.roundsToNext} rounds to go</span>
                   </div>
                   <div className="h-2 bg-gray-100 rounded-full overflow-hidden">

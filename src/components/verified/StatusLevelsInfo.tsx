@@ -11,6 +11,7 @@
  */
 
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { STATUS_TIERS } from '../../state/types';
 
 interface Props {
@@ -19,13 +20,13 @@ interface Props {
 }
 
 const StatusLevelsInfo: React.FC<Props> = ({ onClose, currentLevel = 0 }) => {
-  return (
+  const content = (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[10020] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 pt-safe pb-safe"
       onClick={onClose}
     >
       <div 
-        className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+        className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden max-h-[calc(100vh-2rem)] flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -192,6 +193,8 @@ const StatusLevelsInfo: React.FC<Props> = ({ onClose, currentLevel = 0 }) => {
       </div>
     </div>
   );
+
+  return createPortal(content, document.body);
 };
 
 export default StatusLevelsInfo;

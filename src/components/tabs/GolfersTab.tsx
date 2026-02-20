@@ -15,8 +15,8 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../../state/store';
 import { useCourse } from '../../hooks/useCourse';
-import { STATUS_TIERS } from '../../state/types';
 import { buildJoinInviteUrl } from '../../utils/inviteLinks';
+import { getStatusDisplay } from '../../utils/verifiedStatus';
 import StatusLevelsInfo from '../verified/StatusLevelsInfo';
 
 type Props = { eventId: string; isTabActive?: boolean };
@@ -42,6 +42,7 @@ const GolfersTab: React.FC<Props> = ({ eventId, isTabActive = true }) => {
   const [isGeneratingCode, setIsGeneratingCode] = useState(false);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [showStatusLevels, setShowStatusLevels] = useState(false);
+  const [statusLevelsLevel, setStatusLevelsLevel] = useState<number | null>(null);
 
   if (!event) return null;
 
@@ -67,7 +68,7 @@ const GolfersTab: React.FC<Props> = ({ eventId, isTabActive = true }) => {
       
       // Extended profile data for player card
       const verifiedStatus = profile?.verifiedStatus;
-      const statusTier = verifiedStatus ? STATUS_TIERS[verifiedStatus.statusLevel] || STATUS_TIERS[0] : STATUS_TIERS[0];
+      const statusTier = getStatusDisplay(profile || undefined).tier;
       const individualRounds = profile?.individualRounds || [];
       const homeCourse = profile?.preferences?.homeCourseName;
       
@@ -871,15 +872,21 @@ Code: ${event.shareCode}`,
                     <div className="mb-4">
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-xs font-bold text-gray-600 uppercase">Status Progress</span>
-                        <span className="text-xs text-gray-500">
-                          {selectedPlayer.verifiedStatus?.verifiedRounds || 0} / {selectedPlayer.statusTier.maxRounds || '∞'} rounds
-                        </span>
+                        {selectedPlayer.statusTier.isManualOnly ? (
+                          <span className="text-xs text-gray-500">Manual assignment</span>
+                        ) : (
+                          <span className="text-xs text-gray-500">
+                            {selectedPlayer.verifiedStatus?.verifiedRounds || 0} / {selectedPlayer.statusTier.maxRounds || '∞'} rounds
+                          </span>
+                        )}
                       </div>
                       <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
                         <div 
                           className={`h-full ${selectedPlayer.statusTier.badgeColor}`}
                           style={{ 
-                            width: `${Math.min(100, ((selectedPlayer.verifiedStatus?.verifiedRounds || 0) / (selectedPlayer.statusTier.maxRounds || 100)) * 100)}%` 
+                            width: selectedPlayer.statusTier.isManualOnly
+                              ? '100%'
+                              : `${Math.min(100, ((selectedPlayer.verifiedStatus?.verifiedRounds || 0) / (selectedPlayer.statusTier.maxRounds || 100)) * 100)}%`
                           }}
                         />
                       </div>
@@ -887,7 +894,11 @@ Code: ${event.shareCode}`,
                       
                       {/* How Status Works Link */}
                       <button
-                        onClick={() => setShowStatusLevels(true)}
+                        onClick={() => {
+                          setStatusLevelsLevel(selectedPlayer.statusTier?.level ?? 0);
+                          setSelectedPlayerId(null);
+                          setShowStatusLevels(true);
+                        }}
                         className="mt-2 text-xs text-primary-600 hover:text-primary-700 font-medium flex items-center gap-1"
                       >
                         <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -940,8 +951,11 @@ Code: ${event.shareCode}`,
       {/* Status Levels Info Modal */}
       {showStatusLevels && (
         <StatusLevelsInfo 
-          onClose={() => setShowStatusLevels(false)}
-          currentLevel={selectedPlayer?.verifiedStatus?.statusLevel || currentProfile?.verifiedStatus?.statusLevel || 0}
+          onClose={() => {
+            setShowStatusLevels(false);
+            setStatusLevelsLevel(null);
+          }}
+          currentLevel={statusLevelsLevel ?? getStatusDisplay(currentProfile || undefined).tier.level}
         />
       )}
 
