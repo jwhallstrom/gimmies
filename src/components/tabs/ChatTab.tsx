@@ -2,14 +2,64 @@ import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { useEventChatAdapter } from '../../adapters';
 import useStore from '../../state/store';
-import type { ChatMessage } from '../../state/types';
+import type { ChatMessage, GolferProfile } from '../../state/types';
 import { CHAT_REACTIONS } from '../../state/types';
 import { nanoid } from 'nanoid/non-secure';
+
+// ============================================================================
+// Mention helpers
+// ============================================================================
+
+interface MentionMember {
+  profileId: string;
+  name: string;
+  avatar?: string;
+}
+
+/** Render message text with @mentions highlighted */
+const renderTextWithMentions = (
+  text: string,
+  mentions: string[] | undefined,
+  profilesById: Map<string, GolferProfile>,
+  isMine: boolean,
+): React.ReactNode => {
+  if (!mentions?.length) return text;
+
+  const mentionNames = mentions
+    .map((pid) => profilesById.get(pid)?.name)
+    .filter(Boolean) as string[];
+  if (!mentionNames.length) return text;
+
+  const escaped = mentionNames.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const pattern = new RegExp(`(@(?:${escaped.join('|')}))`, 'g');
+  const parts = text.split(pattern);
+
+  return parts.map((part, i) => {
+    const isMention = mentionNames.some((name) => part === `@${name}`);
+    if (isMention) {
+      return (
+        <span
+          key={i}
+          className={
+            isMine
+              ? 'font-bold text-white/90 underline underline-offset-2 decoration-white/40'
+              : 'font-bold text-primary-600 dark:text-primary-400'
+          }
+        >
+          {part}
+        </span>
+      );
+    }
+    return part;
+  });
+};
 
 interface ChatTabProps {
   eventId: string;
   onCreateEvent?: () => void;
   isActive?: boolean;
+  /** When true, the pinned event banners at the top of chat are hidden (GroupPage renders its own). */
+  hidePinnedBanners?: boolean;
 }
 
 // ============================================================================
@@ -403,7 +453,7 @@ const PollCreator: React.FC<{
 // handle everything. Much simpler, more reliable on iOS PWAs.
 // ============================================================================
 
-const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = true }) => {
+const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = true, hidePinnedBanners = false }) => {
   const {
     event, currentProfile, messages, profilesById,
     send, toggleReaction, deleteMessage, votePoll,
@@ -439,6 +489,27 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = tr
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const composerRef = useRef<HTMLDivElement | null>(null);
+
+  // @mention state
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionStartIdx, setMentionStartIdx] = useState(-1);
+  const profiles = useStore((s) => s.profiles) as GolferProfile[];
+
+  const mentionMembers: MentionMember[] = useMemo(() => {
+    if (!event) return [];
+    return event.golfers
+      .filter((g: any) => g.profileId && g.profileId !== currentProfile?.id)
+      .map((g: any) => {
+        const p = profiles.find((pr) => pr.id === g.profileId);
+        return { profileId: g.profileId, name: p?.name || g.displayName || g.customName || '?', avatar: p?.avatar };
+      });
+  }, [event, profiles, currentProfile?.id]);
+
+  const filteredMentions = useMemo(() => {
+    if (mentionQuery === null) return [];
+    const q = mentionQuery.toLowerCase();
+    return mentionMembers.filter((m) => m.name.toLowerCase().includes(q)).slice(0, 6);
+  }, [mentionQuery, mentionMembers]);
 
   // Double-tap tracking: map of messageId -> last tap timestamp
   const lastTapRef = useRef<Map<string, number>>(new Map());
@@ -555,16 +626,30 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = tr
   const handleSend = async () => {
     const trimmed = text.trim();
     if (!trimmed) return;
-    // Blur first to dismiss keyboard, then send
+
+    const mentionedIds = mentionMembers
+      .filter((m) => trimmed.includes(`@${m.name}`))
+      .map((m) => m.profileId);
+
     inputRef.current?.blur();
-    await send(trimmed, replyTo ? { replyTo: replyTo.id } : undefined);
+    await send(trimmed, {
+      ...(replyTo ? { replyTo: replyTo.id } : {}),
+      ...(mentionedIds.length ? { mentions: mentionedIds } : {}),
+    });
     setText('');
     setReplyTo(null);
-    // Scroll to bottom after sending (wait for layout to settle after keyboard dismiss)
+    setMentionQuery(null);
+    setMentionStartIdx(-1);
     setTimeout(() => scrollToBottom(), 300);
   };
 
   const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Escape' && mentionQuery !== null) {
+      e.preventDefault();
+      setMentionQuery(null);
+      setMentionStartIdx(-1);
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -572,8 +657,35 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = tr
   };
 
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setText(e.target.value);
+    const val = e.target.value;
+    setText(val);
     reportTyping();
+
+    const cursor = e.target.selectionStart ?? val.length;
+    const before = val.slice(0, cursor);
+    const atMatch = before.match(/@([^\s@]*)$/);
+    if (atMatch) {
+      setMentionQuery(atMatch[1]);
+      setMentionStartIdx(before.length - atMatch[0].length);
+    } else {
+      setMentionQuery(null);
+      setMentionStartIdx(-1);
+    }
+  };
+
+  const handleMentionSelect = (member: MentionMember) => {
+    const before = text.slice(0, mentionStartIdx);
+    const afterCursor = inputRef.current?.selectionStart ?? text.length;
+    const after = text.slice(afterCursor);
+    const inserted = `@${member.name} `;
+    setText(before + inserted + after);
+    setMentionQuery(null);
+    setMentionStartIdx(-1);
+    inputRef.current?.focus();
+    requestAnimationFrame(() => {
+      const newPos = before.length + inserted.length;
+      inputRef.current?.setSelectionRange(newPos, newPos);
+    });
   };
 
   const handlePollSubmit = (question: string, options: string[]) => {
@@ -596,7 +708,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = tr
     <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900 pb-[var(--footer-total-height)]">
       {/* Messages - scrollable area, fills available space above composer */}
       {/* Pinned active event banners — group hubs only (Phase 3C) */}
-      {isGroupHub && visibleBanners.length > 0 && (
+      {isGroupHub && !hidePinnedBanners && visibleBanners.length > 0 && (
         <div className="flex-shrink-0 px-3 pt-2 space-y-1.5">
           {visibleBanners.map((evt: any) => {
             const playerCount = evt.golfers?.length || 0;
@@ -790,9 +902,11 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = tr
                       </div>
                     )}
 
-                    {/* Regular text */}
+                    {/* Regular text (with @mention highlighting) */}
                     {!isPoll && !isInvite && (
-                      <div className="whitespace-pre-wrap break-words">{m.text}</div>
+                      <div className="whitespace-pre-wrap break-words">
+                        {renderTextWithMentions(m.text, m.mentions, profilesById, mine)}
+                      </div>
                     )}
 
                     <div className={`text-[10px] mt-1 ${mine ? 'text-primary-200' : 'text-gray-400 dark:text-gray-500'}`}>
@@ -918,6 +1032,30 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = tr
           </div>
         )}
 
+        {/* ---- @Mention Suggestions ---- */}
+        {mentionQuery !== null && filteredMentions.length > 0 && (
+          <div className="mb-1.5 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-lg overflow-hidden">
+            {filteredMentions.map((m) => (
+              <button
+                key={m.profileId}
+                onClick={() => handleMentionSelect(m)}
+                className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-primary-50 dark:hover:bg-primary-900/20 active:bg-primary-100 transition-colors text-left"
+              >
+                <div className="w-7 h-7 rounded-full flex-shrink-0 overflow-hidden">
+                  {m.avatar ? (
+                    <img src={m.avatar} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-purple-400 to-purple-600 text-white text-[10px] font-bold flex items-center justify-center">
+                      {m.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+                <span className="text-sm font-medium text-gray-900 dark:text-white truncate">{m.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* ---- The Chat Box Card (Gemini-style) ---- */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200/80 dark:border-slate-700 shadow-sm overflow-hidden">
           {/* Input row — hero element */}
@@ -1006,7 +1144,15 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = tr
 
         {/* Quick actions — expand below card when + is tapped */}
         {showQuickActions && (
-          <div className="flex gap-2 px-1 pt-2">
+          <div className="flex flex-wrap gap-2 px-1 pt-2">
+            {isGroupHub && onCreateEvent && (
+              <button
+                onClick={() => { onCreateEvent(); setShowQuickActions(false); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-full text-xs font-semibold text-green-700 dark:text-green-400 transition-colors"
+              >
+                ⛳ Schedule Event
+              </button>
+            )}
             <button
               onClick={() => { setShowPollCreator(true); setShowQuickActions(false); }}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-700 rounded-full text-xs font-semibold text-primary-700 dark:text-primary-400 transition-colors"

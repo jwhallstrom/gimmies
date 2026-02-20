@@ -1219,13 +1219,29 @@ const GroupCard: React.FC<{ group: Event }> = ({ group }) => {
   const navigate = useNavigate();
   
   const lastMessage = group.chat?.length ? group.chat[group.chat.length - 1] : null;
+  const avatar = group.groupSettings?.avatar;
   
   return (
     <button
-      onClick={() => navigate(`/event/${group.id}/chat`)}
+      onClick={() => navigate(`/event/${group.id}`)}
       className="w-full text-left bg-purple-50 hover:bg-purple-100 rounded-lg p-2.5 border border-purple-200 hover:border-purple-300 transition-all group"
     >
-      <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2.5">
+        {/* Group Avatar */}
+        <div className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden">
+          {avatar && (avatar.startsWith('data:') || avatar.startsWith('http')) ? (
+            <img src={avatar} alt="" className="w-full h-full object-cover" />
+          ) : avatar ? (
+            <div className="w-full h-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-lg">
+              {avatar}
+            </div>
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-purple-400 to-purple-600 text-white text-sm font-bold flex items-center justify-center">
+              {(group.name || '?').charAt(0).toUpperCase()}
+            </div>
+          )}
+        </div>
+
         <div className="min-w-0 flex-1">
           <div className="font-semibold text-gray-900 group-hover:text-purple-700 truncate transition-colors text-sm">
             {group.name || 'Untitled Group'}
@@ -1234,9 +1250,9 @@ const GroupCard: React.FC<{ group: Event }> = ({ group }) => {
             {lastMessage ? `${lastMessage.senderName}: ${lastMessage.text}` : `${group.golfers.length} members`}
           </div>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-shrink-0">
           <span className="px-1.5 py-0.5 text-[9px] font-bold bg-purple-200 text-purple-700 rounded-full">
-            CHAT
+            {group.golfers.length}
           </span>
           <svg className="w-4 h-4 text-gray-400 group-hover:text-purple-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

@@ -17,6 +17,7 @@ const HandicapPage = lazy(() => import('./HandicapPage'));
 const AddScorePage = lazy(() => import('./AddScorePage'));
 const RoundDetailPage = lazy(() => import('./RoundDetailPage'));
 const EventPage = lazy(() => import('./EventPage'));
+const GroupPage = lazy(() => import('./GroupPage'));
 const JoinEventPage = lazy(() => import('./JoinEventPage'));
 const WalletPage = lazy(() => import('./WalletPage'));
 const AuthDemoPage = lazy(() => import('./AuthDemoPage').then(m => ({ default: m.AuthDemoPage })));
@@ -41,6 +42,20 @@ const NassauTeamsRoute: React.FC = () => {
   const { id } = useParams();
   if (!id) return null;
   return <NassauTeamsPage eventId={id} />;
+};
+
+/**
+ * Route hub: renders GroupPage for groups, EventPage for events.
+ * Keeps the /event/:id URL scheme for both (backward-compatible links).
+ */
+const EventOrGroupRouter: React.FC = () => {
+  const { id } = useParams();
+  const hubType = useStore((s) => {
+    const evt = s.events.find((e: any) => e.id === id) || s.completedEvents.find((e: any) => e.id === id);
+    return evt?.hubType;
+  });
+  if (hubType === 'group') return <GroupPage />;
+  return <EventPage />;
 };
 
 const App: React.FC = () => {
@@ -344,7 +359,7 @@ const App: React.FC = () => {
                 <Route path="/analytics" element={<AnalyticsPage />} />
                 <Route path="/wallet/*" element={<WalletPage />} />
                 <Route path="/event/:id/games/nassau/:nassauId/teams" element={<NassauTeamsRoute />} />
-                <Route path="/event/:id/*" element={<EventPage />} />
+                <Route path="/event/:id/*" element={<EventOrGroupRouter />} />
                 <Route path="/join" element={<JoinEventPage />} />
                 <Route path="/join/:code" element={<JoinEventPage />} />
                 <Route path="/auth-demo" element={<AuthDemoPage />} />
