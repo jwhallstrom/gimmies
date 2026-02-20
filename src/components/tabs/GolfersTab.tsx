@@ -16,6 +16,7 @@ import { useNavigate } from 'react-router-dom';
 import useStore from '../../state/store';
 import { useCourse } from '../../hooks/useCourse';
 import { STATUS_TIERS } from '../../state/types';
+import { buildJoinInviteUrl } from '../../utils/inviteLinks';
 import StatusLevelsInfo from '../verified/StatusLevelsInfo';
 
 type Props = { eventId: string; isTabActive?: boolean };
@@ -216,7 +217,7 @@ const GolfersTab: React.FC<Props> = ({ eventId, isTabActive = true }) => {
   };
 
   // Generate share URL for invites
-  const shareUrl = event.shareCode ? `${window.location.origin}/join/${event.shareCode}` : '';
+  const shareUrl = buildJoinInviteUrl(event.shareCode);
   
   const handleGenerateCode = async () => {
     setIsGeneratingCode(true);

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import useStore from '../state/store';
 import { useAuthMode } from '../hooks/useAuthMode';
+import { buildJoinInviteUrl } from '../utils/inviteLinks';
 
 interface ShareModalProps {
   eventId: string;
@@ -54,7 +55,7 @@ const ShareModal: React.FC<ShareModalProps> = ({ eventId, isOpen, onClose }) => 
 
   const isGroupHub = event.hubType === 'group';
   const isPublic = !!event.isPublic;
-  const shareUrl = event.shareCode ? `${window.location.origin}/join/${event.shareCode}` : '';
+  const shareUrl = buildJoinInviteUrl(event.shareCode);
 
   const handleCopy = (text: string, type: string) => {
     navigator.clipboard.writeText(text);

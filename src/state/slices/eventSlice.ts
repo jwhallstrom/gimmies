@@ -272,6 +272,16 @@ export const createEventSlice = (
     set((state: any) => ({
       events: state.events.map((e: Event) => {
         if (e.id !== eventId) return e;
+
+        const alreadyInEvent = e.golfers.some(
+          (g: EventGolfer) => g.profileId === golferId || g.customName === golferId
+        );
+        const hasScorecard = e.scorecards.some((sc: PlayerScorecard) => sc.golferId === golferId);
+
+        if (alreadyInEvent && hasScorecard) {
+          return e;
+        }
+
         const isProfileId = state.profiles.some((p: GolferProfile) => p.id === golferId);
         const profile = isProfileId ? state.profiles.find((p: GolferProfile) => p.id === golferId) : null;
         
@@ -289,8 +299,11 @@ export const createEventSlice = (
         } else {
           groups = groups.map(g => ({ ...g, golferIds: Array.from(new Set([...g.golferIds, golferId])) }));
         }
-        
-        return { ...e, golfers: [...e.golfers, eventGolfer], scorecards: [...e.scorecards, scorecard], groups, lastModified: new Date().toISOString() };
+
+        const golfers = alreadyInEvent ? e.golfers : [...e.golfers, eventGolfer];
+        const scorecards = hasScorecard ? e.scorecards : [...e.scorecards, scorecard];
+
+        return { ...e, golfers, scorecards, groups, lastModified: new Date().toISOString() };
       })
     }));
     await syncEventToCloud(eventId, get);
