@@ -116,6 +116,7 @@ export const MessagesPanel: React.FC<Props> = ({ isOpen, onClose }) => {
         return {
           id: group.id,
           name: group.name || 'Unnamed Group',
+          avatar: group.groupSettings?.avatar,
           memberCount: group.golfers?.length || 0,
           lastMessage,
           unreadCount,
@@ -209,8 +210,18 @@ export const MessagesPanel: React.FC<Props> = ({ isOpen, onClose }) => {
                   className="w-full flex items-center gap-3 p-3 bg-purple-50 dark:bg-purple-900/20 rounded-2xl hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors border border-purple-100 dark:border-purple-800"
                 >
                   <div className="relative flex-shrink-0">
-                    <div className="w-12 h-12 rounded-full bg-purple-200 dark:bg-purple-800 flex items-center justify-center">
-                      <span className="text-xl">👥</span>
+                    <div className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center">
+                      {group.avatar && (group.avatar.startsWith('data:') || group.avatar.startsWith('http')) ? (
+                        <img src={group.avatar} alt="" className="w-full h-full object-cover" />
+                      ) : group.avatar ? (
+                        <div className="w-full h-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-2xl">
+                          {group.avatar}
+                        </div>
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-purple-400 to-purple-600 text-white text-lg font-bold flex items-center justify-center">
+                          {(group.name || '?').charAt(0).toUpperCase()}
+                        </div>
+                      )}
                     </div>
                     {group.unreadCount > 0 && (
                       <div className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center ring-2 ring-white dark:ring-slate-900">

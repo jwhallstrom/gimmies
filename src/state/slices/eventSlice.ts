@@ -86,7 +86,7 @@ export interface EventSliceActions {
   joinEventByCode: (shareCode: string) => Promise<{ success: boolean; error?: string; eventId?: string }>;
   
   // Chat
-  addChatMessage: (eventId: string, text: string, options?: { replyTo?: string; type?: string; metadata?: Record<string, any>; pollQuestion?: string; pollOptions?: { id: string; text: string; votes: string[] }[] }) => Promise<void>;
+  addChatMessage: (eventId: string, text: string, options?: { replyTo?: string; type?: string; metadata?: Record<string, any>; pollQuestion?: string; pollOptions?: { id: string; text: string; votes: string[] }[]; mentions?: string[] }) => Promise<void>;
   clearChat: (eventId: string) => void;
   toggleReaction: (eventId: string, messageId: string, emoji: string) => void;
   deleteMessage: (eventId: string, messageId: string) => void;
@@ -559,7 +559,7 @@ export const createEventSlice = (
   },
   
   // Chat
-  addChatMessage: async (eventId: string, text: string, options?: { replyTo?: string; type?: string; metadata?: Record<string, any>; pollQuestion?: string; pollOptions?: { id: string; text: string; votes: string[] }[] }) => {
+  addChatMessage: async (eventId: string, text: string, options?: { replyTo?: string; type?: string; metadata?: Record<string, any>; pollQuestion?: string; pollOptions?: { id: string; text: string; votes: string[] }[]; mentions?: string[] }) => {
     const trimmed = text.trim();
     if (!trimmed && !options?.pollQuestion) return;
     const currentProfile = get().currentProfile;
@@ -577,6 +577,7 @@ export const createEventSlice = (
       pollQuestion: options?.pollQuestion,
       pollOptions: options?.pollOptions,
       reactions: {},
+      mentions: options?.mentions?.length ? options.mentions : undefined,
     };
     
     set((state: any) => ({

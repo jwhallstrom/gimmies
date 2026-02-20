@@ -22,11 +22,17 @@ export const CreateGroupWizard: React.FC<Props> = ({ isOpen, onClose, onCreated 
   const { isGuest } = useAuthMode();
 
   const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [avatar, setAvatar] = useState('');
   const [isCreating, setIsCreating] = useState(false);
+
+  const AVATAR_PRESETS = ['⛳', '🏌️', '🏆', '🍺', '🦅', '🐦', '🎯', '🔥', '👑', '☠️', '🎲', '💰'];
 
   useEffect(() => {
     if (!isOpen) return;
     setName(generateFunnyEventName());
+    setDescription('');
+    setAvatar('');
     setIsCreating(false);
   }, [isOpen]);
 
@@ -62,12 +68,19 @@ export const CreateGroupWizard: React.FC<Props> = ({ isOpen, onClose, onCreated 
     try {
       const id = createEvent({ hubType: 'group' } as any);
       if (!id) throw new Error('Failed to create group');
-      await updateEvent(id, { name: name.trim() } as any);
+      const groupSettings: any = {
+        visibility: 'private',
+        joinPolicy: 'open',
+        membersCanInvite: true,
+      };
+      if (description.trim()) groupSettings.description = description.trim();
+      if (avatar) groupSettings.avatar = avatar;
+      await updateEvent(id, { name: name.trim(), groupSettings } as any);
       onClose();
       if (onCreated) {
         onCreated(id);
       } else {
-        navigate(`/event/${id}/chat`);
+        navigate(`/event/${id}`);
       }
     } catch (e) {
       console.error(e);
@@ -90,11 +103,33 @@ export const CreateGroupWizard: React.FC<Props> = ({ isOpen, onClose, onCreated 
           </button>
         </div>
 
-        <div className="p-6 space-y-3 text-gray-900">
+        <div className="p-5 space-y-4 text-gray-900">
           <div className="text-sm text-gray-600">
-            A group is just a chat crew. You can create events from it later.
+            A group is your golf crew's home base. Chat, schedule events, and talk trash.
           </div>
 
+          {/* Avatar picker */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Group icon</label>
+            <div className="flex flex-wrap gap-1.5">
+              {AVATAR_PRESETS.map((emoji) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => setAvatar(avatar === emoji ? '' : emoji)}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl border-2 transition-all active:scale-95 ${
+                    avatar === emoji
+                      ? 'border-purple-500 bg-purple-50'
+                      : 'border-gray-200 hover:border-gray-300 bg-white'
+                  }`}
+                >
+                  {emoji}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Group name</label>
             <input
@@ -104,6 +139,20 @@ export const CreateGroupWizard: React.FC<Props> = ({ isOpen, onClose, onCreated 
               className="w-full bg-white text-gray-900 placeholder:text-gray-400 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
               placeholder="e.g. Saturday Crew"
               autoFocus
+            />
+          </div>
+
+          {/* Description */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Tagline <span className="text-gray-400 font-normal">(optional)</span>
+            </label>
+            <input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full bg-white text-gray-900 placeholder:text-gray-400 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
+              placeholder="e.g. No mulligans. No mercy."
+              maxLength={100}
             />
           </div>
         </div>
