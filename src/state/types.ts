@@ -440,6 +440,9 @@ export interface ChatMessage {
   pollQuestion?: string;
   pollOptions?: ChatPollOption[];
   pollClosed?: boolean;
+
+  /** Profile IDs of users @mentioned in this message */
+  mentions?: string[];
 }
 
 export interface ChatAttachment {
@@ -505,6 +508,12 @@ export interface GroupSettings {
    * Optional location/region for discovery
    */
   location?: string;
+
+  /**
+   * Group avatar: emoji string (rendered on gradient bg),
+   * data: URI, or https URL for uploaded images.
+   */
+  avatar?: string;
 }
 
 export interface JoinRequest {
