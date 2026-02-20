@@ -240,10 +240,10 @@ const GroupInfoPanel: React.FC<GroupInfoPanelProps> = ({ event, onClose, onCreat
   return createPortal(
     <div className="fixed inset-0 z-[9998] flex flex-col">
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm z-0" onClick={onClose} />
 
       {/* Panel */}
-      <div className="relative flex-1 flex flex-col bg-white dark:bg-slate-900 animate-slide-up overflow-hidden">
+      <div className="relative z-10 flex-1 flex flex-col bg-white dark:bg-slate-900 animate-slide-up overflow-hidden">
         {/* Header */}
         <div className="flex-shrink-0 bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 px-5 pt-4 pb-6">
           <div className="flex items-center justify-between mb-5">

@@ -395,6 +395,7 @@ const GroupPage: React.FC = () => {
           eventId={event.id}
           isActive={true}
           hidePinnedBanners={true}
+          noFooterPadding={true}
           onCreateEvent={() => setShowCreateEvent(true)}
         />
       </div>

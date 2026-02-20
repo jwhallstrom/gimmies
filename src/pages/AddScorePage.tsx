@@ -184,13 +184,13 @@ const AddScorePage: React.FC = () => {
   if (step === 'course') {
     return (
       <div className="space-y-6">
-        <div className="flex items-center gap-4 mb-6">
-          <Link to="/handicap" className="text-primary-600 hover:text-primary-700">
+        <div className="flex items-center gap-3 mb-6">
+          <Link to="/handicap" className="flex items-center justify-center w-10 h-10 -ml-2 rounded-lg text-primary-600 dark:text-primary-300 hover:bg-primary-50 dark:hover:bg-white/10 active:bg-primary-100 dark:active:bg-white/20 transition-colors">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </Link>
-          <h1 className="text-2xl font-bold text-primary-800">Add New Round</h1>
+          <h1 className="text-2xl font-bold text-primary-800 dark:text-white">Add New Round</h1>
         </div>
 
         <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
@@ -342,10 +342,10 @@ const AddScorePage: React.FC = () => {
 
     return (
       <div className="space-y-6">
-        <div className="flex items-center gap-4 mb-6">
+        <div className="flex items-center gap-3 mb-6">
           <button 
             onClick={() => setStep('course')}
-            className="text-primary-600 hover:text-primary-700"
+            className="flex items-center justify-center w-10 h-10 -ml-2 rounded-lg text-primary-600 dark:text-primary-300 hover:bg-primary-50 dark:hover:bg-white/10 active:bg-primary-100 dark:active:bg-white/20 transition-colors"
             aria-label="Back to course selection"
             title="Back to course selection"
           >
@@ -353,7 +353,7 @@ const AddScorePage: React.FC = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <h1 className="text-2xl font-bold text-primary-800">Enter Hole-by-Hole Score</h1>
+          <h1 className="text-2xl font-bold text-primary-800 dark:text-white">Enter Hole-by-Hole Score</h1>
         </div>
 
         <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
