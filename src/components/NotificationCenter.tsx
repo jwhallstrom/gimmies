@@ -394,7 +394,7 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-bold flex items-center gap-2">
               <span>🔔</span>
-              Notifications
+              Activity Feed
             </h2>
             <button
               onClick={onClose}

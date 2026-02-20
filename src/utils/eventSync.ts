@@ -7,6 +7,8 @@ import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../amplify/data/resource';
 import type { Event, ChatMessage } from '../state/store';
 
+const CLOUD_CHAT_PAYLOAD_PREFIX = '__GIMMIES_CHAT_V1__';
+
 let cachedClient: ReturnType<typeof generateClient<Schema>> | null = null;
 function getClient() {
   if (import.meta.env.VITE_ENABLE_CLOUD_SYNC !== 'true') return null;
@@ -17,6 +19,48 @@ function getClient() {
   } catch (e) {
     console.warn('❌ Amplify client unavailable (local/offline mode)', e);
     return null;
+  }
+}
+
+function serializeCloudChatPayload(message: ChatMessage): string {
+  const payload = {
+    text: message.text,
+    type: message.type,
+    replyTo: message.replyTo,
+    reactions: message.reactions,
+    metadata: message.metadata,
+    pollQuestion: message.pollQuestion,
+    pollOptions: message.pollOptions,
+    pollClosed: message.pollClosed,
+    editedAt: message.editedAt,
+    isDeleted: message.isDeleted,
+  };
+  return `${CLOUD_CHAT_PAYLOAD_PREFIX}${JSON.stringify(payload)}`;
+}
+
+function deserializeCloudChatPayload(rawText: string): Partial<ChatMessage> {
+  if (!rawText || !rawText.startsWith(CLOUD_CHAT_PAYLOAD_PREFIX)) {
+    return { text: rawText || '' };
+  }
+
+  try {
+    const json = rawText.slice(CLOUD_CHAT_PAYLOAD_PREFIX.length);
+    const parsed = JSON.parse(json);
+    return {
+      text: typeof parsed.text === 'string' ? parsed.text : '',
+      type: parsed.type,
+      replyTo: parsed.replyTo,
+      reactions: parsed.reactions,
+      metadata: parsed.metadata,
+      pollQuestion: parsed.pollQuestion,
+      pollOptions: parsed.pollOptions,
+      pollClosed: parsed.pollClosed,
+      editedAt: parsed.editedAt,
+      isDeleted: parsed.isDeleted,
+    };
+  } catch (error) {
+    console.warn('⚠️ Failed to parse cloud chat payload, falling back to raw text', error);
+    return { text: rawText };
   }
 }
 
@@ -31,11 +75,12 @@ export async function saveChatMessageToCloud(eventId: string, message: ChatMessa
     console.log('💬 saveChatMessageToCloud: Saving message to event:', eventId, 'from:', message.senderName);
     
     const { data, errors } = await client.models.ChatMessage.create({
+      id: message.id,
       eventId,
       profileId: message.profileId,
       senderName: message.senderName, // Save name snapshot for cross-device
-      text: message.text,
-      isBot: false,
+      text: serializeCloudChatPayload(message),
+      isBot: message.profileId === 'gimmies-bot',
     });
     
     if (errors) {
@@ -47,6 +92,36 @@ export async function saveChatMessageToCloud(eventId: string, message: ChatMessa
     return true;
   } catch (error) {
     console.error('❌ saveChatMessageToCloud: Exception:', error);
+    return false;
+  }
+}
+
+/**
+ * Update an existing chat message in cloud.
+ * Used for reactions, poll votes, soft-delete, and message edits.
+ */
+export async function updateChatMessageInCloud(eventId: string, message: ChatMessage): Promise<boolean> {
+  try {
+    const client = getClient();
+    if (!client) return false;
+
+    const { errors } = await client.models.ChatMessage.update({
+      id: message.id,
+      eventId,
+      profileId: message.profileId,
+      senderName: message.senderName,
+      text: serializeCloudChatPayload(message),
+      isBot: message.profileId === 'gimmies-bot',
+    });
+
+    if (errors) {
+      console.error('❌ updateChatMessageInCloud: Error:', errors);
+      return false;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('❌ updateChatMessageInCloud: Exception:', error);
     return false;
   }
 }
@@ -71,13 +146,27 @@ export async function loadChatMessagesFromCloud(eventId: string): Promise<ChatMe
     }
     
     // Convert cloud messages to local format
-    const chatMessages: ChatMessage[] = (messages || []).map(m => ({
-      id: m.id,
-      profileId: m.profileId,
-      senderName: m.senderName || m.profileId, // Use snapshot or fallback to ID
-      text: m.text,
-      createdAt: m.createdAt,
-    })).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    const chatMessages: ChatMessage[] = (messages || [])
+      .map(m => {
+        const decoded = deserializeCloudChatPayload(m.text || '');
+        return {
+          id: m.id,
+          profileId: m.profileId,
+          senderName: m.senderName || m.profileId, // Use snapshot or fallback to ID
+          text: decoded.text || '',
+          createdAt: m.createdAt,
+          type: decoded.type,
+          replyTo: decoded.replyTo,
+          reactions: decoded.reactions,
+          metadata: decoded.metadata,
+          pollQuestion: decoded.pollQuestion,
+          pollOptions: decoded.pollOptions,
+          pollClosed: decoded.pollClosed,
+          editedAt: decoded.editedAt,
+          isDeleted: decoded.isDeleted,
+        } as ChatMessage;
+      })
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
     
     console.log('✅ loadChatMessagesFromCloud: Loaded', chatMessages.length, 'messages');
     return chatMessages;
@@ -269,6 +358,7 @@ export async function loadEventByShareCode(shareCode: string): Promise<Event | n
     }
 
     const cloudEvent = events[0];
+    const chat = await loadChatMessagesFromCloud(cloudEvent.id);
 
     // Parse JSON fields back to objects
     const localEvent: Event = {
@@ -300,7 +390,7 @@ export async function loadEventByShareCode(shareCode: string): Promise<Event | n
       createdAt: cloudEvent.createdAt,
       lastModified: cloudEvent.lastModified || new Date().toISOString(),
       completedAt: cloudEvent.completedAt || undefined,
-      chat: [], // Chat messages loaded separately
+      chat,
     };
 
     console.log('✅ Event loaded from cloud:', localEvent);

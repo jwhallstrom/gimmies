@@ -127,8 +127,8 @@ const UserMenu: React.FC = () => {
       <button
         onClick={() => setShowNotifications(true)}
         className="relative p-2 rounded-xl text-white/90 hover:bg-white/10 transition-colors"
-        aria-label="Notifications"
-        title="Notifications"
+        aria-label="Activity feed"
+        title="Activity feed"
       >
         {/* Golf flag icon */}
         <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">

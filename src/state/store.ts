@@ -751,14 +751,27 @@ export const useStore = create<State>()(
               text: recapLines.join('\n'),
               createdAt: new Date().toISOString(),
             };
-            
+
+            const chatTargetId = completedEvent.parentGroupId || eventId;
+
             set((state: any) => ({
+              events: state.events.map((e: Event) =>
+                e.id === chatTargetId
+                  ? { ...e, chat: [...(e.chat || []), recapChatMessage], lastModified: new Date().toISOString() }
+                  : e
+              ),
               completedEvents: state.completedEvents.map((e: Event) =>
-                e.id === eventId 
-                  ? { ...e, chat: [...(e.chat || []), recapChatMessage] }
+                e.id === chatTargetId
+                  ? { ...e, chat: [...(e.chat || []), recapChatMessage], lastModified: new Date().toISOString() }
                   : e
               )
             }));
+
+            if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+              import('../utils/eventSync').then(({ saveChatMessageToCloud }) => {
+                saveChatMessageToCloud(chatTargetId, recapChatMessage).catch(console.error);
+              });
+            }
             
             console.log('📤 Auto-sent event recap to chat');
           } catch (e) {

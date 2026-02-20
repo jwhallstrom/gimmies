@@ -409,13 +409,27 @@ export const createEventSlice = (
 
     if (chatMessage.trim()) {
       const msg: ChatMessage = { id: nanoid(10), profileId: 'gimmies-bot', senderName: '🤖 Gimmies Bot', text: chatMessage.trim(), createdAt: new Date().toISOString() };
+      const chatTargetId = event.parentGroupId || eventId;
       set((s: any) => ({
         events: s.events.map((e: Event) => {
-          if (e.id !== eventId) return e;
+          if (e.id !== chatTargetId) return e;
           return { ...e, chat: [...(e.chat || []), msg].slice(-500), lastModified: new Date().toISOString() };
-        })
+        }),
+        completedEvents: s.completedEvents.map((e: Event) => {
+          if (e.id !== chatTargetId) return e;
+          return { ...e, chat: [...(e.chat || []), msg].slice(-500), lastModified: new Date().toISOString() };
+        }),
       }));
       get().addToast(chatMessage.trim(), 'achievement', 5000);
+
+      if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+        try {
+          const { saveChatMessageToCloud } = await import('../../utils/eventSync');
+          await saveChatMessageToCloud(chatTargetId, msg);
+        } catch (error) {
+          console.error('Failed to save bot message to cloud:', error);
+        }
+      }
     }
     
     await syncEventToCloud(eventId, get);
@@ -592,6 +606,8 @@ export const createEventSlice = (
     const currentProfile = get().currentProfile;
     if (!currentProfile) return;
     
+    let updatedMessage: ChatMessage | null = null;
+
     set((state: any) => ({
       events: state.events.map((e: Event) => {
         if (e.id !== eventId) return e;
@@ -607,18 +623,54 @@ export const createEventSlice = (
             } else {
               reactions[emoji] = [...current, currentProfile.id];
             }
-            return { ...m, reactions };
+            const next = { ...m, reactions };
+            updatedMessage = next;
+            return next;
           }),
           lastModified: new Date().toISOString(),
         };
-      })
+      }),
+      completedEvents: state.completedEvents.map((e: Event) => {
+        if (e.id !== eventId) return e;
+        return {
+          ...e,
+          chat: (e.chat || []).map((m: ChatMessage) => {
+            if (m.id !== messageId) return m;
+            const reactions = { ...(m.reactions || {}) };
+            const current = reactions[emoji] || [];
+            if (current.includes(currentProfile.id)) {
+              reactions[emoji] = current.filter((id: string) => id !== currentProfile.id);
+              if (reactions[emoji].length === 0) delete reactions[emoji];
+            } else {
+              reactions[emoji] = [...current, currentProfile.id];
+            }
+            const next = { ...m, reactions };
+            updatedMessage = next;
+            return next;
+          }),
+          lastModified: new Date().toISOString(),
+        };
+      }),
     }));
+
+    if (updatedMessage && import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+      void (async () => {
+        try {
+          const { updateChatMessageInCloud } = await import('../../utils/eventSync');
+          await updateChatMessageInCloud(eventId, updatedMessage as ChatMessage);
+        } catch (error) {
+          console.error('Failed to sync reaction to cloud:', error);
+        }
+      })();
+    }
   },
   
   deleteMessage: (eventId: string, messageId: string) => {
     const currentProfile = get().currentProfile;
     if (!currentProfile) return;
     
+    let updatedMessage: ChatMessage | null = null;
+
     set((state: any) => ({
       events: state.events.map((e: Event) => {
         if (e.id !== eventId) return e;
@@ -626,18 +678,46 @@ export const createEventSlice = (
           ...e,
           chat: (e.chat || []).map((m: ChatMessage) => {
             if (m.id !== messageId || m.profileId !== currentProfile.id) return m;
-            return { ...m, isDeleted: true, text: '' };
+            const next = { ...m, isDeleted: true, text: '', editedAt: new Date().toISOString() };
+            updatedMessage = next;
+            return next;
           }),
           lastModified: new Date().toISOString(),
         };
-      })
+      }),
+      completedEvents: state.completedEvents.map((e: Event) => {
+        if (e.id !== eventId) return e;
+        return {
+          ...e,
+          chat: (e.chat || []).map((m: ChatMessage) => {
+            if (m.id !== messageId || m.profileId !== currentProfile.id) return m;
+            const next = { ...m, isDeleted: true, text: '', editedAt: new Date().toISOString() };
+            updatedMessage = next;
+            return next;
+          }),
+          lastModified: new Date().toISOString(),
+        };
+      }),
     }));
+
+    if (updatedMessage && import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+      void (async () => {
+        try {
+          const { updateChatMessageInCloud } = await import('../../utils/eventSync');
+          await updateChatMessageInCloud(eventId, updatedMessage as ChatMessage);
+        } catch (error) {
+          console.error('Failed to sync message delete to cloud:', error);
+        }
+      })();
+    }
   },
   
   votePoll: (eventId: string, messageId: string, optionId: string) => {
     const currentProfile = get().currentProfile;
     if (!currentProfile) return;
     
+    let updatedMessage: ChatMessage | null = null;
+
     set((state: any) => ({
       events: state.events.map((e: Event) => {
         if (e.id !== eventId) return e;
@@ -652,12 +732,43 @@ export const createEventSlice = (
               if (opt.id === optionId) votes.push(currentProfile.id);
               return { ...opt, votes };
             });
-            return { ...m, pollOptions: options };
+            const next = { ...m, pollOptions: options };
+            updatedMessage = next;
+            return next;
           }),
           lastModified: new Date().toISOString(),
         };
-      })
+      }),
+      completedEvents: state.completedEvents.map((e: Event) => {
+        if (e.id !== eventId) return e;
+        return {
+          ...e,
+          chat: (e.chat || []).map((m: ChatMessage) => {
+            if (m.id !== messageId || m.type !== 'poll' || m.pollClosed) return m;
+            const options = (m.pollOptions || []).map(opt => {
+              const votes = (opt.votes || []).filter((id: string) => id !== currentProfile.id);
+              if (opt.id === optionId) votes.push(currentProfile.id);
+              return { ...opt, votes };
+            });
+            const next = { ...m, pollOptions: options };
+            updatedMessage = next;
+            return next;
+          }),
+          lastModified: new Date().toISOString(),
+        };
+      }),
     }));
+
+    if (updatedMessage && import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+      void (async () => {
+        try {
+          const { updateChatMessageInCloud } = await import('../../utils/eventSync');
+          await updateChatMessageInCloud(eventId, updatedMessage as ChatMessage);
+        } catch (error) {
+          console.error('Failed to sync poll vote to cloud:', error);
+        }
+      })();
+    }
   },
   
   // completeEvent is complex - keeping in main store.ts for now
