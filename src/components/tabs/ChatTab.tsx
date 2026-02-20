@@ -60,8 +60,6 @@ interface ChatTabProps {
   isActive?: boolean;
   /** When true, the pinned event banners at the top of chat are hidden (GroupPage renders its own). */
   hidePinnedBanners?: boolean;
-  /** Skip footer-height bottom padding (use when parent flex layout already accounts for it). */
-  noFooterPadding?: boolean;
 }
 
 // ============================================================================
@@ -455,7 +453,7 @@ const PollCreator: React.FC<{
 // handle everything. Much simpler, more reliable on iOS PWAs.
 // ============================================================================
 
-const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = true, hidePinnedBanners = false, noFooterPadding = false }) => {
+const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = true, hidePinnedBanners = false }) => {
   const {
     event, currentProfile, messages, profilesById,
     send, toggleReaction, deleteMessage, votePoll,
@@ -707,7 +705,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = tr
   };
 
   return (
-    <div className={`flex flex-col h-full bg-slate-50 dark:bg-slate-900${noFooterPadding ? '' : ' pb-[var(--footer-total-height)]'}`}>
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900 pb-[var(--footer-total-height)]">
       {/* Messages - scrollable area, fills available space above composer */}
       {/* Pinned active event banners — group hubs only (Phase 3C) */}
       {isGroupHub && !hidePinnedBanners && visibleBanners.length > 0 && (
@@ -971,7 +969,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = tr
           Input card is the hero, action icons below in a compact row.
           CSS :has(.chat-composer-input:focus) hides the footer.
           ================================================================ */}
-      <div ref={composerRef} className="flex-shrink-0 px-3 pb-0.5 pt-1">
+      <div ref={composerRef} className="flex-shrink-0 px-3 pb-0 pt-1">
         {/* Reply Preview — slim bar above the card */}
         {replyTo && (
           <div className="flex items-center gap-2 px-3 py-1.5 mb-1.5 bg-primary-50 dark:bg-primary-900/30 rounded-xl border border-primary-200/60 dark:border-primary-800">
@@ -1058,7 +1056,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = tr
         )}
 
         {/* ---- The Chat Box Card (Gemini-style) ---- */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200/80 dark:border-slate-700 shadow-sm overflow-hidden">
+        <div className="bg-white dark:bg-slate-800 rounded-t-2xl rounded-b-lg border border-gray-200/80 dark:border-slate-700 shadow-sm overflow-hidden">
           {/* Input row — hero element */}
           <div className="flex items-end gap-2 px-3 py-2">
             <textarea
