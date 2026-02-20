@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import useStore from '../../state/store';
 import { useCourse } from '../../hooks/useCourse';
 import { courseHandicap, strokesForHole } from '../../games/handicap';
@@ -664,9 +665,9 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
       )}
 
       {/* Team roster modal */}
-      {teamModal && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4" onClick={() => setTeamModal(null)}>
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+      {teamModal && createPortal(
+        <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setTeamModal(null)}>
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden max-h-[calc(100dvh-2rem)]" onClick={(e) => e.stopPropagation()}>
             <div className="px-4 py-3 border-b border-slate-200 bg-slate-50">
               <div className="flex items-center justify-between gap-2">
                 <div>
@@ -683,7 +684,7 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
                 </button>
               </div>
             </div>
-            <div className="p-4 space-y-2">
+            <div className="p-4 space-y-2 overflow-y-auto max-h-[calc(100dvh-8rem)]">
               {(teamModal.golferIds || []).map((gid) => {
                 const name = resolveGolferName(gid);
                 const canEnter = typeof onEnterScores === 'function' && !event.isCompleted && canEditScore?.(eventId, gid);
@@ -708,7 +709,8 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
               })}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
