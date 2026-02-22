@@ -551,7 +551,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   
   const mySettlements = useMemo(() => {
     if (!myGolferId) return [];
-    return allSettlements.filter((s: any) => s.fromId === myGolferId || s.toId === myGolferId);
+    return allSettlements.filter((s: any) => s.fromProfileId === myGolferId || s.toProfileId === myGolferId);
   }, [allSettlements, myGolferId]);
   
   // Check if all scores are complete
@@ -564,6 +564,60 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   const signedCurrency = (n: number) => (n > 0 ? '+' : n < 0 ? '−' : '') + currency(Math.abs(n));
 
   const myNetValue = myNet ?? 0;
+
+  const myWinningsBreakdown = useMemo(() => {
+    if (!myGolferId) return [] as { name: string; amount: number }[];
+    const items: { name: string; amount: number }[] = [];
+
+    const nassauAmt = (payouts.nassau || []).reduce((t: number, n: any) => t + (n?.winningsByGolfer?.[myGolferId] || 0), 0);
+    if ((event.games?.nassau || []).length > 0) items.push({ name: 'Nassau', amount: nassauAmt });
+
+    const skinsAmt = (payouts.skins || []).reduce((t: number, s: any) => t + (s?.winningsByGolfer?.[myGolferId] || 0), 0);
+    if (skinsArray.length > 0) items.push({ name: 'Skins', amount: skinsAmt });
+
+    const pinkyAmt = (payouts.pinky || []).reduce((t: number, p: any) => t + (p?.owingsByGolfer?.[myGolferId] || 0), 0);
+    if (pinkyArray.length > 0) items.push({ name: 'Pinky', amount: pinkyAmt });
+
+    const greenieAmt = (payouts.greenie || []).reduce((t: number, g: any) => t + (g?.owingsByGolfer?.[myGolferId] || 0), 0);
+    if (greenieArray.length > 0) items.push({ name: 'Greenie', amount: greenieAmt });
+
+    const stablefordAmt = (payouts.stableford || []).reduce((t: number, s: any) => t + (s?.winningsByGolfer?.[myGolferId] || 0), 0);
+    if (stablefordArray.length > 0) items.push({ name: 'Stableford', amount: stablefordAmt });
+
+    const ninePointAmt = (payouts.ninePoint || []).reduce((t: number, np: any) => t + (np?.owingsByGolfer?.[myGolferId] || 0), 0);
+    if (ninePointArray.length > 0) items.push({ name: '9-Point', amount: ninePointAmt });
+
+    const bbbAmt = (payouts.bingoBangoBongo || []).reduce((t: number, b: any) => t + (b?.owingsByGolfer?.[myGolferId] || 0), 0);
+    if (bbbArray.length > 0) items.push({ name: 'BBB', amount: bbbAmt });
+
+    const wolfAmt = (payouts.wolf || []).reduce((t: number, w: any) => t + (w?.owingsByGolfer?.[myGolferId] || 0), 0);
+    if (wolfArray.length > 0) items.push({ name: 'Wolf', amount: wolfAmt });
+
+    const dotsAmt = (payouts.dots || []).reduce((t: number, d: any) => t + (d?.owingsByGolfer?.[myGolferId] || 0), 0);
+    if (dotsArray.length > 0) items.push({ name: 'Dots', amount: dotsAmt });
+
+    return items;
+  }, [
+    myGolferId,
+    payouts.nassau,
+    payouts.skins,
+    payouts.pinky,
+    payouts.greenie,
+    payouts.stableford,
+    payouts.ninePoint,
+    payouts.bingoBangoBongo,
+    payouts.wolf,
+    payouts.dots,
+    event.games?.nassau,
+    skinsArray,
+    pinkyArray,
+    greenieArray,
+    stablefordArray,
+    ninePointArray,
+    bbbArray,
+    wolfArray,
+    dotsArray,
+  ]);
 
   // Helper to get golfer name
   const getGolferName = (golferId: string) => {
@@ -687,7 +741,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
             </div>
             <div className="text-right text-white text-xs opacity-90">
               <div>Buy-in: {currency(myBuyin)}</div>
-              <div>Winnings: +{currency(myWinnings)}</div>
+              <div>Winnings: {signedCurrency(myWinnings)}</div>
             </div>
           </div>
           
@@ -709,6 +763,24 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                 <div className="border-t border-white/20 mt-2 pt-1 flex justify-between text-sm font-bold text-white">
                   <span>Total</span>
                   <span>{currency(myBuyin)}</span>
+                </div>
+              </div>
+
+              <div className="mt-4 text-xs font-bold text-white/90 uppercase tracking-wide">Winnings Breakdown</div>
+              <div className="mt-1 space-y-1">
+                {myWinningsBreakdown.length > 0 ? (
+                  myWinningsBreakdown.map((item, idx) => (
+                    <div key={`${item.name}-${idx}`} className="flex justify-between text-sm text-white">
+                      <span>{item.name}</span>
+                      <span className="font-medium">{signedCurrency(item.amount)}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-xs text-white/60 italic">No winnings entries yet</div>
+                )}
+                <div className="border-t border-white/20 mt-2 pt-1 flex justify-between text-sm font-bold text-white">
+                  <span>Total</span>
+                  <span>{signedCurrency(myWinnings)}</span>
                 </div>
               </div>
             </div>
@@ -3164,6 +3236,26 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                     <div className="border-t border-gray-200/50 mt-2 pt-1 flex justify-between text-sm font-bold text-gray-900">
                       <span>Total</span>
                       <span>{currency(myBuyin)}</span>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 text-xs font-bold text-gray-500 uppercase tracking-wide">Winnings Breakdown</div>
+                  <div className="mt-1 space-y-1">
+                    {myWinningsBreakdown.length > 0 ? (
+                      myWinningsBreakdown.map((item, idx) => (
+                        <div key={`${item.name}-${idx}`} className="flex justify-between text-sm text-gray-700">
+                          <span>{item.name}</span>
+                          <span className={`font-medium ${item.amount > 0 ? 'text-green-600' : item.amount < 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                            {signedCurrency(item.amount)}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-xs text-gray-400 italic">No winnings entries yet</div>
+                    )}
+                    <div className="border-t border-gray-200/50 mt-2 pt-1 flex justify-between text-sm font-bold text-gray-900">
+                      <span>Total</span>
+                      <span>{signedCurrency(myWinnings)}</span>
                     </div>
                   </div>
                 </div>
