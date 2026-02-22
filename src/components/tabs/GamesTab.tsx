@@ -122,6 +122,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   const [dotsSetupId, setDotsSetupId] = useState<string | null>(null);
   const [showSettlements, setShowSettlements] = useState(false);
   const [expandBalance, setExpandBalance] = useState(false);
+  const [payoutsView, setPayoutsView] = useState<'me' | 'admin'>('me');
   
   const completeEvent = useStore((s) => s.completeEvent);
   const getEventSettlements = useStore((s) => s.getEventSettlements);
@@ -1598,8 +1599,35 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
       {/* ========== PAYOUTS SUB-TAB ========== */}
       {subTab === 'payouts' && (
         <div className="space-y-4">
+          {isOwner && (
+            <div className="bg-white rounded-xl border border-slate-200 p-1">
+              <div className="grid grid-cols-2 gap-1">
+                <button
+                  onClick={() => setPayoutsView('me')}
+                  className={`py-2 rounded-lg text-sm font-bold transition-colors ${
+                    payoutsView === 'me'
+                      ? 'bg-primary-600 text-white'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  My View
+                </button>
+                <button
+                  onClick={() => setPayoutsView('admin')}
+                  className={`py-2 rounded-lg text-sm font-bold transition-colors ${
+                    payoutsView === 'admin'
+                      ? 'bg-primary-600 text-white'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  Admin View
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Your Position Summary */}
-          {myNet !== null && (
+          {(payoutsView === 'me' || !isOwner) && myNet !== null && (
             <div className={`rounded-xl p-4 ${myNetValue >= 0 ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
               <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Your Position</div>
               <div className="grid grid-cols-3 gap-3 text-center">
@@ -1621,7 +1649,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
             </div>
           )}
 
-          {(isEventStarted || isEventCompleted) && allPlayerBalances.length > 0 && (
+          {(isEventStarted || isEventCompleted) && allPlayerBalances.length > 0 && (payoutsView === 'admin' || !isOwner) && (
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
               <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
                 <div className="font-bold text-gray-900 dark:text-slate-100">All Players Balance</div>
