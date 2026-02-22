@@ -30,11 +30,11 @@ const CircularChart: React.FC<CircularChartProps> = ({
   if (total === 0) {
     return (
       <div 
-        className="flex items-center justify-center bg-gray-100 rounded-full"
+        className="flex items-center justify-center bg-gray-100 dark:bg-slate-800 rounded-full"
         style={{ width: size, height: size }}
       >
         <div className="text-center">
-          <div className="text-gray-400 text-sm">No data</div>
+          <div className="text-gray-400 dark:text-slate-500 text-sm">No data</div>
         </div>
       </div>
     );
@@ -92,10 +92,10 @@ const CircularChart: React.FC<CircularChartProps> = ({
         {(centerText || centerSubtext) && (
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             {centerText && (
-              <div className="text-2xl font-bold text-gray-900">{centerText}</div>
+              <div className="text-2xl font-bold text-gray-900 dark:text-slate-100">{centerText}</div>
             )}
             {centerSubtext && (
-              <div className="text-sm text-gray-600">{centerSubtext}</div>
+              <div className="text-sm text-gray-600 dark:text-slate-300">{centerSubtext}</div>
             )}
           </div>
         )}
@@ -109,7 +109,7 @@ const CircularChart: React.FC<CircularChartProps> = ({
               className="w-3 h-3 rounded-full flex-shrink-0"
               style={{ backgroundColor: segment.color }}
             />
-            <span className={segment.textColor || 'text-gray-700'}>
+            <span className={segment.textColor || 'text-gray-700 dark:text-slate-300'}>
               {segment.label}: {segment.value} ({segment.percentage.toFixed(1)}%)
             </span>
           </div>

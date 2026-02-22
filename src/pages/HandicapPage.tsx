@@ -137,10 +137,17 @@ const HandicapPage: React.FC = () => {
                             {round.courseName}
                           </p>
                         </Link>
-                        <p className="text-xs text-gray-500 dark:text-slate-400">
-                          {formatDate(round.date)} • {round.teeName}
-                          {round.eventName && ` • ${round.eventName}`}
-                        </p>
+                        <div className="text-xs text-gray-500 dark:text-slate-400 flex items-center gap-1 min-w-0">
+                          <span className="shrink-0">{formatDate(round.date)}</span>
+                          <span className="shrink-0">•</span>
+                          <span className="truncate">{round.teeName}</span>
+                          {round.eventName && (
+                            <>
+                              <span className="shrink-0">•</span>
+                              <span className="truncate">{round.eventName}</span>
+                            </>
+                          )}
+                        </div>
                         {latestHistory && latestHistory.usedRoundIds && latestHistory.usedRoundIds.includes(round.id) && (
                           <div className="mt-1">
                             <span className="inline-flex items-center text-xs px-2 py-0.5 rounded bg-primary-100 text-primary-700">Used in Index</span>
@@ -151,7 +158,7 @@ const HandicapPage: React.FC = () => {
                   </div>
                   <Link 
                     to={`/handicap/round/${round.id}`}
-                    className="flex items-center gap-4 flex-shrink-0 hover:text-primary-700"
+                    className="ml-3 flex items-center gap-3 flex-shrink-0 hover:text-primary-700"
                   >
                     <div className="text-right">
                       <div className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${

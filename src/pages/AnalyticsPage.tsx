@@ -14,19 +14,12 @@ const AnalyticsPage: React.FC = () => {
     );
   }
 
-  // Filter completed rounds for current profile
-  const myCompletedRounds = completedRounds.filter(round => round.golferId === currentProfile.id);
-  
-  // Get all rounds (individual + event rounds)
+  // Used for event results section at the bottom of the page.
+  const myCompletedRounds = completedRounds.filter((round) => round.golferId === currentProfile.id);
+
+  // Canonical rounds list. Keep all analytics totals aligned with Handicap page by using this source.
   const allRounds = getProfileRounds(currentProfile.id);
-  
-  // Filter out individual rounds that are already represented by completed rounds
-  // Handle missing type field - if it has grossScore and scores array, treat as individual
-  const uniqueIndividualRounds = allRounds.filter(r => 
-    (r.type === 'individual' || (!r.type && r.grossScore !== undefined && r.scores)) && !r.completedRoundId
-  );
-  
-  // Calculate comprehensive scoring statistics
+
   const calculateScoringStats = () => {
     const stats = {
       eagles: 0,
@@ -35,31 +28,15 @@ const AnalyticsPage: React.FC = () => {
       bogeys: 0,
       doubleBogeys: 0,
       triplesOrWorse: 0,
-      totalHoles: 0
+      totalHoles: 0,
     };
 
-    console.log('🔍 Analytics Debug - Starting calculation');
-    console.log('  myCompletedRounds count:', myCompletedRounds.length);
-    console.log('  uniqueIndividualRounds count:', uniqueIndividualRounds.length);
-
-    // Add stats from completed event rounds
-    myCompletedRounds.forEach(round => {
-      stats.eagles += round.stats.eagles || 0;
-      stats.birdies += round.stats.birdies || 0;
-      stats.pars += round.stats.pars || 0;
-      stats.bogeys += round.stats.bogeys || 0;
-      stats.doubleBogeys += round.stats.doubleBogeys || 0;
-      stats.triplesOrWorse += round.stats.triplesOrWorse || 0;
-      stats.totalHoles += round.holesPlayed || 0;
-    });
-
-    // Add stats from manual individual rounds
-    uniqueIndividualRounds.forEach(round => {
-      round.scores.forEach(score => {
-        if (score.strokes !== null && score.strokes !== undefined) {
+    allRounds.forEach((round) => {
+      (round.scores || []).forEach((score) => {
+        if (score?.strokes !== null && score?.strokes !== undefined) {
           const toPar = score.strokes - score.par;
           stats.totalHoles++;
-          
+
           if (toPar <= -2) stats.eagles++;
           else if (toPar === -1) stats.birdies++;
           else if (toPar === 0) stats.pars++;
@@ -74,44 +51,32 @@ const AnalyticsPage: React.FC = () => {
   };
 
   const scoringStats = calculateScoringStats();
-  
-  // Calculate summary stats combining both sources
-  const roundsPlayed = myCompletedRounds.length + uniqueIndividualRounds.length;
-  
-  const totalScoreSum = 
-    myCompletedRounds.reduce((sum, r) => sum + r.finalScore, 0) +
-    uniqueIndividualRounds.reduce((sum, r) => sum + r.grossScore, 0);
-    
-  const averageScore = roundsPlayed > 0 ? totalScoreSum / roundsPlayed : 0;
-  
-  const bestScore = roundsPlayed > 0
-    ? Math.min(
-        ...myCompletedRounds.map(r => r.finalScore),
-        ...uniqueIndividualRounds.map(r => r.grossScore)
-      )
-    : 0;
-  
-  // Prepare chart data
-  const chartData = [
-    { label: 'Eagles', value: scoringStats.eagles, color: '#7c3aed', textColor: 'text-purple-700' },
-    { label: 'Birdies', value: scoringStats.birdies, color: '#059669', textColor: 'text-green-700' },
-    { label: 'Pars', value: scoringStats.pars, color: '#0284c7', textColor: 'text-blue-700' },
-    { label: 'Bogeys', value: scoringStats.bogeys, color: '#ea580c', textColor: 'text-orange-700' },
-    { label: 'Doubles', value: scoringStats.doubleBogeys, color: '#dc2626', textColor: 'text-red-700' },
-    { label: 'Triples+', value: scoringStats.triplesOrWorse, color: '#991b1b', textColor: 'text-red-800' }
-  ].filter(item => item.value > 0); // Only show categories with data
 
-  // Calculate additional metrics
+  const roundsPlayed = allRounds.length;
+  const totalScoreSum = allRounds.reduce((sum, r) => sum + (r.grossScore || 0), 0);
+  const averageScore = roundsPlayed > 0 ? totalScoreSum / roundsPlayed : 0;
+  const bestScore = roundsPlayed > 0 ? Math.min(...allRounds.map((r) => r.grossScore || Number.MAX_SAFE_INTEGER)) : 0;
+
+  const chartData = [
+    { label: 'Eagles', value: scoringStats.eagles, color: '#7c3aed', textColor: 'text-purple-700 dark:text-purple-300' },
+    { label: 'Birdies', value: scoringStats.birdies, color: '#059669', textColor: 'text-green-700 dark:text-green-300' },
+    { label: 'Pars', value: scoringStats.pars, color: '#0284c7', textColor: 'text-blue-700 dark:text-blue-300' },
+    { label: 'Bogeys', value: scoringStats.bogeys, color: '#ea580c', textColor: 'text-orange-700 dark:text-orange-300' },
+    { label: 'Doubles', value: scoringStats.doubleBogeys, color: '#dc2626', textColor: 'text-red-700 dark:text-red-300' },
+    { label: 'Triples+', value: scoringStats.triplesOrWorse, color: '#991b1b', textColor: 'text-red-800 dark:text-red-300' },
+  ].filter((item) => item.value > 0);
+
   const totalScoredHoles = scoringStats.totalHoles;
-  const subParPercentage = totalScoredHoles > 0 
-    ? ((scoringStats.eagles + scoringStats.birdies) / totalScoredHoles * 100).toFixed(1)
-    : '0.0';
-  const parOrBetterPercentage = totalScoredHoles > 0 
-    ? ((scoringStats.eagles + scoringStats.birdies + scoringStats.pars) / totalScoredHoles * 100).toFixed(1)
-    : '0.0';
-  const overParPercentage = totalScoredHoles > 0 
-    ? ((scoringStats.bogeys + scoringStats.doubleBogeys + scoringStats.triplesOrWorse) / totalScoredHoles * 100).toFixed(1)
-    : '0.0';
+  const subParPercentage =
+    totalScoredHoles > 0 ? (((scoringStats.eagles + scoringStats.birdies) / totalScoredHoles) * 100).toFixed(1) : '0.0';
+  const parOrBetterPercentage =
+    totalScoredHoles > 0
+      ? (((scoringStats.eagles + scoringStats.birdies + scoringStats.pars) / totalScoredHoles) * 100).toFixed(1)
+      : '0.0';
+  const overParPercentage =
+    totalScoredHoles > 0
+      ? (((scoringStats.bogeys + scoringStats.doubleBogeys + scoringStats.triplesOrWorse) / totalScoredHoles) * 100).toFixed(1)
+      : '0.0';
 
   return (
     <div className="space-y-6">
@@ -120,28 +85,23 @@ const AnalyticsPage: React.FC = () => {
         <p className="text-gray-600 dark:text-slate-300 mt-1">Your golf performance insights</p>
       </div>
 
-      {/* Key Stats - Compact Layout */}
       <div className="bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 backdrop-blur rounded-xl shadow-md p-4 border border-primary-900/5 dark:border-slate-800">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
           <div className="text-center">
             <div className="text-2xl font-bold text-primary-600">{roundsPlayed}</div>
             <div className="text-sm text-gray-600 dark:text-slate-300">Rounds</div>
           </div>
-          
+
           <div className="text-center">
-            <div className="text-2xl font-bold text-primary-600">
-              {averageScore > 0 ? averageScore.toFixed(1) : 'N/A'}
-            </div>
+            <div className="text-2xl font-bold text-primary-600">{averageScore > 0 ? averageScore.toFixed(1) : 'N/A'}</div>
             <div className="text-sm text-gray-600 dark:text-slate-300">Avg Score</div>
           </div>
-          
+
           <div className="text-center">
-            <div className="text-2xl font-bold text-primary-600">
-              {bestScore > 0 ? bestScore : 'N/A'}
-            </div>
+            <div className="text-2xl font-bold text-primary-600">{bestScore > 0 ? bestScore : 'N/A'}</div>
             <div className="text-sm text-gray-600 dark:text-slate-300">Best Score</div>
           </div>
-          
+
           <div className="text-center">
             <div className="text-2xl font-bold text-primary-600">
               {currentProfile.handicapIndex !== undefined ? currentProfile.handicapIndex.toFixed(1) : 'N/A'}
@@ -151,10 +111,8 @@ const AnalyticsPage: React.FC = () => {
         </div>
       </div>
 
-      {/* Scoring Performance */}
       {totalScoredHoles > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Scoring Breakdown Chart */}
           <div className="bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 backdrop-blur rounded-xl shadow-md p-6 border border-primary-900/5 dark:border-slate-800">
             <h3 className="text-lg font-semibold text-primary-800 dark:text-primary-200 mb-4">Scoring Breakdown</h3>
             <div className="flex justify-center">
@@ -168,33 +126,32 @@ const AnalyticsPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Performance Metrics */}
           <div className="bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 backdrop-blur rounded-xl shadow-md p-6 border border-primary-900/5 dark:border-slate-800">
             <h3 className="text-lg font-semibold text-primary-800 dark:text-primary-200 mb-4">Performance Metrics</h3>
-            
+
             <div className="space-y-4">
-              <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-                <span className="text-green-800 font-medium">Sub-Par Rate</span>
-                <span className="text-2xl font-bold text-green-600">{subParPercentage}%</span>
+              <div className="flex justify-between items-center p-3 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                <span className="text-green-800 dark:text-green-300 font-medium">Sub-Par Rate</span>
+                <span className="text-2xl font-bold text-green-600 dark:text-green-300">{subParPercentage}%</span>
               </div>
-              
-              <div className="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
-                <span className="text-blue-800 font-medium">Par or Better</span>
-                <span className="text-2xl font-bold text-blue-600">{parOrBetterPercentage}%</span>
+
+              <div className="flex justify-between items-center p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <span className="text-blue-800 dark:text-blue-300 font-medium">Par or Better</span>
+                <span className="text-2xl font-bold text-blue-600 dark:text-blue-300">{parOrBetterPercentage}%</span>
               </div>
-              
-              <div className="flex justify-between items-center p-3 bg-orange-50 rounded-lg">
-                <span className="text-orange-800 font-medium">Over Par Rate</span>
-                <span className="text-2xl font-bold text-orange-600">{overParPercentage}%</span>
+
+              <div className="flex justify-between items-center p-3 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                <span className="text-orange-800 dark:text-orange-300 font-medium">Over Par Rate</span>
+                <span className="text-2xl font-bold text-orange-600 dark:text-orange-300">{overParPercentage}%</span>
               </div>
 
               <div className="grid grid-cols-2 gap-4 mt-6">
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-purple-600">{scoringStats.eagles}</div>
+                  <div className="text-2xl font-bold text-purple-600 dark:text-purple-300">{scoringStats.eagles}</div>
                   <div className="text-sm text-gray-600 dark:text-slate-300">Total Eagles</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600">{scoringStats.birdies}</div>
+                  <div className="text-2xl font-bold text-green-600 dark:text-green-300">{scoringStats.birdies}</div>
                   <div className="text-sm text-gray-600 dark:text-slate-300">Total Birdies</div>
                 </div>
               </div>
@@ -213,7 +170,6 @@ const AnalyticsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Recent Performance Trends */}
       {allRounds.length > 0 && (
         <div className="bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 backdrop-blur rounded-xl shadow-md p-6 border border-primary-900/5 dark:border-slate-800">
           <h3 className="text-lg font-semibold text-primary-800 dark:text-primary-200 mb-4">Recent Rounds</h3>
@@ -222,39 +178,55 @@ const AnalyticsPage: React.FC = () => {
               const totalPar = round.scores?.reduce((sum, score) => sum + score.par, 0) || 72;
               const toPar = round.grossScore - totalPar;
               const linkTo = round.eventId ? `/event/${round.eventId}` : `/handicap/round/${round.id}`;
-              
+
               return (
-                <Link 
-                  key={round.id} 
+                <Link
+                  key={round.id}
                   to={linkTo}
                   className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-800 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors group"
                 >
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3">
-                      <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                        round.type === 'event' 
-                          ? 'bg-blue-100 text-blue-800' 
-                          : 'bg-green-100 text-green-800'
-                      }`}>
+                      <div
+                        className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                          round.type === 'event' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
+                        }`}
+                      >
                         {round.type === 'event' ? 'Event' : 'Individual'}
                       </div>
-                      <div>
-                        <p className="font-medium text-gray-900 dark:text-slate-100 group-hover:text-primary-700 dark:group-hover:text-primary-300">{round.courseName}</p>
-                        <p className="text-sm text-gray-600 dark:text-slate-300">
-                          {new Date(round.date).toLocaleDateString()} • {round.teeName}
-                          {round.eventName && ` • ${round.eventName}`}
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-900 dark:text-slate-100 truncate group-hover:text-primary-700 dark:group-hover:text-primary-300">
+                          {round.courseName}
+                        </p>
+                        <p className="text-sm text-gray-600 dark:text-slate-300 truncate">
+                          {new Date(round.date).toLocaleDateString()} - {round.teeName}
+                          {round.eventName && ` - ${round.eventName}`}
                         </p>
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 ml-3 flex-shrink-0">
                     <div className="text-right">
                       <div className="text-xl font-bold text-primary-600">{round.grossScore}</div>
-                      <div className={`text-sm font-medium ${toPar < 0 ? 'text-green-600 dark:text-green-300' : toPar > 0 ? 'text-red-600 dark:text-red-300' : 'text-gray-600 dark:text-slate-300'}`}>
-                        {toPar > 0 ? '+' : ''}{toPar}
+                      <div
+                        className={`text-sm font-medium ${
+                          toPar < 0
+                            ? 'text-green-600 dark:text-green-300'
+                            : toPar > 0
+                              ? 'text-red-600 dark:text-red-300'
+                              : 'text-gray-600 dark:text-slate-300'
+                        }`}
+                      >
+                        {toPar > 0 ? '+' : ''}
+                        {toPar}
                       </div>
                     </div>
-                    <svg className="w-4 h-4 text-gray-400 dark:text-slate-500 group-hover:text-primary-600 dark:group-hover:text-primary-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg
+                      className="w-4 h-4 text-gray-400 dark:text-slate-500 group-hover:text-primary-600 dark:group-hover:text-primary-300"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </div>
@@ -262,7 +234,7 @@ const AnalyticsPage: React.FC = () => {
               );
             })}
           </div>
-          
+
           {allRounds.length > 5 && (
             <div className="text-center mt-4">
               <p className="text-sm text-gray-500 dark:text-slate-400">Showing 5 most recent rounds</p>
@@ -271,38 +243,53 @@ const AnalyticsPage: React.FC = () => {
         </div>
       )}
 
-      {/* Completed Event Rounds Detail */}
       {myCompletedRounds.length > 0 && (
         <div className="bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 backdrop-blur rounded-xl shadow-md p-6 border border-primary-900/5 dark:border-slate-800">
           <h3 className="text-lg font-semibold text-primary-800 dark:text-primary-200 mb-4">Event Results & Winnings</h3>
           <div className="space-y-4">
             {myCompletedRounds.map((round) => (
-              <Link 
-                key={round.id} 
+              <Link
+                key={round.id}
                 to={`/event/${round.eventId}`}
                 className="block border border-gray-200 dark:border-slate-700 rounded-lg p-4 hover:border-primary-300 dark:hover:border-primary-600 hover:bg-primary-50/30 dark:hover:bg-primary-900/20 transition-colors group"
               >
                 <div className="flex justify-between items-start mb-2">
-                  <div>
-                    <h4 className="font-semibold text-primary-800 dark:text-primary-200 group-hover:text-primary-600 dark:group-hover:text-primary-300">{round.eventName}</h4>
-                    <p className="text-sm text-gray-600 dark:text-slate-300">
-                      {new Date(round.datePlayed).toLocaleDateString()} • {round.courseName}
-                      {round.teeName && ` • ${round.teeName}`}
+                  <div className="min-w-0">
+                    <h4 className="font-semibold text-primary-800 dark:text-primary-200 group-hover:text-primary-600 dark:group-hover:text-primary-300 truncate">
+                      {round.eventName}
+                    </h4>
+                    <p className="text-sm text-gray-600 dark:text-slate-300 truncate">
+                      {new Date(round.datePlayed).toLocaleDateString()} - {round.courseName}
+                      {round.teeName && ` - ${round.teeName}`}
                     </p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 ml-3 flex-shrink-0">
                     <div className="text-right">
                       <div className="text-2xl font-bold text-primary-600">{round.finalScore}</div>
-                      <div className={`text-sm font-medium ${round.scoreToPar < 0 ? 'text-green-600 dark:text-green-300' : round.scoreToPar > 0 ? 'text-red-600 dark:text-red-300' : 'text-gray-600 dark:text-slate-300'}`}>
-                        {round.scoreToPar > 0 ? '+' : ''}{round.scoreToPar}
+                      <div
+                        className={`text-sm font-medium ${
+                          round.scoreToPar < 0
+                            ? 'text-green-600 dark:text-green-300'
+                            : round.scoreToPar > 0
+                              ? 'text-red-600 dark:text-red-300'
+                              : 'text-gray-600 dark:text-slate-300'
+                        }`}
+                      >
+                        {round.scoreToPar > 0 ? '+' : ''}
+                        {round.scoreToPar}
                       </div>
                     </div>
-                    <svg className="w-5 h-5 text-gray-400 dark:text-slate-500 group-hover:text-primary-600 dark:group-hover:text-primary-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg
+                      className="w-5 h-5 text-gray-400 dark:text-slate-500 group-hover:text-primary-600 dark:group-hover:text-primary-300"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </div>
                 </div>
-                
+
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm mb-3">
                   <div>
                     <span className="text-purple-600">Eagles:</span>
@@ -333,7 +320,11 @@ const AnalyticsPage: React.FC = () => {
                       {round.gameResults.nassau && (
                         <div className="text-sm">
                           <span className="text-gray-600 dark:text-slate-300">Nassau:</span>
-                          <span className={`font-bold ml-2 ${round.gameResults.nassau.winnings >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          <span
+                            className={`font-bold ml-2 ${
+                              round.gameResults.nassau.winnings >= 0 ? 'text-green-600 dark:text-green-300' : 'text-red-600 dark:text-red-300'
+                            }`}
+                          >
                             {round.gameResults.nassau.winnings >= 0 ? '+' : ''}${round.gameResults.nassau.winnings.toFixed(2)}
                           </span>
                         </div>
@@ -341,7 +332,11 @@ const AnalyticsPage: React.FC = () => {
                       {round.gameResults.skins && (
                         <div className="text-sm">
                           <span className="text-gray-600 dark:text-slate-300">Skins:</span>
-                          <span className={`font-bold ml-2 ${round.gameResults.skins.winnings >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          <span
+                            className={`font-bold ml-2 ${
+                              round.gameResults.skins.winnings >= 0 ? 'text-green-600 dark:text-green-300' : 'text-red-600 dark:text-red-300'
+                            }`}
+                          >
                             {round.gameResults.skins.winnings >= 0 ? '+' : ''}${round.gameResults.skins.winnings.toFixed(2)}
                           </span>
                         </div>
