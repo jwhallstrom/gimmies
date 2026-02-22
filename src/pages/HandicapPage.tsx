@@ -113,8 +113,8 @@ const HandicapPage: React.FC = () => {
           ) : (
             rounds.map((round) => (
               <div key={round.id} className="p-4 hover:bg-gray-50 dark:hover:bg-slate-800/60 transition-colors">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1 pr-1">
                     <div className="flex items-center gap-3">
                       <div className="flex-shrink-0">
                         {round.type === 'event' && round.eventId ? (
@@ -137,17 +137,10 @@ const HandicapPage: React.FC = () => {
                             {round.courseName}
                           </p>
                         </Link>
-                        <div className="text-xs text-gray-500 dark:text-slate-400 flex items-center gap-1 min-w-0">
-                          <span className="shrink-0">{formatDate(round.date)}</span>
-                          <span className="shrink-0">•</span>
-                          <span className="truncate">{round.teeName}</span>
-                          {round.eventName && (
-                            <>
-                              <span className="shrink-0">•</span>
-                              <span className="truncate">{round.eventName}</span>
-                            </>
-                          )}
-                        </div>
+                        <p className="text-xs text-gray-500 dark:text-slate-400 truncate">
+                          {formatDate(round.date)} • {round.teeName}
+                          {round.eventName && ` • ${round.eventName}`}
+                        </p>
                         {latestHistory && latestHistory.usedRoundIds && latestHistory.usedRoundIds.includes(round.id) && (
                           <div className="mt-1">
                             <span className="inline-flex items-center text-xs px-2 py-0.5 rounded bg-primary-100 text-primary-700">Used in Index</span>
@@ -158,7 +151,7 @@ const HandicapPage: React.FC = () => {
                   </div>
                   <Link 
                     to={`/handicap/round/${round.id}`}
-                    className="ml-3 flex items-center gap-3 flex-shrink-0 hover:text-primary-700"
+                    className="w-[86px] sm:w-[92px] flex items-center justify-end gap-2 flex-shrink-0 hover:text-primary-700"
                   >
                     <div className="text-right">
                       <div className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${
