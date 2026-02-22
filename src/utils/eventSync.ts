@@ -76,6 +76,15 @@ function parseJsonField<T>(value: unknown, fallback: T): T {
   return value as T;
 }
 
+function normalizeHubType(cloudEvent: any): 'event' | 'group' {
+  const raw = String(cloudEvent?.hubType || '').trim().toLowerCase();
+  if (raw === 'group') return 'group';
+  if (raw === 'event') return 'event';
+  // Legacy fallback: records with group settings but missing/invalid hubType are groups.
+  if (cloudEvent?.groupSettingsJson) return 'group';
+  return 'event';
+}
+
 /**
  * Save a chat message to cloud (as individual record)
  */
@@ -382,7 +391,7 @@ export async function loadEventById(eventId: string): Promise<Event | null> {
       shareCode: cloudEvent.shareCode || undefined,
       scorecardView: cloudEvent.scorecardView as any || 'individual',
       status: (cloudEvent as any).status as 'setup' | 'started' | 'completed' | undefined,
-      hubType: (((cloudEvent as any).hubType as 'event' | 'group') || (((cloudEvent as any).groupSettingsJson ? 'group' : 'event') as 'event' | 'group')),
+      hubType: normalizeHubType(cloudEvent),
       parentGroupId: (cloudEvent as any).parentGroupId || undefined,
       
       // Parse JSON strings back to objects
@@ -449,7 +458,7 @@ export async function loadEventByShareCode(shareCode: string): Promise<Event | n
       shareCode: cloudEvent.shareCode || undefined,
       scorecardView: cloudEvent.scorecardView as any || 'individual',
       status: (cloudEvent as any).status as 'setup' | 'started' | 'completed' | undefined,
-      hubType: (((cloudEvent as any).hubType as 'event' | 'group') || (((cloudEvent as any).groupSettingsJson ? 'group' : 'event') as 'event' | 'group')),
+      hubType: normalizeHubType(cloudEvent),
       parentGroupId: (cloudEvent as any).parentGroupId || undefined,
       
       // Parse JSON strings back to objects
@@ -526,7 +535,7 @@ export async function loadUserEventsFromCloud(): Promise<Event[]> {
       shareCode: cloudEvent.shareCode || undefined,
       scorecardView: cloudEvent.scorecardView as any || 'individual',
       status: (cloudEvent as any).status as 'setup' | 'started' | 'completed' | undefined,
-      hubType: (((cloudEvent as any).hubType as 'event' | 'group') || (((cloudEvent as any).groupSettingsJson ? 'group' : 'event') as 'event' | 'group')),
+      hubType: normalizeHubType(cloudEvent),
       parentGroupId: (cloudEvent as any).parentGroupId || undefined,
       
       golfers: parseJsonField<any[]>(cloudEvent.golfersJson, []),
@@ -582,7 +591,7 @@ export async function loadPublicEventsFromCloud(): Promise<Event[]> {
       .filter((cloudEvent: any) => cloudEvent && cloudEvent.id)
       .filter((cloudEvent) => !cloudEvent.isCompleted)
       // Exclude groups (hubType === 'group') and group child events (have parentGroupId)
-      .filter((cloudEvent) => (cloudEvent as any).hubType !== 'group')
+      .filter((cloudEvent) => normalizeHubType(cloudEvent) !== 'group')
       .filter((cloudEvent) => !(cloudEvent as any).parentGroupId)
       .map((cloudEvent) => ({
         id: cloudEvent.id,
@@ -598,7 +607,7 @@ export async function loadPublicEventsFromCloud(): Promise<Event[]> {
         shareCode: cloudEvent.shareCode || undefined,
         scorecardView: (cloudEvent.scorecardView as any) || 'individual',
         status: (cloudEvent as any).status as 'setup' | 'started' | 'completed' | undefined,
-        hubType: (((cloudEvent as any).hubType as 'event' | 'group') || (((cloudEvent as any).groupSettingsJson ? 'group' : 'event') as 'event' | 'group')),
+        hubType: normalizeHubType(cloudEvent),
 
         golfers: parseJsonField<any[]>(cloudEvent.golfersJson, []),
         groups: parseJsonField<any[]>(cloudEvent.groupsJson, []),
