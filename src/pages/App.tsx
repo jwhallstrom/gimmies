@@ -78,8 +78,8 @@ const App: React.FC = () => {
     const byKey = new Map<string, any>();
     for (const r of rounds) {
       const key =
-        (r?.completedRoundId && `completed:${r.completedRoundId}`) ||
         (r?.eventId && `event:${r.eventId}:${r.profileId || ''}`) ||
+        (r?.completedRoundId && `completed:${r.completedRoundId}`) ||
         `manual:${r?.date || ''}:${r?.courseId || ''}:${r?.teeName || ''}:${r?.grossScore || ''}`;
       const existing = byKey.get(key);
       if (!existing) {

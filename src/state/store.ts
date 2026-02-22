@@ -55,6 +55,10 @@ import { createUISlice, initialUIState, type UISliceActions } from './slices/uiS
 import { createWalletSlice, initialWalletState, type WalletSliceActions } from './slices/walletSlice';
 import { createTournamentSlice, initialTournamentState, type TournamentSliceActions } from './slices/tournamentSlice';
 
+const sanitizeIdPart = (value: string) => String(value || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+const buildCompletedRoundId = (eventId: string, golferId: string) => `cr-${sanitizeIdPart(eventId)}-${sanitizeIdPart(golferId)}`;
+const buildIndividualRoundId = (eventId: string, profileId: string) => `ir-${sanitizeIdPart(eventId)}-${sanitizeIdPart(profileId)}`;
+
 // ============================================================================
 // Combined State Interface
 // ============================================================================
@@ -298,9 +302,11 @@ export const useStore = create<State>()(
             const eventGolfer = event.golfers.find(g => g.profileId === currentProfile.id);
             const scorecard = event.scorecards.find(sc => sc.golferId === currentProfile.id);
             if (!eventGolfer || !scorecard) return;
+            const stableCompletedRoundId = buildCompletedRoundId(event.id, currentProfile.id);
+            const stableIndividualRoundId = buildIndividualRoundId(event.id, currentProfile.id);
             
             const existingCompletedRound = get().completedRounds.find(
-              r => r.eventId === event.id && r.golferId === currentProfile.id
+              r => (r.eventId === event.id && r.golferId === currentProfile.id) || r.id === stableCompletedRoundId
             );
             const effectiveTeeName = eventGolfer.teeName || event.course.teeName || currentProfile.preferredTee;
             
@@ -329,7 +335,7 @@ export const useStore = create<State>()(
             let completedRoundForLinking: CompletedRound | undefined;
             if (!existingCompletedRound) {
               const completedRound: CompletedRound = {
-                id: nanoid(8), eventId: event.id, eventName: event.name, datePlayed: event.date,
+                id: stableCompletedRoundId, eventId: event.id, eventName: event.name, datePlayed: event.date,
                 courseId: event.course.courseId,
                 courseName: event.course.courseId ? (getCourseById(event.course.courseId)?.name || 'Unknown Course') : 'Custom Course',
                 teeName: eventGolfer.teeName, golferId: currentProfile.id, golferName: currentProfile.name,
@@ -344,6 +350,7 @@ export const useStore = create<State>()(
             }
 
             const existingIndividualRound = currentProfile.individualRounds?.find((r) =>
+              r.id === stableIndividualRoundId ||
               (r.eventId && r.eventId === event.id) ||
               (completedRoundForLinking?.id && r.completedRoundId === completedRoundForLinking.id) ||
               (r.date === event.date &&
@@ -386,7 +393,7 @@ export const useStore = create<State>()(
                 const scoreDifferential = calculateScoreDifferential(adjustedGross, cr, sl);
                 
                 const individualRound: IndividualRound = {
-                  id: nanoid(8), profileId: currentProfile.id, date: event.date, courseId: event.course.courseId,
+                  id: stableIndividualRoundId, profileId: currentProfile.id, date: event.date, courseId: event.course.courseId,
                   teeName: tee.name, grossScore: totalScore, netScore: totalScore - courseHandicap, courseHandicap,
                   scoreDifferential, courseRating: cr, slopeRating: sl, scores: roundScores,
                   adjustedGrossScore: adjustedGross,
@@ -398,7 +405,19 @@ export const useStore = create<State>()(
           });
           
           const existingCompleted = get().completedRounds || [];
-          const mergedCompletedRounds = [...existingCompleted, ...newCompletedRoundsFromCloud];
+          const mergedCompletedByKey = new Map<string, CompletedRound>();
+          [...existingCompleted, ...newCompletedRoundsFromCloud].forEach((round) => {
+            const key = `${round.eventId}:${round.golferId}`;
+            const existing = mergedCompletedByKey.get(key);
+            if (!existing) {
+              mergedCompletedByKey.set(key, round);
+              return;
+            }
+            const existingTs = new Date(existing.createdAt || existing.datePlayed || 0).getTime();
+            const currentTs = new Date(round.createdAt || round.datePlayed || 0).getTime();
+            if (currentTs >= existingTs) mergedCompletedByKey.set(key, round);
+          });
+          const mergedCompletedRounds = Array.from(mergedCompletedByKey.values());
 
           // Authoritative replacement for cloud-enabled sessions:
           // active/completed event lists come from cloud membership, preventing stale local rosters.
@@ -480,6 +499,7 @@ export const useStore = create<State>()(
         event.golfers.forEach(eventGolfer => {
           const golferId = eventGolfer.profileId || eventGolfer.customName;
           if (!golferId) return;
+          const stableCompletedRoundId = buildCompletedRoundId(event.id, golferId);
           
           const profile = eventGolfer.profileId ? get().profiles.find(p => p.id === eventGolfer.profileId) : null;
           const golferName = profile ? profile.name : eventGolfer.customName || 'Unknown';
@@ -515,7 +535,7 @@ export const useStore = create<State>()(
           if (skinsWinnings !== 0) gameResults.skins = { winnings: skinsWinnings, skinsWon: 0 };
           
           const completedRound: CompletedRound = {
-            id: nanoid(8), eventId: event.id, eventName: event.name, datePlayed: event.date,
+            id: stableCompletedRoundId, eventId: event.id, eventName: event.name, datePlayed: event.date,
             courseId: event.course.courseId,
             courseName: event.course.courseId ? (getCourseById(event.course.courseId)?.name || 'Unknown Course') : 'Custom Course',
             teeName: eventGolfer.teeName, golferId, golferName,
@@ -582,9 +602,10 @@ export const useStore = create<State>()(
               
               let adjustedGross = 0;
               roundScores.forEach(s => { adjustedGross += applyESCAdjustment(s.strokes ?? 0, s.par, s.handicapStrokes || 0); });
+              const stableIndividualRoundId = buildIndividualRoundId(event.id, eventGolfer.profileId);
               
               const individualRound: IndividualRound = {
-                id: nanoid(8), profileId: eventGolfer.profileId, date: event.date,
+                id: stableIndividualRoundId, profileId: eventGolfer.profileId, date: event.date,
                 courseId: event.course.courseId!, teeName: completedRound.teeName || tee.name,
                 grossScore: completedRound.finalScore, netScore: completedRound.finalScore - courseHandicap,
                 courseHandicap, scoreDifferential: calculateScoreDifferential(adjustedGross, cr, sl),
@@ -624,6 +645,7 @@ export const useStore = create<State>()(
               const filteredToAdd = toAdd.filter((nr: IndividualRound) =>
                 !existing.some((er: IndividualRound) =>
                   er.id === nr.id ||
+                  (er.eventId && nr.eventId && er.eventId === nr.eventId) ||
                   (er.completedRoundId && nr.completedRoundId && er.completedRoundId === nr.completedRoundId) ||
                   (er.date === nr.date && er.courseId === nr.courseId && er.teeName === nr.teeName && er.grossScore === nr.grossScore)
                 )
