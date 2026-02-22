@@ -27,7 +27,21 @@ export function useEventsAdapter() {
   const loadEventsFromCloud = useStore((s) => s.loadEventsFromCloud) as () => Promise<void>;
 
   const userEvents: Event[] = currentProfile
-    ? events.filter((event) => event.golfers.some((g) => g.profileId === currentProfile.id))
+    ? events.filter((event) => {
+        if (event.ownerProfileId === currentProfile.id) return true;
+        if ((event.golfers || []).some((g) => g.profileId === currentProfile.id)) return true;
+        const currentName = (currentProfile.name || '').trim().toLowerCase();
+        if (
+          currentName &&
+          (event.golfers || []).some((g) =>
+            (g.customName || '').trim().toLowerCase() === currentName ||
+            (g.displayName || '').trim().toLowerCase() === currentName
+          )
+        ) {
+          return true;
+        }
+        return (event.groups || []).some((group) => (group.golferIds || []).includes(currentProfile.id));
+      })
     : [];
 
   return {

@@ -246,22 +246,157 @@ export const useStore = create<State>()(
         
         const currentProfile = get().currentProfile;
         if (!currentProfile) return;
+        const normalize = (v: unknown) => String(v || '').trim().toLowerCase();
+        const currentName = normalize(currentProfile.name);
+        const mergeScorecards = (a: any, b: any) => {
+          const aScores = Array.isArray(a?.scores) ? a.scores : [];
+          const bScores = Array.isArray(b?.scores) ? b.scores : [];
+          const byHole = new Map<number, any>();
+          for (const s of aScores) if (typeof s?.hole === 'number') byHole.set(s.hole, s);
+          for (const s of bScores) {
+            if (typeof s?.hole !== 'number') continue;
+            const existing = byHole.get(s.hole);
+            if (!existing || (existing.strokes == null && s.strokes != null)) byHole.set(s.hole, s);
+          }
+          return {
+            ...a,
+            ...b,
+            golferId: b?.golferId || a?.golferId,
+            scores: Array.from(byHole.values()).sort((x: any, y: any) => (x.hole || 0) - (y.hole || 0)),
+          };
+        };
+        const repairEventGolferProfileIds = (event: any, knownProfiles: any[]) => {
+          if (!event) return { event, changed: false };
+          const profilesByName = new Map<string, any[]>();
+          for (const p of knownProfiles || []) {
+            const key = normalize(p?.name);
+            if (!key) continue;
+            const arr = profilesByName.get(key) || [];
+            arr.push(p);
+            profilesByName.set(key, arr);
+          }
+
+          let changed = false;
+          const tokenRemap = new Map<string, string>();
+          const golfersRaw = Array.isArray(event.golfers) ? event.golfers : [];
+          const golfersRepaired = golfersRaw.map((g: any) => {
+            if (!g || g.profileId) return g;
+            const sourceName = String(g.customName || g.displayName || '').trim();
+            if (!sourceName) return g;
+            const matches = profilesByName.get(normalize(sourceName)) || [];
+            if (matches.length !== 1) return g;
+            const profile = matches[0];
+            changed = true;
+            if (g.customName) tokenRemap.set(String(g.customName), profile.id);
+            if (g.displayName) tokenRemap.set(String(g.displayName), profile.id);
+            return {
+              ...g,
+              profileId: profile.id,
+              customName: undefined,
+              displayName: g.displayName || profile.name,
+            };
+          });
+
+          const golfersByKey = new Map<string, any>();
+          for (const g of golfersRepaired) {
+            if (!g) continue;
+            const key = g.profileId ? `p:${g.profileId}` : `c:${String(g.customName || g.displayName || '')}`;
+            const existing = golfersByKey.get(key);
+            if (!existing) {
+              golfersByKey.set(key, g);
+            } else {
+              changed = true;
+              golfersByKey.set(key, {
+                ...existing,
+                ...g,
+                displayName: g.displayName || existing.displayName,
+                handicapSnapshot: g.handicapSnapshot ?? existing.handicapSnapshot ?? null,
+                handicapOverride: g.handicapOverride ?? existing.handicapOverride ?? null,
+                teeName: g.teeName || existing.teeName,
+                gamePreference: g.gamePreference || existing.gamePreference || 'all',
+              });
+            }
+          }
+          const golfers = Array.from(golfersByKey.values());
+
+          const groupsRaw = Array.isArray(event.groups) ? event.groups : [];
+          const groups = groupsRaw.map((gr: any) => {
+            const ids = Array.isArray(gr?.golferIds) ? gr.golferIds : [];
+            const mapped = ids.map((id: string) => tokenRemap.get(String(id)) || id);
+            const deduped = Array.from(new Set(mapped));
+            if (deduped.length !== ids.length || deduped.some((id, i) => id !== ids[i])) changed = true;
+            return { ...gr, golferIds: deduped };
+          });
+
+          const scorecardsRaw = Array.isArray(event.scorecards) ? event.scorecards : [];
+          const scorecardsByGolfer = new Map<string, any>();
+          for (const sc of scorecardsRaw) {
+            if (!sc?.golferId) continue;
+            const mappedGolferId = tokenRemap.get(String(sc.golferId)) || sc.golferId;
+            if (mappedGolferId !== sc.golferId) changed = true;
+            const nextSc = { ...sc, golferId: mappedGolferId };
+            const existing = scorecardsByGolfer.get(mappedGolferId);
+            if (!existing) scorecardsByGolfer.set(mappedGolferId, nextSc);
+            else {
+              changed = true;
+              scorecardsByGolfer.set(mappedGolferId, mergeScorecards(existing, nextSc));
+            }
+          }
+          const scorecards = Array.from(scorecardsByGolfer.values());
+
+          if (!changed) return { event, changed: false };
+          return {
+            event: {
+              ...event,
+              golfers,
+              groups,
+              scorecards,
+              lastModified: new Date().toISOString(),
+            },
+            changed: true,
+          };
+        };
+        const isCurrentProfileMember = (event: any) => {
+          if (!event) return false;
+          if (event.ownerProfileId === currentProfile.id) return true;
+          const golfers = Array.isArray(event.golfers) ? event.golfers : [];
+          if (golfers.some((g: any) => g?.profileId === currentProfile.id)) return true;
+          // Legacy fallback: old records sometimes store only custom/display names.
+          if (currentName && golfers.some((g: any) => normalize(g?.customName) === currentName || normalize(g?.displayName) === currentName)) return true;
+          const groups = Array.isArray(event.groups) ? event.groups : [];
+          if (groups.some((gr: any) => Array.isArray(gr?.golferIds) && gr.golferIds.includes(currentProfile.id))) return true;
+          return false;
+        };
         
         try {
           set({ isLoadingEventsFromCloud: true });
-          const { loadUserEventsFromCloud, loadChatMessagesFromCloud } = await import('../utils/eventSync');
+          const { loadUserEventsFromCloud, loadChatMessagesFromCloud, saveEventToCloud } = await import('../utils/eventSync');
           
           const cloudEvents = await loadUserEventsFromCloud();
-          const myEvents = cloudEvents.filter(event => 
-            event.golfers.some(g => g.profileId === currentProfile.id)
-          );
+          const knownProfiles = get().profiles || [];
+          const repairedResults = cloudEvents.map((e) => repairEventGolferProfileIds(e, knownProfiles));
+          const repairedCloudEvents = repairedResults.map((r) => r.event);
+
+          const changedEvents = repairedResults.filter((r) => r.changed).map((r) => r.event);
+          if (changedEvents.length > 0) {
+            console.log(`Repairing ${changedEvents.length} legacy event/group golfer records with missing profileId...`);
+            for (const fixedEvent of changedEvents) {
+              try {
+                await saveEventToCloud(fixedEvent as any, currentProfile.id);
+              } catch (repairError) {
+                console.error('Failed to persist repaired event golfer IDs:', fixedEvent?.id, repairError);
+              }
+            }
+          }
+
+          const myEvents = repairedCloudEvents.filter(isCurrentProfileMember);
 
           // Hydrate participant profiles so member cards show correct names/avatars/status.
           try {
             const participantProfileIds = Array.from(
               new Set(
                 myEvents
-                  .flatMap((event) => (event.golfers || []).map((g) => g.profileId))
+                  .flatMap((event: any) => (event.golfers || []).map((g: any) => g.profileId))
                   .filter((id): id is string => Boolean(id))
               )
             );
@@ -299,8 +434,8 @@ export const useStore = create<State>()(
           
           // Process completed events
           completedEvents.forEach(event => {
-            const eventGolfer = event.golfers.find(g => g.profileId === currentProfile.id);
-            const scorecard = event.scorecards.find(sc => sc.golferId === currentProfile.id);
+            const eventGolfer = event.golfers.find((g: any) => g.profileId === currentProfile.id);
+            const scorecard = event.scorecards.find((sc: any) => sc.golferId === currentProfile.id);
             if (!eventGolfer || !scorecard) return;
             const stableCompletedRoundId = buildCompletedRoundId(event.id, currentProfile.id);
             const stableIndividualRoundId = buildIndividualRoundId(event.id, currentProfile.id);
