@@ -619,6 +619,112 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
     dotsArray,
   ]);
 
+  const allPlayerBalances = useMemo(() => {
+    const eventGolferIds = (event.golfers || [])
+      .map((g: any) => g.profileId || g.customName || g.displayName)
+      .filter((id: any) => !!id) as string[];
+
+    const isParticipant = (cfg: any, golferId: string) => {
+      const participantIds = Array.isArray(cfg?.participantGolferIds) && cfg.participantGolferIds.length > 0
+        ? cfg.participantGolferIds
+        : eventGolferIds;
+      return participantIds.includes(golferId);
+    };
+
+    const getBuyinData = (golferId: string) => {
+      let buyin = 0;
+      const breakdown: { name: string; amount: number }[] = [];
+
+      event.games.nassau.forEach((n: any, idx: number) => {
+        if (!isParticipant(n, golferId)) return;
+        const fees = n.fees ?? { out: n.fee, in: n.fee, total: n.fee };
+        const cost = (fees.out || 0) + (fees.in || 0) + (fees.total || 0);
+        buyin += cost;
+        breakdown.push({ name: event.games.nassau.length > 1 ? `Nassau ${idx + 1}` : 'Nassau', amount: cost });
+      });
+
+      skinsArray.forEach((s: any, idx: number) => {
+        if (!isParticipant(s, golferId)) return;
+        const cost = s.fee || 0;
+        buyin += cost;
+        breakdown.push({ name: skinsArray.length > 1 ? `Skins ${idx + 1}` : 'Skins', amount: cost });
+      });
+
+      stablefordArray.forEach((s: any, idx: number) => {
+        if (!isParticipant(s, golferId)) return;
+        const cost = s.fee || 0;
+        buyin += cost;
+        breakdown.push({ name: stablefordArray.length > 1 ? `Stableford ${idx + 1}` : 'Stableford', amount: cost });
+      });
+
+      return { buyin, breakdown };
+    };
+
+    const getWinningsBreakdown = (golferId: string) => {
+      const items: { name: string; amount: number }[] = [];
+
+      const nassauAmt = (payouts.nassau || []).reduce((t: number, n: any) => t + (n?.winningsByGolfer?.[golferId] || 0), 0);
+      if ((event.games?.nassau || []).length > 0) items.push({ name: 'Nassau', amount: nassauAmt });
+
+      const skinsAmt = (payouts.skins || []).reduce((t: number, s: any) => t + (s?.winningsByGolfer?.[golferId] || 0), 0);
+      if (skinsArray.length > 0) items.push({ name: 'Skins', amount: skinsAmt });
+
+      const pinkyAmt = (payouts.pinky || []).reduce((t: number, p: any) => t + (p?.owingsByGolfer?.[golferId] || 0), 0);
+      if (pinkyArray.length > 0) items.push({ name: 'Pinky', amount: pinkyAmt });
+
+      const greenieAmt = (payouts.greenie || []).reduce((t: number, g: any) => t + (g?.owingsByGolfer?.[golferId] || 0), 0);
+      if (greenieArray.length > 0) items.push({ name: 'Greenie', amount: greenieAmt });
+
+      const stablefordAmt = (payouts.stableford || []).reduce((t: number, s: any) => t + (s?.winningsByGolfer?.[golferId] || 0), 0);
+      if (stablefordArray.length > 0) items.push({ name: 'Stableford', amount: stablefordAmt });
+
+      const ninePointAmt = (payouts.ninePoint || []).reduce((t: number, np: any) => t + (np?.owingsByGolfer?.[golferId] || 0), 0);
+      if (ninePointArray.length > 0) items.push({ name: '9-Point', amount: ninePointAmt });
+
+      const bbbAmt = (payouts.bingoBangoBongo || []).reduce((t: number, b: any) => t + (b?.owingsByGolfer?.[golferId] || 0), 0);
+      if (bbbArray.length > 0) items.push({ name: 'BBB', amount: bbbAmt });
+
+      const wolfAmt = (payouts.wolf || []).reduce((t: number, w: any) => t + (w?.owingsByGolfer?.[golferId] || 0), 0);
+      if (wolfArray.length > 0) items.push({ name: 'Wolf', amount: wolfAmt });
+
+      const dotsAmt = (payouts.dots || []).reduce((t: number, d: any) => t + (d?.owingsByGolfer?.[golferId] || 0), 0);
+      if (dotsArray.length > 0) items.push({ name: 'Dots', amount: dotsAmt });
+
+      return items;
+    };
+
+    return allGolfers
+      .map((g: any) => {
+        const { buyin, breakdown } = getBuyinData(g.id);
+        const winnings = payouts.totalByGolfer?.[g.id] || 0;
+        const net = winnings - buyin;
+        return {
+          golferId: g.id,
+          golferName: g.name,
+          buyin,
+          winnings,
+          net,
+          buyinBreakdown: breakdown,
+          winningsBreakdown: getWinningsBreakdown(g.id),
+        };
+      })
+      .sort((a: any, b: any) => b.net - a.net);
+  }, [
+    allGolfers,
+    event.golfers,
+    event.games.nassau,
+    event.games,
+    payouts,
+    skinsArray,
+    stablefordArray,
+    pinkyArray,
+    greenieArray,
+    ninePointArray,
+    bbbArray,
+    wolfArray,
+    dotsArray,
+  ]);
+
   // Helper to get golfer name
   const getGolferName = (golferId: string) => {
     const golfer = allGolfers.find((g: any) => g.id === golferId);
@@ -1511,6 +1617,78 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                     {signedCurrency(myNetValue)}
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {(isEventStarted || isEventCompleted) && allPlayerBalances.length > 0 && (
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+              <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                <div className="font-bold text-gray-900 dark:text-slate-100">All Players Balance</div>
+                <div className="text-xs text-gray-500 dark:text-slate-400">Buy-in vs winnings with per-game breakdown</div>
+              </div>
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {allPlayerBalances.map((row: any) => (
+                  <details key={row.golferId} className="group">
+                    <summary className="list-none px-4 py-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/70">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-gray-900 dark:text-slate-100 truncate">{row.golferName}</div>
+                          <div className="text-xs text-gray-500 dark:text-slate-400">
+                            Buy-in {currency(row.buyin)} • Winnings {signedCurrency(row.winnings)}
+                          </div>
+                        </div>
+                        <div className={`font-black text-lg ${row.net > 0 ? 'text-green-600 dark:text-green-300' : row.net < 0 ? 'text-red-600 dark:text-red-300' : 'text-gray-600 dark:text-slate-300'}`}>
+                          {signedCurrency(row.net)}
+                        </div>
+                      </div>
+                    </summary>
+                    <div className="px-4 pb-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 bg-slate-50 dark:bg-slate-800/60">
+                          <div className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Buy-in Breakdown</div>
+                          <div className="mt-2 space-y-1">
+                            {row.buyinBreakdown.length === 0 ? (
+                              <div className="text-xs text-gray-400 dark:text-slate-500 italic">No buy-ins</div>
+                            ) : (
+                              row.buyinBreakdown.map((item: any, idx: number) => (
+                                <div key={`${row.golferId}-buyin-${idx}`} className="flex items-center justify-between text-sm text-gray-700 dark:text-slate-200">
+                                  <span>{item.name}</span>
+                                  <span className="font-semibold">{currency(item.amount)}</span>
+                                </div>
+                              ))
+                            )}
+                            <div className="pt-1 mt-1 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between text-sm font-bold text-gray-900 dark:text-slate-100">
+                              <span>Total</span>
+                              <span>{currency(row.buyin)}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 bg-slate-50 dark:bg-slate-800/60">
+                          <div className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Winnings Breakdown</div>
+                          <div className="mt-2 space-y-1">
+                            {row.winningsBreakdown.length === 0 ? (
+                              <div className="text-xs text-gray-400 dark:text-slate-500 italic">No winnings entries yet</div>
+                            ) : (
+                              row.winningsBreakdown.map((item: any, idx: number) => (
+                                <div key={`${row.golferId}-winnings-${idx}`} className="flex items-center justify-between text-sm text-gray-700 dark:text-slate-200">
+                                  <span>{item.name}</span>
+                                  <span className={`font-semibold ${item.amount > 0 ? 'text-green-600 dark:text-green-300' : item.amount < 0 ? 'text-red-600 dark:text-red-300' : 'text-gray-500 dark:text-slate-400'}`}>
+                                    {signedCurrency(item.amount)}
+                                  </span>
+                                </div>
+                              ))
+                            )}
+                            <div className="pt-1 mt-1 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between text-sm font-bold text-gray-900 dark:text-slate-100">
+                              <span>Total</span>
+                              <span>{signedCurrency(row.winnings)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </details>
+                ))}
               </div>
             </div>
           )}

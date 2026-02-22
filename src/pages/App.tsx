@@ -73,6 +73,55 @@ const App: React.FC = () => {
     return getUnreadCount(events, currentProfile?.id);
   }, [events, currentProfile?.id]);
 
+  const normalizeCloudRounds = (cloudRounds: any[]) => {
+    const rounds = Array.isArray(cloudRounds) ? cloudRounds : [];
+    const byKey = new Map<string, any>();
+    for (const r of rounds) {
+      const key =
+        (r?.completedRoundId && `completed:${r.completedRoundId}`) ||
+        (r?.eventId && `event:${r.eventId}:${r.profileId || ''}`) ||
+        `manual:${r?.date || ''}:${r?.courseId || ''}:${r?.teeName || ''}:${r?.grossScore || ''}`;
+      const existing = byKey.get(key);
+      if (!existing) {
+        byKey.set(key, r);
+        continue;
+      }
+      const existingTs = new Date(existing.createdAt || existing.date || 0).getTime();
+      const currentTs = new Date(r.createdAt || r.date || 0).getTime();
+      if (currentTs > existingTs) byKey.set(key, r);
+    }
+    return Array.from(byKey.values()).sort(
+      (a, b) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime()
+    );
+  };
+
+  const upsertCloudProfileToStore = (cloudProfile: any, cloudRounds: any[]) => {
+    const normalizedRounds = normalizeCloudRounds(cloudRounds);
+    const incoming = { ...cloudProfile, individualRounds: normalizedRounds } as any;
+    const state = useStore.getState();
+    const existing = state.profiles.find((p: any) => p.userId === cloudProfile.userId || p.id === cloudProfile.id);
+    const nextProfiles = existing
+      ? state.profiles.map((p: any) =>
+          (p.userId === cloudProfile.userId || p.id === cloudProfile.id)
+            ? { ...p, ...incoming, individualRounds: normalizedRounds }
+            : p
+        )
+      : [...state.profiles, incoming];
+
+    useStore.setState({
+      profiles: nextProfiles as any,
+      currentProfile: incoming as any,
+    });
+
+    setTimeout(() => {
+      try {
+        useStore.getState().calculateAndUpdateHandicap(incoming.id);
+      } catch (e) {
+        console.error('Failed to recalculate handicap from cloud profile:', e);
+      }
+    }, 0);
+  };
+
   // If someone opens a join link before their profile is set up, we store the code in sessionStorage.
   // Once a profile exists, auto-join and navigate them straight into the event.
   useEffect(() => {
@@ -184,16 +233,7 @@ const App: React.FC = () => {
             const cloudRounds = await loadIndividualRoundsFromCloud(cloudProfile.id);
             console.log('Loaded', cloudRounds.length, 'individual rounds from cloud');
             
-            // Import the store's profiles array and add this profile
-            const { profiles } = useStore.getState();
-            const existingProfile = profiles.find(p => p.userId === user.userId);
-            
-            if (!existingProfile) {
-              useStore.setState({ 
-                profiles: [...profiles, { ...cloudProfile, individualRounds: cloudRounds } as any],
-                currentProfile: { ...cloudProfile, individualRounds: cloudRounds } as any
-              });
-            }
+            upsertCloudProfileToStore(cloudProfile, cloudRounds);
           } else {
             console.log('No cloud profile found - user will need to complete profile');
           }
@@ -261,11 +301,7 @@ const App: React.FC = () => {
             const cloudRounds = await loadIndividualRoundsFromCloud(cloudProfile.id);
             console.log('Loaded', cloudRounds.length, 'individual rounds from cloud');
             
-            const { profiles } = useStore.getState();
-            useStore.setState({ 
-              profiles: [...profiles, { ...cloudProfile, individualRounds: cloudRounds } as any],
-              currentProfile: { ...cloudProfile, individualRounds: cloudRounds } as any
-            });
+            upsertCloudProfileToStore(cloudProfile, cloudRounds);
           }
         }
       } catch (err) {

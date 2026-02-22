@@ -303,9 +303,6 @@ export const useStore = create<State>()(
               r => r.eventId === event.id && r.golferId === currentProfile.id
             );
             const effectiveTeeName = eventGolfer.teeName || event.course.teeName || currentProfile.preferredTee;
-            const existingIndividualRound = currentProfile.individualRounds?.find(
-              r => r.date === event.date && r.courseId === event.course.courseId && r.teeName === effectiveTeeName
-            );
             
             let totalScore = 0, totalPar = 0, holesPlayed = 0;
             const holeScores: any[] = [];
@@ -345,6 +342,15 @@ export const useStore = create<State>()(
             } else {
               completedRoundForLinking = existingCompletedRound;
             }
+
+            const existingIndividualRound = currentProfile.individualRounds?.find((r) =>
+              (r.eventId && r.eventId === event.id) ||
+              (completedRoundForLinking?.id && r.completedRoundId === completedRoundForLinking.id) ||
+              (r.date === event.date &&
+                r.courseId === event.course.courseId &&
+                r.teeName === effectiveTeeName &&
+                r.grossScore === totalScore)
+            );
             
             if (!existingIndividualRound && event.course.courseId && holesPlayed >= 14) {
               const course = getCourseById(event.course.courseId);
@@ -403,10 +409,16 @@ export const useStore = create<State>()(
             profiles: get().profiles.map(p => {
               if (p.id === currentProfile.id) {
                 const existingRounds = p.individualRounds || [];
-                const roundsToAdd = newIndividualRoundsFromCloud.filter(newRound =>
-                  !existingRounds.some(existing => existing.id === newRound.id ||
-                    (existing.date === newRound.date && existing.courseId === newRound.courseId &&
-                      existing.teeName === newRound.teeName && existing.grossScore === newRound.grossScore))
+                const roundsToAdd = newIndividualRoundsFromCloud.filter((newRound) =>
+                  !existingRounds.some((existing) =>
+                    existing.id === newRound.id ||
+                    (newRound.eventId && existing.eventId === newRound.eventId) ||
+                    (newRound.completedRoundId && existing.completedRoundId === newRound.completedRoundId) ||
+                    (existing.date === newRound.date &&
+                      existing.courseId === newRound.courseId &&
+                      existing.teeName === newRound.teeName &&
+                      existing.grossScore === newRound.grossScore)
+                  )
                 );
                 return { ...p, individualRounds: [...existingRounds, ...roundsToAdd] };
               }
@@ -416,18 +428,24 @@ export const useStore = create<State>()(
 
           if (newIndividualRoundsFromCloud.length > 0) {
             const existingRounds = currentProfile.individualRounds || [];
-            const roundsToAdd = newIndividualRoundsFromCloud.filter(newRound =>
-              !existingRounds.some(existing => existing.id === newRound.id ||
-                (existing.date === newRound.date && existing.courseId === newRound.courseId &&
-                  existing.teeName === newRound.teeName && existing.grossScore === newRound.grossScore))
+            const roundsToAdd = newIndividualRoundsFromCloud.filter((newRound) =>
+              !existingRounds.some((existing) =>
+                existing.id === newRound.id ||
+                (newRound.eventId && existing.eventId === newRound.eventId) ||
+                (newRound.completedRoundId && existing.completedRoundId === newRound.completedRoundId) ||
+                (existing.date === newRound.date &&
+                  existing.courseId === newRound.courseId &&
+                  existing.teeName === newRound.teeName &&
+                  existing.grossScore === newRound.grossScore)
+              )
             );
             if (roundsToAdd.length > 0) {
               import('../utils/roundSync').then(({ batchSaveIndividualRoundsToCloud }) => {
                 batchSaveIndividualRoundsToCloud(roundsToAdd).catch(console.error);
               });
             }
-            setTimeout(() => get().calculateAndUpdateHandicap(currentProfile.id), 0);
           }
+          setTimeout(() => get().calculateAndUpdateHandicap(currentProfile.id), 0);
           
           // Load CompletedRounds from cloud
           try {

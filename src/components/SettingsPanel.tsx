@@ -210,7 +210,7 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
       onClick={onClose}
     >
       <div 
-        className="absolute right-0 top-0 bottom-0 w-full sm:max-w-md bg-gray-50 shadow-2xl flex flex-col overflow-hidden animate-slide-in-right z-[10000]"
+        className="absolute right-0 top-0 bottom-0 w-full sm:max-w-md bg-gray-50 dark:bg-slate-900 text-gray-900 dark:text-slate-100 shadow-2xl flex flex-col overflow-hidden animate-slide-in-right z-[10000]"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -230,9 +230,9 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
 
         {isGuest && (
           <div className="px-4 pt-4">
-            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
-              <div className="text-sm font-extrabold text-amber-900">Guest Mode</div>
-              <div className="text-xs text-amber-800 mt-1">
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-2xl p-4">
+              <div className="text-sm font-extrabold text-amber-900 dark:text-amber-200">Guest Mode</div>
+              <div className="text-xs text-amber-800 dark:text-amber-300 mt-1">
                 Creating/joining games is disabled until you sign in.
               </div>
               <button
@@ -250,9 +250,9 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
         )}
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto pb-safe relative bg-gray-50">
+        <div className="flex-1 overflow-y-auto pb-safe relative bg-gray-50 dark:bg-slate-900">
           {/* Profile Hero */}
-          <div className="bg-white p-5 border-b border-gray-200 relative">
+          <div className="bg-white dark:bg-slate-900 p-5 border-b border-gray-200 dark:border-slate-800 relative">
             {!editMode ? (
               <div className="flex items-center gap-4">
                 {/* Avatar - Tap to change */}
@@ -291,10 +291,10 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
                 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <h3 className="text-xl font-bold text-gray-900 truncate">{profileName}</h3>
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-slate-100 truncate">{profileName}</h3>
                     <StatusBadge profile={currentProfile} size="sm" />
                   </div>
-                  <p className="text-sm text-gray-500 truncate">{username}</p>
+                  <p className="text-sm text-gray-500 dark:text-slate-400 truncate">{username}</p>
                   <div className="flex items-center gap-3 mt-1">
                     <span className="text-sm font-semibold text-primary-600">
                       {handicapIndex != null ? `${handicapIndex.toFixed(1)} HCP` : 'No handicap'}
@@ -309,11 +309,11 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
                 
                 <button
                   onClick={() => setEditMode(true)}
-                  className="p-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+                  className="p-2.5 bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 dark:hover:bg-slate-700 rounded-xl transition-colors"
                   aria-label="Edit profile"
                   title="Edit profile"
                 >
-                  <svg className="w-5 h-5 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="w-5 h-5 text-gray-600 dark:text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                   </svg>
                 </button>
@@ -322,10 +322,10 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
               /* Edit Mode */
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <h4 className="font-semibold text-gray-900">Edit Profile</h4>
+                  <h4 className="font-semibold text-gray-900 dark:text-slate-100">Edit Profile</h4>
                   <button
                     onClick={() => setEditMode(false)}
-                    className="text-sm text-gray-500 hover:text-gray-700"
+                    className="text-sm text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200"
                   >
                     Cancel
                   </button>
@@ -337,7 +337,7 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
                     onClick={() => fileInputRef.current?.click()}
                     className="relative"
                   >
-                    <div className="w-24 h-24 rounded-full bg-primary-600 flex items-center justify-center text-white text-3xl font-bold overflow-hidden border-4 border-gray-200 shadow-lg">
+                     <div className="w-24 h-24 rounded-full bg-primary-600 flex items-center justify-center text-white text-3xl font-bold overflow-hidden border-4 border-gray-200 dark:border-slate-700 shadow-lg">
                       {profileAvatar ? (
                         <img src={profileAvatar} alt="" className="w-full h-full object-cover" />
                       ) : (
@@ -353,27 +353,27 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
                     </div>
                   </button>
                 </div>
-                <p className="text-center text-xs text-gray-500">Tap photo to change</p>
+                <p className="text-center text-xs text-gray-500 dark:text-slate-400">Tap photo to change</p>
                 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Display Name</label>
+                    <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1">Display Name</label>
                     <input
                       type="text"
                       value={editName}
                       onChange={e => setEditName(e.target.value)}
-                      className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-base focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                       className="w-full px-3 py-2.5 border border-gray-300 dark:border-slate-600 rounded-xl text-base bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                       placeholder="Your name"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-gray-500 mb-1">Handicap Index</label>
+                     <label className="block text-xs font-medium text-gray-500 dark:text-slate-400 mb-1">Handicap Index</label>
                     <input
                       type="number"
                       step="0.1"
                       value={editHandicap}
                       onChange={e => setEditHandicap(e.target.value)}
-                      className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-base focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                       className="w-full px-3 py-2.5 border border-gray-300 dark:border-slate-600 rounded-xl text-base bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                       placeholder="0.0"
                     />
                   </div>
@@ -391,25 +391,25 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
           </div>
 
           {/* Quick Stats */}
-          <div className="bg-white px-4 py-3 border-b border-gray-200">
+          <div className="bg-white dark:bg-slate-900 px-4 py-3 border-b border-gray-200 dark:border-slate-800">
             <div className="grid grid-cols-4 gap-2 text-center">
-              <button onClick={() => { onClose(); navigate('/handicap'); }} className="p-2 rounded-xl hover:bg-gray-50">
-                <div className="text-lg font-bold text-gray-900">{roundCount}</div>
-                <div className="text-[10px] text-gray-500 font-medium">Rounds</div>
+              <button onClick={() => { onClose(); navigate('/handicap'); }} className="p-2 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800">
+                <div className="text-lg font-bold text-gray-900 dark:text-slate-100">{roundCount}</div>
+                <div className="text-[10px] text-gray-500 dark:text-slate-400 font-medium">Rounds</div>
               </button>
-              <button onClick={() => { onClose(); navigate('/'); }} className="p-2 rounded-xl hover:bg-gray-50">
-                <div className="text-lg font-bold text-gray-900">{groupCount}</div>
-                <div className="text-[10px] text-gray-500 font-medium">Groups</div>
+              <button onClick={() => { onClose(); navigate('/'); }} className="p-2 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800">
+                <div className="text-lg font-bold text-gray-900 dark:text-slate-100">{groupCount}</div>
+                <div className="text-[10px] text-gray-500 dark:text-slate-400 font-medium">Groups</div>
               </button>
-              <button onClick={() => { onClose(); navigate('/events'); }} className="p-2 rounded-xl hover:bg-gray-50">
-                <div className="text-lg font-bold text-gray-900">{eventCount}</div>
-                <div className="text-[10px] text-gray-500 font-medium">Events</div>
+              <button onClick={() => { onClose(); navigate('/events'); }} className="p-2 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800">
+                <div className="text-lg font-bold text-gray-900 dark:text-slate-100">{eventCount}</div>
+                <div className="text-[10px] text-gray-500 dark:text-slate-400 font-medium">Events</div>
               </button>
-              <button onClick={() => { onClose(); navigate('/wallet'); }} className="p-2 rounded-xl hover:bg-gray-50">
+              <button onClick={() => { onClose(); navigate('/wallet'); }} className="p-2 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800">
                 <div className={`text-lg font-bold ${netBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   ${Math.abs(netBalance).toFixed(0)}
                 </div>
-                <div className="text-[10px] text-gray-500 font-medium">Net</div>
+                <div className="text-[10px] text-gray-500 dark:text-slate-400 font-medium">Net</div>
               </button>
             </div>
           </div>
@@ -426,22 +426,22 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
           {/* Golf Settings */}
           <div className="mt-4">
             <div className="px-4 py-2">
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Golf Settings</h3>
+               <h3 className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider">Golf Settings</h3>
             </div>
-            <div className="bg-white border-y border-gray-200 divide-y divide-gray-100">
+            <div className="bg-white dark:bg-slate-900 border-y border-gray-200 dark:border-slate-800 divide-y divide-gray-100 dark:divide-slate-800">
               {/* Home Course */}
               <button
                 onClick={() => setShowCourseSearch(true)}
-                className="w-full px-4 py-3.5 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                className="w-full px-4 py-3.5 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
               >
                 <div className="flex items-center gap-3">
                   <span className="text-xl">⛳</span>
                   <div className="text-left">
-                    <div className="text-sm font-medium text-gray-900">Home Course</div>
-                    <div className="text-xs text-gray-500">{homeCourse || 'Not set'}</div>
+                     <div className="text-sm font-medium text-gray-900 dark:text-slate-100">Home Course</div>
+                     <div className="text-xs text-gray-500 dark:text-slate-400">{homeCourse || 'Not set'}</div>
                   </div>
                 </div>
-                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-gray-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </button>
@@ -502,15 +502,15 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
           {/* Preferences */}
           <div className="mt-4">
             <div className="px-4 py-2">
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Preferences</h3>
+               <h3 className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider">Preferences</h3>
             </div>
-            <div className="bg-white border-y border-gray-200 divide-y divide-gray-100">
+            <div className="bg-white dark:bg-slate-900 border-y border-gray-200 dark:border-slate-800 divide-y divide-gray-100 dark:divide-slate-800">
               {/* Theme */}
               <div className="px-4 py-3.5">
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-3">
                     <span className="text-xl">🎨</span>
-                    <span className="text-sm font-medium text-gray-900">Theme</span>
+                     <span className="text-sm font-medium text-gray-900 dark:text-slate-100">Theme</span>
                   </div>
                 </div>
                 <div className="grid grid-cols-3 gap-2 ml-9">
@@ -523,7 +523,7 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
                         className={`py-2 px-3 rounded-lg text-xs font-semibold transition-colors ${
                           isActive 
                             ? 'bg-primary-600 text-white' 
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                             : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-200 hover:bg-gray-200 dark:hover:bg-slate-700'
                         }`}
                       >
                         {theme === 'light' ? '☀️ Light' : theme === 'dark' ? '🌙 Dark' : '🔄 Auto'}
@@ -537,11 +537,11 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
               <div className="px-4 py-3.5 space-y-3">
                 <div className="flex items-center gap-3 mb-2">
                   <span className="text-xl">⚙️</span>
-                  <span className="text-sm font-medium text-gray-900">Scoring</span>
+                   <span className="text-sm font-medium text-gray-900 dark:text-slate-100">Scoring</span>
                 </div>
                 
                 <label className="flex items-center justify-between ml-9 cursor-pointer">
-                  <span className="text-sm text-gray-700">Default to net scoring</span>
+                   <span className="text-sm text-gray-700 dark:text-slate-300">Default to net scoring</span>
                   <input
                     type="checkbox"
                     checked={currentProfile.preferences?.defaultNetScoring || false}
@@ -551,7 +551,7 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
                 </label>
                 
                 <label className="flex items-center justify-between ml-9 cursor-pointer">
-                  <span className="text-sm text-gray-700">Auto-advance to next hole</span>
+                   <span className="text-sm text-gray-700 dark:text-slate-300">Auto-advance to next hole</span>
                   <input
                     type="checkbox"
                     checked={currentProfile.preferences?.autoAdvanceScores || false}
@@ -561,7 +561,7 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
                 </label>
                 
                 <label className="flex items-center justify-between ml-9 cursor-pointer">
-                  <span className="text-sm text-gray-700">Show handicap strokes</span>
+                   <span className="text-sm text-gray-700 dark:text-slate-300">Show handicap strokes</span>
                   <input
                     type="checkbox"
                     checked={currentProfile.preferences?.showHandicapStrokes || false}
@@ -576,9 +576,9 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
           {/* Account */}
           <div className="mt-4">
             <div className="px-4 py-2">
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">Account</h3>
+               <h3 className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider">Account</h3>
             </div>
-            <div className="bg-white border-y border-gray-200 divide-y divide-gray-100">
+            <div className="bg-white dark:bg-slate-900 border-y border-gray-200 dark:border-slate-800 divide-y divide-gray-100 dark:divide-slate-800">
               {/* Email */}
               <div className="px-4 py-3.5 flex items-center gap-3">
                 <span className="text-xl">📧</span>
@@ -594,7 +594,7 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={() => onClose()}
-                className="w-full px-4 py-3.5 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                className="w-full px-4 py-3.5 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
               >
                 <div className="flex items-center gap-3">
                   <span className="text-xl">🏆</span>
@@ -644,19 +644,19 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
           {/* About */}
           <div className="mt-4 mb-8">
             <div className="px-4 py-2">
-              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider">About</h3>
+               <h3 className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider">About</h3>
             </div>
-            <div className="bg-white border-y border-gray-200 divide-y divide-gray-100">
+            <div className="bg-white dark:bg-slate-900 border-y border-gray-200 dark:border-slate-800 divide-y divide-gray-100 dark:divide-slate-800">
               <div className="px-4 py-3.5 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <span className="text-xl">📱</span>
-                  <span className="text-sm font-medium text-gray-900">Version</span>
+                 <span className="text-sm font-medium text-gray-900 dark:text-slate-100">Version</span>
                 </div>
-                <span className="text-sm text-gray-500">{packageJson.version}</span>
+                 <span className="text-sm text-gray-500 dark:text-slate-400">{packageJson.version}</span>
               </div>
             </div>
             
-            <p className="px-4 py-4 text-xs text-gray-400 text-center">
+            <p className="px-4 py-4 text-xs text-gray-400 dark:text-slate-500 text-center">
               Made with ⛳ for golfers who like to have fun
             </p>
           </div>
@@ -664,7 +664,7 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
 
         {/* Course Search Modal */}
         {showCourseSearch && (
-          <div className="absolute inset-0 bg-white z-10 flex flex-col">
+          <div className="absolute inset-0 bg-white dark:bg-slate-900 z-10 flex flex-col">
             <div className="bg-primary-700 text-white px-4 py-4 flex items-center gap-3 pt-safe">
               <button
                 onClick={() => setShowCourseSearch(false)}

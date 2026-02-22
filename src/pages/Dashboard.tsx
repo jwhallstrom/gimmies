@@ -21,8 +21,16 @@ import type { Event } from '../state/types';
 import useStore from '../state/store';
 import { getHole } from '../data/cloudCourses';
 
+const parseEventDate = (value: string) => {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [y, m, d] = value.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+  return new Date(value);
+};
+
 const formatDateShort = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  parseEventDate(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
 const clamp = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 
@@ -241,7 +249,7 @@ const Dashboard: React.FC = () => {
     
     // Sort by date/activity
     live.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
-    upcoming.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()); // Soonest first
+    upcoming.sort((a, b) => parseEventDate(a.date).getTime() - parseEventDate(b.date).getTime()); // Soonest first
     completed.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
     groupList.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
     

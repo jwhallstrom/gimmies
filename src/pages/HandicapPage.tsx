@@ -111,7 +111,7 @@ const HandicapPage: React.FC = () => {
               <p className="text-sm mt-1">Add your first round to start tracking your handicap!</p>
             </div>
           ) : (
-            rounds.slice(0, 10).map((round) => (
+            rounds.map((round) => (
               <div key={round.id} className="p-4 hover:bg-gray-50 dark:hover:bg-slate-800/60 transition-colors">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
@@ -191,19 +191,19 @@ const HandicapPage: React.FC = () => {
 
       {/* Handicap History - Show if available */}
       {currentProfile.handicapHistory && currentProfile.handicapHistory.length > 0 && (
-        <div className="bg-white/90 backdrop-blur rounded-xl shadow-md border border-primary-900/5">
-          <div className="p-6 border-b border-gray-200">
-            <h2 className="text-xl font-semibold text-gray-900">Handicap History</h2>
+        <div className="bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 backdrop-blur rounded-xl shadow-md border border-primary-900/5 dark:border-slate-800">
+          <div className="p-6 border-b border-gray-200 dark:border-slate-800">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-100">Handicap History</h2>
           </div>
           
           <div className="p-4">
             <div className="space-y-2">
               {currentProfile.handicapHistory.slice(-5).reverse().map((history, index) => (
                 <div key={index} className="flex justify-between items-center py-2">
-                  <span className="text-sm text-gray-600">
+                  <span className="text-sm text-gray-600 dark:text-slate-300">
                     {formatDate(history.date)}
                   </span>
-                  <span className="font-medium text-primary-600">
+                  <span className="font-medium text-primary-600 dark:text-primary-300">
                     {history.handicapIndex.toFixed(1)}
                   </span>
                 </div>

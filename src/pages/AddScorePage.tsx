@@ -193,7 +193,7 @@ const AddScorePage: React.FC = () => {
           <h1 className="text-2xl font-bold text-primary-800 dark:text-white">Add New Round</h1>
         </div>
 
-        <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-md border border-gray-200 dark:border-slate-700 overflow-hidden">
           {/* Card Header */}
           <div className="bg-gradient-to-r from-primary-600 to-primary-700 px-6 py-4">
             <h2 className="text-lg font-semibold text-white">Select Course & Tees</h2>
@@ -202,7 +202,7 @@ const AddScorePage: React.FC = () => {
           {/* Card Body */}
           <div className="p-6 space-y-6">
             <div>
-              <label htmlFor="date-input" className="block text-sm font-semibold text-gray-800 mb-2">
+              <label htmlFor="date-input" className="block text-sm font-semibold text-gray-800 dark:text-slate-200 mb-2">
                 Date
               </label>
               <div className="flex gap-2">
@@ -211,11 +211,11 @@ const AddScorePage: React.FC = () => {
                   type="date"
                   value={formData.date}
                   onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                  className="flex-1 p-3 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                  className="flex-1 p-3 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                 />
                 <button
                   onClick={() => setFormData(prev => ({ ...prev, date: new Date().toISOString().slice(0, 10) }))}
-                  className="bg-gray-100 text-gray-700 p-3 rounded-lg hover:bg-gray-200 transition-colors"
+                  className="bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-slate-100 p-3 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-600 transition-colors"
                   title="Set to Today"
                   type="button"
                 >
@@ -227,20 +227,20 @@ const AddScorePage: React.FC = () => {
             </div>
 
             <div>
-              <label htmlFor="course-search" className="block text-sm font-semibold text-gray-800 mb-2">Search Course</label>
+              <label htmlFor="course-search" className="block text-sm font-semibold text-gray-800 dark:text-slate-200 mb-2">Search Course</label>
               <input
                 id="course-search"
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Start typing a course name..."
-                className="w-full p-3 border border-gray-300 rounded-lg bg-white text-gray-900 placeholder-gray-400 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                className="w-full p-3 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 placeholder-gray-400 dark:placeholder-slate-400 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
             </div>
 
             <div className="max-h-72 overflow-auto">
               {filteredCourses.length === 0 ? (
-                <div className="text-sm text-gray-500">No courses found.</div>
+                <div className="text-sm text-gray-500 dark:text-slate-400">No courses found.</div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {filteredCourses.map(course => {
@@ -248,12 +248,12 @@ const AddScorePage: React.FC = () => {
                     return (
                       <div
                         key={course.courseId}
-                        className={`p-3 border-2 ${isSelected ? 'border-primary-500 bg-primary-50' : 'border-gray-200 bg-white'} rounded-lg transition-colors`}
+                        className={`p-3 border-2 ${isSelected ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/30' : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800'} rounded-lg transition-colors`}
                       >
                         <div className="flex items-center gap-3">
                           <div className="flex-1">
-                            <div className="font-medium text-gray-900">{course.name}</div>
-                            <div className="text-sm text-gray-500">{course.tees?.[0]?.holes?.length || 18} holes</div>
+                            <div className="font-medium text-gray-900 dark:text-slate-100">{course.name}</div>
+                            <div className="text-sm text-gray-500 dark:text-slate-400">{course.tees?.[0]?.holes?.length || 18} holes</div>
                           </div>
                           {isSelected ? (
                             <span className="text-xs px-2 py-1 rounded bg-primary-600 text-white font-medium">Selected</span>
@@ -261,7 +261,7 @@ const AddScorePage: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => handleCourseSelect(course.courseId)}
-                              className="text-sm text-primary-700 border border-primary-300 bg-white hover:bg-primary-50 hover:border-primary-400 px-3 py-1 rounded font-medium"
+                              className="text-sm text-primary-700 dark:text-primary-300 border border-primary-300 dark:border-primary-700 bg-white dark:bg-slate-800 hover:bg-primary-50 dark:hover:bg-primary-900/30 hover:border-primary-400 px-3 py-1 rounded font-medium"
                             >
                               Select
                             </button>
@@ -270,12 +270,12 @@ const AddScorePage: React.FC = () => {
 
                         {isSelected && (
                           <div className="pt-3 mt-3 border-t border-primary-200 space-y-3">
-                            <label htmlFor={`tee-select-${course.courseId}`} className="block text-sm font-semibold text-gray-800">Choose Tees</label>
+                            <label htmlFor={`tee-select-${course.courseId}`} className="block text-sm font-semibold text-gray-800 dark:text-slate-200">Choose Tees</label>
                             <select
                               id={`tee-select-${course.courseId}`}
                               value={formData.teeName}
                               onChange={(e) => setFormData(prev => ({ ...prev, teeName: e.target.value }))}
-                              className="w-full p-3 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                              className="w-full p-3 border border-gray-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
                             >
                               <option value="">-- Choose tees --</option>
                               {course.tees.map(tee => (
@@ -356,7 +356,7 @@ const AddScorePage: React.FC = () => {
           <h1 className="text-2xl font-bold text-primary-800 dark:text-white">Enter Hole-by-Hole Score</h1>
         </div>
 
-        <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-md border border-gray-200 dark:border-slate-700 overflow-hidden">
           {/* Card Header */}
           <div className="bg-gradient-to-r from-primary-600 to-primary-700 px-6 py-4">
             <h3 className="font-semibold text-white">{selectedCourse?.name}</h3>
@@ -365,7 +365,7 @@ const AddScorePage: React.FC = () => {
 
           {/* Card Body */}
           <div className="p-6 space-y-4">
-            <div className="text-xs font-semibold text-gray-700">Front Nine</div>
+            <div className="text-xs font-semibold text-gray-700 dark:text-slate-300">Front Nine</div>
             <div className="space-y-0.5">
               <div className="flex gap-0.5">
                 <div className="w-10 text-[10px] font-semibold text-slate-600 py-1">Hole</div>
@@ -395,8 +395,8 @@ const AddScorePage: React.FC = () => {
                     if (diff <= -3) colorClass = 'bg-fuchsia-600 text-white font-semibold';
                     else if (diff === -2) colorClass = 'bg-amber-500 text-black font-semibold';
                     else if (diff === -1) colorClass = 'bg-green-500 text-white font-semibold';
-                    else if (diff === 0) colorClass = 'bg-neutral-50';
-                    else if (diff === 1) colorClass = 'bg-orange-200';
+                    else if (diff === 0) colorClass = 'bg-neutral-50 text-gray-900 dark:bg-slate-700 dark:text-slate-100 font-semibold';
+                    else if (diff === 1) colorClass = 'bg-orange-200 text-gray-900 dark:bg-orange-900/40 dark:text-orange-100 font-semibold';
                     else if (diff === 2) colorClass = 'bg-red-300 text-red-900 font-semibold';
                     else if (diff >= 3) colorClass = 'bg-red-600 text-white font-semibold';
                   }
@@ -451,7 +451,7 @@ const AddScorePage: React.FC = () => {
             </div>
 
             {/* Back nine - similar layout */}
-            <div className="text-xs font-semibold text-slate-600">Back Nine</div>
+            <div className="text-xs font-semibold text-slate-600 dark:text-slate-300">Back Nine</div>
             <div className="space-y-0.5">
               <div className="flex gap-0.5">
                 <div className="w-10 text-[10px] font-semibold text-slate-600 py-1">Hole</div>
@@ -481,8 +481,8 @@ const AddScorePage: React.FC = () => {
                     if (diff <= -3) colorClass = 'bg-fuchsia-600 text-white font-semibold';
                     else if (diff === -2) colorClass = 'bg-amber-500 text-black font-semibold';
                     else if (diff === -1) colorClass = 'bg-green-500 text-white font-semibold';
-                    else if (diff === 0) colorClass = 'bg-neutral-50';
-                    else if (diff === 1) colorClass = 'bg-orange-200';
+                    else if (diff === 0) colorClass = 'bg-neutral-50 text-gray-900 dark:bg-slate-700 dark:text-slate-100 font-semibold';
+                    else if (diff === 1) colorClass = 'bg-orange-200 text-gray-900 dark:bg-orange-900/40 dark:text-orange-100 font-semibold';
                     else if (diff === 2) colorClass = 'bg-red-300 text-red-900 font-semibold';
                     else if (diff >= 3) colorClass = 'bg-red-600 text-white font-semibold';
                   }
@@ -537,13 +537,13 @@ const AddScorePage: React.FC = () => {
 
             <div className="pt-4">
               <div className="grid grid-cols-2 gap-4 mb-4">
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
+                <div className="text-center p-4 bg-gray-50 dark:bg-slate-800 rounded-lg">
                   <div className="text-2xl font-bold text-primary-600">{grossSum}</div>
-                  <div className="text-sm text-gray-600">Gross Score</div>
+                  <div className="text-sm text-gray-600 dark:text-slate-300">Gross Score</div>
                 </div>
-                <div className="text-center p-4 bg-gray-50 rounded-lg">
+                <div className="text-center p-4 bg-gray-50 dark:bg-slate-800 rounded-lg">
                   <div className="text-2xl font-bold text-primary-600">{selectedTee?.courseRating || '--'}</div>
-                  <div className="text-sm text-gray-600">Course Rating</div>
+                  <div className="text-sm text-gray-600 dark:text-slate-300">Course Rating</div>
                 </div>
               </div>
 
@@ -589,7 +589,7 @@ const AddScorePage: React.FC = () => {
         <h1 className="text-2xl font-bold text-primary-800">Review Round</h1>
       </div>
 
-      <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-md border border-gray-200 dark:border-slate-700 overflow-hidden">
         {/* Card Header */}
         <div className="bg-gradient-to-r from-primary-600 to-primary-700 px-6 py-4">
           <h3 className="font-semibold text-white">{selectedCourse?.name}</h3>
@@ -619,36 +619,36 @@ const AddScorePage: React.FC = () => {
             const diff = holes.length > 0 ? calculateScoreDifferential(adj, courseRating, slopeRating) : undefined;
             return (
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="text-center p-4 bg-gray-50 rounded-lg border border-gray-100">
+                <div className="text-center p-4 bg-gray-50 dark:bg-slate-800 rounded-lg border border-gray-100 dark:border-slate-700">
                   <div className="text-2xl font-bold text-primary-600">{formData.grossScore}</div>
-                  <div className="text-sm text-gray-600">Gross Score</div>
+                  <div className="text-sm text-gray-600 dark:text-slate-300">Gross Score</div>
                 </div>
-                <div className="text-center p-4 bg-gray-50 rounded-lg border border-gray-100">
+                <div className="text-center p-4 bg-gray-50 dark:bg-slate-800 rounded-lg border border-gray-100 dark:border-slate-700">
                   <div className="text-2xl font-bold text-primary-600">{formData.grossScore - (selectedTee?.par || 72)}</div>
-                  <div className="text-sm text-gray-600">vs Par</div>
+                  <div className="text-sm text-gray-600 dark:text-slate-300">vs Par</div>
                 </div>
-                <div className="text-center p-4 bg-gray-50 rounded-lg border border-gray-100">
+                <div className="text-center p-4 bg-gray-50 dark:bg-slate-800 rounded-lg border border-gray-100 dark:border-slate-700">
                   <div className="text-2xl font-bold text-primary-600">{selectedTee?.courseRating || '--'}</div>
-                  <div className="text-sm text-gray-600">Course Rating</div>
+                  <div className="text-sm text-gray-600 dark:text-slate-300">Course Rating</div>
                 </div>
-                <div className="text-center p-4 bg-gray-50 rounded-lg border border-gray-100">
+                <div className="text-center p-4 bg-gray-50 dark:bg-slate-800 rounded-lg border border-gray-100 dark:border-slate-700">
                   <div className="text-2xl font-bold text-primary-600">{selectedTee?.slopeRating || '--'}</div>
-                  <div className="text-sm text-gray-600">Slope Rating</div>
+                  <div className="text-sm text-gray-600 dark:text-slate-300">Slope Rating</div>
                 </div>
-                <div className="text-center p-4 bg-gray-50 rounded-lg border border-gray-100 col-span-2 md:col-span-2">
+                <div className="text-center p-4 bg-gray-50 dark:bg-slate-800 rounded-lg border border-gray-100 dark:border-slate-700 col-span-2 md:col-span-2">
                   <div className="text-2xl font-bold text-primary-600">{adj || '--'}</div>
-                  <div className="text-sm text-gray-600">Adjusted Gross (WHS)</div>
+                  <div className="text-sm text-gray-600 dark:text-slate-300">Adjusted Gross (WHS)</div>
                 </div>
-                <div className="text-center p-4 bg-gray-50 rounded-lg border border-gray-100 col-span-2 md:col-span-2">
+                <div className="text-center p-4 bg-gray-50 dark:bg-slate-800 rounded-lg border border-gray-100 dark:border-slate-700 col-span-2 md:col-span-2">
                   <div className="text-2xl font-bold text-primary-600">{diff ?? '--'}</div>
-                  <div className="text-sm text-gray-600">Score Differential (uses adjusted)</div>
+                  <div className="text-sm text-gray-600 dark:text-slate-300">Score Differential (uses adjusted)</div>
                 </div>
               </div>
             );
           })()}
 
           <div className="space-y-4">
-            <p className="text-sm text-gray-600">
+            <p className="text-sm text-gray-600 dark:text-slate-300">
               This round will be added to your handicap history and used for handicap index calculations.
             </p>
             

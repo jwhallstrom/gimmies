@@ -9,7 +9,7 @@ const AnalyticsPage: React.FC = () => {
   if (!currentProfile) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-600">Please create a profile to view analytics.</p>
+        <p className="text-gray-600 dark:text-slate-300">Please create a profile to view analytics.</p>
       </div>
     );
   }
@@ -115,38 +115,38 @@ const AnalyticsPage: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white/90 backdrop-blur rounded-xl shadow-md p-6 border border-primary-900/5">
-        <h1 className="text-2xl font-bold text-primary-800">Analytics</h1>
-        <p className="text-gray-600 mt-1">Your golf performance insights</p>
+      <div className="bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 backdrop-blur rounded-xl shadow-md p-6 border border-primary-900/5 dark:border-slate-800">
+        <h1 className="text-2xl font-bold text-primary-800 dark:text-primary-200">Analytics</h1>
+        <p className="text-gray-600 dark:text-slate-300 mt-1">Your golf performance insights</p>
       </div>
 
       {/* Key Stats - Compact Layout */}
-      <div className="bg-white/90 backdrop-blur rounded-xl shadow-md p-4 border border-primary-900/5">
+      <div className="bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 backdrop-blur rounded-xl shadow-md p-4 border border-primary-900/5 dark:border-slate-800">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
           <div className="text-center">
             <div className="text-2xl font-bold text-primary-600">{roundsPlayed}</div>
-            <div className="text-sm text-gray-600">Rounds</div>
+            <div className="text-sm text-gray-600 dark:text-slate-300">Rounds</div>
           </div>
           
           <div className="text-center">
             <div className="text-2xl font-bold text-primary-600">
               {averageScore > 0 ? averageScore.toFixed(1) : 'N/A'}
             </div>
-            <div className="text-sm text-gray-600">Avg Score</div>
+            <div className="text-sm text-gray-600 dark:text-slate-300">Avg Score</div>
           </div>
           
           <div className="text-center">
             <div className="text-2xl font-bold text-primary-600">
               {bestScore > 0 ? bestScore : 'N/A'}
             </div>
-            <div className="text-sm text-gray-600">Best Score</div>
+            <div className="text-sm text-gray-600 dark:text-slate-300">Best Score</div>
           </div>
           
           <div className="text-center">
             <div className="text-2xl font-bold text-primary-600">
               {currentProfile.handicapIndex !== undefined ? currentProfile.handicapIndex.toFixed(1) : 'N/A'}
             </div>
-            <div className="text-sm text-gray-600">Handicap</div>
+            <div className="text-sm text-gray-600 dark:text-slate-300">Handicap</div>
           </div>
         </div>
       </div>
@@ -155,8 +155,8 @@ const AnalyticsPage: React.FC = () => {
       {totalScoredHoles > 0 ? (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Scoring Breakdown Chart */}
-          <div className="bg-white/90 backdrop-blur rounded-xl shadow-md p-6 border border-primary-900/5">
-            <h3 className="text-lg font-semibold text-primary-800 mb-4">Scoring Breakdown</h3>
+          <div className="bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 backdrop-blur rounded-xl shadow-md p-6 border border-primary-900/5 dark:border-slate-800">
+            <h3 className="text-lg font-semibold text-primary-800 dark:text-primary-200 mb-4">Scoring Breakdown</h3>
             <div className="flex justify-center">
               <CircularChart
                 data={chartData}
@@ -169,8 +169,8 @@ const AnalyticsPage: React.FC = () => {
           </div>
 
           {/* Performance Metrics */}
-          <div className="bg-white/90 backdrop-blur rounded-xl shadow-md p-6 border border-primary-900/5">
-            <h3 className="text-lg font-semibold text-primary-800 mb-4">Performance Metrics</h3>
+          <div className="bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 backdrop-blur rounded-xl shadow-md p-6 border border-primary-900/5 dark:border-slate-800">
+            <h3 className="text-lg font-semibold text-primary-800 dark:text-primary-200 mb-4">Performance Metrics</h3>
             
             <div className="space-y-4">
               <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
@@ -191,32 +191,32 @@ const AnalyticsPage: React.FC = () => {
               <div className="grid grid-cols-2 gap-4 mt-6">
                 <div className="text-center">
                   <div className="text-2xl font-bold text-purple-600">{scoringStats.eagles}</div>
-                  <div className="text-sm text-gray-600">Total Eagles</div>
+                  <div className="text-sm text-gray-600 dark:text-slate-300">Total Eagles</div>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold text-green-600">{scoringStats.birdies}</div>
-                  <div className="text-sm text-gray-600">Total Birdies</div>
+                  <div className="text-sm text-gray-600 dark:text-slate-300">Total Birdies</div>
                 </div>
               </div>
             </div>
           </div>
         </div>
       ) : (
-        <div className="bg-white/90 backdrop-blur rounded-xl shadow-md p-8 border border-primary-900/5 text-center">
-          <div className="text-gray-400 mb-2">
+        <div className="bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 backdrop-blur rounded-xl shadow-md p-8 border border-primary-900/5 dark:border-slate-800 text-center">
+          <div className="text-gray-400 dark:text-slate-500 mb-2">
             <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
             </svg>
           </div>
-          <h3 className="text-lg font-semibold text-gray-600 mb-2">No Scoring Data Yet</h3>
-          <p className="text-gray-500">Add some individual rounds or complete events to see your scoring analytics.</p>
+          <h3 className="text-lg font-semibold text-gray-600 dark:text-slate-300 mb-2">No Scoring Data Yet</h3>
+          <p className="text-gray-500 dark:text-slate-400">Add some individual rounds or complete events to see your scoring analytics.</p>
         </div>
       )}
 
       {/* Recent Performance Trends */}
       {allRounds.length > 0 && (
-        <div className="bg-white/90 backdrop-blur rounded-xl shadow-md p-6 border border-primary-900/5">
-          <h3 className="text-lg font-semibold text-primary-800 mb-4">Recent Rounds</h3>
+        <div className="bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 backdrop-blur rounded-xl shadow-md p-6 border border-primary-900/5 dark:border-slate-800">
+          <h3 className="text-lg font-semibold text-primary-800 dark:text-primary-200 mb-4">Recent Rounds</h3>
           <div className="space-y-3">
             {allRounds.slice(0, 5).map((round) => {
               const totalPar = round.scores?.reduce((sum, score) => sum + score.par, 0) || 72;
@@ -227,7 +227,7 @@ const AnalyticsPage: React.FC = () => {
                 <Link 
                   key={round.id} 
                   to={linkTo}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors group"
+                  className="flex items-center justify-between p-3 bg-gray-50 dark:bg-slate-800 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors group"
                 >
                   <div className="flex-1">
                     <div className="flex items-center gap-3">
@@ -239,8 +239,8 @@ const AnalyticsPage: React.FC = () => {
                         {round.type === 'event' ? 'Event' : 'Individual'}
                       </div>
                       <div>
-                        <p className="font-medium text-gray-900 group-hover:text-primary-700">{round.courseName}</p>
-                        <p className="text-sm text-gray-600">
+                        <p className="font-medium text-gray-900 dark:text-slate-100 group-hover:text-primary-700 dark:group-hover:text-primary-300">{round.courseName}</p>
+                        <p className="text-sm text-gray-600 dark:text-slate-300">
                           {new Date(round.date).toLocaleDateString()} • {round.teeName}
                           {round.eventName && ` • ${round.eventName}`}
                         </p>
@@ -250,11 +250,11 @@ const AnalyticsPage: React.FC = () => {
                   <div className="flex items-center gap-3">
                     <div className="text-right">
                       <div className="text-xl font-bold text-primary-600">{round.grossScore}</div>
-                      <div className={`text-sm font-medium ${toPar < 0 ? 'text-green-600' : toPar > 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                      <div className={`text-sm font-medium ${toPar < 0 ? 'text-green-600 dark:text-green-300' : toPar > 0 ? 'text-red-600 dark:text-red-300' : 'text-gray-600 dark:text-slate-300'}`}>
                         {toPar > 0 ? '+' : ''}{toPar}
                       </div>
                     </div>
-                    <svg className="w-4 h-4 text-gray-400 group-hover:text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4 text-gray-400 dark:text-slate-500 group-hover:text-primary-600 dark:group-hover:text-primary-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </div>
@@ -265,7 +265,7 @@ const AnalyticsPage: React.FC = () => {
           
           {allRounds.length > 5 && (
             <div className="text-center mt-4">
-              <p className="text-sm text-gray-500">Showing 5 most recent rounds</p>
+              <p className="text-sm text-gray-500 dark:text-slate-400">Showing 5 most recent rounds</p>
             </div>
           )}
         </div>
@@ -273,19 +273,19 @@ const AnalyticsPage: React.FC = () => {
 
       {/* Completed Event Rounds Detail */}
       {myCompletedRounds.length > 0 && (
-        <div className="bg-white/90 backdrop-blur rounded-xl shadow-md p-6 border border-primary-900/5">
-          <h3 className="text-lg font-semibold text-primary-800 mb-4">Event Results & Winnings</h3>
+        <div className="bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 backdrop-blur rounded-xl shadow-md p-6 border border-primary-900/5 dark:border-slate-800">
+          <h3 className="text-lg font-semibold text-primary-800 dark:text-primary-200 mb-4">Event Results & Winnings</h3>
           <div className="space-y-4">
             {myCompletedRounds.map((round) => (
               <Link 
                 key={round.id} 
                 to={`/event/${round.eventId}`}
-                className="block border border-gray-200 rounded-lg p-4 hover:border-primary-300 hover:bg-primary-50/30 transition-colors group"
+                className="block border border-gray-200 dark:border-slate-700 rounded-lg p-4 hover:border-primary-300 dark:hover:border-primary-600 hover:bg-primary-50/30 dark:hover:bg-primary-900/20 transition-colors group"
               >
                 <div className="flex justify-between items-start mb-2">
                   <div>
-                    <h4 className="font-semibold text-primary-800 group-hover:text-primary-600">{round.eventName}</h4>
-                    <p className="text-sm text-gray-600">
+                    <h4 className="font-semibold text-primary-800 dark:text-primary-200 group-hover:text-primary-600 dark:group-hover:text-primary-300">{round.eventName}</h4>
+                    <p className="text-sm text-gray-600 dark:text-slate-300">
                       {new Date(round.datePlayed).toLocaleDateString()} • {round.courseName}
                       {round.teeName && ` • ${round.teeName}`}
                     </p>
@@ -293,11 +293,11 @@ const AnalyticsPage: React.FC = () => {
                   <div className="flex items-center gap-3">
                     <div className="text-right">
                       <div className="text-2xl font-bold text-primary-600">{round.finalScore}</div>
-                      <div className={`text-sm font-medium ${round.scoreToPar < 0 ? 'text-green-600' : round.scoreToPar > 0 ? 'text-red-600' : 'text-gray-600'}`}>
+                      <div className={`text-sm font-medium ${round.scoreToPar < 0 ? 'text-green-600 dark:text-green-300' : round.scoreToPar > 0 ? 'text-red-600 dark:text-red-300' : 'text-gray-600 dark:text-slate-300'}`}>
                         {round.scoreToPar > 0 ? '+' : ''}{round.scoreToPar}
                       </div>
                     </div>
-                    <svg className="w-5 h-5 text-gray-400 group-hover:text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-5 h-5 text-gray-400 dark:text-slate-500 group-hover:text-primary-600 dark:group-hover:text-primary-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </div>
@@ -327,12 +327,12 @@ const AnalyticsPage: React.FC = () => {
                 </div>
 
                 {(round.gameResults.nassau || round.gameResults.skins) && (
-                  <div className="pt-3 border-t border-gray-200">
-                    <div className="text-sm text-gray-600 mb-2">Game Results:</div>
+                  <div className="pt-3 border-t border-gray-200 dark:border-slate-700">
+                    <div className="text-sm text-gray-600 dark:text-slate-300 mb-2">Game Results:</div>
                     <div className="flex gap-6">
                       {round.gameResults.nassau && (
                         <div className="text-sm">
-                          <span className="text-gray-600">Nassau:</span>
+                          <span className="text-gray-600 dark:text-slate-300">Nassau:</span>
                           <span className={`font-bold ml-2 ${round.gameResults.nassau.winnings >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                             {round.gameResults.nassau.winnings >= 0 ? '+' : ''}${round.gameResults.nassau.winnings.toFixed(2)}
                           </span>
@@ -340,7 +340,7 @@ const AnalyticsPage: React.FC = () => {
                       )}
                       {round.gameResults.skins && (
                         <div className="text-sm">
-                          <span className="text-gray-600">Skins:</span>
+                          <span className="text-gray-600 dark:text-slate-300">Skins:</span>
                           <span className={`font-bold ml-2 ${round.gameResults.skins.winnings >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                             {round.gameResults.skins.winnings >= 0 ? '+' : ''}${round.gameResults.skins.winnings.toFixed(2)}
                           </span>
