@@ -259,6 +259,68 @@ export async function saveEventToCloud(event: Event, currentProfileId: string): 
 }
 
 /**
+ * Save only selected event fields to cloud.
+ * Prevents stale local snapshots from overwriting golfers/scorecards unintentionally.
+ */
+export async function saveEventPatchToCloud(
+  event: Event,
+  patch: Partial<Event>,
+  currentProfileId: string
+): Promise<boolean> {
+  try {
+    const client = getClient();
+    if (!client) return false;
+
+    const updateData: Record<string, any> = {
+      id: event.id,
+      lastModified: new Date().toISOString(),
+    };
+
+    if ('name' in patch) updateData.name = event.name;
+    if ('date' in patch) updateData.date = event.date;
+    if ('isPublic' in patch) updateData.isPublic = !!event.isPublic;
+    if ('isCompleted' in patch) updateData.isCompleted = !!event.isCompleted;
+    if ('scorecardView' in patch) updateData.scorecardView = event.scorecardView || 'individual';
+    if ('status' in patch) updateData.status = event.status || null;
+    if ('hubType' in patch) updateData.hubType = event.hubType || 'event';
+    if ('parentGroupId' in patch) updateData.parentGroupId = event.parentGroupId || null;
+    if ('completedAt' in patch) updateData.completedAt = event.completedAt || null;
+    if ('ownerProfileId' in patch) updateData.ownerProfileId = event.ownerProfileId || currentProfileId;
+    if ('shareCode' in patch) updateData.shareCode = event.shareCode || null;
+
+    if ('course' in patch) {
+      updateData.courseId = event.course?.courseId || null;
+      updateData.teeName = event.course?.teeName || null;
+    }
+    if ('games' in patch) updateData.gamesJson = JSON.stringify(event.games || {});
+    if ('pinkyResults' in patch) updateData.pinkyResultsJson = JSON.stringify(event.pinkyResults || {});
+    if ('greenieResults' in patch) updateData.greenieResultsJson = JSON.stringify(event.greenieResults || {});
+    if ('groupSettings' in patch) {
+      updateData.groupSettingsJson = event.hubType === 'group'
+        ? JSON.stringify(event.groupSettings || {})
+        : null;
+    }
+
+    const { data, errors } = await client.models.Event.update(updateData as any);
+    if (errors) {
+      console.error('❌ saveEventPatchToCloud: update failed:', errors);
+      return false;
+    }
+
+    // If update returns null (record not found), create full record.
+    if (!data) {
+      const shareCode = await saveEventToCloud(event, currentProfileId);
+      return !!shareCode;
+    }
+
+    return true;
+  } catch (error) {
+    console.error('❌ saveEventPatchToCloud: exception:', error);
+    return false;
+  }
+}
+
+/**
  * Load event from cloud by ID
  */
 export async function loadEventById(eventId: string): Promise<Event | null> {
@@ -308,7 +370,7 @@ export async function loadEventById(eventId: string): Promise<Event | null> {
       shareCode: cloudEvent.shareCode || undefined,
       scorecardView: cloudEvent.scorecardView as any || 'individual',
       status: (cloudEvent as any).status as 'setup' | 'started' | 'completed' | undefined,
-      hubType: ((cloudEvent as any).hubType as 'event' | 'group') || 'event',
+      hubType: (((cloudEvent as any).hubType as 'event' | 'group') || (((cloudEvent as any).groupSettingsJson ? 'group' : 'event') as 'event' | 'group')),
       parentGroupId: (cloudEvent as any).parentGroupId || undefined,
       
       // Parse JSON strings back to objects
@@ -375,7 +437,7 @@ export async function loadEventByShareCode(shareCode: string): Promise<Event | n
       shareCode: cloudEvent.shareCode || undefined,
       scorecardView: cloudEvent.scorecardView as any || 'individual',
       status: (cloudEvent as any).status as 'setup' | 'started' | 'completed' | undefined,
-      hubType: ((cloudEvent as any).hubType as 'event' | 'group') || 'event',
+      hubType: (((cloudEvent as any).hubType as 'event' | 'group') || (((cloudEvent as any).groupSettingsJson ? 'group' : 'event') as 'event' | 'group')),
       parentGroupId: (cloudEvent as any).parentGroupId || undefined,
       
       // Parse JSON strings back to objects
@@ -432,7 +494,7 @@ export async function loadUserEventsFromCloud(): Promise<Event[]> {
       shareCode: cloudEvent.shareCode || undefined,
       scorecardView: cloudEvent.scorecardView as any || 'individual',
       status: (cloudEvent as any).status as 'setup' | 'started' | 'completed' | undefined,
-      hubType: ((cloudEvent as any).hubType as 'event' | 'group') || 'event',
+      hubType: (((cloudEvent as any).hubType as 'event' | 'group') || (((cloudEvent as any).groupSettingsJson ? 'group' : 'event') as 'event' | 'group')),
       parentGroupId: (cloudEvent as any).parentGroupId || undefined,
       
       golfers: cloudEvent.golfersJson ? JSON.parse(cloudEvent.golfersJson as string) : [],
@@ -494,7 +556,7 @@ export async function loadPublicEventsFromCloud(): Promise<Event[]> {
         shareCode: cloudEvent.shareCode || undefined,
         scorecardView: (cloudEvent.scorecardView as any) || 'individual',
         status: (cloudEvent as any).status as 'setup' | 'started' | 'completed' | undefined,
-        hubType: ((cloudEvent as any).hubType as 'event' | 'group') || 'event',
+        hubType: (((cloudEvent as any).hubType as 'event' | 'group') || (((cloudEvent as any).groupSettingsJson ? 'group' : 'event') as 'event' | 'group')),
 
         golfers: cloudEvent.golfersJson ? JSON.parse(cloudEvent.golfersJson as string) : [],
         groups: cloudEvent.groupsJson ? JSON.parse(cloudEvent.groupsJson as string) : [],

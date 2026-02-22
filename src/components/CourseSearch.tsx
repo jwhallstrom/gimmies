@@ -78,8 +78,14 @@ export function CourseSearch({ selectedCourseId, onSelect, disabled }: CourseSea
 
       {/* Full-screen Modal */}
       {isOpen && !disabled && createPortal(
-        <div className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-sm">
-          <div className="h-full flex flex-col bg-white sm:max-w-lg sm:mx-auto sm:my-8 sm:rounded-2xl sm:h-[calc(100%-4rem)] sm:shadow-2xl">
+        <div className="fixed inset-0 z-[10020] bg-black/50 backdrop-blur-sm">
+          <div
+            className="h-full flex flex-col bg-white sm:max-w-lg sm:mx-auto sm:my-8 sm:rounded-2xl sm:h-[calc(100%-4rem)] sm:shadow-2xl"
+            style={{
+              paddingTop: 'env(safe-area-inset-top, 0px)',
+              paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+            }}
+          >
             {/* Header */}
             <div className="bg-primary-700 px-4 py-4 flex items-center gap-3 sm:rounded-t-2xl">
               <button

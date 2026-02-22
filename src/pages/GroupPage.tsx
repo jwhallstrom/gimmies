@@ -12,9 +12,9 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import useStore from '../state/store';
-import { STATUS_TIERS } from '../state/types';
 import type { GolferProfile } from '../state/types';
 import { useEventSync } from '../hooks/useEventSync';
+import { getEffectiveVerifiedStatus, getStatusDisplay } from '../utils/verifiedStatus';
 import ChatTab from '../components/tabs/ChatTab';
 import GroupInfoPanel from '../components/group/GroupInfoPanel';
 import GroupAvatar from '../components/group/GroupAvatar';
@@ -468,8 +468,8 @@ const GroupPage: React.FC = () => {
     const profile: GolferProfile | undefined = golfer.profileId
       ? profiles.find((p: GolferProfile) => p.id === golfer.profileId)
       : undefined;
-    const verifiedStatus = profile?.verifiedStatus;
-    const statusTier = verifiedStatus ? STATUS_TIERS[verifiedStatus.statusLevel] || STATUS_TIERS[0] : STATUS_TIERS[0];
+    const verifiedStatus = getEffectiveVerifiedStatus(profile);
+    const statusTier = getStatusDisplay(profile).tier;
     return {
       id: selectedPlayerId,
       name: profile?.name || golfer.displayName || golfer.customName || 'Unknown',
@@ -480,11 +480,11 @@ const GroupPage: React.FC = () => {
       roundsPlayed: (profile?.individualRounds || []).length,
       homeCourse: profile?.preferences?.homeCourseName,
       statusTier,
-      verifiedStatus: verifiedStatus ? {
+      verifiedStatus: {
         statusLevel: verifiedStatus.statusLevel,
         verifiedRounds: verifiedStatus.verifiedRounds,
         badges: verifiedStatus.badges,
-      } : undefined,
+      },
     };
   }, [selectedPlayerId, event.golfers, profiles]);
 
@@ -531,7 +531,7 @@ const GroupPage: React.FC = () => {
   };
 
   return (
-    <div className="h-full min-h-0 -mx-4 -mt-4 flex flex-col">
+    <div className="h-full min-h-0 -mx-4 flex flex-col">
 
       {/* ===== HEADER ===== */}
       <div className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 px-3 py-2.5 shadow-lg sticky top-0 z-30 flex-shrink-0">

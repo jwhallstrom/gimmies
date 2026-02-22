@@ -13,6 +13,7 @@ import React, { useState, useMemo } from 'react';
 import type { Event } from '../state/types';
 import { generateRoundRecap, generateRecapPushMessage } from '../utils/roundRecap';
 import useStore from '../state/store';
+import { getCourseById } from '../data/cloudCourses';
 
 interface Props {
   event: Event;
@@ -29,6 +30,9 @@ const EventNotifications: React.FC<Props> = ({ event, onClose }) => {
   const [sent, setSent] = useState(false);
   
   const updateEvent = useStore(s => s.updateEvent);
+  const addChatMessage = useStore(s => s.addChatMessage);
+  const currentProfile = useStore(s => s.currentProfile);
+  const addToast = useStore(s => s.addToast);
   const profiles = useStore(s => s.profiles);
   const autoRecapDisabled = event.settings?.disableAutoRecap ?? false;
   
@@ -55,28 +59,63 @@ const EventNotifications: React.FC<Props> = ({ event, onClose }) => {
     return golfer.displayName || golfer.customName || 'Unknown';
   };
   
-  // Get course name - blank for now, could be looked up by courseId
-  const courseName = '';
+  const courseName = event.course?.courseId ? getCourseById(event.course.courseId)?.name || '' : '';
+  const chatTargetId = event.parentGroupId || event.id;
   
   const handleSend = async () => {
     if (!selectedType) return;
+    if (!currentProfile) return;
     
     setIsSending(true);
-    
-    // Simulate sending (in production, call notification service)
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    console.log('Sending notification:', {
-      type: selectedType,
-      eventId: event.id,
-      golferCount,
-      teeTime: selectedType === 'tee_time' ? teeTime : undefined,
-      message: selectedType === 'custom' ? customMessage : undefined,
-      recap: selectedType === 'recap' ? recap : undefined,
-    });
-    
-    setIsSending(false);
-    setSent(true);
+
+    try {
+      let messageText = '';
+      let messageType: 'text' | 'system' = 'system';
+
+      if (selectedType === 'tee_time') {
+        const teeTimeText = new Date(`2000-01-01T${teeTime}`).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        const dateText = new Date(event.date).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+        messageText = [
+          '⛳ Tee Time Alert',
+          `${event.name}`,
+          `${dateText} at ${teeTimeText}${courseName ? ` • ${courseName}` : ''}`,
+          `From ${currentProfile.name}`,
+        ].join('\n');
+      } else if (selectedType === 'reminder') {
+        const dateText = new Date(event.date).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+        messageText = [
+          '📅 Game Reminder',
+          `Reminder: ${event.name}`,
+          `We\'re playing ${dateText}${courseName ? ` at ${courseName}` : ''}.`,
+          'See you on the course! ⛳',
+        ].join('\n');
+      } else if (selectedType === 'recap') {
+        messageText = [
+          '🏁 Round Recap',
+          recapPush.body,
+          ...recap.highlights.slice(0, 5).map(h => `${h.emoji} ${h.title}: ${h.description}`),
+        ].join('\n');
+      } else {
+        messageType = 'text';
+        messageText = customMessage.trim();
+      }
+
+      await addChatMessage(chatTargetId, messageText, {
+        type: messageType,
+        metadata: {
+          source: 'event_notifications',
+          notificationType: selectedType,
+          eventId: event.id,
+        },
+      });
+
+      setSent(true);
+    } catch (error) {
+      console.error('Failed to send event notification:', error);
+      addToast('Failed to send reminder. Please try again.', 'error');
+    } finally {
+      setIsSending(false);
+    }
   };
   
   // Success state

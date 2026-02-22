@@ -251,6 +251,37 @@ export const useStore = create<State>()(
           const myEvents = cloudEvents.filter(event => 
             event.golfers.some(g => g.profileId === currentProfile.id)
           );
+
+          // Hydrate participant profiles so member cards show correct names/avatars/status.
+          try {
+            const participantProfileIds = Array.from(
+              new Set(
+                myEvents
+                  .flatMap((event) => (event.golfers || []).map((g) => g.profileId))
+                  .filter((id): id is string => Boolean(id))
+              )
+            );
+            if (participantProfileIds.length > 0) {
+              const { loadCloudProfilesByIds } = await import('../utils/profileSync');
+              const cloudParticipantProfiles = await loadCloudProfilesByIds(participantProfileIds);
+              if (cloudParticipantProfiles.length > 0) {
+                const existingProfiles = get().profiles;
+                const byId = new Map(existingProfiles.map((p) => [p.id, p]));
+                for (const p of cloudParticipantProfiles) {
+                  const existing = byId.get(p.id);
+                  byId.set(p.id, existing ? { ...existing, ...p } as any : p as any);
+                }
+                const nextProfiles = Array.from(byId.values()) as any[];
+                const nextCurrentProfile = nextProfiles.find((p) => p.id === currentProfile.id) || get().currentProfile;
+                set({
+                  profiles: nextProfiles as any,
+                  currentProfile: nextCurrentProfile as any,
+                });
+              }
+            }
+          } catch (profileHydrateError) {
+            console.error('Failed to hydrate participant profiles from cloud:', profileHydrateError);
+          }
           
           for (const event of myEvents) {
             event.chat = await loadChatMessagesFromCloud(event.id);
@@ -360,46 +391,42 @@ export const useStore = create<State>()(
             }
           });
           
-          const localEventIds = new Set(get().events.map(e => e.id));
-          const localCompletedEventIds = new Set(get().completedEvents.map(e => e.id));
-          const newActiveEvents = activeEvents.filter(e => !localEventIds.has(e.id));
-          const newCompletedEventsToAdd = completedEvents.filter(e => !localCompletedEventIds.has(e.id));
-          const completedEventIds = new Set(completedEvents.map(e => e.id));
-          const cleanedActiveEvents = get().events.filter(e => !completedEventIds.has(e.id));
-          
-          if (newActiveEvents.length > 0 || newCompletedEventsToAdd.length > 0 || cleanedActiveEvents.length !== get().events.length || newCompletedRoundsFromCloud.length > 0 || newIndividualRoundsFromCloud.length > 0) {
-            set({
-              events: [...cleanedActiveEvents, ...newActiveEvents],
-              completedEvents: [...get().completedEvents, ...newCompletedEventsToAdd],
-              completedRounds: [...get().completedRounds, ...newCompletedRoundsFromCloud],
-              profiles: get().profiles.map(p => {
-                if (p.id === currentProfile.id) {
-                  const existingRounds = p.individualRounds || [];
-                  const roundsToAdd = newIndividualRoundsFromCloud.filter(newRound => 
-                    !existingRounds.some(existing => existing.id === newRound.id || 
-                      (existing.date === newRound.date && existing.courseId === newRound.courseId && 
-                       existing.teeName === newRound.teeName && existing.grossScore === newRound.grossScore))
-                  );
-                  return { ...p, individualRounds: [...existingRounds, ...roundsToAdd] };
-                }
-                return p;
-              })
-            });
-            
-            if (newIndividualRoundsFromCloud.length > 0) {
-              const existingRounds = currentProfile.individualRounds || [];
-              const roundsToAdd = newIndividualRoundsFromCloud.filter(newRound => 
-                !existingRounds.some(existing => existing.id === newRound.id || 
-                  (existing.date === newRound.date && existing.courseId === newRound.courseId && 
-                   existing.teeName === newRound.teeName && existing.grossScore === newRound.grossScore))
-              );
-              if (roundsToAdd.length > 0) {
-                import('../utils/roundSync').then(({ batchSaveIndividualRoundsToCloud }) => {
-                  batchSaveIndividualRoundsToCloud(roundsToAdd).catch(console.error);
-                });
+          const existingCompleted = get().completedRounds || [];
+          const mergedCompletedRounds = [...existingCompleted, ...newCompletedRoundsFromCloud];
+
+          // Authoritative replacement for cloud-enabled sessions:
+          // active/completed event lists come from cloud membership, preventing stale local rosters.
+          set({
+            events: activeEvents,
+            completedEvents,
+            completedRounds: mergedCompletedRounds,
+            profiles: get().profiles.map(p => {
+              if (p.id === currentProfile.id) {
+                const existingRounds = p.individualRounds || [];
+                const roundsToAdd = newIndividualRoundsFromCloud.filter(newRound =>
+                  !existingRounds.some(existing => existing.id === newRound.id ||
+                    (existing.date === newRound.date && existing.courseId === newRound.courseId &&
+                      existing.teeName === newRound.teeName && existing.grossScore === newRound.grossScore))
+                );
+                return { ...p, individualRounds: [...existingRounds, ...roundsToAdd] };
               }
-              setTimeout(() => get().calculateAndUpdateHandicap(currentProfile.id), 0);
+              return p;
+            })
+          });
+
+          if (newIndividualRoundsFromCloud.length > 0) {
+            const existingRounds = currentProfile.individualRounds || [];
+            const roundsToAdd = newIndividualRoundsFromCloud.filter(newRound =>
+              !existingRounds.some(existing => existing.id === newRound.id ||
+                (existing.date === newRound.date && existing.courseId === newRound.courseId &&
+                  existing.teeName === newRound.teeName && existing.grossScore === newRound.grossScore))
+            );
+            if (roundsToAdd.length > 0) {
+              import('../utils/roundSync').then(({ batchSaveIndividualRoundsToCloud }) => {
+                batchSaveIndividualRoundsToCloud(roundsToAdd).catch(console.error);
+              });
             }
+            setTimeout(() => get().calculateAndUpdateHandicap(currentProfile.id), 0);
           }
           
           // Load CompletedRounds from cloud

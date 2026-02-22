@@ -222,7 +222,28 @@ export const createEventSlice = (
         return { ...e, ...patch, games: updatedGames, lastModified: new Date().toISOString() };
       })
     }));
-    await syncEventToCloud(id, get);
+
+    if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+      const rosterKeysTouched =
+        'golfers' in patch ||
+        'groups' in patch ||
+        'scorecards' in patch;
+
+      if (rosterKeysTouched) {
+        await syncEventToCloud(id, get);
+      } else {
+        try {
+          const event = get().events.find((e: Event) => e.id === id);
+          const profile = get().currentProfile;
+          if (event && profile) {
+            const { saveEventPatchToCloud } = await import('../../utils/eventSync');
+            await saveEventPatchToCloud(event, patch, profile.id);
+          }
+        } catch (error) {
+          console.error('Failed to sync event patch to cloud:', error);
+        }
+      }
+    }
   },
   
   deleteEvent: async (eventId: string) => {

@@ -111,9 +111,12 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
 
   if (isGuest) {
     return (
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 1rem))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 1rem))' }}>
-        <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-full">
-          <div className="bg-primary-900 p-4 text-white flex justify-between items-center flex-shrink-0">
+      <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-sm">
+        <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-t-2xl sm:rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col h-[100dvh] sm:h-auto sm:max-h-[calc(100dvh-2rem)]">
+          <div
+            className="bg-primary-900 p-4 text-white flex justify-between items-center flex-shrink-0"
+            style={{ paddingTop: 'calc(1rem + env(safe-area-inset-top, 0px))' }}
+          >
             <h2 className="text-lg font-bold">New Event</h2>
             <button onClick={onClose} className="text-white/80 hover:text-white" aria-label="Close">
               <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -121,7 +124,7 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
               </svg>
             </button>
           </div>
-          <div className="p-5">
+          <div className="p-5 flex-1 overflow-y-auto">
             <SignInRequired
               title="🔒 Sign in to create events"
               message="Guest Mode is browse-only right now. Sign in to create events, invite players, and sync across devices."
@@ -198,11 +201,14 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
   const canCreate = Boolean(eventName.trim() && eventDate && selectedCourseId && selectedTeeName);
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top, 1rem))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom, 1rem))' }}>
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col max-h-full">
+    <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-sm">
+      <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col h-[100dvh] sm:h-auto sm:max-h-[calc(100dvh-2rem)]">
         
         {/* Header */}
-        <div className="bg-primary-600 p-4 text-white flex justify-between items-center flex-shrink-0">
+        <div
+          className="bg-primary-600 p-4 text-white flex justify-between items-center flex-shrink-0"
+          style={{ paddingTop: 'calc(1rem + env(safe-area-inset-top, 0px))' }}
+        >
           <h2 className="text-lg font-bold">New Event Setup</h2>
           <button onClick={onClose} className="text-white/80 hover:text-white" aria-label="Close Wizard">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -218,7 +224,7 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
         </div>
 
         {/* Content */}
-        <div className="p-6 flex-1 overflow-y-auto">
+        <div className="p-6 flex-1 min-h-0 overflow-y-auto">
           
           {step === 'details' && (
             <div className="space-y-4">
@@ -322,7 +328,7 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
           )}
 
           {step === 'course' && (
-            <div className="space-y-4 min-h-[400px] pb-20">
+            <div className="space-y-4 min-h-[400px]">
               <h3 className="text-xl font-semibold text-gray-800">Course & Tee</h3>
               <p className="text-sm text-gray-600">Pick the course and tees your group will play.</p>
               
@@ -461,7 +467,10 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
         </div>
 
         {/* Footer Actions */}
-        <div className="p-4 border-t bg-gray-50 flex justify-between items-center flex-shrink-0">
+        <div
+          className="p-4 border-t bg-gray-50 flex justify-between items-center flex-shrink-0"
+          style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
+        >
           {step !== 'details' ? (
             <button
               onClick={handleBack}
