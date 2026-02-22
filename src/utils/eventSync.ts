@@ -64,6 +64,18 @@ function deserializeCloudChatPayload(rawText: string): Partial<ChatMessage> {
   }
 }
 
+function parseJsonField<T>(value: unknown, fallback: T): T {
+  if (value == null) return fallback;
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      return fallback;
+    }
+  }
+  return value as T;
+}
+
 /**
  * Save a chat message to cloud (as individual record)
  */
@@ -474,6 +486,7 @@ export async function loadUserEventsFromCloud(): Promise<Event[]> {
     console.log('Loading user events from cloud...');
     const events: any[] = [];
     let nextToken: string | null | undefined = undefined;
+    let sawAnyData = false;
     do {
       const response = await client.models.Event.list(
         nextToken ? { nextToken } : undefined
@@ -481,13 +494,21 @@ export async function loadUserEventsFromCloud(): Promise<Event[]> {
       const data = response.data;
       const errors = response.errors;
       const pageToken = response.nextToken as string | null | undefined;
-      if (errors) {
-        console.error('Failed to load events from cloud:', errors);
-        return [];
+      if (errors?.length) {
+        // Amplify list can return partial data with record-level errors.
+        // Keep good records instead of blanking Home.
+        console.warn('loadUserEventsFromCloud: partial page errors:', errors);
       }
-      if (data?.length) events.push(...data);
+      if (data?.length) {
+        events.push(...data);
+        sawAnyData = true;
+      }
       nextToken = pageToken;
     } while (nextToken);
+
+    if (!sawAnyData) {
+      console.warn('loadUserEventsFromCloud: no readable event records returned');
+    }
 
     const localEvents: Event[] = events.map((cloudEvent) => ({
       id: cloudEvent.id,
@@ -506,13 +527,13 @@ export async function loadUserEventsFromCloud(): Promise<Event[]> {
       hubType: (((cloudEvent as any).hubType as 'event' | 'group') || (((cloudEvent as any).groupSettingsJson ? 'group' : 'event') as 'event' | 'group')),
       parentGroupId: (cloudEvent as any).parentGroupId || undefined,
       
-      golfers: cloudEvent.golfersJson ? JSON.parse(cloudEvent.golfersJson as string) : [],
-      groups: cloudEvent.groupsJson ? JSON.parse(cloudEvent.groupsJson as string) : [],
-      scorecards: cloudEvent.scorecardsJson ? JSON.parse(cloudEvent.scorecardsJson as string) : [],
-      games: cloudEvent.gamesJson ? JSON.parse(cloudEvent.gamesJson as string) : {},
-      pinkyResults: cloudEvent.pinkyResultsJson ? JSON.parse(cloudEvent.pinkyResultsJson as string) : {},
-      greenieResults: cloudEvent.greenieResultsJson ? JSON.parse(cloudEvent.greenieResultsJson as string) : {},
-      groupSettings: (cloudEvent as any).groupSettingsJson ? JSON.parse((cloudEvent as any).groupSettingsJson as string) : undefined,
+      golfers: parseJsonField<any[]>(cloudEvent.golfersJson, []),
+      groups: parseJsonField<any[]>(cloudEvent.groupsJson, []),
+      scorecards: parseJsonField<any[]>(cloudEvent.scorecardsJson, []),
+      games: parseJsonField<any>(cloudEvent.gamesJson, {}),
+      pinkyResults: parseJsonField<any>(cloudEvent.pinkyResultsJson, {}),
+      greenieResults: parseJsonField<any>(cloudEvent.greenieResultsJson, {}),
+      groupSettings: parseJsonField<any>((cloudEvent as any).groupSettingsJson, undefined),
       
       createdAt: cloudEvent.createdAt,
       lastModified: cloudEvent.lastModified || new Date().toISOString(),
@@ -547,9 +568,9 @@ export async function loadPublicEventsFromCloud(): Promise<Event[]> {
       const errors = response.errors;
       const pageToken = response.nextToken as string | null | undefined;
 
-      if (errors) {
-        console.error('Failed to load public events from cloud:', errors);
-        return [];
+      if (errors?.length) {
+        // Keep partial good data if some records are unreadable.
+        console.warn('loadPublicEventsFromCloud: partial page errors:', errors);
       }
       if (data?.length) events.push(...data);
       nextToken = pageToken;
@@ -576,13 +597,13 @@ export async function loadPublicEventsFromCloud(): Promise<Event[]> {
         status: (cloudEvent as any).status as 'setup' | 'started' | 'completed' | undefined,
         hubType: (((cloudEvent as any).hubType as 'event' | 'group') || (((cloudEvent as any).groupSettingsJson ? 'group' : 'event') as 'event' | 'group')),
 
-        golfers: cloudEvent.golfersJson ? JSON.parse(cloudEvent.golfersJson as string) : [],
-        groups: cloudEvent.groupsJson ? JSON.parse(cloudEvent.groupsJson as string) : [],
-        scorecards: cloudEvent.scorecardsJson ? JSON.parse(cloudEvent.scorecardsJson as string) : [],
-        games: cloudEvent.gamesJson ? JSON.parse(cloudEvent.gamesJson as string) : {},
-        pinkyResults: cloudEvent.pinkyResultsJson ? JSON.parse(cloudEvent.pinkyResultsJson as string) : {},
-        greenieResults: cloudEvent.greenieResultsJson ? JSON.parse(cloudEvent.greenieResultsJson as string) : {},
-        groupSettings: (cloudEvent as any).groupSettingsJson ? JSON.parse((cloudEvent as any).groupSettingsJson as string) : undefined,
+        golfers: parseJsonField<any[]>(cloudEvent.golfersJson, []),
+        groups: parseJsonField<any[]>(cloudEvent.groupsJson, []),
+        scorecards: parseJsonField<any[]>(cloudEvent.scorecardsJson, []),
+        games: parseJsonField<any>(cloudEvent.gamesJson, {}),
+        pinkyResults: parseJsonField<any>(cloudEvent.pinkyResultsJson, {}),
+        greenieResults: parseJsonField<any>(cloudEvent.greenieResultsJson, {}),
+        groupSettings: parseJsonField<any>((cloudEvent as any).groupSettingsJson, undefined),
 
         createdAt: cloudEvent.createdAt,
         lastModified: cloudEvent.lastModified || new Date().toISOString(),
