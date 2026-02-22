@@ -472,13 +472,22 @@ export async function loadUserEventsFromCloud(): Promise<Event[]> {
     if (!client) return [];
 
     console.log('Loading user events from cloud...');
-
-    const { data: events, errors } = await client.models.Event.list();
-
-    if (errors) {
-      console.error('Failed to load events from cloud:', errors);
-      return [];
-    }
+    const events: any[] = [];
+    let nextToken: string | null | undefined = undefined;
+    do {
+      const response = await client.models.Event.list(
+        nextToken ? { nextToken } : undefined
+      );
+      const data = response.data;
+      const errors = response.errors;
+      const pageToken = response.nextToken as string | null | undefined;
+      if (errors) {
+        console.error('Failed to load events from cloud:', errors);
+        return [];
+      }
+      if (data?.length) events.push(...data);
+      nextToken = pageToken;
+    } while (nextToken);
 
     const localEvents: Event[] = events.map((cloudEvent) => ({
       id: cloudEvent.id,
@@ -527,15 +536,24 @@ export async function loadPublicEventsFromCloud(): Promise<Event[]> {
   try {
     const client = getClient();
     if (!client) return [];
+    const events: any[] = [];
+    let nextToken: string | null | undefined = undefined;
+    do {
+      const response = await client.models.Event.list({
+        filter: { isPublic: { eq: true } },
+        ...(nextToken ? { nextToken } : {}),
+      });
+      const data = response.data;
+      const errors = response.errors;
+      const pageToken = response.nextToken as string | null | undefined;
 
-    const { data: events, errors } = await client.models.Event.list({
-      filter: { isPublic: { eq: true } },
-    });
-
-    if (errors) {
-      console.error('Failed to load public events from cloud:', errors);
-      return [];
-    }
+      if (errors) {
+        console.error('Failed to load public events from cloud:', errors);
+        return [];
+      }
+      if (data?.length) events.push(...data);
+      nextToken = pageToken;
+    } while (nextToken);
 
     const localEvents: Event[] = (events || [])
       .filter((cloudEvent) => !cloudEvent.isCompleted)
