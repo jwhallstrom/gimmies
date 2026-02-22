@@ -41,6 +41,7 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
   const getEventSettlements = useStore((s) => s.getEventSettlements);
 
   const [showSettlements, setShowSettlements] = useState(false);
+  const [payoutView, setPayoutView] = useState<'me' | 'admin'>('me');
   const [teamModal, setTeamModal] = useState<{ 
     name: string; 
     members: string[]; 
@@ -226,11 +227,72 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
   const myBuyin = myGolferId ? buyinByGolfer[myGolferId] ?? 0 : 0;
   const incomplete = event.scorecards.some((sc: any) => sc.scores.some((s: any) => s.strokes == null));
 
+  const allSettlements = useMemo(() => getEventSettlements(eventId), [eventId, getEventSettlements]);
+
   // Get my settlements only
   const mySettlements = useMemo(() => {
-    const all = getEventSettlements(eventId);
-    return all.filter((s: any) => s.fromProfileId === myGolferId || s.toProfileId === myGolferId);
-  }, [eventId, myGolferId, getEventSettlements]);
+    return allSettlements.filter((s: any) => s.fromProfileId === myGolferId || s.toProfileId === myGolferId);
+  }, [allSettlements, myGolferId]);
+
+  const adminRows = useMemo(() => {
+    const rows = event.golfers
+      .map((eg: any) => {
+        const golferId = eg.profileId || eg.customName || eg.displayName;
+        if (!golferId) return null;
+
+        const breakdown = gameBreakdown[golferId] || {
+          nassau: 0,
+          skins: 0,
+          pinky: 0,
+          greenie: 0,
+          stableford: 0,
+          ninePoint: 0,
+          bingoBangoBongo: 0,
+          wolf: 0,
+          dots: 0,
+        };
+        const winnings =
+          (breakdown.nassau || 0) +
+          (breakdown.skins || 0) +
+          (breakdown.pinky || 0) +
+          (breakdown.greenie || 0) +
+          (breakdown.stableford || 0) +
+          (breakdown.ninePoint || 0) +
+          (breakdown.bingoBangoBongo || 0) +
+          (breakdown.wolf || 0) +
+          (breakdown.dots || 0);
+
+        const pendingToPay = allSettlements
+          .filter((s: any) => s.status === 'pending' && s.fromProfileId === golferId)
+          .reduce((sum: number, s: any) => sum + (s.roundedAmount || 0), 0);
+        const pendingToCollect = allSettlements
+          .filter((s: any) => s.status === 'pending' && s.toProfileId === golferId)
+          .reduce((sum: number, s: any) => sum + (s.roundedAmount || 0), 0);
+
+        return {
+          golferId,
+          name: golfersById[golferId] || golferId,
+          buyin: buyinByGolfer[golferId] || 0,
+          winnings,
+          net: netByGolfer[golferId] || 0,
+          pendingNet: pendingToCollect - pendingToPay,
+        };
+      })
+      .filter(Boolean) as Array<{
+        golferId: string;
+        name: string;
+        buyin: number;
+        winnings: number;
+        net: number;
+        pendingNet: number;
+      }>;
+
+    rows.sort((a, b) => b.net - a.net);
+    return rows;
+  }, [event.golfers, gameBreakdown, golfersById, buyinByGolfer, netByGolfer, allSettlements]);
+
+  const settlementsForView = isOwner && payoutView === 'admin' ? allSettlements : mySettlements;
+  const pendingSettlementsForView = settlementsForView.filter((s: any) => s.status === 'pending');
 
   // Event actions
   const handleStartEvent = () => {
@@ -341,6 +403,29 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
   // ============ STARTED OR COMPLETED - Show Game Results ============
   return (
     <div className="space-y-4">
+      {isOwner && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-1">
+          <div className="flex gap-1">
+            <button
+              onClick={() => setPayoutView('me')}
+              className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${
+                payoutView === 'me' ? 'bg-primary-600 text-white' : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              My View
+            </button>
+            <button
+              onClick={() => setPayoutView('admin')}
+              className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${
+                payoutView === 'admin' ? 'bg-primary-600 text-white' : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              Admin View
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Completed: Big Net Result Banner */}
       {isCompleted && myNet != null && (
         <div className={`rounded-2xl p-6 text-center ${myNet >= 0 ? 'bg-gradient-to-br from-green-500 to-green-600' : 'bg-gradient-to-br from-red-500 to-red-600'} text-white shadow-lg`}>
@@ -767,8 +852,47 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
         </div>
       )}
 
-      {/* Settlements - Only show user's */}
-      {(isStarted || isCompleted) && mySettlements.length > 0 && (
+      {isOwner && payoutView === 'admin' && (isStarted || isCompleted) && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-slate-50 to-white">
+            <div className="font-bold text-gray-900 text-sm">All Players Ledger</div>
+            <div className="text-xs text-gray-500">Buy-in, winnings, net, and pending settlements</div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="text-left px-3 py-2 font-semibold text-gray-600">Player</th>
+                  <th className="text-right px-3 py-2 font-semibold text-gray-600">Buy-in</th>
+                  <th className="text-right px-3 py-2 font-semibold text-gray-600">Winnings</th>
+                  <th className="text-right px-3 py-2 font-semibold text-gray-600">Net</th>
+                  <th className="text-right px-3 py-2 font-semibold text-gray-600">Pending</th>
+                </tr>
+              </thead>
+              <tbody>
+                {adminRows.map((row) => (
+                  <tr key={row.golferId} className="border-t border-gray-100">
+                    <td className="px-3 py-2 text-gray-900">{row.name}</td>
+                    <td className="px-3 py-2 text-right text-gray-700">{currency(row.buyin)}</td>
+                    <td className={`px-3 py-2 text-right font-medium ${row.winnings >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {signedCurrency(row.winnings)}
+                    </td>
+                    <td className={`px-3 py-2 text-right font-bold ${row.net >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                      {signedCurrency(row.net)}
+                    </td>
+                    <td className={`px-3 py-2 text-right font-medium ${row.pendingNet >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {signedCurrency(row.pendingNet)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Settlements */}
+      {(isStarted || isCompleted) && (settlementsForView.length > 0 || (isOwner && payoutView === 'admin')) && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <button
             onClick={() => setShowSettlements(!showSettlements)}
@@ -777,9 +901,11 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
             <div className="flex items-center gap-3">
               <span className="text-lg">💸</span>
               <div className="text-left">
-                <div className="font-bold text-gray-900 text-sm">Settle Up</div>
+                <div className="font-bold text-gray-900 text-sm">
+                  {isOwner && payoutView === 'admin' ? 'Settle Up (All Players)' : 'Settle Up'}
+                </div>
                 <div className="text-xs text-gray-500">
-                  {mySettlements.filter((s: any) => s.status === 'pending').length} pending
+                  {pendingSettlementsForView.length} pending
                 </div>
               </div>
             </div>
