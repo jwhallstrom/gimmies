@@ -510,7 +510,9 @@ export async function loadUserEventsFromCloud(): Promise<Event[]> {
       console.warn('loadUserEventsFromCloud: no readable event records returned');
     }
 
-    const localEvents: Event[] = events.map((cloudEvent) => ({
+    const validEvents = events.filter((cloudEvent: any) => cloudEvent && cloudEvent.id);
+
+    const localEvents: Event[] = validEvents.map((cloudEvent) => ({
       id: cloudEvent.id,
       name: cloudEvent.name,
       date: cloudEvent.date,
@@ -577,6 +579,7 @@ export async function loadPublicEventsFromCloud(): Promise<Event[]> {
     } while (nextToken);
 
     const localEvents: Event[] = (events || [])
+      .filter((cloudEvent: any) => cloudEvent && cloudEvent.id)
       .filter((cloudEvent) => !cloudEvent.isCompleted)
       // Exclude groups (hubType === 'group') and group child events (have parentGroupId)
       .filter((cloudEvent) => (cloudEvent as any).hubType !== 'group')
