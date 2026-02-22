@@ -1,4 +1,4 @@
-import React, { useEffect, useState, Suspense, lazy, useMemo } from 'react';
+import React, { useEffect, useState, Suspense, lazy, useMemo, useRef } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { LoginPage } from '../components/auth/LoginPage';
 import { ProfileCompletion } from '../components/auth/ProfileCompletion';
@@ -60,12 +60,15 @@ const EventOrGroupRouter: React.FC = () => {
 
 const App: React.FC = () => {
   const { currentUser, currentProfile, events, switchUser, createUser, joinEventByCode, addToast, pendingLevelUp, clearPendingLevelUp } = useStore();
+  const loadEventsFromCloud = useStore((s) => s.loadEventsFromCloud);
   const location = useLocation();
   const navigate = useNavigate();
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [amplifyUser, setAmplifyUser] = useState<any>(null);
   const [pendingJoinHandled, setPendingJoinHandled] = useState(false);
   const [showMessagesPanel, setShowMessagesPanel] = useState(false);
+  const isCloudSyncInFlight = useRef(false);
+  const lastCloudSyncAt = useRef(0);
   const isEventRoute = location.pathname.startsWith('/event/');
   
   // Calculate unread message count for header badge
@@ -256,6 +259,57 @@ const App: React.FC = () => {
     amplifyUser: amplifyUser?.userId,
     location: location.pathname 
   });
+
+  // Canonical cloud sync loop:
+  // Keep events/groups in sync from a single place so browser + installed PWA
+  // converge to cloud state after auth changes, focus changes, and reconnects.
+  useEffect(() => {
+    if (!currentProfile?.id || !amplifyUser?.userId) return;
+
+    const MIN_GAP_MS = 5000;
+    const PERIODIC_MS = 60000;
+
+    const syncFromCloud = async (reason: string) => {
+      if (isCloudSyncInFlight.current) return;
+      const now = Date.now();
+      if (now - lastCloudSyncAt.current < MIN_GAP_MS) return;
+      isCloudSyncInFlight.current = true;
+      try {
+        await loadEventsFromCloud();
+        lastCloudSyncAt.current = Date.now();
+      } catch (err) {
+        console.error(`[CloudSync] ${reason} failed:`, err);
+      } finally {
+        isCloudSyncInFlight.current = false;
+      }
+    };
+
+    // Initial and route-change sync
+    void syncFromCloud(`route:${location.pathname}`);
+
+    const onFocus = () => { void syncFromCloud('window-focus'); };
+    const onOnline = () => { void syncFromCloud('network-online'); };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        void syncFromCloud('visibility-visible');
+      }
+    };
+
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('online', onOnline);
+    document.addEventListener('visibilitychange', onVisible);
+
+    const periodic = window.setInterval(() => {
+      void syncFromCloud('periodic');
+    }, PERIODIC_MS);
+
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('online', onOnline);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.clearInterval(periodic);
+    };
+  }, [currentProfile?.id, amplifyUser?.userId, location.pathname, loadEventsFromCloud]);
 
 
   const handleLoginSuccess = () => {
