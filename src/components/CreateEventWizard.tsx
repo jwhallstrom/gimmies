@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../state/store';
 import { CourseSearch } from './CourseSearch';
@@ -110,7 +111,7 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
   if (!isOpen) return null;
 
   if (isGuest) {
-    return (
+    return createPortal(
       <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-sm">
         <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-t-2xl sm:rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col h-[100dvh] sm:h-auto sm:max-h-[calc(100dvh-2rem)]">
           <div
@@ -132,7 +133,8 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
             />
           </div>
         </div>
-      </div>
+      </div>,
+      document.body
     );
   }
 
@@ -200,7 +202,7 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
 
   const canCreate = Boolean(eventName.trim() && eventDate && selectedCourseId && selectedTeeName);
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/50 backdrop-blur-sm">
       <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col h-[100dvh] sm:h-auto sm:max-h-[calc(100dvh-2rem)]">
         
@@ -515,6 +517,7 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };
