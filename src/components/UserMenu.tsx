@@ -159,14 +159,13 @@ const UserMenu: React.FC = () => {
       <button
         onClick={handleManualSync}
         disabled={isSyncing}
-        className="p-2 rounded-xl text-white/90 hover:bg-white/10 transition-colors"
+        className={`p-2 rounded-xl text-white/90 hover:bg-white/10 transition-colors ${isSyncing ? 'opacity-60 cursor-not-allowed' : ''}`}
         aria-label="Sync now"
         title={isSyncing ? 'Syncing...' : 'Sync now'}
       >
-        <svg className={`w-5 h-5 ${isSyncing ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h5" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 20v-5h-5" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 9a8 8 0 00-14.5-4M4 15a8 8 0 0014.5 4" />
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v10m0 0l-3-3m3 3l3-3" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15v3a3 3 0 003 3h8a3 3 0 003-3v-3" />
         </svg>
       </button>
 

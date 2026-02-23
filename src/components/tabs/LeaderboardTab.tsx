@@ -125,7 +125,7 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
 
     // Check for snowman (8) on latest score - disappears after next score entry
     if (latestScore.strokes === 8) {
-      return 'â›„';
+      return '\u26C4';
     }
 
     // Check current consecutive birdies streak (from the end working backwards)
@@ -143,12 +143,12 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
 
     // Fire emoji for 3+ current consecutive birdies - disappears when streak breaks
     if (currentBirdieStreak >= 3) {
-      return 'ðŸ”¥';
+      return '\uD83D\uDD25';
     }
 
     // Bird emoji for 2+ current consecutive birdies - disappears when streak breaks
     if (currentBirdieStreak >= 2) {
-      return 'ðŸ¦';
+      return '\uD83D\uDC26';
     }
 
     // Check for permanent achievements within last 2 holes
@@ -159,7 +159,7 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
       const par = holeParByNumber[s.hole];
       return s.strokes === 1 && typeof par === 'number' && par > 1;
     })) {
-      return 'ðŸ’Ž';
+      return '\uD83D\uDC8E';
     }
 
     // Check for eagle (2 under par) in last 2 holes
@@ -167,7 +167,7 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
       const par = holeParByNumber[s.hole];
       return typeof par === 'number' && s.strokes <= par - 2;
     })) {
-      return 'ðŸ¦…';
+      return '\uD83E\uDD85';
     }
 
     return '';
@@ -176,7 +176,7 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
   // Calculate scores for each golfer
   const leaderboardData = event.golfers.map((eventGolfer: any) => {
     const profile = eventGolfer.profileId ? profiles.find((p: any) => p.id === eventGolfer.profileId) : null;
-    // âœ… Use displayName snapshot if profile not found locally
+    // Use displayName snapshot if profile not found locally
     const displayName = profile ? profile.name : (eventGolfer.displayName || eventGolfer.customName || 'Unknown');
     const golferId = eventGolfer.profileId || eventGolfer.customName;
 
@@ -417,7 +417,7 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
                       <td className="px-3 py-3">
                         {(() => {
                           const team = teamByGolferId.get(String(player.id));
-                          if (!team) return <span className="text-slate-300">â€”</span>;
+                          if (!team) return <span className="text-slate-300">-</span>;
                           return (
                             <button
                               type="button"
@@ -481,13 +481,13 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
                                 <div className="text-xs font-semibold text-slate-600 py-1 text-center w-12 shrink-0">Par</div>
                                 {holes.slice(0, 9).map((hole) => (
                                   <div key={`par-${hole.number}`} className="text-xs text-slate-600 py-1 text-center bg-slate-100 rounded w-8 shrink-0">
-                                    {typeof hole.par === 'number' ? hole.par : 'â€”'}
+                                    {typeof hole.par === 'number' ? hole.par : '-'}
                                   </div>
                                 ))}
                                 <div className="text-xs text-slate-600 py-1 text-center bg-slate-200 rounded w-10 shrink-0 ml-1 font-semibold">
                                   {parsKnown
                                     ? holes.slice(0, 9).reduce((sum: number, h: any) => sum + (h.par as number), 0)
-                                    : 'â€”'}
+                                    : '-'}
                                 </div>
                               </div>
                               
@@ -542,13 +542,13 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
                                 <div className="text-xs font-semibold text-slate-600 py-1 text-center w-12 shrink-0">Par</div>
                                 {holes.slice(9, 18).map((hole) => (
                                   <div key={`par-${hole.number}`} className="text-xs text-slate-600 py-1 text-center bg-slate-100 rounded w-8 shrink-0">
-                                    {typeof hole.par === 'number' ? hole.par : 'â€”'}
+                                    {typeof hole.par === 'number' ? hole.par : '-'}
                                   </div>
                                 ))}
                                 <div className="text-xs text-slate-600 py-1 text-center bg-slate-200 rounded w-10 shrink-0 ml-1 font-semibold">
                                   {parsKnown
                                     ? holes.slice(9, 18).reduce((sum: number, h: any) => sum + (h.par as number), 0)
-                                    : 'â€”'}
+                                    : '-'}
                                 </div>
                               </div>
                               
@@ -618,7 +618,7 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
-                      <span className="text-xl">ðŸŒï¸</span>
+                      <span className="text-xl">Start</span>
                       <div>
                         <div className="font-semibold text-blue-900 text-sm">Ready to Start?</div>
                         <p className="text-xs text-blue-700 mt-0.5">Lock in players and begin the round</p>
@@ -631,7 +631,7 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
                       }}
                       className="px-4 py-2 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-bold text-sm hover:from-blue-700 hover:to-blue-800 shadow-md whitespace-nowrap"
                     >
-                      ðŸš€ Start
+                      Start
                     </button>
                   </div>
                 </div>
@@ -644,7 +644,7 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
                 <div className={`${allScoresComplete ? 'bg-green-50 border-green-200' : 'bg-amber-50 border-amber-200'} border rounded-xl p-4`}>
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3">
-                      <span className="text-xl">{allScoresComplete ? 'ðŸ' : 'â³'}</span>
+                      <span className="text-xl">{allScoresComplete ? 'Done' : 'In Play'}</span>
                       <div>
                         <div className={`font-semibold text-sm ${allScoresComplete ? 'text-green-900' : 'text-amber-900'}`}>
                           {allScoresComplete ? 'All Scores Complete!' : 'Round In Progress'}
@@ -679,7 +679,7 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
                             : 'bg-gray-200 text-gray-500 cursor-not-allowed'
                       }`}
                     >
-                      âœ“ Complete
+                      Complete
                     </button>
                   </div>
                 </div>
