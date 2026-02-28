@@ -68,12 +68,54 @@ function parseJsonField<T>(value: unknown, fallback: T): T {
   if (value == null) return fallback;
   if (typeof value === 'string') {
     try {
-      return JSON.parse(value) as T;
+      const parsed = JSON.parse(value) as T;
+      return (parsed == null ? fallback : parsed);
     } catch {
       return fallback;
     }
   }
-  return value as T;
+  return ((value as T) == null ? fallback : (value as T));
+}
+
+function asObjectArray(value: unknown): any[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item) => item && typeof item === 'object');
+}
+
+function normalizeCloudEventRecord(cloudEvent: any): Event | null {
+  if (!cloudEvent || typeof cloudEvent !== 'object' || !cloudEvent.id) return null;
+  const golfers = asObjectArray(parseJsonField<any[]>(cloudEvent.golfersJson, []));
+  const groups = asObjectArray(parseJsonField<any[]>(cloudEvent.groupsJson, []));
+  const scorecards = asObjectArray(parseJsonField<any[]>(cloudEvent.scorecardsJson, []));
+
+  return {
+    id: cloudEvent.id,
+    name: cloudEvent.name,
+    date: cloudEvent.date,
+    course: {
+      courseId: cloudEvent.courseId || undefined,
+      teeName: cloudEvent.teeName || undefined,
+    },
+    ownerProfileId: cloudEvent.ownerProfileId,
+    isPublic: cloudEvent.isPublic || false,
+    isCompleted: cloudEvent.isCompleted || false,
+    shareCode: cloudEvent.shareCode || undefined,
+    scorecardView: cloudEvent.scorecardView as any || 'individual',
+    status: (cloudEvent as any).status as 'setup' | 'started' | 'completed' | undefined,
+    hubType: normalizeHubType(cloudEvent),
+    parentGroupId: (cloudEvent as any).parentGroupId || undefined,
+    golfers,
+    groups,
+    scorecards,
+    games: parseJsonField<any>(cloudEvent.gamesJson, {}),
+    pinkyResults: parseJsonField<any>(cloudEvent.pinkyResultsJson, {}),
+    greenieResults: parseJsonField<any>(cloudEvent.greenieResultsJson, {}),
+    groupSettings: parseJsonField<any>((cloudEvent as any).groupSettingsJson, undefined),
+    createdAt: cloudEvent.createdAt,
+    lastModified: cloudEvent.lastModified || new Date().toISOString(),
+    completedAt: cloudEvent.completedAt || undefined,
+    chat: [],
+  };
 }
 
 function normalizeHubType(cloudEvent: any): 'event' | 'group' {
@@ -361,12 +403,12 @@ export async function loadEventById(eventId: string): Promise<Event | null> {
     console.log('📥 loadEventById: Cloud event golfersJson:', cloudEvent.golfersJson);
 
     // Parse JSON fields back to objects
-    const golfers = cloudEvent.golfersJson ? JSON.parse(cloudEvent.golfersJson as string) : [];
-    const groups = cloudEvent.groupsJson ? JSON.parse(cloudEvent.groupsJson as string) : [];
-    const scorecards = cloudEvent.scorecardsJson ? JSON.parse(cloudEvent.scorecardsJson as string) : [];
-    const games = cloudEvent.gamesJson ? JSON.parse(cloudEvent.gamesJson as string) : {};
-    const pinkyResults = cloudEvent.pinkyResultsJson ? JSON.parse(cloudEvent.pinkyResultsJson as string) : {};
-    const greenieResults = cloudEvent.greenieResultsJson ? JSON.parse(cloudEvent.greenieResultsJson as string) : {};
+    const golfers = asObjectArray(parseJsonField<any[]>(cloudEvent.golfersJson, []));
+    const groups = asObjectArray(parseJsonField<any[]>(cloudEvent.groupsJson, []));
+    const scorecards = asObjectArray(parseJsonField<any[]>(cloudEvent.scorecardsJson, []));
+    const games = parseJsonField<any>(cloudEvent.gamesJson, {});
+    const pinkyResults = parseJsonField<any>(cloudEvent.pinkyResultsJson, {});
+    const greenieResults = parseJsonField<any>(cloudEvent.greenieResultsJson, {});
     
     console.log('📥 loadEventById: Parsed golfers:', golfers);
     console.log('📥 loadEventById: Parsed scorecards:', scorecards);
@@ -375,7 +417,7 @@ export async function loadEventById(eventId: string): Promise<Event | null> {
     const chat = await loadChatMessagesFromCloud(eventId);
     console.log('📥 loadEventById: Loaded chat:', chat.length, 'messages');
 
-    const groupSettings = (cloudEvent as any).groupSettingsJson ? JSON.parse((cloudEvent as any).groupSettingsJson as string) : undefined;
+    const groupSettings = parseJsonField<any>((cloudEvent as any).groupSettingsJson, undefined);
     
     const localEvent: Event = {
       id: cloudEvent.id,
@@ -462,13 +504,13 @@ export async function loadEventByShareCode(shareCode: string): Promise<Event | n
       parentGroupId: (cloudEvent as any).parentGroupId || undefined,
       
       // Parse JSON strings back to objects
-      golfers: cloudEvent.golfersJson ? JSON.parse(cloudEvent.golfersJson as string) : [],
-      groups: cloudEvent.groupsJson ? JSON.parse(cloudEvent.groupsJson as string) : [],
-      scorecards: cloudEvent.scorecardsJson ? JSON.parse(cloudEvent.scorecardsJson as string) : [],
-      games: cloudEvent.gamesJson ? JSON.parse(cloudEvent.gamesJson as string) : {},
-      pinkyResults: cloudEvent.pinkyResultsJson ? JSON.parse(cloudEvent.pinkyResultsJson as string) : {},
-      greenieResults: cloudEvent.greenieResultsJson ? JSON.parse(cloudEvent.greenieResultsJson as string) : {},
-      groupSettings: (cloudEvent as any).groupSettingsJson ? JSON.parse((cloudEvent as any).groupSettingsJson as string) : undefined,
+      golfers: asObjectArray(parseJsonField<any[]>(cloudEvent.golfersJson, [])),
+      groups: asObjectArray(parseJsonField<any[]>(cloudEvent.groupsJson, [])),
+      scorecards: asObjectArray(parseJsonField<any[]>(cloudEvent.scorecardsJson, [])),
+      games: parseJsonField<any>(cloudEvent.gamesJson, {}),
+      pinkyResults: parseJsonField<any>(cloudEvent.pinkyResultsJson, {}),
+      greenieResults: parseJsonField<any>(cloudEvent.greenieResultsJson, {}),
+      groupSettings: parseJsonField<any>((cloudEvent as any).groupSettingsJson, undefined),
       
       createdAt: cloudEvent.createdAt,
       lastModified: cloudEvent.lastModified || new Date().toISOString(),
@@ -519,38 +561,15 @@ export async function loadUserEventsFromCloud(): Promise<Event[]> {
       console.warn('loadUserEventsFromCloud: no readable event records returned');
     }
 
-    const validEvents = events.filter((cloudEvent: any) => cloudEvent && cloudEvent.id);
-
-    const localEvents: Event[] = validEvents.map((cloudEvent) => ({
-      id: cloudEvent.id,
-      name: cloudEvent.name,
-      date: cloudEvent.date,
-      course: {
-        courseId: cloudEvent.courseId || undefined,
-        teeName: cloudEvent.teeName || undefined,
-      },
-      ownerProfileId: cloudEvent.ownerProfileId,
-      isPublic: cloudEvent.isPublic || false,
-      isCompleted: cloudEvent.isCompleted || false,
-      shareCode: cloudEvent.shareCode || undefined,
-      scorecardView: cloudEvent.scorecardView as any || 'individual',
-      status: (cloudEvent as any).status as 'setup' | 'started' | 'completed' | undefined,
-      hubType: normalizeHubType(cloudEvent),
-      parentGroupId: (cloudEvent as any).parentGroupId || undefined,
-      
-      golfers: parseJsonField<any[]>(cloudEvent.golfersJson, []),
-      groups: parseJsonField<any[]>(cloudEvent.groupsJson, []),
-      scorecards: parseJsonField<any[]>(cloudEvent.scorecardsJson, []),
-      games: parseJsonField<any>(cloudEvent.gamesJson, {}),
-      pinkyResults: parseJsonField<any>(cloudEvent.pinkyResultsJson, {}),
-      greenieResults: parseJsonField<any>(cloudEvent.greenieResultsJson, {}),
-      groupSettings: parseJsonField<any>((cloudEvent as any).groupSettingsJson, undefined),
-      
-      createdAt: cloudEvent.createdAt,
-      lastModified: cloudEvent.lastModified || new Date().toISOString(),
-      completedAt: cloudEvent.completedAt || undefined,
-      chat: [], // Chat messages loaded separately
-    }));
+    const localEvents: Event[] = [];
+    for (const cloudEvent of events) {
+      try {
+        const normalized = normalizeCloudEventRecord(cloudEvent);
+        if (normalized) localEvents.push(normalized);
+      } catch (e) {
+        console.warn('Skipping malformed cloud event record:', cloudEvent?.id, e);
+      }
+    }
 
     console.log(`✅ Loaded ${localEvents.length} events from cloud`);
     return localEvents;
@@ -588,39 +607,15 @@ export async function loadPublicEventsFromCloud(): Promise<Event[]> {
     } while (nextToken);
 
     const localEvents: Event[] = (events || [])
-      .filter((cloudEvent: any) => cloudEvent && cloudEvent.id)
+      .map((cloudEvent: any) => normalizeCloudEventRecord(cloudEvent))
+      .filter((cloudEvent: Event | null): cloudEvent is Event => Boolean(cloudEvent))
       .filter((cloudEvent) => !cloudEvent.isCompleted)
       // Exclude groups (hubType === 'group') and group child events (have parentGroupId)
       .filter((cloudEvent) => normalizeHubType(cloudEvent) !== 'group')
       .filter((cloudEvent) => !(cloudEvent as any).parentGroupId)
       .map((cloudEvent) => ({
-        id: cloudEvent.id,
-        name: cloudEvent.name,
-        date: cloudEvent.date,
-        course: {
-          courseId: cloudEvent.courseId || undefined,
-          teeName: cloudEvent.teeName || undefined,
-        },
-        ownerProfileId: cloudEvent.ownerProfileId,
-        isPublic: cloudEvent.isPublic || false,
-        isCompleted: cloudEvent.isCompleted || false,
-        shareCode: cloudEvent.shareCode || undefined,
-        scorecardView: (cloudEvent.scorecardView as any) || 'individual',
-        status: (cloudEvent as any).status as 'setup' | 'started' | 'completed' | undefined,
-        hubType: normalizeHubType(cloudEvent),
-
-        golfers: parseJsonField<any[]>(cloudEvent.golfersJson, []),
-        groups: parseJsonField<any[]>(cloudEvent.groupsJson, []),
-        scorecards: parseJsonField<any[]>(cloudEvent.scorecardsJson, []),
-        games: parseJsonField<any>(cloudEvent.gamesJson, {}),
-        pinkyResults: parseJsonField<any>(cloudEvent.pinkyResultsJson, {}),
-        greenieResults: parseJsonField<any>(cloudEvent.greenieResultsJson, {}),
-        groupSettings: parseJsonField<any>((cloudEvent as any).groupSettingsJson, undefined),
-
-        createdAt: cloudEvent.createdAt,
-        lastModified: cloudEvent.lastModified || new Date().toISOString(),
-        completedAt: cloudEvent.completedAt || undefined,
-        chat: [], // loaded separately if/when user opens the event
+        ...cloudEvent,
+        chat: [],
       }));
 
     return localEvents;

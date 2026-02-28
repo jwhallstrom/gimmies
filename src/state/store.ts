@@ -247,7 +247,6 @@ export const useStore = create<State>()(
         const currentProfile = get().currentProfile;
         if (!currentProfile) return;
         const normalize = (v: unknown) => String(v || '').trim().toLowerCase();
-        const currentName = normalize(currentProfile.name);
         const mergeScorecards = (a: any, b: any) => {
           const aScores = Array.isArray(a?.scores) ? a.scores : [];
           const bScores = Array.isArray(b?.scores) ? b.scores : [];
@@ -361,8 +360,6 @@ export const useStore = create<State>()(
           if (event.ownerProfileId === currentProfile.id) return true;
           const golfers = Array.isArray(event.golfers) ? event.golfers : [];
           if (golfers.some((g: any) => g?.profileId === currentProfile.id)) return true;
-          // Legacy fallback: old records sometimes store only custom/display names.
-          if (currentName && golfers.some((g: any) => normalize(g?.customName) === currentName || normalize(g?.displayName) === currentName)) return true;
           const groups = Array.isArray(event.groups) ? event.groups : [];
           if (groups.some((gr: any) => Array.isArray(gr?.golferIds) && gr.golferIds.includes(currentProfile.id))) return true;
           return false;
@@ -389,14 +386,16 @@ export const useStore = create<State>()(
             }
           }
 
-          const myEvents = repairedCloudEvents.filter(isCurrentProfileMember);
+          const myEvents = repairedCloudEvents
+            .filter((e: any) => e && typeof e.id === 'string')
+            .filter(isCurrentProfileMember);
 
           // Hydrate participant profiles so member cards show correct names/avatars/status.
           try {
             const participantProfileIds = Array.from(
               new Set(
                 myEvents
-                  .flatMap((event: any) => (event.golfers || []).map((g: any) => g.profileId))
+                  .flatMap((event: any) => (Array.isArray(event.golfers) ? event.golfers : []).map((g: any) => g?.profileId))
                   .filter((id): id is string => Boolean(id))
               )
             );
@@ -434,8 +433,10 @@ export const useStore = create<State>()(
           
           // Process completed events
           completedEvents.forEach(event => {
-            const eventGolfer = event.golfers.find((g: any) => g.profileId === currentProfile.id);
-            const scorecard = event.scorecards.find((sc: any) => sc.golferId === currentProfile.id);
+            const eventGolfers = Array.isArray(event.golfers) ? event.golfers : [];
+            const eventScorecards = Array.isArray(event.scorecards) ? event.scorecards : [];
+            const eventGolfer = eventGolfers.find((g: any) => g?.profileId === currentProfile.id);
+            const scorecard = eventScorecards.find((sc: any) => sc?.golferId === currentProfile.id);
             if (!eventGolfer || !scorecard) return;
             const stableCompletedRoundId = buildCompletedRoundId(event.id, currentProfile.id);
             const stableIndividualRoundId = buildIndividualRoundId(event.id, currentProfile.id);
