@@ -204,6 +204,23 @@ async function listPublicEventRecords(client: ReturnType<typeof generateClient<S
   return all;
 }
 
+async function listAllEventRecords(client: ReturnType<typeof generateClient<Schema>>) {
+  const all: EventRecord[] = [];
+  let nextToken: string | null | undefined = undefined;
+
+  do {
+    const response = await client.models.Event.list(
+      nextToken ? { nextToken } : undefined
+    );
+    if (response.data?.length) {
+      all.push(...(response.data as EventRecord[]));
+    }
+    nextToken = response.nextToken as string | null | undefined;
+  } while (nextToken);
+
+  return all;
+}
+
 async function touchEvent(client: ReturnType<typeof generateClient<Schema>>, eventId: string) {
   await client.models.Event.update({
     id: eventId,
@@ -232,14 +249,11 @@ async function handleJoinHubByShareCode(
   }
 
   const profile = await requireOwnedProfile(client, args.profileId, callerUserId);
-  const eventResult = await client.models.Event.list({
-    filter: {
-      shareCode: { eq: normalizedCode },
-    },
-  });
-  const event = (eventResult.data?.[0] || null) as EventRecord | null;
+  const allEvents = await listAllEventRecords(client);
+  const event = allEvents.find((candidate) => String(candidate.shareCode || '').trim().toUpperCase() === normalizedCode) || null;
 
   if (!event) {
+    console.warn('joinHubByShareCode: no event found for code', normalizedCode, 'visibleEvents', allEvents.length);
     return { success: false, error: 'Event not found or share code is invalid.' };
   }
 
