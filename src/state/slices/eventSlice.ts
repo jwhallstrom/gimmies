@@ -161,6 +161,9 @@ export const createEventSlice = (
       ...initialData
     };
     set((state: any) => ({ events: [...state.events, newEvent] }));
+    if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+      void syncEventToCloud(id, get);
+    }
     return id;
   },
   
