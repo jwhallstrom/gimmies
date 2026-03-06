@@ -416,12 +416,26 @@ async function handleUpdateEventChatMessage(
 export const handler = async (event: AppSyncResolverEvent<Record<string, any>>) => {
   const client = await getClient();
   const callerUserId = getCallerUserId(event.identity as IdentityLike);
+  const fieldName =
+    (event as any)?.info?.fieldName ||
+    (event as any)?.fieldName ||
+    (event as any)?.typeName ||
+    (event as any)?.requestContext?.fieldName ||
+    null;
 
   if (!callerUserId) {
     throw new Error('Authentication required.');
   }
 
-  switch (event.info.fieldName) {
+  if (!fieldName) {
+    console.error('event-access: unsupported event shape', JSON.stringify({
+      keys: Object.keys((event as any) || {}),
+      sample: event,
+    }));
+    throw new Error('Unsupported event shape.');
+  }
+
+  switch (fieldName) {
     case 'listPublicEvents':
       return handleListPublicEvents(client);
     case 'listPublicGroups':
@@ -435,6 +449,6 @@ export const handler = async (event: AppSyncResolverEvent<Record<string, any>>) 
     case 'updateEventChatMessage':
       return handleUpdateEventChatMessage(client, callerUserId, event.arguments as any);
     default:
-      throw new Error(`Unsupported field: ${event.info.fieldName}`);
+      throw new Error(`Unsupported field: ${fieldName}`);
   }
 };
