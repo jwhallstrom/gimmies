@@ -92,7 +92,7 @@ const GAME_TYPES = [
 
 const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGame }) => {
   const navigate = useNavigate();
-  const event = useStore((s: any) => 
+  const rawEvent = useStore((s: any) => 
     s.events.find((e: any) => e.id === eventId) || 
     s.completedEvents.find((e: any) => e.id === eventId)
   );
@@ -127,18 +127,28 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   const completeEvent = useStore((s) => s.completeEvent);
   const getEventSettlements = useStore((s) => s.getEventSettlements);
 
-  if (!event) return null;
+  if (!rawEvent) return null;
 
   const safeGames = {
-    nassau: Array.isArray(event.games?.nassau) ? event.games.nassau : [],
-    skins: Array.isArray(event.games?.skins) ? event.games.skins : [],
-    pinky: Array.isArray(event.games?.pinky) ? event.games.pinky : [],
-    greenie: Array.isArray(event.games?.greenie) ? event.games.greenie : [],
-    stableford: Array.isArray(event.games?.stableford) ? event.games.stableford : [],
-    ninePoint: Array.isArray(event.games?.ninePoint) ? event.games.ninePoint : [],
-    bingoBangoBongo: Array.isArray(event.games?.bingoBangoBongo) ? event.games.bingoBangoBongo : [],
-    wolf: Array.isArray(event.games?.wolf) ? event.games.wolf : [],
-    dots: Array.isArray(event.games?.dots) ? event.games.dots : [],
+    nassau: Array.isArray(rawEvent.games?.nassau) ? rawEvent.games.nassau : [],
+    skins: Array.isArray(rawEvent.games?.skins) ? rawEvent.games.skins : [],
+    pinky: Array.isArray(rawEvent.games?.pinky) ? rawEvent.games.pinky : [],
+    greenie: Array.isArray(rawEvent.games?.greenie) ? rawEvent.games.greenie : [],
+    stableford: Array.isArray(rawEvent.games?.stableford) ? rawEvent.games.stableford : [],
+    ninePoint: Array.isArray(rawEvent.games?.ninePoint) ? rawEvent.games.ninePoint : [],
+    bingoBangoBongo: Array.isArray(rawEvent.games?.bingoBangoBongo) ? rawEvent.games.bingoBangoBongo : [],
+    wolf: Array.isArray(rawEvent.games?.wolf) ? rawEvent.games.wolf : [],
+    dots: Array.isArray(rawEvent.games?.dots) ? rawEvent.games.dots : [],
+  };
+  const event = {
+    ...rawEvent,
+    golfers: Array.isArray(rawEvent.golfers) ? rawEvent.golfers : [],
+    groups: Array.isArray(rawEvent.groups) ? rawEvent.groups : [],
+    scorecards: Array.isArray(rawEvent.scorecards) ? rawEvent.scorecards : [],
+    games: {
+      ...(rawEvent.games || {}),
+      ...safeGames,
+    },
   };
   
   // Check if current user is the event owner

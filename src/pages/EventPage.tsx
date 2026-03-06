@@ -65,13 +65,13 @@ const EventPage: React.FC = () => {
   // Keep the active event page on realtime cloud sync while it is open.
   useEventSync(id);
   
-  const event = useStore(s => 
+  const rawEvent = useStore(s => 
     s.events.find(e => e.id === id) || 
     s.completedEvents.find(e => e.id === id)
   );
   const { deleteEvent, currentProfile, joinEventByCode, generateShareCode, addToast } = useStore();
   
-  if (!event) {
+  if (!rawEvent) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center">
@@ -87,6 +87,25 @@ const EventPage: React.FC = () => {
       </div>
     );
   }
+
+  const event = {
+    ...rawEvent,
+    golfers: Array.isArray(rawEvent.golfers) ? rawEvent.golfers : [],
+    groups: Array.isArray(rawEvent.groups) ? rawEvent.groups : [],
+    scorecards: Array.isArray(rawEvent.scorecards) ? rawEvent.scorecards : [],
+    games: {
+      ...(rawEvent.games || {}),
+      nassau: Array.isArray(rawEvent.games?.nassau) ? rawEvent.games.nassau : [],
+      skins: Array.isArray(rawEvent.games?.skins) ? rawEvent.games.skins : [],
+      pinky: Array.isArray(rawEvent.games?.pinky) ? rawEvent.games.pinky : [],
+      greenie: Array.isArray(rawEvent.games?.greenie) ? rawEvent.games.greenie : [],
+      stableford: Array.isArray(rawEvent.games?.stableford) ? rawEvent.games.stableford : [],
+      ninePoint: Array.isArray(rawEvent.games?.ninePoint) ? rawEvent.games.ninePoint : [],
+      bingoBangoBongo: Array.isArray(rawEvent.games?.bingoBangoBongo) ? rawEvent.games.bingoBangoBongo : [],
+      wolf: Array.isArray(rawEvent.games?.wolf) ? rawEvent.games.wolf : [],
+      dots: Array.isArray(rawEvent.games?.dots) ? rawEvent.games.dots : [],
+    },
+  };
 
   const isGroupHub = event.hubType === 'group';
   const isOwner = Boolean(currentProfile && event.ownerProfileId === currentProfile.id);
