@@ -144,7 +144,6 @@ const schema = a.schema({
   .authorization(allow => [
     allow.owner().to(['read', 'create', 'update', 'delete']), // Amplify auto-manages owner field
     allow.authenticated().to(['read']), // Others can read profiles
-    (allow as any).resource(eventAccess).to(['query']),
   ]),
 
   // Individual Handicap Round (for GHIN-style tracking)
@@ -229,7 +228,6 @@ const schema = a.schema({
   .authorization(allow => [
     allow.owner(), // Owner can CRUD
     allow.ownersDefinedIn('memberUserIds').to(['read', 'update']),
-    (allow as any).resource(eventAccess).to(['query', 'mutate']),
   ]),
 
   // Chat Message (scoped to event)
@@ -246,7 +244,6 @@ const schema = a.schema({
   })
   .authorization(allow => [
     allow.owner().to(['read', 'update', 'delete']),
-    (allow as any).resource(eventAccess).to(['query', 'mutate']),
   ]),
 
   // Completed Round (analytics/history)
@@ -295,6 +292,10 @@ const schema = a.schema({
     allow.authenticated(), // Authenticated users can do anything
   ]),
 });
+
+schema.authorization((allow) => [
+  (allow as any).resource(eventAccess).to(['query', 'mutate']),
+]);
 
 export type Schema = ClientSchema<typeof schema>;
 
