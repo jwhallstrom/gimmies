@@ -678,6 +678,52 @@ export async function loadPublicEventsFromCloud(): Promise<Event[]> {
 }
 
 /**
+ * Load public (discoverable) groups from cloud.
+ * These are meant for the browse/join experience, similar to public events.
+ */
+export async function loadPublicGroupsFromCloud(): Promise<Event[]> {
+  try {
+    const client = getClient();
+    if (!client) return [];
+    const events: any[] = [];
+    let nextToken: string | null | undefined = undefined;
+    do {
+      const response = await client.models.Event.list({
+        filter: { isPublic: { eq: true } },
+        ...(nextToken ? { nextToken } : {}),
+      });
+      const data = response.data;
+      const errors = response.errors;
+      const pageToken = response.nextToken as string | null | undefined;
+
+      if (errors?.length) {
+        console.warn('loadPublicGroupsFromCloud: partial page errors:', errors);
+      }
+      if (data?.length) events.push(...data);
+      nextToken = pageToken;
+    } while (nextToken);
+
+    const localGroups: Event[] = (events || [])
+      .map((cloudEvent: any) => normalizeCloudEventRecord(cloudEvent))
+      .filter((cloudEvent: Event | null): cloudEvent is Event => Boolean(cloudEvent))
+      .filter((cloudEvent) => normalizeHubType(cloudEvent) === 'group')
+      .filter((cloudEvent) => {
+        const settings = cloudEvent.groupSettings;
+        return (settings?.visibility || 'private') === 'public';
+      })
+      .map((cloudEvent) => ({
+        ...cloudEvent,
+        chat: [],
+      }));
+
+    return localGroups;
+  } catch (error) {
+    console.error('Error loading public groups from cloud:', error);
+    return [];
+  }
+}
+
+/**
  * Delete event from cloud
  */
 export async function deleteEventFromCloud(eventId: string): Promise<boolean> {

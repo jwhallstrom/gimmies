@@ -66,7 +66,7 @@ export const CreateGroupWizard: React.FC<Props> = ({ isOpen, onClose, onCreated 
     if (!name.trim()) return;
     setIsCreating(true);
     try {
-      const id = createEvent({ hubType: 'group' } as any);
+      const id = createEvent({ hubType: 'group', isPublic: false } as any);
       if (!id) throw new Error('Failed to create group');
       const groupSettings: any = {
         visibility: 'private',

@@ -139,7 +139,12 @@ const GroupInfoPanel: React.FC<GroupInfoPanelProps> = ({ event, onClose, onCreat
   });
 
   const updateGroupSettings = (updates: any) => {
-    updateEvent(event.id, { groupSettings: { ...groupSettings, ...updates } } as any);
+    const nextGroupSettings = { ...groupSettings, ...updates };
+    const nextPatch: any = { groupSettings: nextGroupSettings };
+    if ('visibility' in updates) {
+      nextPatch.isPublic = nextGroupSettings.visibility === 'public';
+    }
+    updateEvent(event.id, nextPatch);
   };
 
   const handleSaveName = () => {
@@ -532,6 +537,24 @@ const GroupInfoPanel: React.FC<GroupInfoPanelProps> = ({ event, onClose, onCreat
                       </button>
                     </div>
                   )}
+
+                  {/* Members can invite toggle */}
+                  <div className="flex items-center justify-between px-4 py-3">
+                    <div>
+                      <div className="text-sm font-medium text-gray-900 dark:text-white">Public discovery</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">Let other signed-in users find this group in Join</div>
+                    </div>
+                    <button
+                      onClick={() => updateGroupSettings({ visibility: groupSettings.visibility === 'public' ? 'private' : 'public' })}
+                      className={`relative w-11 h-6 rounded-full transition-colors ${
+                        groupSettings.visibility === 'public' ? 'bg-purple-600' : 'bg-gray-300 dark:bg-slate-600'
+                      }`}
+                    >
+                      <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                        groupSettings.visibility === 'public' ? 'translate-x-5' : ''
+                      }`} />
+                    </button>
+                  </div>
 
                   {/* Members can invite toggle */}
                   <div className="flex items-center justify-between px-4 py-3">

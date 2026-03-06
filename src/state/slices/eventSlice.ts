@@ -146,7 +146,7 @@ export const createEventSlice = (
       games: { nassau: [], skins: [], pinky: [], greenie: [], stableford: [], ninePoint: [], bingoBangoBongo: [], wolf: [], dots: [] },
       ownerProfileId: currentProfile.id,
       scorecardView: 'individual',
-      isPublic: true,
+      isPublic: isGroup ? false : true,
       createdAt: new Date().toISOString(),
       lastModified: new Date().toISOString(),
       chat: [],
@@ -549,6 +549,19 @@ export const createEventSlice = (
             return { success: true, eventId: cloudEvent.id };
           }
 
+          const isGroup = cloudEvent.hubType === 'group';
+          const groupSettings = cloudEvent.groupSettings || {
+            visibility: 'private' as const,
+            joinPolicy: 'open' as const,
+            membersCanInvite: true,
+          };
+          if (isGroup && groupSettings.joinPolicy !== 'open') {
+            if (groupSettings.joinPolicy === 'invite_only') {
+              return { success: false, error: 'This group is invite-only. Ask an admin to add you.' };
+            }
+            return { success: false, error: 'This group requires join approval. Request flow is not enabled yet.' };
+          }
+
           const localEvent = get().events.find((e: Event) => e.id === cloudEvent.id);
           if (!localEvent) {
             set((state: any) => ({ events: [...state.events, cloudEvent] }));
@@ -568,6 +581,20 @@ export const createEventSlice = (
     const event = get().events.find((e: Event) => (e.shareCode || '').toUpperCase() === normalized);
     if (!event) {
       return { success: false, error: 'Event not found or share code is invalid.' };
+    }
+
+    if (event.hubType === 'group') {
+      const groupSettings = event.groupSettings || {
+        visibility: 'private' as const,
+        joinPolicy: 'open' as const,
+        membersCanInvite: true,
+      };
+      if (groupSettings.joinPolicy !== 'open') {
+        if (groupSettings.joinPolicy === 'invite_only') {
+          return { success: false, error: 'This group is invite-only. Ask an admin to add you.' };
+        }
+        return { success: false, error: 'This group requires join approval. Request flow is not enabled yet.' };
+      }
     }
     
     const alreadyJoined = event.golfers.some((g: EventGolfer) => g.profileId === currentProfile.id);

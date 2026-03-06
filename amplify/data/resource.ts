@@ -62,7 +62,6 @@ const schema = a.schema({
   })
   .authorization(allow => [
     allow.owner(),
-    allow.authenticated().to(['read']),
   ]),
 
   // Golf Event (Round with multiple players) or Group (chat hub)
@@ -161,7 +160,6 @@ const schema = a.schema({
   })
   .authorization(allow => [
     allow.owner(),
-    allow.authenticated().to(['read']),
   ]),
 
   // Course Data (for admin management)

@@ -8,9 +8,9 @@ import useStore from '../state/store';
 const PENDING_JOIN_KEY = 'gimmies.pendingJoinCode.v1';
 const DEFAULT_ITEMS_LIMIT = 5;
 const SECTION_ORDER_KEY = 'gimmies.joinSectionOrder.v1';
-const DEFAULT_SECTION_ORDER = ['courses', 'events'];
+const DEFAULT_SECTION_ORDER = ['courses', 'events', 'groups'];
 
-type SectionId = 'courses' | 'events';
+type SectionId = 'courses' | 'events' | 'groups';
 
 function getSavedSectionOrder(): SectionId[] {
   try {
@@ -90,6 +90,7 @@ const JoinEventPage: React.FC = () => {
 
   // Public events
   const [publicEvents, setPublicEvents] = useState<any[]>([]);
+  const [publicGroups, setPublicGroups] = useState<any[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
   
   // Search
@@ -98,8 +99,10 @@ const JoinEventPage: React.FC = () => {
   // Section states (collapsible)
   const [showCourses, setShowCourses] = useState(true);
   const [showEvents, setShowEvents] = useState(true);
+  const [showGroups, setShowGroups] = useState(true);
   const [showAllCourses, setShowAllCourses] = useState(false);
   const [showAllEvents, setShowAllEvents] = useState(false);
+  const [showAllGroups, setShowAllGroups] = useState(false);
   
   // Section order (draggable)
   const [sectionOrder, setSectionOrder] = useState<SectionId[]>(getSavedSectionOrder);
@@ -174,10 +177,14 @@ const JoinEventPage: React.FC = () => {
       }
       try {
         setLoadingEvents(true);
-        const { loadPublicEventsFromCloud } = await import('../utils/eventSync');
-        const list = await loadPublicEventsFromCloud();
+        const { loadPublicEventsFromCloud, loadPublicGroupsFromCloud } = await import('../utils/eventSync');
+        const [eventList, groupList] = await Promise.all([
+          loadPublicEventsFromCloud(),
+          loadPublicGroupsFromCloud(),
+        ]);
         if (cancelled) return;
-        setPublicEvents((list || []).filter((e: any) => !e.isCompleted && isUpcoming(e.date)));
+        setPublicEvents((eventList || []).filter((e: any) => !e.isCompleted && isUpcoming(e.date)));
+        setPublicGroups(groupList || []);
       } catch {
         if (cancelled) return;
       } finally {
@@ -332,6 +339,32 @@ const JoinEventPage: React.FC = () => {
     );
   }, [sortedEvents, normalizedQuery]);
 
+  const sortedGroups = useMemo(() => {
+    return (publicGroups || []).map((g: any) => {
+      const memberCount = g.golfers?.length || 0;
+      const description = g.groupSettings?.description || '';
+      const location = g.groupSettings?.location || '';
+      return {
+        ...g,
+        memberCount,
+        description,
+        location,
+      };
+    }).sort((a, b) => {
+      if (a.memberCount !== b.memberCount) return b.memberCount - a.memberCount;
+      return (a.name || '').localeCompare(b.name || '');
+    });
+  }, [publicGroups]);
+
+  const filteredGroups = useMemo(() => {
+    if (!normalizedQuery) return sortedGroups;
+    return sortedGroups.filter((g: any) =>
+      (g.name || '').toLowerCase().includes(normalizedQuery) ||
+      (g.description || '').toLowerCase().includes(normalizedQuery) ||
+      (g.location || '').toLowerCase().includes(normalizedQuery)
+    );
+  }, [sortedGroups, normalizedQuery]);
+
   // Drag handlers
   const handleDragStart = (e: React.DragEvent, sectionId: SectionId) => {
     setDraggedSection(sectionId);
@@ -394,7 +427,7 @@ const JoinEventPage: React.FC = () => {
       return;
     }
 
-    const local = (myEvents || []).find((e: any) => e.id === eventId);
+    let local = (myEvents || []).find((e: any) => e.id === eventId);
     if (local?.golfers?.some((g: any) => g.profileId === currentProfile.id)) {
       navigate(`/event/${eventId}`);
       return;
@@ -405,17 +438,33 @@ const JoinEventPage: React.FC = () => {
         const { loadEventById } = await import('../utils/eventSync');
         const full = await loadEventById(eventId);
         if (full) {
+          local = full;
           useStore.setState((s: any) => ({
             events: (s.events || []).some((e: any) => e.id === eventId) ? s.events : [...(s.events || []), full],
           }));
         }
       }
 
+      if (local?.hubType === 'group') {
+        const settings = local.groupSettings || {
+          visibility: 'private' as const,
+          joinPolicy: 'open' as const,
+          membersCanInvite: true,
+        };
+        if (settings.joinPolicy !== 'open') {
+          const message = settings.joinPolicy === 'invite_only'
+            ? 'This group is invite-only. Ask an admin to add you.'
+            : 'This group requires join approval. Request flow is not enabled yet.';
+          addToast?.(message, 'error', 3500);
+          return;
+        }
+      }
+
       await addGolferToEvent(eventId, currentProfile.id);
-      addToast?.('Joined game!', 'success', 2500);
+      addToast?.(local?.hubType === 'group' ? 'Joined group!' : 'Joined game!', 'success', 2500);
       navigate(`/event/${eventId}`);
     } catch {
-      addToast?.('Could not join this game', 'error', 3500);
+      addToast?.(local?.hubType === 'group' ? 'Could not join this group' : 'Could not join this game', 'error', 3500);
     }
   };
 
@@ -523,6 +572,20 @@ const JoinEventPage: React.FC = () => {
       badgeBg: 'bg-primary-100 dark:bg-primary-900/50',
       labelColor: 'text-gray-800 dark:text-white',
       items: filteredEvents,
+    },
+    groups: {
+      show: true,
+      isExpanded: showGroups,
+      setExpanded: setShowGroups,
+      showAll: showAllGroups,
+      setShowAll: setShowAllGroups,
+      icon: <span className="text-base">👥</span>,
+      label: 'Groups',
+      count: filteredGroups.length,
+      gradient: 'from-purple-50 to-white dark:from-purple-900/20 dark:to-slate-800 hover:from-purple-100',
+      badgeBg: 'bg-purple-100 dark:bg-purple-900/50',
+      labelColor: 'text-gray-800 dark:text-white',
+      items: filteredGroups,
     },
   };
 
@@ -661,6 +724,44 @@ const JoinEventPage: React.FC = () => {
     );
   };
 
+  const GroupCard = ({ group }: { group: any }) => {
+    const alreadyJoined = (group.golfers || []).some((g: any) => g.profileId === currentProfile?.id);
+    return (
+      <div className="flex items-center gap-3 p-3 rounded-lg border transition-all bg-white dark:bg-slate-700/50 hover:bg-purple-50 dark:hover:bg-slate-700 border-gray-200 dark:border-slate-600 hover:border-purple-300 dark:hover:border-purple-700">
+        <div className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 bg-purple-100 dark:bg-purple-900/50">
+          <span className="text-base">👥</span>
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-sm text-gray-900 dark:text-white truncate flex items-center gap-1.5">
+            {group.name || 'Golf Group'}
+          </div>
+          <div className="text-xs text-gray-600 dark:text-gray-300 truncate">
+            {group.description || 'Group hub for chat, invites, and scheduling'}
+          </div>
+          <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5 flex-wrap mt-0.5">
+            <span className="text-purple-600 dark:text-purple-400 font-medium">👥 {group.memberCount} member{group.memberCount !== 1 ? 's' : ''}</span>
+            {group.location && (
+              <>
+                <span className="text-gray-300 dark:text-gray-600">•</span>
+                <span>{group.location}</span>
+              </>
+            )}
+          </div>
+        </div>
+        <button
+          onClick={(e) => { e.stopPropagation(); handleJoinEvent(group.id); }}
+          className={`px-4 py-2 text-xs font-bold rounded-lg transition flex-shrink-0 ${
+            alreadyJoined
+              ? 'bg-gray-100 dark:bg-slate-600 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-500'
+              : 'bg-gradient-to-r from-purple-500 to-purple-700 text-white shadow-sm hover:shadow-md'
+          }`}
+        >
+          {alreadyJoined ? 'Open' : 'Join'}
+        </button>
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-3 pb-24">
       {/* Header */}
@@ -671,8 +772,8 @@ const JoinEventPage: React.FC = () => {
           </svg>
         </div>
         <div>
-          <h1 className="text-lg font-black text-gray-900 dark:text-white">Join a Game</h1>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Find events near you or enter a code</p>
+          <h1 className="text-lg font-black text-gray-900 dark:text-white">Join a Game or Group</h1>
+          <p className="text-xs text-gray-500 dark:text-gray-400">Browse public events and groups, or enter an invite code</p>
         </div>
       </div>
 
@@ -860,15 +961,21 @@ const JoinEventPage: React.FC = () => {
                   <div className="px-3 pb-3 space-y-1.5">
                     {config.items.length === 0 ? (
                       <div className="text-sm text-center text-gray-500 dark:text-gray-400 py-4">
-                        {sectionId === 'events' ? 'No public events available' : 'No courses found'}
+                        {sectionId === 'events'
+                          ? 'No public events available'
+                          : sectionId === 'groups'
+                            ? 'No public groups available'
+                            : 'No courses found'}
                       </div>
                     ) : (
                       <>
-                        {itemsToShow.map((item: any) => (
-                          sectionId === 'courses' 
-                            ? <CourseCard key={item.id} course={item} />
-                            : <EventCard key={item.id} event={item} />
-                        ))}
+                          {itemsToShow.map((item: any) => (
+                            sectionId === 'courses'
+                              ? <CourseCard key={item.id} course={item} />
+                              : sectionId === 'groups'
+                                ? <GroupCard key={item.id} group={item} />
+                                : <EventCard key={item.id} event={item} />
+                          ))}
                         
                         {hasMoreItems && !config.showAll && (
                           <button
