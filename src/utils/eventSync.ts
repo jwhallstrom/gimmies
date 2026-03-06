@@ -444,9 +444,11 @@ export async function saveEventPatchToCloud(
     if ('hubType' in patch) updateData.hubType = event.hubType || 'event';
     if ('parentGroupId' in patch) updateData.parentGroupId = event.parentGroupId || null;
     if ('completedAt' in patch) updateData.completedAt = event.completedAt || null;
-    if ('ownerProfileId' in patch) updateData.ownerProfileId = event.ownerProfileId || currentProfileId;
+    if ('ownerProfileId' in patch) {
+      updateData.ownerProfileId = event.ownerProfileId || currentProfileId;
+      updateData.memberUserIds = deriveEventMemberUserIds(event, currentProfileId);
+    }
     if ('shareCode' in patch) updateData.shareCode = event.shareCode || null;
-    updateData.memberUserIds = deriveEventMemberUserIds(event, currentProfileId);
 
     if ('course' in patch) {
       updateData.courseId = event.course?.courseId || null;

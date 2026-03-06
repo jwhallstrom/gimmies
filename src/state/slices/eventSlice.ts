@@ -543,19 +543,24 @@ export const createEventSlice = (
         const joinResult = await joinHubByShareCodeInCloud(normalized, currentProfile.id, currentProfile.name);
         if (joinResult.success && joinResult.eventId) {
           const cloudEvent = await loadEventById(joinResult.eventId);
-          if (cloudEvent) {
-            const localEvent = get().events.find((e: Event) => e.id === cloudEvent.id);
-            if (!localEvent) {
-              set((state: any) => ({ events: [...state.events, cloudEvent] }));
-            } else {
-              set((state: any) => ({ events: state.events.map((e: Event) => e.id === cloudEvent.id ? cloudEvent : e) }));
-            }
+          if (!cloudEvent) {
+            return {
+              success: false,
+              error: 'Join did not complete in cloud. Please try again.',
+            };
+          }
+          const localEvent = get().events.find((e: Event) => e.id === cloudEvent.id);
+          if (!localEvent) {
+            set((state: any) => ({ events: [...state.events, cloudEvent] }));
+          } else {
+            set((state: any) => ({ events: state.events.map((e: Event) => e.id === cloudEvent.id ? cloudEvent : e) }));
           }
           return { success: true, eventId: joinResult.eventId };
         }
-        if (joinResult.error) return { success: false, error: joinResult.error };
+        return { success: false, error: joinResult.error || 'Could not join this event right now.' };
       } catch (error) {
         console.error('Failed to load event from cloud:', error);
+        return { success: false, error: 'Could not join this event right now.' };
       }
     }
 

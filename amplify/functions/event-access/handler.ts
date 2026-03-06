@@ -396,13 +396,34 @@ async function handleJoinHubByShareCode(
         golferIds: Array.from(new Set([...(Array.isArray(group.golferIds) ? group.golferIds : []), args.profileId])),
       }));
 
-  await client.models.Event.update({
+  const updateResult = await client.models.Event.update({
     id: event.id,
     memberUserIds: nextMemberUserIds,
     golfersJson: nextGolfers,
     scorecardsJson: nextScorecards,
     groupsJson: nextGroups,
     lastModified: new Date().toISOString(),
+  });
+
+  if (updateResult.errors?.length || !updateResult.data) {
+    console.error('joinHubByShareCode: failed to update event membership', {
+      eventId: event.id,
+      profileId: args.profileId,
+      callerMembershipKeys,
+      errors: updateResult.errors,
+    });
+    return {
+      success: false,
+      error: 'Could not join this event right now.',
+      hubType,
+    };
+  }
+
+  console.log('joinHubByShareCode: membership updated', {
+    eventId: event.id,
+    profileId: args.profileId,
+    memberUserIds: nextMemberUserIds,
+    golferCount: nextGolfers.length,
   });
 
   return {
