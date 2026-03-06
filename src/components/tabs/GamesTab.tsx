@@ -128,6 +128,18 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   const getEventSettlements = useStore((s) => s.getEventSettlements);
 
   if (!event) return null;
+
+  const safeGames = {
+    nassau: Array.isArray(event.games?.nassau) ? event.games.nassau : [],
+    skins: Array.isArray(event.games?.skins) ? event.games.skins : [],
+    pinky: Array.isArray(event.games?.pinky) ? event.games.pinky : [],
+    greenie: Array.isArray(event.games?.greenie) ? event.games.greenie : [],
+    stableford: Array.isArray(event.games?.stableford) ? event.games.stableford : [],
+    ninePoint: Array.isArray(event.games?.ninePoint) ? event.games.ninePoint : [],
+    bingoBangoBongo: Array.isArray(event.games?.bingoBangoBongo) ? event.games.bingoBangoBongo : [],
+    wolf: Array.isArray(event.games?.wolf) ? event.games.wolf : [],
+    dots: Array.isArray(event.games?.dots) ? event.games.dots : [],
+  };
   
   // Check if current user is the event owner
   const isOwner = currentProfile && event.ownerProfileId === currentProfile.id;
@@ -176,9 +188,9 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
     const id = nanoid(6);
     updateEvent(eventId, {
       games: {
-        ...event.games,
+        ...safeGames,
         nassau: [
-          ...event.games.nassau,
+          ...safeGames.nassau,
           { id, groupId: defaultGroupId, fee: 5, fees: { out: 5, in: 5, total: 5 }, net, participantGolferIds: gameEligibleIds('nassau') },
         ],
       },
@@ -188,12 +200,12 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   const removeNassau = (id: string) => {
     useStore.getState().removeNassau(eventId, id);
   };
-  const skinsArray: any[] = Array.isArray(event.games.skins) ? event.games.skins : (event.games.skins ? [event.games.skins] : []);
+  const skinsArray: any[] = safeGames.skins;
   const addSkins = (net: boolean) => {
     const id = nanoid(6);
     updateEvent(eventId, {
       games: {
-        ...event.games,
+        ...safeGames,
         skins: [...skinsArray, { id, fee: 10, net, carryovers: false, participantGolferIds: gameEligibleIds('skins') }],
       },
     });
@@ -204,15 +216,15 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   };
   
   // Pinky game management
-  const pinkyArray: any[] = Array.isArray(event.games.pinky) ? event.games.pinky : [];
+  const pinkyArray: any[] = safeGames.pinky;
   const addPinky = () => {
     const id = nanoid(6);
     updateEvent(eventId, { 
       games: { 
-        nassau: event.games.nassau || [],
-        skins: event.games.skins || [],
+        nassau: safeGames.nassau,
+        skins: safeGames.skins,
         pinky: [...pinkyArray, { id, fee: 1, participantGolferIds: gameEligibleIds('pinky') }],
-        greenie: event.games.greenie || []
+        greenie: safeGames.greenie
       } 
     });
     setPinkySetupId(id);
@@ -230,14 +242,14 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   };
   
   // Greenie game management
-  const greenieArray: any[] = Array.isArray(event.games.greenie) ? event.games.greenie : [];
+  const greenieArray: any[] = safeGames.greenie;
   const addGreenie = () => {
     const id = nanoid(6);
     updateEvent(eventId, { 
       games: { 
-        nassau: event.games.nassau || [],
-        skins: event.games.skins || [],
-        pinky: event.games.pinky || [],
+        nassau: safeGames.nassau,
+        skins: safeGames.skins,
+        pinky: safeGames.pinky,
         greenie: [...greenieArray, { id, fee: 1, participantGolferIds: gameEligibleIds('greenie') }]
       } 
     });
@@ -258,16 +270,16 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   // ============================================================================
   // New game type arrays and management functions
   // ============================================================================
-  const stablefordArray: any[] = Array.isArray(event.games.stableford) ? event.games.stableford : [];
-  const ninePointArray: any[] = Array.isArray(event.games.ninePoint) ? event.games.ninePoint : [];
-  const bbbArray: any[] = Array.isArray(event.games.bingoBangoBongo) ? event.games.bingoBangoBongo : [];
-  const wolfArray: any[] = Array.isArray(event.games.wolf) ? event.games.wolf : [];
-  const dotsArray: any[] = Array.isArray(event.games.dots) ? event.games.dots : [];
+  const stablefordArray: any[] = safeGames.stableford;
+  const ninePointArray: any[] = safeGames.ninePoint;
+  const bbbArray: any[] = safeGames.bingoBangoBongo;
+  const wolfArray: any[] = safeGames.wolf;
+  const dotsArray: any[] = safeGames.dots;
 
   const addStableford = (net: boolean) => {
     const id = nanoid(6);
     updateEvent(eventId, {
-      games: { ...event.games, stableford: [...stablefordArray, { id, fee: 10, net, system: 'standard', participantGolferIds: gameEligibleIds('nassau') }] }
+      games: { ...safeGames, stableford: [...stablefordArray, { id, fee: 10, net, system: 'standard', participantGolferIds: gameEligibleIds('nassau') }] }
     });
     setStablefordSetupId(id);
   };
@@ -276,7 +288,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
     const id = nanoid(6);
     const eligible = gameEligibleIds('nassau').slice(0, 3);
     updateEvent(eventId, {
-      games: { ...event.games, ninePoint: [...ninePointArray, { id, fee: 1, net, participantGolferIds: eligible, sweepEnabled: false }] }
+      games: { ...safeGames, ninePoint: [...ninePointArray, { id, fee: 1, net, participantGolferIds: eligible, sweepEnabled: false }] }
     });
     setNinePointSetupId(id);
   };
@@ -284,7 +296,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   const addBingoBangoBongo = () => {
     const id = nanoid(6);
     updateEvent(eventId, {
-      games: { ...event.games, bingoBangoBongo: [...bbbArray, { id, fee: 1, participantGolferIds: gameEligibleIds('nassau') }] }
+      games: { ...safeGames, bingoBangoBongo: [...bbbArray, { id, fee: 1, participantGolferIds: gameEligibleIds('nassau') }] }
     });
     setBbbSetupId(id);
   };
@@ -293,7 +305,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
     const id = nanoid(6);
     const eligible = gameEligibleIds('nassau').slice(0, 4);
     updateEvent(eventId, {
-      games: { ...event.games, wolf: [...wolfArray, { id, fee: 1, participantGolferIds: eligible, wolfOrder: eligible, blindWolfEnabled: false }] }
+      games: { ...safeGames, wolf: [...wolfArray, { id, fee: 1, participantGolferIds: eligible, wolfOrder: eligible, blindWolfEnabled: false }] }
     });
     setWolfSetupId(id);
   };
@@ -301,7 +313,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   const addDots = () => {
     const id = nanoid(6);
     updateEvent(eventId, {
-      games: { ...event.games, dots: [...dotsArray, { id, fee: 1, participantGolferIds: gameEligibleIds('nassau'), activeDots: [...DEFAULT_DOTS] }] }
+      games: { ...safeGames, dots: [...dotsArray, { id, fee: 1, participantGolferIds: gameEligibleIds('nassau'), activeDots: [...DEFAULT_DOTS] }] }
     });
     setDotsSetupId(id);
   };

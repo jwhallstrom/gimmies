@@ -114,6 +114,21 @@ function asObjectArray(value: unknown): any[] {
   return value.filter((item) => item && typeof item === 'object');
 }
 
+function normalizeEventGames(value: unknown): Event['games'] {
+  const raw = (value && typeof value === 'object') ? (value as Record<string, unknown>) : {};
+  return {
+    nassau: Array.isArray(raw.nassau) ? raw.nassau as any[] : [],
+    skins: Array.isArray(raw.skins) ? raw.skins as any[] : [],
+    pinky: Array.isArray(raw.pinky) ? raw.pinky as any[] : [],
+    greenie: Array.isArray(raw.greenie) ? raw.greenie as any[] : [],
+    stableford: Array.isArray(raw.stableford) ? raw.stableford as any[] : [],
+    ninePoint: Array.isArray(raw.ninePoint) ? raw.ninePoint as any[] : [],
+    bingoBangoBongo: Array.isArray(raw.bingoBangoBongo) ? raw.bingoBangoBongo as any[] : [],
+    wolf: Array.isArray(raw.wolf) ? raw.wolf as any[] : [],
+    dots: Array.isArray(raw.dots) ? raw.dots as any[] : [],
+  } as Event['games'];
+}
+
 function buildMembershipKeys(userId?: string | null): string[] {
   const normalized = String(userId || '').trim();
   if (!normalized) return [];
@@ -176,7 +191,7 @@ function normalizeCloudEventRecord(cloudEvent: any): Event | null {
     golfers,
     groups,
     scorecards,
-    games: parseJsonField<any>(cloudEvent.gamesJson, {}),
+    games: normalizeEventGames(parseJsonField<any>(cloudEvent.gamesJson, {})),
     pinkyResults: parseJsonField<any>(cloudEvent.pinkyResultsJson, {}),
     greenieResults: parseJsonField<any>(cloudEvent.greenieResultsJson, {}),
     groupSettings: parseJsonField<any>((cloudEvent as any).groupSettingsJson, undefined),
@@ -519,7 +534,7 @@ export async function loadEventById(eventId: string): Promise<Event | null> {
     const golfers = asObjectArray(parseJsonField<any[]>(cloudEvent.golfersJson, []));
     const groups = asObjectArray(parseJsonField<any[]>(cloudEvent.groupsJson, []));
     const scorecards = asObjectArray(parseJsonField<any[]>(cloudEvent.scorecardsJson, []));
-    const games = parseJsonField<any>(cloudEvent.gamesJson, {});
+    const games = normalizeEventGames(parseJsonField<any>(cloudEvent.gamesJson, {}));
     const pinkyResults = parseJsonField<any>(cloudEvent.pinkyResultsJson, {});
     const greenieResults = parseJsonField<any>(cloudEvent.greenieResultsJson, {});
     
@@ -620,7 +635,7 @@ export async function loadEventByShareCode(shareCode: string): Promise<Event | n
       golfers: asObjectArray(parseJsonField<any[]>(cloudEvent.golfersJson, [])),
       groups: asObjectArray(parseJsonField<any[]>(cloudEvent.groupsJson, [])),
       scorecards: asObjectArray(parseJsonField<any[]>(cloudEvent.scorecardsJson, [])),
-      games: parseJsonField<any>(cloudEvent.gamesJson, {}),
+      games: normalizeEventGames(parseJsonField<any>(cloudEvent.gamesJson, {})),
       pinkyResults: parseJsonField<any>(cloudEvent.pinkyResultsJson, {}),
       greenieResults: parseJsonField<any>(cloudEvent.greenieResultsJson, {}),
       groupSettings: parseJsonField<any>((cloudEvent as any).groupSettingsJson, undefined),

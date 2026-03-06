@@ -25,6 +25,8 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
   
   if (!event) return null;
 
+  const safeNassauGames = Array.isArray(event.games?.nassau) ? event.games.nassau : [];
+
   // Load only the selected course from DynamoDB (faster than loading full catalog)
   const { course: selectedCourse, loading: coursesLoading } = useCourse(event.course.courseId);
   
@@ -108,7 +110,7 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
         if (!currentProfile) return false;
 
         // Find all teams in Nassau games that include the current user (owner)
-        const userTeams = event.games.nassau.flatMap(nassau =>
+        const userTeams = safeNassauGames.flatMap(nassau =>
           nassau.teams?.filter(team => team.golferIds.includes(currentProfile.id)) || []
         );
 
@@ -128,7 +130,7 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
 
       // Can see team members if they're on a team together in Nassau games
       if (currentProfile) {
-        const userTeams = event.games.nassau.flatMap(nassau =>
+        const userTeams = safeNassauGames.flatMap(nassau =>
           nassau.teams?.filter(team => team.golferIds.includes(currentProfile.id)) || []
         );
         const teamGolferIds = userTeams.flatMap(team => team.golferIds);
@@ -140,7 +142,7 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
   });
 
   const isEventOwner = currentProfile?.id === event.ownerProfileId;
-  const hasNassauGames = event.games.nassau.length > 0;
+  const hasNassauGames = safeNassauGames.length > 0;
   const isTeamScorecard = event.scorecardView === 'team' && hasNassauGames;
 
   // Auto-switch from team view to individual if no Nassau games exist
