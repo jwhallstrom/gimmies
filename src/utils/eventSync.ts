@@ -98,15 +98,19 @@ function mapCloudChatMessages(messages: any[]): ChatMessage[] {
 
 function parseJsonField<T>(value: unknown, fallback: T): T {
   if (value == null) return fallback;
-  if (typeof value === 'string') {
+  let current: unknown = value;
+
+  // Some cloud fields are double-encoded JSON strings. Unwrap them a couple
+  // of times so arrays/objects survive normalization instead of being dropped.
+  for (let i = 0; i < 3 && typeof current === 'string'; i++) {
     try {
-      const parsed = JSON.parse(value) as T;
-      return (parsed == null ? fallback : parsed);
+      current = JSON.parse(current);
     } catch {
       return fallback;
     }
   }
-  return ((value as T) == null ? fallback : (value as T));
+
+  return ((current as T) == null ? fallback : (current as T));
 }
 
 function asObjectArray(value: unknown): any[] {
