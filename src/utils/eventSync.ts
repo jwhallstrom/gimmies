@@ -114,6 +114,15 @@ function asObjectArray(value: unknown): any[] {
   return value.filter((item) => item && typeof item === 'object');
 }
 
+function buildMembershipKeys(userId?: string | null): string[] {
+  const normalized = String(userId || '').trim();
+  if (!normalized) return [];
+  return Array.from(new Set([
+    normalized,
+    `${normalized}::${normalized}`,
+  ]));
+}
+
 function deriveEventMemberUserIds(event: Event, currentProfileId?: string): string[] {
   const state = useStore.getState();
   const profileIds = new Set<string>();
@@ -125,17 +134,21 @@ function deriveEventMemberUserIds(event: Event, currentProfileId?: string): stri
     if (golfer.profileId) profileIds.add(golfer.profileId);
   }
 
-  const userIds = new Set<string>();
+  const membershipKeys = new Set<string>();
   for (const profileId of profileIds) {
     const profile = state.profiles.find((candidate: any) => candidate.id === profileId);
-    if (profile?.userId) userIds.add(profile.userId);
+    for (const key of buildMembershipKeys(profile?.userId)) {
+      membershipKeys.add(key);
+    }
   }
 
-  if (!userIds.size && state.currentProfile?.userId) {
-    userIds.add(state.currentProfile.userId);
+  if (!membershipKeys.size && state.currentProfile?.userId) {
+    for (const key of buildMembershipKeys(state.currentProfile.userId)) {
+      membershipKeys.add(key);
+    }
   }
 
-  return Array.from(userIds);
+  return Array.from(membershipKeys);
 }
 
 function normalizeCloudEventRecord(cloudEvent: any): Event | null {

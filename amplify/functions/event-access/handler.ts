@@ -64,6 +64,28 @@ function getCallerUserId(identity: IdentityLike | null | undefined): string | nu
   return typeof sub === 'string' && sub.trim() ? sub : null;
 }
 
+function getCallerMembershipKeys(identity: IdentityLike | null | undefined): string[] {
+  if (!identity) return [];
+  const claims = identity.claims || {};
+  const sub = typeof (identity.sub || claims.sub) === 'string' ? String(identity.sub || claims.sub).trim() : '';
+  const username =
+    typeof identity.username === 'string' && identity.username.trim()
+      ? identity.username.trim()
+      : typeof claims['cognito:username'] === 'string'
+        ? String(claims['cognito:username']).trim()
+        : '';
+
+  const candidates = [
+    sub,
+    username,
+    sub && username ? `${sub}::${username}` : '',
+    sub ? `${sub}::${sub}` : '',
+    username ? `${username}::${username}` : '',
+  ].filter(Boolean);
+
+  return Array.from(new Set(candidates));
+}
+
 function asObjectArray(value: unknown): Record<string, any>[] {
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is Record<string, any> => Boolean(item) && typeof item === 'object');
@@ -76,8 +98,9 @@ function normalizeHubType(record: Partial<EventRecord>): 'event' | 'group' {
   return record.groupSettingsJson ? 'group' : 'event';
 }
 
-function isMember(record: Partial<EventRecord>, userId: string): boolean {
-  return Array.isArray(record.memberUserIds) && record.memberUserIds.includes(userId);
+function isMember(record: Partial<EventRecord>, membershipKeys: string[]): boolean {
+  if (!Array.isArray(record.memberUserIds) || membershipKeys.length === 0) return false;
+  return membershipKeys.some((key) => record.memberUserIds!.includes(key));
 }
 
 function groupSettings(record: Partial<EventRecord>) {
@@ -240,6 +263,7 @@ async function handleListPublicGroups(client: ReturnType<typeof generateClient<S
 
 async function handleJoinHubByShareCode(
   client: ReturnType<typeof generateClient<Schema>>,
+  callerMembershipKeys: string[],
   callerUserId: string,
   args: { shareCode: string; profileId: string; displayName?: string | null },
 ) {
@@ -269,7 +293,7 @@ async function handleJoinHubByShareCode(
     };
   }
 
-  const nextMemberUserIds = Array.from(new Set([...(event.memberUserIds || []), callerUserId]));
+  const nextMemberUserIds = Array.from(new Set([...(event.memberUserIds || []), ...callerMembershipKeys]));
   const golfers = asObjectArray(event.golfersJson);
   const groups = asObjectArray(event.groupsJson);
   const scorecards = asObjectArray(event.scorecardsJson);
@@ -318,13 +342,13 @@ async function handleJoinHubByShareCode(
 
 async function handleListEventChatMessages(
   client: ReturnType<typeof generateClient<Schema>>,
-  callerUserId: string,
+  callerMembershipKeys: string[],
   args: { eventId: string },
 ) {
   const eventResult = await client.models.Event.get({ id: args.eventId });
   const event = eventResult.data as EventRecord | null;
 
-  if (!event || !isMember(event, callerUserId)) {
+  if (!event || !isMember(event, callerMembershipKeys)) {
     throw new Error('Event access denied.');
   }
 
@@ -348,12 +372,12 @@ async function handleListEventChatMessages(
 
 async function handleCreateEventChatMessage(
   client: ReturnType<typeof generateClient<Schema>>,
-  callerUserId: string,
+  callerMembershipKeys: string[],
   args: { eventId: string; messageId: string; profileId: string; senderName?: string | null; text: string; isBot?: boolean | null },
 ) {
   const eventResult = await client.models.Event.get({ id: args.eventId });
   const event = eventResult.data as EventRecord | null;
-  if (!event || !isMember(event, callerUserId)) {
+  if (!event || !isMember(event, callerMembershipKeys)) {
     return { success: false, error: 'Event access denied.' };
   }
 
@@ -380,12 +404,12 @@ async function handleCreateEventChatMessage(
 
 async function handleUpdateEventChatMessage(
   client: ReturnType<typeof generateClient<Schema>>,
-  callerUserId: string,
+  callerMembershipKeys: string[],
   args: { eventId: string; messageId: string; text: string },
 ) {
   const eventResult = await client.models.Event.get({ id: args.eventId });
   const event = eventResult.data as EventRecord | null;
-  if (!event || !isMember(event, callerUserId)) {
+  if (!event || !isMember(event, callerMembershipKeys)) {
     return { success: false, error: 'Event access denied.' };
   }
 
@@ -430,6 +454,7 @@ async function handleUpdateEventChatMessage(
 export const handler = async (event: AppSyncResolverEvent<Record<string, any>>) => {
   const client = await getClient();
   const callerUserId = getCallerUserId(event.identity as IdentityLike);
+  const callerMembershipKeys = getCallerMembershipKeys(event.identity as IdentityLike);
   const fieldName =
     (event as any)?.info?.fieldName ||
     (event as any)?.fieldName ||
@@ -455,13 +480,13 @@ export const handler = async (event: AppSyncResolverEvent<Record<string, any>>) 
     case 'listPublicGroups':
       return handleListPublicGroups(client);
     case 'joinHubByShareCode':
-      return handleJoinHubByShareCode(client, callerUserId, event.arguments as any);
+      return handleJoinHubByShareCode(client, callerMembershipKeys, callerUserId, event.arguments as any);
     case 'listEventChatMessages':
-      return handleListEventChatMessages(client, callerUserId, event.arguments as any);
+      return handleListEventChatMessages(client, callerMembershipKeys, event.arguments as any);
     case 'createEventChatMessage':
-      return handleCreateEventChatMessage(client, callerUserId, event.arguments as any);
+      return handleCreateEventChatMessage(client, callerMembershipKeys, event.arguments as any);
     case 'updateEventChatMessage':
-      return handleUpdateEventChatMessage(client, callerUserId, event.arguments as any);
+      return handleUpdateEventChatMessage(client, callerMembershipKeys, event.arguments as any);
     default:
       throw new Error(`Unsupported field: ${fieldName}`);
   }
