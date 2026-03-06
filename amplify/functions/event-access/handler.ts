@@ -261,6 +261,78 @@ async function handleListPublicGroups(client: ReturnType<typeof generateClient<S
   return publicHubSummaries(events, 'group');
 }
 
+async function handleListAccessibleHubs(
+  client: ReturnType<typeof generateClient<Schema>>,
+  callerMembershipKeys: string[],
+) {
+  const events = await listAllEventRecords(client);
+  return events
+    .filter((event) => isMember(event, callerMembershipKeys))
+    .map((record) => ({
+      id: record.id,
+      name: record.name,
+      date: record.date,
+      courseId: record.courseId || null,
+      teeName: record.teeName || null,
+      ownerProfileId: record.ownerProfileId,
+      isPublic: Boolean(record.isPublic),
+      isCompleted: Boolean(record.isCompleted),
+      hubType: normalizeHubType(record),
+      parentGroupId: record.parentGroupId || null,
+      shareCode: record.shareCode || null,
+      scorecardView: record.scorecardView || null,
+      status: record.status || null,
+      golfersJson: record.golfersJson || [],
+      groupsJson: record.groupsJson || [],
+      scorecardsJson: record.scorecardsJson || [],
+      gamesJson: record.gamesJson || {},
+      pinkyResultsJson: record.pinkyResultsJson || {},
+      greenieResultsJson: record.greenieResultsJson || {},
+      groupSettingsJson: record.groupSettingsJson || null,
+      createdAt: record.createdAt || null,
+      lastModified: record.lastModified || null,
+      completedAt: record.completedAt || null,
+    }));
+}
+
+async function handleGetAccessibleHubById(
+  client: ReturnType<typeof generateClient<Schema>>,
+  callerMembershipKeys: string[],
+  args: { eventId: string },
+) {
+  const events = await listAllEventRecords(client);
+  const event = events.find((candidate) => candidate.id === args.eventId) || null;
+  if (!event || !isMember(event, callerMembershipKeys)) {
+    return null;
+  }
+
+  return {
+    id: event.id,
+    name: event.name,
+    date: event.date,
+    courseId: event.courseId || null,
+    teeName: event.teeName || null,
+    ownerProfileId: event.ownerProfileId,
+    isPublic: Boolean(event.isPublic),
+    isCompleted: Boolean(event.isCompleted),
+    hubType: normalizeHubType(event),
+    parentGroupId: event.parentGroupId || null,
+    shareCode: event.shareCode || null,
+    scorecardView: event.scorecardView || null,
+    status: event.status || null,
+    golfersJson: event.golfersJson || [],
+    groupsJson: event.groupsJson || [],
+    scorecardsJson: event.scorecardsJson || [],
+    gamesJson: event.gamesJson || {},
+    pinkyResultsJson: event.pinkyResultsJson || {},
+    greenieResultsJson: event.greenieResultsJson || {},
+    groupSettingsJson: event.groupSettingsJson || null,
+    createdAt: event.createdAt || null,
+    lastModified: event.lastModified || null,
+    completedAt: event.completedAt || null,
+  };
+}
+
 async function handleJoinHubByShareCode(
   client: ReturnType<typeof generateClient<Schema>>,
   callerMembershipKeys: string[],
@@ -479,6 +551,10 @@ export const handler = async (event: AppSyncResolverEvent<Record<string, any>>) 
       return handleListPublicEvents(client);
     case 'listPublicGroups':
       return handleListPublicGroups(client);
+    case 'listAccessibleHubs':
+      return handleListAccessibleHubs(client, callerMembershipKeys);
+    case 'getAccessibleHubById':
+      return handleGetAccessibleHubById(client, callerMembershipKeys, event.arguments as any);
     case 'joinHubByShareCode':
       return handleJoinHubByShareCode(client, callerMembershipKeys, callerUserId, event.arguments as any);
     case 'listEventChatMessages':

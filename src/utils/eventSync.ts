@@ -506,9 +506,9 @@ export async function loadEventById(eventId: string): Promise<Event | null> {
 
     console.log('📥 loadEventById: Loading event from cloud by ID:', eventId);
 
-    const { data: cloudEvent, errors } = await client.models.Event.get({ id: eventId });
+    const { data: cloudEvent, errors } = await client.queries.getAccessibleHubById({ eventId });
 
-    if (errors || !cloudEvent) {
+    if (errors || !cloudEvent?.id) {
       console.log('❌ loadEventById: Event not found with ID:', eventId);
       return null;
     }
@@ -559,7 +559,7 @@ export async function loadEventById(eventId: string): Promise<Event | null> {
       chat, // ✅ Use chat from cloud instead of empty array
       groupSettings,
       
-      createdAt: cloudEvent.createdAt,
+      createdAt: String(cloudEvent.createdAt || new Date().toISOString()),
       lastModified: cloudEvent.lastModified || new Date().toISOString(),
       completedAt: cloudEvent.completedAt || undefined,
     };
@@ -625,7 +625,7 @@ export async function loadEventByShareCode(shareCode: string): Promise<Event | n
       greenieResults: parseJsonField<any>(cloudEvent.greenieResultsJson, {}),
       groupSettings: parseJsonField<any>((cloudEvent as any).groupSettingsJson, undefined),
       
-      createdAt: cloudEvent.createdAt,
+      createdAt: cloudEvent.createdAt || new Date().toISOString(),
       lastModified: cloudEvent.lastModified || new Date().toISOString(),
       completedAt: cloudEvent.completedAt || undefined,
       chat,
@@ -648,29 +648,13 @@ export async function loadUserEventsFromCloud(): Promise<Event[]> {
     if (!client) return [];
 
     console.log('Loading user events from cloud...');
-    const events: any[] = [];
-    let nextToken: string | null | undefined = undefined;
-    let sawAnyData = false;
-    do {
-      const response = await client.models.Event.list(
-        nextToken ? { nextToken } : undefined
-      );
-      const data = response.data;
-      const errors = response.errors;
-      const pageToken = response.nextToken as string | null | undefined;
-      if (errors?.length) {
-        // Amplify list can return partial data with record-level errors.
-        // Keep good records instead of blanking Home.
-        console.warn('loadUserEventsFromCloud: partial page errors:', errors);
-      }
-      if (data?.length) {
-        events.push(...data);
-        sawAnyData = true;
-      }
-      nextToken = pageToken;
-    } while (nextToken);
+    const { data, errors } = await client.queries.listAccessibleHubs();
+    if (errors?.length) {
+      console.warn('loadUserEventsFromCloud: errors:', errors);
+    }
 
-    if (!sawAnyData) {
+    const events = (data as any[]) || [];
+    if (!events.length) {
       console.warn('loadUserEventsFromCloud: no readable event records returned');
     }
 

@@ -71,6 +71,21 @@ const schema = a.schema({
     .authorization((allow) => [allow.authenticated()])
     .handler(a.handler.function(eventAccess)),
 
+  listAccessibleHubs: a
+    .query()
+    .returns(a.ref('PublicHubSummary').array())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(eventAccess)),
+
+  getAccessibleHubById: a
+    .query()
+    .arguments({
+      eventId: a.id().required(),
+    })
+    .returns(a.ref('PublicHubSummary'))
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(eventAccess)),
+
   joinHubByShareCode: a
     .mutation()
     .arguments({
