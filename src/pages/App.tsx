@@ -261,13 +261,13 @@ const App: React.FC = () => {
   });
 
   // Canonical cloud sync loop:
-  // Keep events/groups in sync from a single place so browser + installed PWA
-  // converge to cloud state after auth changes, focus changes, and reconnects.
+  // Keep background lists converged after auth changes, focus changes, and reconnects.
+  // Active event/group pages maintain their own realtime subscriptions.
   useEffect(() => {
     if (!currentProfile?.id || !amplifyUser?.userId) return;
 
     const MIN_GAP_MS = 5000;
-    const PERIODIC_MS = 60000;
+    const PERIODIC_MS = isEventRoute ? 180000 : 120000;
 
     const syncFromCloud = async (reason: string) => {
       if (isCloudSyncInFlight.current) return;
@@ -309,7 +309,7 @@ const App: React.FC = () => {
       document.removeEventListener('visibilitychange', onVisible);
       window.clearInterval(periodic);
     };
-  }, [currentProfile?.id, amplifyUser?.userId, location.pathname, loadEventsFromCloud]);
+  }, [currentProfile?.id, amplifyUser?.userId, isEventRoute, location.pathname, loadEventsFromCloud]);
 
 
   const handleLoginSuccess = () => {

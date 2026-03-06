@@ -9,9 +9,6 @@ const UserMenu: React.FC = () => {
   const { isGuest } = useAuthMode();
   const [showSettings, setShowSettings] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
-  const loadEventsFromCloud = useStore((s: any) => s.loadEventsFromCloud) as () => Promise<void>;
-  const isSyncing = useStore((s: any) => s.isLoadingEventsFromCloud) as boolean;
-  const addToast = useStore((s: any) => s.addToast) as ((message: string, type?: 'success' | 'error' | 'warning', durationMs?: number) => void) | undefined;
 
   // Calculate notification count (unread items)
   const notificationCount = useMemo(() => {
@@ -101,16 +98,6 @@ const UserMenu: React.FC = () => {
 
   if (!currentUser || !currentProfile) return null;
 
-  const handleManualSync = async () => {
-    if (isSyncing) return;
-    try {
-      await loadEventsFromCloud();
-      addToast?.('Synced latest events and groups', 'success', 1800);
-    } catch {
-      addToast?.('Sync failed. Please try again.', 'error', 2200);
-    }
-  };
-
   return (
     <div className="flex items-center gap-1">
       {/* Profile Avatar - Opens Settings */}
@@ -153,20 +140,6 @@ const UserMenu: React.FC = () => {
             {notificationCount}
           </span>
         )}
-      </button>
-
-      {/* Manual Sync */}
-      <button
-        onClick={handleManualSync}
-        disabled={isSyncing}
-        className={`p-2 rounded-xl text-white/90 hover:bg-white/10 transition-colors ${isSyncing ? 'opacity-60 cursor-not-allowed' : ''}`}
-        aria-label="Sync now"
-        title={isSyncing ? 'Syncing...' : 'Sync now'}
-      >
-        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v10m0 0l-3-3m3 3l3-3" />
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15v3a3 3 0 003 3h8a3 3 0 003-3v-3" />
-        </svg>
       </button>
 
       {/* Notification Center */}

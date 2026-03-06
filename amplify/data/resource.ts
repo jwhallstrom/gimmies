@@ -133,7 +133,7 @@ const schema = a.schema({
   })
   .authorization(allow => [
     allow.authenticated().to(['read', 'create']),
-    allow.owner().to(['delete']), // Can delete own messages
+    allow.owner().to(['read', 'update', 'delete']), // Sender can edit/delete their own messages
   ]),
 
   // Completed Round (analytics/history)

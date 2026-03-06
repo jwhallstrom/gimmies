@@ -64,6 +64,37 @@ function deserializeCloudChatPayload(rawText: string): Partial<ChatMessage> {
   }
 }
 
+function mapCloudChatMessage(cloudMessage: any): ChatMessage | null {
+  if (!cloudMessage?.id || !cloudMessage?.profileId || !cloudMessage?.createdAt) {
+    return null;
+  }
+
+  const decoded = deserializeCloudChatPayload(cloudMessage.text || '');
+  return {
+    id: cloudMessage.id,
+    profileId: cloudMessage.profileId,
+    senderName: cloudMessage.senderName || cloudMessage.profileId,
+    text: decoded.text || '',
+    createdAt: cloudMessage.createdAt,
+    type: decoded.type,
+    replyTo: decoded.replyTo,
+    reactions: decoded.reactions,
+    metadata: decoded.metadata,
+    pollQuestion: decoded.pollQuestion,
+    pollOptions: decoded.pollOptions,
+    pollClosed: decoded.pollClosed,
+    editedAt: decoded.editedAt,
+    isDeleted: decoded.isDeleted,
+  } as ChatMessage;
+}
+
+function mapCloudChatMessages(messages: any[]): ChatMessage[] {
+  return (messages || [])
+    .map((message) => mapCloudChatMessage(message))
+    .filter((message): message is ChatMessage => Boolean(message))
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+}
+
 function parseJsonField<T>(value: unknown, fallback: T): T {
   if (value == null) return fallback;
   if (typeof value === 'string') {
@@ -208,28 +239,7 @@ export async function loadChatMessagesFromCloud(eventId: string): Promise<ChatMe
       return [];
     }
     
-    // Convert cloud messages to local format
-    const chatMessages: ChatMessage[] = (messages || [])
-      .map(m => {
-        const decoded = deserializeCloudChatPayload(m.text || '');
-        return {
-          id: m.id,
-          profileId: m.profileId,
-          senderName: m.senderName || m.profileId, // Use snapshot or fallback to ID
-          text: decoded.text || '',
-          createdAt: m.createdAt,
-          type: decoded.type,
-          replyTo: decoded.replyTo,
-          reactions: decoded.reactions,
-          metadata: decoded.metadata,
-          pollQuestion: decoded.pollQuestion,
-          pollOptions: decoded.pollOptions,
-          pollClosed: decoded.pollClosed,
-          editedAt: decoded.editedAt,
-          isDeleted: decoded.isDeleted,
-        } as ChatMessage;
-      })
-      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+    const chatMessages = mapCloudChatMessages(messages || []);
     
     console.log('✅ loadChatMessagesFromCloud: Loaded', chatMessages.length, 'messages');
     return chatMessages;
@@ -381,6 +391,48 @@ export async function saveEventPatchToCloud(
     console.error('❌ saveEventPatchToCloud: exception:', error);
     return false;
   }
+}
+
+interface EventRealtimeSubscriptionHandlers {
+  onEvent?: (event: Event) => void;
+  onChat?: (messages: ChatMessage[]) => void;
+  onError?: (scope: 'event' | 'chat', error: unknown) => void;
+}
+
+export function subscribeToEventRealtime(
+  eventId: string,
+  handlers: EventRealtimeSubscriptionHandlers
+): () => void {
+  const client = getClient();
+  if (!client || !eventId) return () => {};
+
+  const eventSubscription = client.models.Event.observeQuery({
+    filter: { id: { eq: eventId } },
+  }).subscribe({
+    next: (snapshot: any) => {
+      const normalized = normalizeCloudEventRecord(snapshot?.items?.[0]);
+      if (normalized) handlers.onEvent?.(normalized);
+    },
+    error: (error: unknown) => {
+      handlers.onError?.('event', error);
+    },
+  });
+
+  const chatSubscription = client.models.ChatMessage.observeQuery({
+    filter: { eventId: { eq: eventId } },
+  }).subscribe({
+    next: (snapshot: any) => {
+      handlers.onChat?.(mapCloudChatMessages(snapshot?.items || []));
+    },
+    error: (error: unknown) => {
+      handlers.onError?.('chat', error);
+    },
+  });
+
+  return () => {
+    eventSubscription.unsubscribe();
+    chatSubscription.unsubscribe();
+  };
 }
 
 /**

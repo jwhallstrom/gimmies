@@ -62,9 +62,8 @@ const EventPage: React.FC = () => {
   };
   const navigate = useNavigate();
   
-  // Auto-sync event from cloud - faster polling when on chat tab (8s) vs other tabs (20s)
-  // Chat is index 0 for groups, index 1 for events
-  useEventSync(id, 15000);
+  // Keep the active event page on realtime cloud sync while it is open.
+  useEventSync(id);
   
   const event = useStore(s => 
     s.events.find(e => e.id === id) || 

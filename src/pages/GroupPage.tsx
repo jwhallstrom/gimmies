@@ -420,7 +420,7 @@ const GroupPage: React.FC = () => {
   const [joiningEventId, setJoiningEventId] = useState<string | null>(null);
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
-  useEventSync(id, 15000);
+  useEventSync(id);
 
   const event = useStore((s) =>
     s.events.find((e) => e.id === id) ||
