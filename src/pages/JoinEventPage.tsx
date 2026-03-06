@@ -421,7 +421,7 @@ const JoinEventPage: React.FC = () => {
     );
   };
 
-  const handleJoinEvent = async (eventId: string) => {
+  const handleJoinEvent = async (eventId: string, shareCode?: string) => {
     if (!currentProfile) {
       navigate('/');
       return;
@@ -434,6 +434,17 @@ const JoinEventPage: React.FC = () => {
     }
 
     try {
+      if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true' && shareCode) {
+        const result = await joinEventByCode(String(shareCode).toUpperCase());
+        if (result?.success && result.eventId) {
+          addToast?.(local?.hubType === 'group' ? 'Joined group!' : 'Joined game!', 'success', 2500);
+          navigate(`/event/${result.eventId}`);
+          return;
+        }
+        addToast?.(result?.error || 'Could not join this item', 'error', 3500);
+        return;
+      }
+
       if (!local && import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
         const { loadEventById } = await import('../utils/eventSync');
         const full = await loadEventById(eventId);
@@ -711,7 +722,7 @@ const JoinEventPage: React.FC = () => {
           )}
         </div>
         <button
-          onClick={(e) => { e.stopPropagation(); handleJoinEvent(event.id); }}
+          onClick={(e) => { e.stopPropagation(); handleJoinEvent(event.id, event.shareCode); }}
           className={`px-4 py-2 text-xs font-bold rounded-lg transition flex-shrink-0 ${
             alreadyJoined
               ? 'bg-gray-100 dark:bg-slate-600 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-500'
@@ -749,7 +760,7 @@ const JoinEventPage: React.FC = () => {
           </div>
         </div>
         <button
-          onClick={(e) => { e.stopPropagation(); handleJoinEvent(group.id); }}
+          onClick={(e) => { e.stopPropagation(); handleJoinEvent(group.id, group.shareCode); }}
           className={`px-4 py-2 text-xs font-bold rounded-lg transition flex-shrink-0 ${
             alreadyJoined
               ? 'bg-gray-100 dark:bg-slate-600 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-slate-500'

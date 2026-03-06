@@ -1,10 +1,121 @@
-import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
+import { type ClientSchema, a, defineData, defineFunction } from '@aws-amplify/backend';
+
+const eventAccess = defineFunction({
+  name: 'event-access',
+  entry: '../functions/event-access/handler.ts',
+});
 
 /**
  * Gimmies Golf Data Schema - Amplify GraphQL API
  * Mirrors existing Dexie/Zustand structure for seamless migration
  */
 const schema = a.schema({
+  PublicHubSummary: a.customType({
+    id: a.id().required(),
+    name: a.string().required(),
+    date: a.date().required(),
+    courseId: a.string(),
+    teeName: a.string(),
+    ownerProfileId: a.id().required(),
+    isPublic: a.boolean(),
+    isCompleted: a.boolean(),
+    hubType: a.string(),
+    parentGroupId: a.string(),
+    shareCode: a.string(),
+    scorecardView: a.string(),
+    status: a.string(),
+    golfersJson: a.json(),
+    groupsJson: a.json(),
+    scorecardsJson: a.json(),
+    gamesJson: a.json(),
+    pinkyResultsJson: a.json(),
+    greenieResultsJson: a.json(),
+    groupSettingsJson: a.json(),
+    createdAt: a.datetime(),
+    lastModified: a.datetime(),
+    completedAt: a.datetime(),
+  }),
+
+  JoinHubResult: a.customType({
+    success: a.boolean().required(),
+    eventId: a.id(),
+    error: a.string(),
+    hubType: a.string(),
+  }),
+
+  EventChatMessage: a.customType({
+    id: a.id().required(),
+    eventId: a.id().required(),
+    profileId: a.string().required(),
+    senderName: a.string(),
+    text: a.string().required(),
+    isBot: a.boolean(),
+    createdAt: a.datetime(),
+    updatedAt: a.datetime(),
+  }),
+
+  EventChatMutationResult: a.customType({
+    success: a.boolean().required(),
+    error: a.string(),
+  }),
+
+  listPublicEvents: a
+    .query()
+    .returns(a.ref('PublicHubSummary').array())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(eventAccess)),
+
+  listPublicGroups: a
+    .query()
+    .returns(a.ref('PublicHubSummary').array())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(eventAccess)),
+
+  joinHubByShareCode: a
+    .mutation()
+    .arguments({
+      shareCode: a.string().required(),
+      profileId: a.id().required(),
+      displayName: a.string(),
+    })
+    .returns(a.ref('JoinHubResult'))
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(eventAccess)),
+
+  listEventChatMessages: a
+    .query()
+    .arguments({
+      eventId: a.id().required(),
+    })
+    .returns(a.ref('EventChatMessage').array())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(eventAccess)),
+
+  createEventChatMessage: a
+    .mutation()
+    .arguments({
+      eventId: a.id().required(),
+      messageId: a.id().required(),
+      profileId: a.string().required(),
+      senderName: a.string(),
+      text: a.string().required(),
+      isBot: a.boolean(),
+    })
+    .returns(a.ref('EventChatMutationResult'))
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(eventAccess)),
+
+  updateEventChatMessage: a
+    .mutation()
+    .arguments({
+      eventId: a.id().required(),
+      messageId: a.id().required(),
+      text: a.string().required(),
+    })
+    .returns(a.ref('EventChatMutationResult'))
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(eventAccess)),
+
   // User Profile - extends Cognito user attributes
   Profile: a.model({
     userId: a.string().required(), // Cognito user ID (for our reference)
@@ -33,6 +144,7 @@ const schema = a.schema({
   .authorization(allow => [
     allow.owner().to(['read', 'create', 'update', 'delete']), // Amplify auto-manages owner field
     allow.authenticated().to(['read']), // Others can read profiles
+    (allow as any).resource(eventAccess).to(['query']),
   ]),
 
   // Individual Handicap Round (for GHIN-style tracking)
@@ -96,6 +208,7 @@ const schema = a.schema({
     status: a.enum(['setup', 'started', 'completed']),
     
     // Related data (stored as JSON for flexibility)
+    memberUserIds: a.string().array(),
     golfersJson: a.json(), // EventGolfer[]
     groupsJson: a.json(), // Group[]
     scorecardsJson: a.json(), // PlayerScorecard[]
@@ -115,7 +228,8 @@ const schema = a.schema({
   })
   .authorization(allow => [
     allow.owner(), // Owner can CRUD
-    allow.authenticated(), // ALL authenticated users can read/update/create (for collaborative events)
+    allow.ownersDefinedIn('memberUserIds').to(['read', 'update']),
+    (allow as any).resource(eventAccess).to(['query', 'mutate']),
   ]),
 
   // Chat Message (scoped to event)
@@ -131,8 +245,8 @@ const schema = a.schema({
     isBot: a.boolean().default(false),
   })
   .authorization(allow => [
-    allow.authenticated().to(['read', 'create']),
-    allow.owner().to(['read', 'update', 'delete']), // Sender can edit/delete their own messages
+    allow.owner().to(['read', 'update', 'delete']),
+    (allow as any).resource(eventAccess).to(['query', 'mutate']),
   ]),
 
   // Completed Round (analytics/history)

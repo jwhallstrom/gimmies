@@ -536,42 +536,21 @@ export const createEventSlice = (
 
     if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
       try {
-        const { loadEventByShareCode } = await import('../../utils/eventSync');
-        const cloudEvent = await loadEventByShareCode(normalized);
-        
-        if (cloudEvent) {
-          const alreadyJoined = cloudEvent.golfers.some((g: EventGolfer) => g.profileId === currentProfile.id);
-          if (alreadyJoined) {
+        const { joinHubByShareCodeInCloud, loadEventById } = await import('../../utils/eventSync');
+        const joinResult = await joinHubByShareCodeInCloud(normalized, currentProfile.id, currentProfile.name);
+        if (joinResult.success && joinResult.eventId) {
+          const cloudEvent = await loadEventById(joinResult.eventId);
+          if (cloudEvent) {
             const localEvent = get().events.find((e: Event) => e.id === cloudEvent.id);
             if (!localEvent) {
               set((state: any) => ({ events: [...state.events, cloudEvent] }));
+            } else {
+              set((state: any) => ({ events: state.events.map((e: Event) => e.id === cloudEvent.id ? cloudEvent : e) }));
             }
-            return { success: true, eventId: cloudEvent.id };
           }
-
-          const isGroup = cloudEvent.hubType === 'group';
-          const groupSettings = cloudEvent.groupSettings || {
-            visibility: 'private' as const,
-            joinPolicy: 'open' as const,
-            membersCanInvite: true,
-          };
-          if (isGroup && groupSettings.joinPolicy !== 'open') {
-            if (groupSettings.joinPolicy === 'invite_only') {
-              return { success: false, error: 'This group is invite-only. Ask an admin to add you.' };
-            }
-            return { success: false, error: 'This group requires join approval. Request flow is not enabled yet.' };
-          }
-
-          const localEvent = get().events.find((e: Event) => e.id === cloudEvent.id);
-          if (!localEvent) {
-            set((state: any) => ({ events: [...state.events, cloudEvent] }));
-          } else {
-            set((state: any) => ({ events: state.events.map((e: Event) => e.id === cloudEvent.id ? cloudEvent : e) }));
-          }
-
-          await get().addGolferToEvent(cloudEvent.id, currentProfile.id);
-          return { success: true, eventId: cloudEvent.id };
+          return { success: true, eventId: joinResult.eventId };
         }
+        if (joinResult.error) return { success: false, error: joinResult.error };
       } catch (error) {
         console.error('Failed to load event from cloud:', error);
       }

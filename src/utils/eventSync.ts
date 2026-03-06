@@ -6,6 +6,7 @@
 import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../amplify/data/resource';
 import type { Event, ChatMessage } from '../state/store';
+import useStore from '../state/store';
 
 const CLOUD_CHAT_PAYLOAD_PREFIX = '__GIMMIES_CHAT_V1__';
 
@@ -113,6 +114,30 @@ function asObjectArray(value: unknown): any[] {
   return value.filter((item) => item && typeof item === 'object');
 }
 
+function deriveEventMemberUserIds(event: Event, currentProfileId?: string): string[] {
+  const state = useStore.getState();
+  const profileIds = new Set<string>();
+
+  if (event.ownerProfileId) profileIds.add(event.ownerProfileId);
+  if (currentProfileId) profileIds.add(currentProfileId);
+
+  for (const golfer of event.golfers || []) {
+    if (golfer.profileId) profileIds.add(golfer.profileId);
+  }
+
+  const userIds = new Set<string>();
+  for (const profileId of profileIds) {
+    const profile = state.profiles.find((candidate: any) => candidate.id === profileId);
+    if (profile?.userId) userIds.add(profile.userId);
+  }
+
+  if (!userIds.size && state.currentProfile?.userId) {
+    userIds.add(state.currentProfile.userId);
+  }
+
+  return Array.from(userIds);
+}
+
 function normalizeCloudEventRecord(cloudEvent: any): Event | null {
   if (!cloudEvent || typeof cloudEvent !== 'object' || !cloudEvent.id) return null;
   const golfers = asObjectArray(parseJsonField<any[]>(cloudEvent.golfersJson, []));
@@ -167,17 +192,17 @@ export async function saveChatMessageToCloud(eventId: string, message: ChatMessa
     if (!client) return false;
 
     console.log('💬 saveChatMessageToCloud: Saving message to event:', eventId, 'from:', message.senderName);
-    
-    const { data, errors } = await client.models.ChatMessage.create({
-      id: message.id,
+
+    const { data, errors } = await client.mutations.createEventChatMessage({
+      messageId: message.id,
       eventId,
       profileId: message.profileId,
       senderName: message.senderName, // Save name snapshot for cross-device
       text: serializeCloudChatPayload(message),
       isBot: message.profileId === 'gimmies-bot',
     });
-    
-    if (errors) {
+
+    if (errors || !data?.success) {
       console.error('❌ saveChatMessageToCloud: Error:', errors);
       return false;
     }
@@ -190,6 +215,37 @@ export async function saveChatMessageToCloud(eventId: string, message: ChatMessa
   }
 }
 
+export async function joinHubByShareCodeInCloud(
+  shareCode: string,
+  profileId: string,
+  displayName?: string
+): Promise<{ success: boolean; eventId?: string; error?: string; hubType?: string }> {
+  try {
+    const client = getClient();
+    if (!client) return { success: false, error: 'Cloud sync unavailable.' };
+
+    const { data, errors } = await client.mutations.joinHubByShareCode({
+      shareCode: String(shareCode || '').trim().toUpperCase(),
+      profileId,
+      displayName: displayName || undefined,
+    });
+
+    if (errors?.length) {
+      return { success: false, error: errors[0].message };
+    }
+
+    return {
+      success: !!data?.success,
+      eventId: data?.eventId || undefined,
+      error: data?.error || undefined,
+      hubType: data?.hubType || undefined,
+    };
+  } catch (error) {
+    console.error('❌ joinHubByShareCodeInCloud: Exception:', error);
+    return { success: false, error: 'Could not join right now.' };
+  }
+}
+
 /**
  * Update an existing chat message in cloud.
  * Used for reactions, poll votes, soft-delete, and message edits.
@@ -199,16 +255,13 @@ export async function updateChatMessageInCloud(eventId: string, message: ChatMes
     const client = getClient();
     if (!client) return false;
 
-    const { errors } = await client.models.ChatMessage.update({
-      id: message.id,
+    const { data, errors } = await client.mutations.updateEventChatMessage({
       eventId,
-      profileId: message.profileId,
-      senderName: message.senderName,
+      messageId: message.id,
       text: serializeCloudChatPayload(message),
-      isBot: message.profileId === 'gimmies-bot',
     });
 
-    if (errors) {
+    if (errors || !data?.success) {
       console.error('❌ updateChatMessageInCloud: Error:', errors);
       return false;
     }
@@ -229,17 +282,17 @@ export async function loadChatMessagesFromCloud(eventId: string): Promise<ChatMe
     if (!client) return [];
 
     console.log('📥 loadChatMessagesFromCloud: Loading messages for event:', eventId);
-    
-    const { data: messages, errors } = await client.models.ChatMessage.list({
-      filter: { eventId: { eq: eventId } }
+
+    const { data, errors } = await client.queries.listEventChatMessages({
+      eventId,
     });
-    
+
     if (errors) {
       console.error('❌ loadChatMessagesFromCloud: Error:', errors);
       return [];
     }
-    
-    const chatMessages = mapCloudChatMessages(messages || []);
+
+    const chatMessages = mapCloudChatMessages((data as any[]) || []);
     
     console.log('✅ loadChatMessagesFromCloud: Loaded', chatMessages.length, 'messages');
     return chatMessages;
@@ -282,6 +335,7 @@ export async function saveEventToCloud(event: Event, currentProfileId: string): 
       hubType: event.hubType || 'event',
       // Parent group ID - links events created from groups
       parentGroupId: event.parentGroupId || null,
+      memberUserIds: deriveEventMemberUserIds(event, currentProfileId),
       
       // Store complex objects as JSON strings
       golfersJson: JSON.stringify(event.golfers || []),
@@ -360,6 +414,7 @@ export async function saveEventPatchToCloud(
     if ('completedAt' in patch) updateData.completedAt = event.completedAt || null;
     if ('ownerProfileId' in patch) updateData.ownerProfileId = event.ownerProfileId || currentProfileId;
     if ('shareCode' in patch) updateData.shareCode = event.shareCode || null;
+    updateData.memberUserIds = deriveEventMemberUserIds(event, currentProfileId);
 
     if ('course' in patch) {
       updateData.courseId = event.course?.courseId || null;
@@ -411,27 +466,20 @@ export function subscribeToEventRealtime(
   }).subscribe({
     next: (snapshot: any) => {
       const normalized = normalizeCloudEventRecord(snapshot?.items?.[0]);
-      if (normalized) handlers.onEvent?.(normalized);
+      if (normalized) {
+        handlers.onEvent?.(normalized);
+        void loadChatMessagesFromCloud(eventId)
+          .then((messages) => handlers.onChat?.(messages))
+          .catch((error) => handlers.onError?.('chat', error));
+      }
     },
     error: (error: unknown) => {
       handlers.onError?.('event', error);
     },
   });
 
-  const chatSubscription = client.models.ChatMessage.observeQuery({
-    filter: { eventId: { eq: eventId } },
-  }).subscribe({
-    next: (snapshot: any) => {
-      handlers.onChat?.(mapCloudChatMessages(snapshot?.items || []));
-    },
-    error: (error: unknown) => {
-      handlers.onError?.('chat', error);
-    },
-  });
-
   return () => {
     eventSubscription.unsubscribe();
-    chatSubscription.unsubscribe();
   };
 }
 
@@ -639,26 +687,12 @@ export async function loadPublicEventsFromCloud(): Promise<Event[]> {
   try {
     const client = getClient();
     if (!client) return [];
-    const events: any[] = [];
-    let nextToken: string | null | undefined = undefined;
-    do {
-      const response = await client.models.Event.list({
-        filter: { isPublic: { eq: true } },
-        ...(nextToken ? { nextToken } : {}),
-      });
-      const data = response.data;
-      const errors = response.errors;
-      const pageToken = response.nextToken as string | null | undefined;
+    const { data, errors } = await client.queries.listPublicEvents();
+    if (errors?.length) {
+      console.warn('loadPublicEventsFromCloud: errors:', errors);
+    }
 
-      if (errors?.length) {
-        // Keep partial good data if some records are unreadable.
-        console.warn('loadPublicEventsFromCloud: partial page errors:', errors);
-      }
-      if (data?.length) events.push(...data);
-      nextToken = pageToken;
-    } while (nextToken);
-
-    const localEvents: Event[] = (events || [])
+    const localEvents: Event[] = ((data as any[]) || [])
       .map((cloudEvent: any) => normalizeCloudEventRecord(cloudEvent))
       .filter((cloudEvent: Event | null): cloudEvent is Event => Boolean(cloudEvent))
       .filter((cloudEvent) => !cloudEvent.isCompleted)
@@ -685,25 +719,12 @@ export async function loadPublicGroupsFromCloud(): Promise<Event[]> {
   try {
     const client = getClient();
     if (!client) return [];
-    const events: any[] = [];
-    let nextToken: string | null | undefined = undefined;
-    do {
-      const response = await client.models.Event.list({
-        filter: { isPublic: { eq: true } },
-        ...(nextToken ? { nextToken } : {}),
-      });
-      const data = response.data;
-      const errors = response.errors;
-      const pageToken = response.nextToken as string | null | undefined;
+    const { data, errors } = await client.queries.listPublicGroups();
+    if (errors?.length) {
+      console.warn('loadPublicGroupsFromCloud: errors:', errors);
+    }
 
-      if (errors?.length) {
-        console.warn('loadPublicGroupsFromCloud: partial page errors:', errors);
-      }
-      if (data?.length) events.push(...data);
-      nextToken = pageToken;
-    } while (nextToken);
-
-    const localGroups: Event[] = (events || [])
+    const localGroups: Event[] = ((data as any[]) || [])
       .map((cloudEvent: any) => normalizeCloudEventRecord(cloudEvent))
       .filter((cloudEvent: Event | null): cloudEvent is Event => Boolean(cloudEvent))
       .filter((cloudEvent) => normalizeHubType(cloudEvent) === 'group')
