@@ -3,6 +3,7 @@ import useStore from '../state/store';
 import NotificationCenter from './NotificationCenter';
 import SettingsPanel from './SettingsPanel';
 import { useAuthMode } from '../hooks/useAuthMode';
+import { parseLocalDate } from '../utils/dateUtils';
 
 const UserMenu: React.FC = () => {
   const { currentUser, currentProfile, events, settlements, notificationReadAt } = useStore();
@@ -34,7 +35,7 @@ const UserMenu: React.FC = () => {
     (events || [])
       .filter((e: any) => !e?.isCompleted && e?.hubType !== 'group')
       .forEach((event: any) => {
-        const eventDate = new Date(event.date);
+        const eventDate = parseLocalDate(event.date);
         const hoursUntil = (eventDate.getTime() - now.getTime()) / (1000 * 60 * 60);
         if (hoursUntil > 0 && hoursUntil < 24) {
           const id = `upcoming-${event.id}`;

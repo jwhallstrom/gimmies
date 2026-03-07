@@ -403,6 +403,7 @@ export const createEventSlice = (
     const state = get();
     const event = state.events.find((e: Event) => e.id === eventId);
     if (!event) return;
+    if (!get().canEditScore(eventId, golferId)) return;
 
     const eventGolfer = event.golfers.find((g: EventGolfer) => g.profileId === golferId || g.customName === golferId);
     const profile = eventGolfer?.profileId ? state.profiles.find((p: GolferProfile) => p.id === eventGolfer.profileId) : null;
@@ -466,11 +467,12 @@ export const createEventSlice = (
     if (event.isCompleted) return false;
     if (event.ownerProfileId === currentProfile.id) return true;
     if (golferId === currentProfile.id) return true;
-    if (event.scorecardView === 'team') {
-      const userTeams = event.games.nassau.flatMap((nassau: any) => nassau.teams?.filter((team: any) => team.golferIds.includes(currentProfile.id)) || []);
-      const teamGolferIds = userTeams.flatMap((team: any) => team.golferIds);
-      return teamGolferIds.includes(golferId);
-    }
+    const nassauGames = Array.isArray(event.games?.nassau) ? event.games.nassau : [];
+    const userTeams = nassauGames.flatMap(
+      (nassau: any) => nassau.teams?.filter((team: any) => (team.golferIds || []).includes(currentProfile.id)) || []
+    );
+    const teamGolferIds = new Set(userTeams.flatMap((team: any) => team.golferIds || []));
+    if (teamGolferIds.has(golferId)) return true;
     return false;
   },
   

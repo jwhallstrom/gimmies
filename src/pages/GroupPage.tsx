@@ -22,6 +22,7 @@ import { getCourseById } from '../data/cloudCourses';
 import PlayerCardModal from '../components/PlayerCardModal';
 import type { PlayerCardData } from '../components/PlayerCardModal';
 import { CreateEventWizard } from '../components/CreateEventWizard';
+import { formatLocalDate } from '../utils/dateUtils';
 
 // ============================================================================
 // Helpers
@@ -37,7 +38,7 @@ function markChatAsRead(groupId: string) {
 }
 
 const formatDateShort = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  formatLocalDate(iso, { weekday: 'short', month: 'short', day: 'numeric' });
 
 const countStrokesEntered = (event: any): number =>
   (event.scorecards || []).reduce(

@@ -14,6 +14,7 @@ import type { Event } from '../state/types';
 import { generateRoundRecap, generateRecapPushMessage } from '../utils/roundRecap';
 import useStore from '../state/store';
 import { getCourseById } from '../data/cloudCourses';
+import { formatLocalDate } from '../utils/dateUtils';
 
 interface Props {
   event: Event;
@@ -51,8 +52,10 @@ const EventNotifications: React.FC<Props> = ({ event, onClose }) => {
   const recap = useMemo(() => generateRoundRecap(event, profiles), [event, profiles]);
   const recapPush = useMemo(() => generateRecapPushMessage(recap), [recap]);
   
-  // Check if round has scores
+  // Recap content should only be shared once results are final.
   const hasScores = event.scorecards.some(sc => sc.scores.length > 0);
+  const isCompleted = event.isCompleted || event.status === 'completed';
+  const canSendRecap = hasScores && isCompleted;
   
   // Helper to get golfer name
   const getGolferName = (golfer: typeof event.golfers[0]) => {
@@ -74,7 +77,7 @@ const EventNotifications: React.FC<Props> = ({ event, onClose }) => {
 
       if (selectedType === 'tee_time') {
         const teeTimeText = new Date(`2000-01-01T${teeTime}`).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-        const dateText = new Date(event.date).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+        const dateText = formatLocalDate(event.date, { weekday: 'long', month: 'long', day: 'numeric' });
         messageText = [
           '⛳ Tee Time Alert',
           `${event.name}`,
@@ -82,7 +85,7 @@ const EventNotifications: React.FC<Props> = ({ event, onClose }) => {
           `From ${currentProfile.name}`,
         ].join('\n');
       } else if (selectedType === 'reminder') {
-        const dateText = new Date(event.date).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' });
+        const dateText = formatLocalDate(event.date, { weekday: 'long', month: 'long', day: 'numeric' });
         messageText = [
           '📅 Game Reminder',
           `Reminder: ${event.name}`,
@@ -205,8 +208,8 @@ const EventNotifications: React.FC<Props> = ({ event, onClose }) => {
                 </div>
               </button>
               
-              {/* Round Recap (only if scores exist) */}
-              {hasScores && (
+              {/* Round Recap (only after the event is complete) */}
+              {canSendRecap && (
                 <button
                   onClick={() => setSelectedType('recap')}
                   className="w-full p-4 bg-white border-2 border-gray-200 rounded-xl text-left hover:border-primary-300 hover:bg-primary-50 transition-colors"
@@ -216,7 +219,7 @@ const EventNotifications: React.FC<Props> = ({ event, onClose }) => {
                     <div>
                       <div className="font-semibold text-gray-900">Round Recap</div>
                       <div className="text-sm text-gray-500">
-                        Share highlights: low score, birdies, skins & more
+                        Share finalized highlights, payouts, and results
                       </div>
                     </div>
                   </div>
@@ -302,7 +305,7 @@ const EventNotifications: React.FC<Props> = ({ event, onClose }) => {
                   <div className="text-gray-600 mt-1">
                     Tee time: {new Date(`2000-01-01T${teeTime}`).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                     <br />
-                    {courseName || 'Course'} • {new Date(event.date).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
+                    {courseName || 'Course'} • {formatLocalDate(event.date, { weekday: 'short', month: 'short', day: 'numeric' })}
                     <br />
                     <br />
                     Playing: {event.golfers.slice(0, 3).map(g => getGolferName(g)).join(', ')}
@@ -337,7 +340,7 @@ const EventNotifications: React.FC<Props> = ({ event, onClose }) => {
                 <div className="text-sm">
                   <div className="font-semibold text-gray-900">📅 Reminder: {event.name}</div>
                   <div className="text-gray-600 mt-1">
-                    Don't forget! We're playing {new Date(event.date).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}
+                    Don't forget! We're playing {formatLocalDate(event.date, { weekday: 'long', month: 'long', day: 'numeric' })}
                     {courseName && ` at ${courseName}`}.
                     <br /><br />
                     See you on the course! ⛳

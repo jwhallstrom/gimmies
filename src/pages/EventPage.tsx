@@ -24,6 +24,7 @@ import EventNotifications from '../components/EventNotifications';
 import { CreateEventWizard } from '../components/CreateEventWizard';
 import { getCourseById } from '../data/cloudCourses';
 import { LeaderboardIcon } from '../components/icons/LeaderboardIcon';
+import { formatLocalDate } from '../utils/dateUtils';
 
 // Mark group chat as read (stores in localStorage)
 const LAST_READ_KEY = 'gimmies.chatLastRead.v1';
@@ -38,7 +39,7 @@ function markChatAsRead(groupId: string) {
 }
 
 const formatDateShort = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  formatLocalDate(iso, { month: 'short', day: 'numeric' });
 
 const EventPage: React.FC = () => {
   const { id } = useParams();
@@ -420,7 +421,7 @@ const EventPage: React.FC = () => {
               {courseName && <span className="truncate max-w-[120px]">{courseName}</span>}
               {courseName && <span className="text-primary-400">•</span>}
               <span className="flex-shrink-0">
-                {new Date(event.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                {formatLocalDate(event.date, { weekday: 'short', month: 'short', day: 'numeric' })}
               </span>
               {event.isCompleted && (
                 <span className="px-1 py-0.5 bg-green-500/20 text-green-300 rounded text-[8px] font-bold flex-shrink-0">

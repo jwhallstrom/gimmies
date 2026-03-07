@@ -984,7 +984,7 @@ const Dashboard: React.FC = () => {
             
             {/* Action buttons */}
             <div className="px-4 pb-4 space-y-2">
-              {/* Join Event - Most prominent (grandma's #1) */}
+              {/* Join Event or Group - Most prominent (grandma's #1) */}
               <button
                 onClick={() => {
                   if (isGuest) {
@@ -1001,7 +1001,7 @@ const Dashboard: React.FC = () => {
                   🎫
                 </div>
                 <div className="text-left flex-1">
-                  <div className="font-bold text-lg">Join Event</div>
+                  <div className="font-bold text-lg">Join Event or Group</div>
                   <div className="text-orange-100 text-sm">Someone invited you? Enter their code</div>
                 </div>
                 <svg className="w-6 h-6 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">

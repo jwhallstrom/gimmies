@@ -4,6 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { getCourseById, getAllCourses } from '../data/cloudCourses';
 import { useCourses } from '../hooks/useCourses';
 import useStore from '../state/store';
+import { formatLocalDate, isSameOrAfterToday, parseLocalDate } from '../utils/dateUtils';
 
 const PENDING_JOIN_KEY = 'gimmies.pendingJoinCode.v1';
 const DEFAULT_ITEMS_LIMIT = 5;
@@ -39,12 +40,7 @@ function extractJoinCode(raw: string): string {
 
 function isUpcoming(dateStr: string): boolean {
   if (!dateStr) return true;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const d = new Date(dateStr);
-  if (Number.isNaN(d.getTime())) return true;
-  d.setHours(0, 0, 0, 0);
-  return d.getTime() >= today.getTime();
+  return isSameOrAfterToday(dateStr);
 }
 
 function haversineMiles(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
@@ -62,7 +58,7 @@ function haversineMiles(a: { lat: number; lng: number }, b: { lat: number; lng: 
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return '';
-  const d = new Date(dateStr);
+  const d = parseLocalDate(dateStr);
   if (Number.isNaN(d.getTime())) return dateStr;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -73,7 +69,7 @@ function formatDate(dateStr: string): string {
   if (d.getTime() === today.getTime()) return 'Today';
   if (d.getTime() === tomorrow.getTime()) return 'Tomorrow';
   
-  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+  return formatLocalDate(dateStr, { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
 const JoinEventPage: React.FC = () => {

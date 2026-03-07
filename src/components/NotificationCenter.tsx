@@ -16,6 +16,7 @@ import useStore from '../state/store';
 import type { Event } from '../state/types';
 import { calculateEventPayouts } from '../games/payouts';
 import { computeSkins } from '../games/skins';
+import { parseLocalDate } from '../utils/dateUtils';
 
 // Notification types for categorization
 type NotificationType = 'money' | 'live' | 'social' | 'personal' | 'system';
@@ -153,7 +154,7 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
       const holesPlayed = myScorecard?.scores?.filter((s: any) => s?.strokes != null).length || 0;
       
       // Event starting soon
-      const eventDate = new Date(event.date);
+      const eventDate = parseLocalDate(event.date);
       const hoursUntil = (eventDate.getTime() - now.getTime()) / (1000 * 60 * 60);
       
       if (hoursUntil > 0 && hoursUntil < 24) {
@@ -324,22 +325,27 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
     });
   }, [events, completedEvents, currentProfile, profiles, settlements, notificationReadAt]);
 
+  const visibleNotifications = useMemo(
+    () => notifications.filter((n) => !(n.id.startsWith('skin-') && events?.some((e: Event) => e.id === n.eventId && !e.isCompleted))),
+    [notifications, events]
+  );
+
   // Filter notifications by tab
   const filteredNotifications = useMemo(() => {
-    if (activeTab === 'all') return notifications;
-    if (activeTab === 'money') return notifications.filter(n => n.type === 'money');
-    if (activeTab === 'activity') return notifications.filter(n => n.type === 'live' || n.type === 'personal');
-    if (activeTab === 'social') return notifications.filter(n => n.type === 'social');
-    return notifications;
-  }, [notifications, activeTab]);
+    if (activeTab === 'all') return visibleNotifications;
+    if (activeTab === 'money') return visibleNotifications.filter(n => n.type === 'money');
+    if (activeTab === 'activity') return visibleNotifications.filter(n => n.type === 'live' || n.type === 'personal');
+    if (activeTab === 'social') return visibleNotifications.filter(n => n.type === 'social');
+    return visibleNotifications;
+  }, [visibleNotifications, activeTab]);
 
   // Counts for badges
   const counts = useMemo(() => ({
-    all: notifications.filter(n => !n.read).length,
-    money: notifications.filter(n => n.type === 'money' && !n.read).length,
-    activity: notifications.filter(n => (n.type === 'live' || n.type === 'personal') && !n.read).length,
-    social: notifications.filter(n => n.type === 'social' && !n.read).length,
-  }), [notifications]);
+    all: visibleNotifications.filter(n => !n.read).length,
+    money: visibleNotifications.filter(n => n.type === 'money' && !n.read).length,
+    activity: visibleNotifications.filter(n => (n.type === 'live' || n.type === 'personal') && !n.read).length,
+    social: visibleNotifications.filter(n => n.type === 'social' && !n.read).length,
+  }), [visibleNotifications]);
 
   const handleNotificationClick = (notif: Notification) => {
     markNotificationRead?.(notif.id);
@@ -350,7 +356,7 @@ const NotificationCenter: React.FC<Props> = ({ isOpen, onClose }) => {
   };
 
   const markAllRead = () => {
-    markNotificationsRead?.(notifications.map(n => n.id));
+    markNotificationsRead?.(visibleNotifications.map(n => n.id));
   };
 
   const formatTime = (date: Date) => {
