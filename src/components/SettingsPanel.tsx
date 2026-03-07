@@ -21,6 +21,7 @@ import { CourseSearch } from './CourseSearch';
 import { StatusBadge, StatusProgress } from './verified';
 import StatusLevelsInfo from './verified/StatusLevelsInfo';
 import { isCourseIssueAdminEmail } from '../utils/adminAccess';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Props {
   isOpen: boolean;
@@ -198,13 +199,16 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
   const roundCount = currentProfile?.stats?.roundsPlayed ?? 0;
   const walletSummary = currentProfile ? getProfileWallet(currentProfile.id) : null;
   const netBalance = walletSummary?.lifetimeNet ?? 0;
+  const { user: authUser } = useAuth();
   const homeCourse = currentProfile?.preferences?.homeCourseName || 
     (currentProfile?.preferences as any)?.homeCourse || null;
   const profileName = currentProfile?.name || 'Golfer';
   const profileAvatar = currentProfile?.avatar || null;
   const handicapIndex = currentProfile?.handicapIndex;
   const username = currentUser?.username || '';
-  const canReviewCourseIssues = isCourseIssueAdminEmail(currentProfile?.email || currentUser?.username || '');
+  const canReviewCourseIssues = isCourseIssueAdminEmail(
+    authUser?.email || currentProfile?.email || currentUser?.username || ''
+  );
 
   return createPortal(
     <div 

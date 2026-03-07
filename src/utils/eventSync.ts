@@ -173,7 +173,8 @@ function deriveEventMemberUserIds(event: Event, currentProfileId?: string): stri
 async function resolveEventMemberUserIds(
   client: ReturnType<typeof generateClient<Schema>>,
   event: Event,
-  currentProfileId?: string
+  currentProfileId?: string,
+  mergeExistingCloudMembers: boolean = true
 ): Promise<string[]> {
   const membershipKeys = new Set<string>(deriveEventMemberUserIds(event, currentProfileId));
   const state = useStore.getState();
@@ -199,6 +200,9 @@ async function resolveEventMemberUserIds(
   }
 
   try {
+    if (!mergeExistingCloudMembers) {
+      return Array.from(membershipKeys);
+    }
     const currentEvent = await client.models.Event.get({ id: event.id });
     for (const key of ((currentEvent.data as any)?.memberUserIds || [])) {
       if (typeof key === 'string' && key.trim()) {
@@ -380,7 +384,11 @@ export async function loadChatMessagesFromCloud(eventId: string): Promise<ChatMe
  * Save event to cloud (DynamoDB)
  * Returns the share code if successful
  */
-export async function saveEventToCloud(event: Event, currentProfileId: string): Promise<string | null> {
+export async function saveEventToCloud(
+  event: Event,
+  currentProfileId: string,
+  options?: { preserveExistingMembers?: boolean }
+): Promise<string | null> {
   try {
     const client = getClient();
     if (!client) return null;
@@ -391,7 +399,12 @@ export async function saveEventToCloud(event: Event, currentProfileId: string): 
     // Generate share code if not exists
     const shareCode = event.shareCode || generateShareCode();
 
-    const memberUserIds = await resolveEventMemberUserIds(client, event, currentProfileId);
+    const memberUserIds = await resolveEventMemberUserIds(
+      client,
+      event,
+      currentProfileId,
+      options?.preserveExistingMembers !== false
+    );
 
     const eventData = {
       id: event.id,

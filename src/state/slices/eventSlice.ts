@@ -23,7 +23,12 @@ const defaultScoreArray = (courseId?: string) => {
   return holes.map((h: any) => ({ hole: h.number, strokes: null }));
 };
 
-const syncEventToCloud = async (eventId: string, get: () => any, patch?: Partial<Event>) => {
+const syncEventToCloud = async (
+  eventId: string,
+  get: () => any,
+  patch?: Partial<Event>,
+  options?: { preserveExistingMembers?: boolean }
+) => {
   if (import.meta.env.VITE_ENABLE_CLOUD_SYNC !== 'true') return;
   const event = get().events.find((e: Event) => e.id === eventId);
   const profile = get().currentProfile;
@@ -33,7 +38,7 @@ const syncEventToCloud = async (eventId: string, get: () => any, patch?: Partial
       if (patch && Object.keys(patch).length > 0) {
         await saveEventPatchToCloud(event, patch, profile.id);
       } else {
-        await saveEventToCloud(event, profile.id);
+        await saveEventToCloud(event, profile.id, options);
       }
     } catch (error) {
       console.error('Failed to sync event to cloud:', error);
@@ -361,7 +366,7 @@ export const createEventSlice = (
         };
       })
     }));
-    await syncEventToCloud(eventId, get);
+    await syncEventToCloud(eventId, get, undefined, { preserveExistingMembers: false });
   },
   
   // Groups
