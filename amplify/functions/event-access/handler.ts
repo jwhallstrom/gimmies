@@ -216,8 +216,29 @@ async function requireOwnedProfile(client: ReturnType<typeof generateClient<Sche
   return profile;
 }
 
-function requireCourseIssueAdmin(callerEmail: string | null) {
-  if (!callerEmail || !COURSE_ISSUE_ADMIN_EMAILS.has(callerEmail)) {
+async function requireCourseIssueAdmin(
+  client: ReturnType<typeof generateClient<Schema>>,
+  callerUserId: string | null,
+  callerEmail: string | null
+) {
+  if (callerEmail && COURSE_ISSUE_ADMIN_EMAILS.has(callerEmail)) {
+    return;
+  }
+
+  if (!callerUserId) {
+    throw new Error('Admin access denied.');
+  }
+
+  const profileResult = await client.models.Profile.list({
+    filter: { userId: { eq: callerUserId } },
+  });
+
+  const matchedProfile = (profileResult.data || []).find((profile: any) => {
+    const email = typeof profile?.email === 'string' ? profile.email.trim().toLowerCase() : '';
+    return email && COURSE_ISSUE_ADMIN_EMAILS.has(email);
+  });
+
+  if (!matchedProfile) {
     throw new Error('Admin access denied.');
   }
 }
@@ -759,9 +780,10 @@ async function listAllCourseIssueReports(client: ReturnType<typeof generateClien
 
 async function handleListCourseIssueReports(
   client: ReturnType<typeof generateClient<Schema>>,
+  callerUserId: string | null,
   callerEmail: string | null
 ) {
-  requireCourseIssueAdmin(callerEmail);
+  await requireCourseIssueAdmin(client, callerUserId, callerEmail);
   const reports = await listAllCourseIssueReports(client);
   return reports
     .map((report) => ({
@@ -787,10 +809,11 @@ async function handleListCourseIssueReports(
 
 async function handleUpdateCourseIssueReportStatus(
   client: ReturnType<typeof generateClient<Schema>>,
+  callerUserId: string | null,
   callerEmail: string | null,
   args: { reportId: string; status: string }
 ) {
-  requireCourseIssueAdmin(callerEmail);
+  await requireCourseIssueAdmin(client, callerUserId, callerEmail);
 
   const nextStatus = String(args.status || '').trim().toLowerCase();
   if (!['open', 'completed'].includes(nextStatus)) {
@@ -860,9 +883,9 @@ export const handler = async (event: AppSyncResolverEvent<Record<string, any>>) 
     case 'updateEventChatMessage':
       return handleUpdateEventChatMessage(client, callerMembershipKeys, callerUserId, event.arguments as any);
     case 'listCourseIssueReportsAdmin':
-      return handleListCourseIssueReports(client, callerEmail);
+      return handleListCourseIssueReports(client, callerUserId, callerEmail);
     case 'updateCourseIssueReportStatus':
-      return handleUpdateCourseIssueReportStatus(client, callerEmail, event.arguments as any);
+      return handleUpdateCourseIssueReportStatus(client, callerUserId, callerEmail, event.arguments as any);
     default:
       throw new Error(`Unsupported field: ${fieldName}`);
   }

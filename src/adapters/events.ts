@@ -26,23 +26,10 @@ export function useEventsAdapter() {
   const cleanupDuplicateProfiles = useStore((s) => s.cleanupDuplicateProfiles) as () => void;
   const loadEventsFromCloud = useStore((s) => s.loadEventsFromCloud) as () => Promise<void>;
 
-  const userEvents: Event[] = currentProfile
-    ? events.filter((event) => {
-        if (event.ownerProfileId === currentProfile.id) return true;
-        if ((event.golfers || []).some((g) => g.profileId === currentProfile.id)) return true;
-        const currentName = (currentProfile.name || '').trim().toLowerCase();
-        if (
-          currentName &&
-          (event.golfers || []).some((g) =>
-            (g.customName || '').trim().toLowerCase() === currentName ||
-            (g.displayName || '').trim().toLowerCase() === currentName
-          )
-        ) {
-          return true;
-        }
-        return (event.groups || []).some((group) => (group.golferIds || []).includes(currentProfile.id));
-      })
-    : [];
+  // In cloud-enabled sessions, store.events is already restricted to hubs the
+  // signed-in user can access. Avoid a second local profile-id filter here,
+  // because browser/PWA profile record mismatches can hide valid joined hubs.
+  const userEvents: Event[] = currentProfile ? events : [];
 
   return {
     // state

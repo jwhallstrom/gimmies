@@ -386,9 +386,11 @@ export const useStore = create<State>()(
             }
           }
 
+          // listAccessibleHubs is already backend-authorized for the signed-in user.
+          // Do not re-filter by local profile membership here, or PWA/browser profile
+          // mismatches can hide legitimately joined events/groups after refresh.
           const myEvents = repairedCloudEvents
-            .filter((e: any) => e && typeof e.id === 'string')
-            .filter(isCurrentProfileMember);
+            .filter((e: any) => e && typeof e.id === 'string');
 
           // Hydrate participant profiles so member cards show correct names/avatars/status.
           try {
