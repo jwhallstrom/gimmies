@@ -170,6 +170,48 @@ function deriveEventMemberUserIds(event: Event, currentProfileId?: string): stri
   return Array.from(membershipKeys);
 }
 
+async function resolveEventMemberUserIds(
+  client: ReturnType<typeof generateClient<Schema>>,
+  event: Event,
+  currentProfileId?: string
+): Promise<string[]> {
+  const membershipKeys = new Set<string>(deriveEventMemberUserIds(event, currentProfileId));
+  const state = useStore.getState();
+
+  const missingProfileIds = new Set<string>();
+  for (const golfer of event.golfers || []) {
+    if (!golfer.profileId) continue;
+    const profile = state.profiles.find((candidate: any) => candidate.id === golfer.profileId);
+    if (!profile?.userId) {
+      missingProfileIds.add(golfer.profileId);
+    }
+  }
+
+  for (const profileId of missingProfileIds) {
+    try {
+      const profileResult = await client.models.Profile.get({ id: profileId });
+      for (const key of buildMembershipKeys((profileResult.data as any)?.userId)) {
+        membershipKeys.add(key);
+      }
+    } catch (error) {
+      console.warn('⚠️ resolveEventMemberUserIds: failed to load profile for membership merge', profileId, error);
+    }
+  }
+
+  try {
+    const currentEvent = await client.models.Event.get({ id: event.id });
+    for (const key of ((currentEvent.data as any)?.memberUserIds || [])) {
+      if (typeof key === 'string' && key.trim()) {
+        membershipKeys.add(key.trim());
+      }
+    }
+  } catch (error) {
+    console.warn('⚠️ resolveEventMemberUserIds: failed to merge existing cloud members', event.id, error);
+  }
+
+  return Array.from(membershipKeys);
+}
+
 function normalizeCloudEventRecord(cloudEvent: any): Event | null {
   if (!cloudEvent || typeof cloudEvent !== 'object' || !cloudEvent.id) return null;
   const golfers = asObjectArray(parseJsonField<any[]>(cloudEvent.golfersJson, []));
@@ -235,7 +277,7 @@ export async function saveChatMessageToCloud(eventId: string, message: ChatMessa
     });
 
     if (errors || !data?.success) {
-      console.error('❌ saveChatMessageToCloud: Error:', errors);
+      console.error('❌ saveChatMessageToCloud: Error:', errors || data?.error || 'unknown failure');
       return false;
     }
     
@@ -349,6 +391,8 @@ export async function saveEventToCloud(event: Event, currentProfileId: string): 
     // Generate share code if not exists
     const shareCode = event.shareCode || generateShareCode();
 
+    const memberUserIds = await resolveEventMemberUserIds(client, event, currentProfileId);
+
     const eventData = {
       id: event.id,
       name: event.name,
@@ -367,7 +411,7 @@ export async function saveEventToCloud(event: Event, currentProfileId: string): 
       hubType: event.hubType || 'event',
       // Parent group ID - links events created from groups
       parentGroupId: event.parentGroupId || null,
-      memberUserIds: deriveEventMemberUserIds(event, currentProfileId),
+      memberUserIds,
       
       // Store complex objects as JSON strings
       golfersJson: JSON.stringify(event.golfers || []),
