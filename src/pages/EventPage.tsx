@@ -427,6 +427,18 @@ const EventPage: React.FC = () => {
                   DONE
                 </span>
               )}
+              {event.shareCode && (
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(event.shareCode || '');
+                    addToast('Join code copied!', 'success');
+                  }}
+                  className="px-1.5 py-0.5 bg-white/10 hover:bg-white/15 text-white rounded text-[8px] font-bold tracking-[0.18em] flex-shrink-0"
+                  title="Copy join code"
+                >
+                  {event.shareCode}
+                </button>
+              )}
             </div>
           </div>
         </div>

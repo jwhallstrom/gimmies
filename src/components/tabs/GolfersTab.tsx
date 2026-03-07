@@ -637,8 +637,8 @@ Code: ${event.shareCode}`,
                     </button>
                   </div>
 
-                  {/* Or divider + code — only for private events and groups */}
-                  {event.shareCode && (!isPublicEvent || isGroupHub) && (
+                  {/* Or divider + code */}
+                  {event.shareCode && (
                     <>
                       <div className="flex items-center gap-3">
                         <div className="flex-1 h-px bg-gray-200" />

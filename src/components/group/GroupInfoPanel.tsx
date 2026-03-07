@@ -333,6 +333,19 @@ const GroupInfoPanel: React.FC<GroupInfoPanelProps> = ({ event, onClose, onCreat
               </button>
             )}
 
+            {event.shareCode && (
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(event.shareCode || '');
+                  addToast('Join code copied!', 'success');
+                }}
+                className="mx-auto mt-2 inline-flex items-center gap-2 rounded-full bg-white/10 hover:bg-white/15 px-3 py-1.5 text-white text-xs font-bold tracking-[0.18em] transition-colors"
+              >
+                <span>JOIN CODE</span>
+                <span className="font-mono">{event.shareCode}</span>
+              </button>
+            )}
+
             <p className="text-xs text-primary-300 mt-2">
               {members.length} member{members.length !== 1 ? 's' : ''} · Created{' '}
               {new Date(event.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}

@@ -86,6 +86,19 @@ function getCallerMembershipKeys(identity: IdentityLike | null | undefined): str
   return Array.from(new Set(candidates));
 }
 
+function parseJsonField<T>(value: unknown, fallback: T): T {
+  if (value == null) return fallback;
+  let current: unknown = value;
+  for (let i = 0; i < 3 && typeof current === 'string'; i++) {
+    try {
+      current = JSON.parse(current);
+    } catch {
+      return fallback;
+    }
+  }
+  return (current == null ? fallback : (current as T));
+}
+
 function asObjectArray(value: unknown): Record<string, any>[] {
   if (!Array.isArray(value)) return [];
   return value.filter((item): item is Record<string, any> => Boolean(item) && typeof item === 'object');
@@ -104,7 +117,7 @@ function isMember(record: Partial<EventRecord>, membershipKeys: string[]): boole
 }
 
 function groupSettings(record: Partial<EventRecord>) {
-  const raw = record.groupSettingsJson;
+  const raw = parseJsonField(record.groupSettingsJson, {});
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
   return raw as Record<string, any>;
 }
@@ -366,9 +379,9 @@ async function handleJoinHubByShareCode(
   }
 
   const nextMemberUserIds = Array.from(new Set([...(event.memberUserIds || []), ...callerMembershipKeys]));
-  const golfers = asObjectArray(event.golfersJson);
-  const groups = asObjectArray(event.groupsJson);
-  const scorecards = asObjectArray(event.scorecardsJson);
+  const golfers = asObjectArray(parseJsonField(event.golfersJson, []));
+  const groups = asObjectArray(parseJsonField(event.groupsJson, []));
+  const scorecards = asObjectArray(parseJsonField(event.scorecardsJson, []));
 
   const alreadyInGolfers = golfers.some((golfer) => golfer.profileId === args.profileId);
   const alreadyInScorecards = scorecards.some((scorecard) => scorecard.golferId === args.profileId);
@@ -399,9 +412,9 @@ async function handleJoinHubByShareCode(
   const updateResult = await client.models.Event.update({
     id: event.id,
     memberUserIds: nextMemberUserIds,
-    golfersJson: nextGolfers,
-    scorecardsJson: nextScorecards,
-    groupsJson: nextGroups,
+    golfersJson: JSON.stringify(nextGolfers),
+    scorecardsJson: JSON.stringify(nextScorecards),
+    groupsJson: JSON.stringify(nextGroups),
     lastModified: new Date().toISOString(),
   });
 
