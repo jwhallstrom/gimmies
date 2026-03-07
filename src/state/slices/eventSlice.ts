@@ -354,6 +354,69 @@ export const createEventSlice = (
   },
   
   removeGolferFromEvent: async (eventId: string, golferId: string) => {
+    const currentProfile = get().currentProfile;
+    const event = get().events.find((candidate: Event) => candidate.id === eventId);
+    const isSelfLeave = !!currentProfile && golferId === currentProfile.id && event?.ownerProfileId !== currentProfile.id;
+    const targetGolfer = event?.golfers.find((golfer: EventGolfer) => golfer.profileId === golferId || golfer.customName === golferId);
+    const isOwnerRemovingProfileMember =
+      !!currentProfile &&
+      !!event &&
+      event.ownerProfileId === currentProfile.id &&
+      golferId !== currentProfile.id &&
+      !!targetGolfer?.profileId;
+
+    if (isSelfLeave) {
+      if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+        try {
+          const { leaveHubInCloud } = await import('../../utils/eventSync');
+          const result = await leaveHubInCloud(eventId, golferId);
+          if (!result.success) {
+            console.error('Failed to leave hub in cloud:', result.error);
+            return;
+          }
+        } catch (error) {
+          console.error('Failed to leave hub in cloud:', error);
+          return;
+        }
+      }
+
+      set((state: any) => ({
+        events: state.events.filter((e: Event) => e.id !== eventId),
+        completedEvents: state.completedEvents.filter((e: Event) => e.id !== eventId),
+      }));
+      return;
+    }
+
+    if (isOwnerRemovingProfileMember) {
+      if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+        try {
+          const { removeHubMemberInCloud } = await import('../../utils/eventSync');
+          const result = await removeHubMemberInCloud(eventId, currentProfile.id, targetGolfer!.profileId!);
+          if (!result.success) {
+            console.error('Failed to remove hub member in cloud:', result.error);
+            return;
+          }
+        } catch (error) {
+          console.error('Failed to remove hub member in cloud:', error);
+          return;
+        }
+      }
+
+      set((state: any) => ({
+        events: state.events.map((e: Event) => {
+          if (e.id !== eventId) return e;
+          return {
+            ...e,
+            golfers: e.golfers.filter(g => g.profileId !== golferId && g.customName !== golferId),
+            scorecards: e.scorecards.filter(sc => sc.golferId !== golferId),
+            groups: e.groups.map(g => ({ ...g, golferIds: g.golferIds.filter(id => id !== golferId) })),
+            lastModified: new Date().toISOString()
+          };
+        })
+      }));
+      return;
+    }
+
     set((state: any) => ({
       events: state.events.map((e: Event) => {
         if (e.id !== eventId) return e;

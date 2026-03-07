@@ -484,6 +484,149 @@ async function handleJoinHubByShareCode(
   };
 }
 
+async function handleLeaveHub(
+  client: ReturnType<typeof generateClient<Schema>>,
+  callerMembershipKeys: string[],
+  callerUserId: string,
+  args: { eventId: string; profileId: string },
+) {
+  if (!args.eventId || !args.profileId) {
+    return { success: false, error: 'Missing event or profile.' };
+  }
+
+  await requireOwnedProfile(client, args.profileId, callerUserId);
+
+  const eventResult = await client.models.Event.get({ id: args.eventId });
+  const event = eventResult.data as EventRecord | null;
+  if (!event) {
+    return { success: false, error: 'Event not found.' };
+  }
+
+  const hubType = normalizeHubType(event);
+  if (event.ownerProfileId === args.profileId) {
+    return { success: false, error: 'Owners cannot leave their own hub.', hubType, eventId: args.eventId };
+  }
+
+  if (!isMember(event, callerMembershipKeys)) {
+    return { success: false, error: 'Event access denied.', hubType, eventId: args.eventId };
+  }
+
+  const golfers = asObjectArray(parseJsonField(event.golfersJson, []))
+    .filter((golfer) => golfer.profileId !== args.profileId && golfer.customName !== args.profileId);
+  const scorecards = asObjectArray(parseJsonField(event.scorecardsJson, []))
+    .filter((scorecard) => scorecard.golferId !== args.profileId);
+  const groups = asObjectArray(parseJsonField(event.groupsJson, []))
+    .map((group) => ({
+      ...group,
+      golferIds: Array.isArray(group.golferIds)
+        ? group.golferIds.filter((id: string) => id !== args.profileId)
+        : [],
+    }));
+  const nextMemberUserIds = (event.memberUserIds || []).filter((key) => !callerMembershipKeys.includes(key));
+
+  const updateResult = await client.models.Event.update({
+    id: event.id,
+    memberUserIds: nextMemberUserIds,
+    golfersJson: JSON.stringify(golfers),
+    scorecardsJson: JSON.stringify(scorecards),
+    groupsJson: JSON.stringify(groups),
+    lastModified: new Date().toISOString(),
+  });
+
+  if (updateResult.errors?.length || !updateResult.data) {
+    console.error('leaveHub: failed to update event membership', {
+      eventId: event.id,
+      profileId: args.profileId,
+      callerMembershipKeys,
+      errors: updateResult.errors,
+    });
+    return {
+      success: false,
+      error: 'Could not leave this event right now.',
+      hubType,
+      eventId: event.id,
+    };
+  }
+
+  return {
+    success: true,
+    eventId: event.id,
+    hubType,
+  };
+}
+
+async function handleRemoveHubMember(
+  client: ReturnType<typeof generateClient<Schema>>,
+  callerUserId: string,
+  args: { eventId: string; actorProfileId: string; targetProfileId: string },
+) {
+  if (!args.eventId || !args.actorProfileId || !args.targetProfileId) {
+    return { success: false, error: 'Missing event or profile.' };
+  }
+
+  await requireOwnedProfile(client, args.actorProfileId, callerUserId);
+
+  const eventResult = await client.models.Event.get({ id: args.eventId });
+  const event = eventResult.data as EventRecord | null;
+  if (!event) {
+    return { success: false, error: 'Event not found.' };
+  }
+
+  const hubType = normalizeHubType(event);
+  if (event.ownerProfileId !== args.actorProfileId) {
+    return { success: false, error: 'Only the owner can remove members.', hubType, eventId: args.eventId };
+  }
+  if (args.targetProfileId === args.actorProfileId) {
+    return { success: false, error: 'Owners cannot remove themselves.', hubType, eventId: args.eventId };
+  }
+
+  const targetProfile = await client.models.Profile.get({ id: args.targetProfileId });
+  const targetMembershipKeys = buildMembershipKeys((targetProfile.data as any)?.userId);
+
+  const golfers = asObjectArray(parseJsonField(event.golfersJson, []))
+    .filter((golfer) => golfer.profileId !== args.targetProfileId && golfer.customName !== args.targetProfileId);
+  const scorecards = asObjectArray(parseJsonField(event.scorecardsJson, []))
+    .filter((scorecard) => scorecard.golferId !== args.targetProfileId);
+  const groups = asObjectArray(parseJsonField(event.groupsJson, []))
+    .map((group) => ({
+      ...group,
+      golferIds: Array.isArray(group.golferIds)
+        ? group.golferIds.filter((id: string) => id !== args.targetProfileId)
+        : [],
+    }));
+  const nextMemberUserIds = (event.memberUserIds || []).filter((key) => !targetMembershipKeys.includes(key));
+
+  const updateResult = await client.models.Event.update({
+    id: event.id,
+    memberUserIds: nextMemberUserIds,
+    golfersJson: JSON.stringify(golfers),
+    scorecardsJson: JSON.stringify(scorecards),
+    groupsJson: JSON.stringify(groups),
+    lastModified: new Date().toISOString(),
+  });
+
+  if (updateResult.errors?.length || !updateResult.data) {
+    console.error('removeHubMember: failed to update event membership', {
+      eventId: event.id,
+      actorProfileId: args.actorProfileId,
+      targetProfileId: args.targetProfileId,
+      errors: updateResult.errors,
+    });
+    return {
+      success: false,
+      error: 'Could not remove this member right now.',
+      hubType,
+      eventId: event.id,
+    };
+  }
+
+  return {
+    success: true,
+    eventId: event.id,
+    hubType,
+  };
+}
+
 async function handleListEventChatMessages(
   client: ReturnType<typeof generateClient<Schema>>,
   callerMembershipKeys: string[],
@@ -706,6 +849,10 @@ export const handler = async (event: AppSyncResolverEvent<Record<string, any>>) 
       return handleGetAccessibleHubById(client, callerMembershipKeys, event.arguments as any);
     case 'joinHubByShareCode':
       return handleJoinHubByShareCode(client, callerMembershipKeys, callerUserId, event.arguments as any);
+    case 'leaveHub':
+      return handleLeaveHub(client, callerMembershipKeys, callerUserId, event.arguments as any);
+    case 'removeHubMember':
+      return handleRemoveHubMember(client, callerUserId, event.arguments as any);
     case 'listEventChatMessages':
       return handleListEventChatMessages(client, callerMembershipKeys, event.arguments as any);
     case 'createEventChatMessage':

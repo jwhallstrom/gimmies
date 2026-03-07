@@ -43,6 +43,13 @@ const schema = a.schema({
     hubType: a.string(),
   }),
 
+  LeaveHubResult: a.customType({
+    success: a.boolean().required(),
+    eventId: a.id(),
+    error: a.string(),
+    hubType: a.string(),
+  }),
+
   EventChatMessage: a.customType({
     id: a.id().required(),
     eventId: a.id().required(),
@@ -118,6 +125,27 @@ const schema = a.schema({
       displayName: a.string(),
     })
     .returns(a.ref('JoinHubResult'))
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(eventAccess)),
+
+  leaveHub: a
+    .mutation()
+    .arguments({
+      eventId: a.id().required(),
+      profileId: a.id().required(),
+    })
+    .returns(a.ref('LeaveHubResult'))
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(eventAccess)),
+
+  removeHubMember: a
+    .mutation()
+    .arguments({
+      eventId: a.id().required(),
+      actorProfileId: a.id().required(),
+      targetProfileId: a.id().required(),
+    })
+    .returns(a.ref('LeaveHubResult'))
     .authorization((allow) => [allow.authenticated()])
     .handler(a.handler.function(eventAccess)),
 

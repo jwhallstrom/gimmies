@@ -113,6 +113,7 @@ const Dashboard: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [isRefreshingInvites, setIsRefreshingInvites] = useState(false);
+  const [showInviteInfo, setShowInviteInfo] = useState(false);
   
   // Section order - persisted to localStorage
   const [sectionOrder, setSectionOrder] = useState<SectionId[]>(getSavedSectionOrder);
@@ -649,38 +650,53 @@ const Dashboard: React.FC = () => {
         document.body
       )}
 
-      <button
-        type="button"
-        onClick={refreshInvites}
-        disabled={isRefreshingInvites}
-        className="w-full rounded-2xl border border-sky-200 bg-gradient-to-r from-sky-50 via-white to-cyan-50 px-4 py-3 text-left shadow-sm transition-colors hover:from-sky-100 hover:to-cyan-100 disabled:cursor-wait disabled:opacity-70 dark:border-sky-800 dark:from-slate-900 dark:via-slate-900 dark:to-sky-950 dark:hover:from-slate-800 dark:hover:to-sky-900"
-      >
+      <div className="rounded-2xl border border-sky-200 bg-gradient-to-r from-sky-50 via-white to-cyan-50 px-3.5 py-2.5 shadow-sm dark:border-sky-800 dark:from-slate-900 dark:via-slate-900 dark:to-sky-950">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-100 text-sky-700 dark:bg-sky-900/70 dark:text-sky-200">
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-700 dark:bg-sky-900/70 dark:text-sky-200">
             {isRefreshingInvites ? (
-              <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
+              <svg className="h-4.5 w-4.5 animate-spin" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
               </svg>
             ) : (
-              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="h-4.5 w-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m14.836 2A8.001 8.001 0 005.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-14.837-2m14.837 2H15" />
               </svg>
             )}
           </div>
-          <div className="min-w-0 flex-1">
-            <div className="font-bold text-slate-900 dark:text-slate-100">
-              {isRefreshingInvites ? 'Syncing New Invites...' : 'Sync New Invites'}
+          <div className="relative min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <div className="truncate text-sm font-bold text-slate-900 dark:text-slate-100">
+                {isRefreshingInvites ? 'Syncing New Invites...' : 'Sync New Invites'}
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowInviteInfo((value) => !value)}
+                className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border border-sky-200 bg-white/80 text-[11px] font-bold text-sky-700 transition-colors hover:bg-sky-100 dark:border-sky-700 dark:bg-slate-800 dark:text-sky-200 dark:hover:bg-slate-700"
+                aria-label="What this does"
+              >
+                i
+              </button>
             </div>
-            <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">
-              Refresh events and groups you joined from a text, email, or browser link.
-            </p>
+            {showInviteInfo && (
+              <div className="absolute left-0 top-7 z-10 max-w-[220px] rounded-xl border border-sky-200 bg-white px-3 py-2 text-xs leading-5 text-slate-600 shadow-lg dark:border-sky-800 dark:bg-slate-900 dark:text-slate-300">
+                Refresh events and groups you joined from a text, email, or browser link.
+              </div>
+            )}
           </div>
-          <svg className="h-5 w-5 flex-shrink-0 text-sky-500 dark:text-sky-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-          </svg>
+          <button
+            type="button"
+            onClick={refreshInvites}
+            disabled={isRefreshingInvites}
+            className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-xl bg-sky-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-wait disabled:opacity-70 dark:bg-sky-500 dark:hover:bg-sky-400"
+          >
+            <span>{isRefreshingInvites ? 'Syncing' : 'Sync'}</span>
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
         </div>
-      </button>
+      </div>
 
       {/* Unified Content - Draggable Accordions */}
       <section className="space-y-3">

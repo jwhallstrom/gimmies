@@ -324,6 +324,66 @@ export async function joinHubByShareCodeInCloud(
   }
 }
 
+export async function leaveHubInCloud(
+  eventId: string,
+  profileId: string
+): Promise<{ success: boolean; eventId?: string; error?: string; hubType?: string }> {
+  try {
+    const client = getClient();
+    if (!client) return { success: false, error: 'Cloud sync unavailable.' };
+
+    const { data, errors } = await client.mutations.leaveHub({
+      eventId,
+      profileId,
+    });
+
+    if (errors?.length) {
+      return { success: false, error: errors[0].message };
+    }
+
+    return {
+      success: !!data?.success,
+      eventId: data?.eventId || undefined,
+      error: data?.error || undefined,
+      hubType: data?.hubType || undefined,
+    };
+  } catch (error) {
+    console.error('❌ leaveHubInCloud: Exception:', error);
+    return { success: false, error: 'Could not leave right now.' };
+  }
+}
+
+export async function removeHubMemberInCloud(
+  eventId: string,
+  actorProfileId: string,
+  targetProfileId: string
+): Promise<{ success: boolean; eventId?: string; error?: string; hubType?: string }> {
+  try {
+    const client = getClient();
+    if (!client) return { success: false, error: 'Cloud sync unavailable.' };
+
+    const { data, errors } = await client.mutations.removeHubMember({
+      eventId,
+      actorProfileId,
+      targetProfileId,
+    });
+
+    if (errors?.length) {
+      return { success: false, error: errors[0].message };
+    }
+
+    return {
+      success: !!data?.success,
+      eventId: data?.eventId || undefined,
+      error: data?.error || undefined,
+      hubType: data?.hubType || undefined,
+    };
+  } catch (error) {
+    console.error('❌ removeHubMemberInCloud: Exception:', error);
+    return { success: false, error: 'Could not remove member right now.' };
+  }
+}
+
 /**
  * Update an existing chat message in cloud.
  * Used for reactions, poll votes, soft-delete, and message edits.
