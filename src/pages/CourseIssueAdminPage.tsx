@@ -4,7 +4,7 @@ import useStore from '../state/store';
 import { isCourseIssueAdminEmail } from '../utils/adminAccess';
 import { listCourseIssueReports, updateCourseIssueReportStatus, type CourseIssueAdminReport } from '../utils/courseIssueAdmin';
 import { formatLocalDate } from '../utils/dateUtils';
-import { useAuth } from '../contexts/AuthContext';
+import { useOptionalAuth } from '../contexts/AuthContext';
 
 const badgeClasses: Record<string, string> = {
   open: 'bg-amber-100 text-amber-800 border-amber-200',
@@ -15,7 +15,8 @@ const CourseIssueAdminPage: React.FC = () => {
   const currentUser = useStore((s) => s.currentUser);
   const currentProfile = useStore((s) => s.currentProfile);
   const addToast = useStore((s) => s.addToast);
-  const { user: authUser } = useAuth();
+  const auth = useOptionalAuth();
+  const authUser = auth?.user;
 
   const [reports, setReports] = useState<CourseIssueAdminReport[]>([]);
   const [statusFilter, setStatusFilter] = useState<'all' | 'open' | 'completed'>('all');

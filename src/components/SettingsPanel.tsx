@@ -21,7 +21,7 @@ import { CourseSearch } from './CourseSearch';
 import { StatusBadge, StatusProgress } from './verified';
 import StatusLevelsInfo from './verified/StatusLevelsInfo';
 import { isCourseIssueAdminEmail } from '../utils/adminAccess';
-import { useAuth } from '../contexts/AuthContext';
+import { useOptionalAuth } from '../contexts/AuthContext';
 
 interface Props {
   isOpen: boolean;
@@ -199,7 +199,8 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
   const roundCount = currentProfile?.stats?.roundsPlayed ?? 0;
   const walletSummary = currentProfile ? getProfileWallet(currentProfile.id) : null;
   const netBalance = walletSummary?.lifetimeNet ?? 0;
-  const { user: authUser } = useAuth();
+  const auth = useOptionalAuth();
+  const authUser = auth?.user;
   const homeCourse = currentProfile?.preferences?.homeCourseName || 
     (currentProfile?.preferences as any)?.homeCourse || null;
   const profileName = currentProfile?.name || 'Golfer';
