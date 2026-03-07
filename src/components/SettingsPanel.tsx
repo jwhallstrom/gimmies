@@ -20,6 +20,7 @@ import { getStatusDisplay } from '../utils/verifiedStatus';
 import { CourseSearch } from './CourseSearch';
 import { StatusBadge, StatusProgress } from './verified';
 import StatusLevelsInfo from './verified/StatusLevelsInfo';
+import { isCourseIssueAdminEmail } from '../utils/adminAccess';
 
 interface Props {
   isOpen: boolean;
@@ -203,6 +204,7 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
   const profileAvatar = currentProfile?.avatar || null;
   const handicapIndex = currentProfile?.handicapIndex;
   const username = currentUser?.username || '';
+  const canReviewCourseIssues = isCourseIssueAdminEmail(currentProfile?.email || currentUser?.username || '');
 
   return createPortal(
     <div 
@@ -629,6 +631,24 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
                   <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" /></svg>
                 </div>
               </a>
+
+              {canReviewCourseIssues && (
+                <button
+                  onClick={() => { onClose(); navigate('/admin/course-issues'); }}
+                  className="w-full px-4 py-3.5 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl">🗂️</span>
+                    <div className="text-left">
+                      <div className="text-sm font-medium text-gray-900 dark:text-slate-100">Course Issue Inbox</div>
+                      <div className="text-xs text-gray-500 dark:text-slate-400">Review scorecard photos and mark fixes complete</div>
+                    </div>
+                  </div>
+                  <svg className="w-5 h-5 text-gray-400 dark:text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              )}
 
               {/* Sign Out */}
               <button

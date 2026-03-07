@@ -7,6 +7,8 @@ import { generateFunnyEventName } from '../utils/nameGenerator';
 import { useCourses } from '../hooks/useCourses';
 import { useAuthMode } from '../hooks/useAuthMode';
 import { SignInRequired } from './SignInRequired';
+import CourseIssueReportModal from './CourseIssueReportModal';
+import { formatLocalDate } from '../utils/dateUtils';
 
 interface Props {
   isOpen: boolean;
@@ -35,6 +37,7 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
   const [selectedTeeName, setSelectedTeeName] = useState<string>('');
   const [isPublic, setIsPublic] = useState(true);
   const [isCreating, setIsCreating] = useState(false);
+  const [showCourseIssueModal, setShowCourseIssueModal] = useState(false);
 
   // Reset state when opening
   useEffect(() => {
@@ -178,7 +181,7 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
       if (parentGroupId && currentProfile) {
         const shareCode = await generateShareCode(eventId);
         const when = eventDate
-          ? new Date(eventDate).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })
+          ? formatLocalDate(eventDate, { weekday: 'short', month: 'short', day: 'numeric' })
           : '';
         const tee = selectedTeeName ? ` (${selectedTeeName})` : '';
         const code = shareCode ? ` Join code: ${shareCode}` : '';
@@ -462,6 +465,13 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
                     ))}
                   </div>
                 )}
+                <button
+                  type="button"
+                  onClick={() => setShowCourseIssueModal(true)}
+                  className="text-sm font-semibold text-primary-700 hover:text-primary-800"
+                >
+                  Course or tee data wrong? Send us a scorecard photo.
+                </button>
               </div>
             </div>
           )}
@@ -517,6 +527,15 @@ export const CreateEventWizard: React.FC<Props> = ({ isOpen, onClose, onCreated,
           )}
         </div>
       </div>
+      <CourseIssueReportModal
+        isOpen={showCourseIssueModal}
+        onClose={() => setShowCourseIssueModal(false)}
+        source="create_event"
+        selectedCourseId={selectedCourseId || undefined}
+        selectedCourseName={selectedCourseName || undefined}
+        selectedTeeName={selectedTeeName || undefined}
+        initialIssueType={selectedCourseId ? 'missing_tee' : 'missing_course'}
+      />
     </div>,
     document.body
   );

@@ -19,6 +19,7 @@ const RoundDetailPage = lazy(() => import('./RoundDetailPage'));
 const EventPage = lazy(() => import('./EventPage'));
 const GroupPage = lazy(() => import('./GroupPage'));
 const JoinEventPage = lazy(() => import('./JoinEventPage'));
+const CourseIssueAdminPage = lazy(() => import('./CourseIssueAdminPage'));
 const WalletPage = lazy(() => import('./WalletPage'));
 const AuthDemoPage = lazy(() => import('./AuthDemoPage').then(m => ({ default: m.AuthDemoPage })));
 
@@ -452,6 +453,7 @@ const App: React.FC = () => {
                 <Route path="/event/:id/*" element={<EventOrGroupRouter />} />
                 <Route path="/join" element={<JoinEventPage />} />
                 <Route path="/join/:code" element={<JoinEventPage />} />
+                <Route path="/admin/course-issues" element={<CourseIssueAdminPage />} />
                 <Route path="/auth-demo" element={<AuthDemoPage />} />
                 
                 {/* Tournament & Club - redirect to standalone apps */}

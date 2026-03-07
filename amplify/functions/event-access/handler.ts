@@ -40,6 +40,30 @@ type EventRecord = {
   completedAt?: string | null;
 };
 
+type CourseIssueReportRecord = {
+  id: string;
+  reporterProfileId?: string | null;
+  reporterName?: string | null;
+  reporterEmail?: string | null;
+  source?: string | null;
+  issueType?: string | null;
+  courseId?: string | null;
+  courseName?: string | null;
+  teeName?: string | null;
+  notes?: string | null;
+  imageName?: string | null;
+  imageMimeType?: string | null;
+  imageDataUrl?: string | null;
+  status?: string | null;
+  createdAt?: string | null;
+  updatedAt?: string | null;
+};
+
+const COURSE_ISSUE_ADMIN_EMAILS = new Set([
+  'victory7500@hotmail.com',
+  'jwhallstrom@gmail.com',
+]);
+
 let configured = false;
 let cachedClient: ReturnType<typeof generateClient<Schema>> | null = null;
 
@@ -62,6 +86,14 @@ function getCallerUserId(identity: IdentityLike | null | undefined): string | nu
   const claims = identity.claims || {};
   const sub = identity.sub || claims.sub;
   return typeof sub === 'string' && sub.trim() ? sub : null;
+}
+
+function getCallerEmail(identity: IdentityLike | null | undefined): string | null {
+  if (!identity) return null;
+  const claims = identity.claims || {};
+  const rawEmail = claims.email;
+  if (typeof rawEmail !== 'string' || !rawEmail.trim()) return null;
+  return rawEmail.trim().toLowerCase();
 }
 
 function getCallerMembershipKeys(identity: IdentityLike | null | undefined): string[] {
@@ -182,6 +214,12 @@ async function requireOwnedProfile(client: ReturnType<typeof generateClient<Sche
   }
 
   return profile;
+}
+
+function requireCourseIssueAdmin(callerEmail: string | null) {
+  if (!callerEmail || !COURSE_ISSUE_ADMIN_EMAILS.has(callerEmail)) {
+    throw new Error('Admin access denied.');
+  }
 }
 
 function publicHubSummaries(records: EventRecord[], hubType: 'event' | 'group') {
@@ -559,9 +597,84 @@ async function handleUpdateEventChatMessage(
   return { success: true };
 }
 
+async function listAllCourseIssueReports(client: ReturnType<typeof generateClient<Schema>>) {
+  const all: CourseIssueReportRecord[] = [];
+  let nextToken: string | null | undefined = undefined;
+
+  do {
+    const response = await (client.models as any).CourseIssueReport.list(
+      nextToken ? { nextToken } : undefined
+    );
+    if (response.data?.length) {
+      all.push(...(response.data as CourseIssueReportRecord[]));
+    }
+    nextToken = response.nextToken as string | null | undefined;
+  } while (nextToken);
+
+  return all;
+}
+
+async function handleListCourseIssueReports(
+  client: ReturnType<typeof generateClient<Schema>>,
+  callerEmail: string | null
+) {
+  requireCourseIssueAdmin(callerEmail);
+  const reports = await listAllCourseIssueReports(client);
+  return reports
+    .map((report) => ({
+      id: report.id,
+      reporterProfileId: report.reporterProfileId || null,
+      reporterName: report.reporterName || null,
+      reporterEmail: report.reporterEmail || null,
+      source: report.source || null,
+      issueType: report.issueType || null,
+      courseId: report.courseId || null,
+      courseName: report.courseName || null,
+      teeName: report.teeName || null,
+      notes: report.notes || null,
+      imageName: report.imageName || null,
+      imageMimeType: report.imageMimeType || null,
+      imageDataUrl: report.imageDataUrl || null,
+      status: report.status || 'open',
+      createdAt: report.createdAt || null,
+      updatedAt: report.updatedAt || null,
+    }))
+    .sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+}
+
+async function handleUpdateCourseIssueReportStatus(
+  client: ReturnType<typeof generateClient<Schema>>,
+  callerEmail: string | null,
+  args: { reportId: string; status: string }
+) {
+  requireCourseIssueAdmin(callerEmail);
+
+  const nextStatus = String(args.status || '').trim().toLowerCase();
+  if (!['open', 'completed'].includes(nextStatus)) {
+    return { success: false, error: 'Invalid status.' };
+  }
+
+  const existing = await (client.models as any).CourseIssueReport.get({ id: args.reportId });
+  if (!existing?.data) {
+    return { success: false, error: 'Report not found.' };
+  }
+
+  const updateResult = await (client.models as any).CourseIssueReport.update({
+    id: args.reportId,
+    status: nextStatus,
+  });
+
+  if (updateResult.errors?.length) {
+    return { success: false, error: updateResult.errors[0]?.message || 'Failed to update report.' };
+  }
+
+  return { success: true };
+}
+
 export const handler = async (event: AppSyncResolverEvent<Record<string, any>>) => {
   const client = await getClient();
   const callerUserId = getCallerUserId(event.identity as IdentityLike);
+  const callerEmail = getCallerEmail(event.identity as IdentityLike);
   const callerMembershipKeys = getCallerMembershipKeys(event.identity as IdentityLike);
   const fieldName =
     (event as any)?.info?.fieldName ||
@@ -599,6 +712,10 @@ export const handler = async (event: AppSyncResolverEvent<Record<string, any>>) 
       return handleCreateEventChatMessage(client, callerMembershipKeys, callerUserId, event.arguments as any);
     case 'updateEventChatMessage':
       return handleUpdateEventChatMessage(client, callerMembershipKeys, callerUserId, event.arguments as any);
+    case 'listCourseIssueReports':
+      return handleListCourseIssueReports(client, callerEmail);
+    case 'updateCourseIssueReportStatus':
+      return handleUpdateCourseIssueReportStatus(client, callerEmail, event.arguments as any);
     default:
       throw new Error(`Unsupported field: ${fieldName}`);
   }

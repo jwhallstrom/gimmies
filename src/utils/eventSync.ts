@@ -499,6 +499,9 @@ export async function saveEventPatchToCloud(
       updateData.teeName = event.course?.teeName || null;
     }
     if ('games' in patch) updateData.gamesJson = JSON.stringify(event.games || {});
+    if ('golfers' in patch) updateData.golfersJson = JSON.stringify(event.golfers || []);
+    if ('groups' in patch) updateData.groupsJson = JSON.stringify(event.groups || []);
+    if ('scorecards' in patch) updateData.scorecardsJson = JSON.stringify(event.scorecards || []);
     if ('pinkyResults' in patch) updateData.pinkyResultsJson = JSON.stringify(event.pinkyResults || {});
     if ('greenieResults' in patch) updateData.greenieResultsJson = JSON.stringify(event.greenieResults || {});
     if ('groupSettings' in patch) {

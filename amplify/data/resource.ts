@@ -59,6 +59,30 @@ const schema = a.schema({
     error: a.string(),
   }),
 
+  CourseIssueReportAdmin: a.customType({
+    id: a.id().required(),
+    reporterProfileId: a.id(),
+    reporterName: a.string(),
+    reporterEmail: a.string(),
+    source: a.string(),
+    issueType: a.string(),
+    courseId: a.string(),
+    courseName: a.string(),
+    teeName: a.string(),
+    notes: a.string(),
+    imageName: a.string(),
+    imageMimeType: a.string(),
+    imageDataUrl: a.string(),
+    status: a.string(),
+    createdAt: a.datetime(),
+    updatedAt: a.datetime(),
+  }),
+
+  CourseIssueReportStatusResult: a.customType({
+    success: a.boolean().required(),
+    error: a.string(),
+  }),
+
   listPublicEvents: a
     .query()
     .returns(a.ref('PublicHubSummary').array())
@@ -128,6 +152,22 @@ const schema = a.schema({
       text: a.string().required(),
     })
     .returns(a.ref('EventChatMutationResult'))
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(eventAccess)),
+
+  listCourseIssueReports: a
+    .query()
+    .returns(a.ref('CourseIssueReportAdmin').array())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(eventAccess)),
+
+  updateCourseIssueReportStatus: a
+    .mutation()
+    .arguments({
+      reportId: a.id().required(),
+      status: a.string().required(),
+    })
+    .returns(a.ref('CourseIssueReportStatusResult'))
     .authorization((allow) => [allow.authenticated()])
     .handler(a.handler.function(eventAccess)),
 
@@ -305,6 +345,25 @@ const schema = a.schema({
   .authorization(allow => [
     allow.publicApiKey(), // Allow API key for all operations (courses are public data)
     allow.authenticated(), // Authenticated users can do anything
+  ]),
+
+  CourseIssueReport: a.model({
+    reporterProfileId: a.id().required(),
+    reporterName: a.string(),
+    reporterEmail: a.string(),
+    source: a.string().required(), // create_event | add_score
+    issueType: a.string().required(), // missing_course | missing_tee | wrong_rating | wrong_slope | other
+    courseId: a.string(),
+    courseName: a.string(),
+    teeName: a.string(),
+    notes: a.string(),
+    imageName: a.string(),
+    imageMimeType: a.string(),
+    imageDataUrl: a.string(),
+    status: a.string().default('open'),
+  })
+  .authorization(allow => [
+    allow.owner(),
   ]),
 });
 

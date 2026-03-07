@@ -4,6 +4,7 @@ import useStore from '../state/store';
 import { IndividualRound, ScoreEntry } from '../types/handicap';
 import { calculateCourseHandicap, distributeHandicapStrokes, calculateNetScore, applyESCAdjustment, calculateScoreDifferential } from '../utils/handicap';
 import { useCourses } from '../hooks/useCourses';
+import CourseIssueReportModal from '../components/CourseIssueReportModal';
 
 const AddScorePage: React.FC = () => {
   const navigate = useNavigate();
@@ -21,6 +22,7 @@ const AddScorePage: React.FC = () => {
 
   const [query, setQuery] = useState('');
   const [isSaving, setIsSaving] = useState(false);
+  const [showCourseIssueModal, setShowCourseIssueModal] = useState(false);
 
   // Load cloud courses
   const { courses, searchCourses } = useCourses();
@@ -300,8 +302,25 @@ const AddScorePage: React.FC = () => {
                 </div>
               )}
             </div>
+
+            <button
+              type="button"
+              onClick={() => setShowCourseIssueModal(true)}
+              className="text-sm font-semibold text-primary-700 dark:text-primary-300 hover:text-primary-800 dark:hover:text-primary-200"
+            >
+              Course missing or tee/rating wrong? Send us a scorecard photo.
+            </button>
           </div>
         </div>
+        <CourseIssueReportModal
+          isOpen={showCourseIssueModal}
+          onClose={() => setShowCourseIssueModal(false)}
+          source="add_score"
+          selectedCourseId={formData.courseId || undefined}
+          selectedCourseName={selectedCourse?.name || undefined}
+          selectedTeeName={formData.teeName || undefined}
+          initialIssueType={formData.courseId ? 'missing_tee' : 'missing_course'}
+        />
       </div>
     );
   }
