@@ -437,7 +437,8 @@ const JoinEventPage: React.FC = () => {
       if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true' && shareCode) {
         const result = await joinEventByCode(String(shareCode).toUpperCase());
         if (result?.success && result.eventId) {
-          addToast?.(local?.hubType === 'group' ? 'Joined group!' : 'Joined game!', 'success', 2500);
+          const joinedType = local?.hubType || ((publicGroups || []).some((g: any) => g.id === eventId) ? 'group' : 'event');
+          addToast?.(joinedType === 'group' ? 'Joined group!' : 'Joined game!', 'success', 2500);
           navigate(`/event/${result.eventId}`);
           return;
         }

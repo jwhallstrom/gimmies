@@ -479,6 +479,7 @@ async function handleListEventChatMessages(
 async function handleCreateEventChatMessage(
   client: ReturnType<typeof generateClient<Schema>>,
   callerMembershipKeys: string[],
+  callerUserId: string,
   args: { eventId: string; messageId: string; profileId: string; senderName?: string | null; text: string; isBot?: boolean | null },
 ) {
   const eventResult = await client.models.Event.get({ id: args.eventId });
@@ -511,6 +512,7 @@ async function handleCreateEventChatMessage(
 async function handleUpdateEventChatMessage(
   client: ReturnType<typeof generateClient<Schema>>,
   callerMembershipKeys: string[],
+  callerUserId: string,
   args: { eventId: string; messageId: string; text: string },
 ) {
   const eventResult = await client.models.Event.get({ id: args.eventId });
@@ -594,9 +596,9 @@ export const handler = async (event: AppSyncResolverEvent<Record<string, any>>) 
     case 'listEventChatMessages':
       return handleListEventChatMessages(client, callerMembershipKeys, event.arguments as any);
     case 'createEventChatMessage':
-      return handleCreateEventChatMessage(client, callerMembershipKeys, event.arguments as any);
+      return handleCreateEventChatMessage(client, callerMembershipKeys, callerUserId, event.arguments as any);
     case 'updateEventChatMessage':
-      return handleUpdateEventChatMessage(client, callerMembershipKeys, event.arguments as any);
+      return handleUpdateEventChatMessage(client, callerMembershipKeys, callerUserId, event.arguments as any);
     default:
       throw new Error(`Unsupported field: ${fieldName}`);
   }
