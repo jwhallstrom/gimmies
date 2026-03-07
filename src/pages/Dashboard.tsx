@@ -112,9 +112,7 @@ const Dashboard: React.FC = () => {
   const [showCreateGroupWizard, setShowCreateGroupWizard] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showFabMenu, setShowFabMenu] = useState(false);
-  
-  // Search state
-  const [searchQuery, setSearchQuery] = useState('');
+  const [isRefreshingInvites, setIsRefreshingInvites] = useState(false);
   
   // Section order - persisted to localStorage
   const [sectionOrder, setSectionOrder] = useState<SectionId[]>(getSavedSectionOrder);
@@ -228,8 +226,25 @@ const Dashboard: React.FC = () => {
     loadEventsFromCloud().catch(() => {});
   }, [currentProfile?.id, isGuest]);
 
+  const refreshInvites = useCallback(async () => {
+    if (isGuest) {
+      addToast?.('Sign in to sync invites', 'error', 2500);
+      return;
+    }
+
+    setIsRefreshingInvites(true);
+    try {
+      await loadEventsFromCloud();
+      addToast?.('Invites refreshed', 'success', 2200);
+    } catch {
+      addToast?.('Could not refresh invites', 'error', 3000);
+    } finally {
+      setIsRefreshingInvites(false);
+    }
+  }, [addToast, isGuest, loadEventsFromCloud]);
+
   // Separate events into categories: live, upcoming, completed, groups
-  const { liveEvents, upcomingEvents, completedEvents, groups, activeEvents, filteredLive, filteredUpcoming, filteredGroups, filteredHistory } = useMemo(() => {
+  const { liveEvents, upcomingEvents, completedEvents, groups, activeEvents } = useMemo(() => {
     const live: Event[] = [];
     const upcoming: Event[] = [];
     const completed: Event[] = [];
@@ -256,22 +271,14 @@ const Dashboard: React.FC = () => {
     // activeEvents = all non-completed for backward compat
     const active = [...live, ...upcoming];
     
-    // Apply search filter
-    const q = searchQuery.toLowerCase().trim();
-    const matchesSearch = (e: Event) => !q || (e.name || '').toLowerCase().includes(q);
-    
     return { 
       liveEvents: live, 
       upcomingEvents: upcoming, 
       completedEvents: completed, 
       groups: groupList, 
       activeEvents: active,
-      filteredLive: live.filter(matchesSearch),
-      filteredUpcoming: upcoming.filter(matchesSearch),
-      filteredGroups: groupList.filter(matchesSearch),
-      filteredHistory: completed.filter(matchesSearch),
     };
-  }, [userEvents, searchQuery]);
+  }, [userEvents]);
 
 
   // Which sections are visible (for up/down arrow boundary checks)
@@ -642,29 +649,38 @@ const Dashboard: React.FC = () => {
         document.body
       )}
 
-      {/* Search Bar */}
-      <div className="relative">
-        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search events & groups..."
-          className="w-full pl-9 pr-9 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200 focus:border-primary-300 shadow-sm"
-        />
-        {searchQuery && (
-          <button
-            onClick={() => setSearchQuery('')}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        )}
-      </div>
+      <button
+        type="button"
+        onClick={refreshInvites}
+        disabled={isRefreshingInvites}
+        className="w-full rounded-2xl border border-sky-200 bg-gradient-to-r from-sky-50 via-white to-cyan-50 px-4 py-3 text-left shadow-sm transition-colors hover:from-sky-100 hover:to-cyan-100 disabled:cursor-wait disabled:opacity-70 dark:border-sky-800 dark:from-slate-900 dark:via-slate-900 dark:to-sky-950 dark:hover:from-slate-800 dark:hover:to-sky-900"
+      >
+        <div className="flex items-center gap-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-100 text-sky-700 dark:bg-sky-900/70 dark:text-sky-200">
+            {isRefreshingInvites ? (
+              <svg className="h-5 w-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+              </svg>
+            ) : (
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m14.836 2A8.001 8.001 0 005.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-14.837-2m14.837 2H15" />
+              </svg>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="font-bold text-slate-900 dark:text-slate-100">
+              {isRefreshingInvites ? 'Syncing New Invites...' : 'Sync New Invites'}
+            </div>
+            <p className="mt-0.5 text-sm text-slate-600 dark:text-slate-300">
+              Refresh events and groups you joined from a text, email, or browser link.
+            </p>
+          </div>
+          <svg className="h-5 w-5 flex-shrink-0 text-sky-500 dark:text-sky-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+        </div>
+      </button>
 
       {/* Unified Content - Draggable Accordions */}
       <section className="space-y-3">
@@ -676,13 +692,6 @@ const Dashboard: React.FC = () => {
             <p className="text-gray-500 mb-2 px-4">
               Tap the <span className="inline-flex items-center justify-center w-8 h-8 bg-accent rounded-full text-white font-bold text-lg align-middle mx-1">+</span> to create an event or group
             </p>
-          </div>
-        )}
-
-        {/* No search results */}
-        {searchQuery && filteredLive.length === 0 && filteredUpcoming.length === 0 && filteredGroups.length === 0 && filteredHistory.length === 0 && (liveEvents.length > 0 || upcomingEvents.length > 0 || groups.length > 0 || completedEvents.length > 0) && (
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm py-8 text-center">
-            <div className="text-gray-500">No results for "{searchQuery}"</div>
           </div>
         )}
 
@@ -712,11 +721,11 @@ const Dashboard: React.FC = () => {
               setShowAll: setShowAllLive,
               icon: <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>,
               label: 'Live',
-              count: filteredLive.length,
+              count: liveEvents.length,
               gradient: 'from-red-50 to-white hover:from-red-100',
               badgeBg: 'bg-red-100',
               labelColor: 'text-gray-800',
-              items: filteredLive,
+              items: liveEvents,
               renderItem: (event) => (
                 <EventCard key={event.id} event={event} profiles={profiles} status="live" />
               ),
@@ -729,11 +738,11 @@ const Dashboard: React.FC = () => {
               setShowAll: setShowAllUpcoming,
               icon: <span className="text-base">📅</span>,
               label: 'Upcoming',
-              count: filteredUpcoming.length,
+              count: upcomingEvents.length,
               gradient: 'from-primary-50 to-white hover:from-primary-100',
               badgeBg: 'bg-primary-100',
               labelColor: 'text-gray-800',
-              items: filteredUpcoming,
+              items: upcomingEvents,
               renderItem: (event) => (
                 <EventCard key={event.id} event={event} profiles={profiles} status="upcoming" />
               ),
@@ -746,11 +755,11 @@ const Dashboard: React.FC = () => {
               setShowAll: setShowAllGroups,
               icon: <span className="text-base">👥</span>,
               label: 'Groups',
-              count: filteredGroups.length,
+              count: groups.length,
               gradient: 'from-purple-50 to-white hover:from-purple-100',
               badgeBg: 'bg-purple-100',
               labelColor: 'text-gray-800',
-              items: filteredGroups,
+              items: groups,
               renderItem: (group) => (
                 <GroupCard key={group.id} group={group} />
               ),
@@ -763,11 +772,11 @@ const Dashboard: React.FC = () => {
               setShowAll: setShowAllHistory,
               icon: <span className="text-base">📜</span>,
               label: 'History',
-              count: filteredHistory.length,
+              count: completedEvents.length,
               gradient: 'from-gray-50 to-white hover:from-gray-100',
               badgeBg: 'bg-gray-100',
               labelColor: 'text-gray-600',
-              items: filteredHistory,
+              items: completedEvents,
               renderItem: (event) => (
                 <EventCard key={event.id} event={event} profiles={profiles} status="completed" />
               ),
@@ -890,9 +899,6 @@ const Dashboard: React.FC = () => {
                     </button>
                   )}
                 </div>
-              )}
-              {config.isExpanded && config.items.length === 0 && searchQuery && (
-                <div className="px-4 pb-4 text-sm text-gray-500">No {config.label.toLowerCase()} match "{searchQuery}"</div>
               )}
             </div>
           );

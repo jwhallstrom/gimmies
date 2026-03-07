@@ -712,7 +712,7 @@ export const handler = async (event: AppSyncResolverEvent<Record<string, any>>) 
       return handleCreateEventChatMessage(client, callerMembershipKeys, callerUserId, event.arguments as any);
     case 'updateEventChatMessage':
       return handleUpdateEventChatMessage(client, callerMembershipKeys, callerUserId, event.arguments as any);
-    case 'listCourseIssueReports':
+    case 'listCourseIssueReportsAdmin':
       return handleListCourseIssueReports(client, callerEmail);
     case 'updateCourseIssueReportStatus':
       return handleUpdateCourseIssueReportStatus(client, callerEmail, event.arguments as any);

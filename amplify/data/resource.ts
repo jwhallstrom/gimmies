@@ -155,7 +155,7 @@ const schema = a.schema({
     .authorization((allow) => [allow.authenticated()])
     .handler(a.handler.function(eventAccess)),
 
-  listCourseIssueReports: a
+  listCourseIssueReportsAdmin: a
     .query()
     .returns(a.ref('CourseIssueReportAdmin').array())
     .authorization((allow) => [allow.authenticated()])

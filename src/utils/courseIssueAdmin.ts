@@ -31,7 +31,7 @@ export type CourseIssueAdminReport = {
 
 export async function listCourseIssueReports(): Promise<CourseIssueAdminReport[]> {
   const client = getClient();
-  const { data, errors } = await client.queries.listCourseIssueReports();
+  const { data, errors } = await client.queries.listCourseIssueReportsAdmin();
   if (errors?.length) {
     throw new Error(errors[0]?.message || 'Failed to load course issue reports.');
   }
