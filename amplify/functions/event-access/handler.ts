@@ -118,6 +118,18 @@ function getCallerMembershipKeys(identity: IdentityLike | null | undefined): str
   return Array.from(new Set(candidates));
 }
 
+function buildMembershipKeys(userId?: string | null): string[] {
+  const raw = typeof userId === 'string' ? userId.trim() : '';
+  if (!raw) return [];
+
+  const candidates = [
+    raw,
+    `${raw}::${raw}`,
+  ].filter(Boolean);
+
+  return Array.from(new Set(candidates));
+}
+
 function parseJsonField<T>(value: unknown, fallback: T): T {
   if (value == null) return fallback;
   let current: unknown = value;
