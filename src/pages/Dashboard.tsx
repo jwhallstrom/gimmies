@@ -247,13 +247,6 @@ const Dashboard: React.FC = () => {
 
     setIsRefreshingInvites(true);
     try {
-      useStore.setState({
-        events: [],
-        completedEvents: [],
-        completedRounds: [],
-        lastEventsCloudSyncAt: null,
-        lastEventsCloudSyncCount: 0,
-      } as any);
       const result = await loadEventsFromCloud();
       setLastManualRefreshAt(result.syncedAt);
       addToast?.(`Synced ${result.totalCount} events & groups`, 'success', 2500);

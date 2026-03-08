@@ -70,6 +70,11 @@ const EventPage: React.FC = () => {
     s.events.find(e => e.id === id) || 
     s.completedEvents.find(e => e.id === id)
   );
+  const parentGroup = useStore((s) =>
+    rawEvent?.parentGroupId
+      ? (s.events.find((e: any) => e.id === rawEvent.parentGroupId) as any | undefined)
+      : undefined
+  );
   const { deleteEvent, currentProfile, joinEventByCode, generateShareCode, addToast } = useStore();
   
   if (!rawEvent) {
@@ -113,12 +118,6 @@ const EventPage: React.FC = () => {
   const courseName = event.course.courseId ? getCourseById(event.course.courseId)?.name : null;
   
   // Parent group context (Phase 4) — for child events within groups
-  const parentGroup = useStore((s) =>
-    event.parentGroupId
-      ? (s.events.find((e: any) => e.id === event.parentGroupId) as any | undefined)
-      : undefined
-  );
-  
   // Get child events for this group (both active and completed)
   const { activeChildEvents, completedChildEvents } = useStore((s) => {
     if (!isGroupHub) return { activeChildEvents: [], completedChildEvents: [] };
