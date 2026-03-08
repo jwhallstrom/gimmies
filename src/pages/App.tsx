@@ -126,6 +126,18 @@ const App: React.FC = () => {
     }, 0);
   };
 
+  const clearMismatchedLocalSession = () => {
+    useStore.setState({
+      events: [],
+      completedEvents: [],
+      completedRounds: [],
+      currentProfile: null,
+      profiles: [],
+      lastEventsCloudSyncAt: null,
+      lastEventsCloudSyncCount: 0,
+    } as any);
+  };
+
   // If someone opens a join link before their profile is set up, we store the code in sessionStorage.
   // Once a profile exists, auto-join and navigate them straight into the event.
   useEffect(() => {
@@ -243,6 +255,16 @@ const App: React.FC = () => {
         } else {
           console.log('No cloud profile found - user will need to complete profile');
         }
+
+        const state = useStore.getState();
+        if (state.currentProfile?.userId && state.currentProfile.userId !== user.userId) {
+          console.warn('Clearing mismatched local profile for signed-in user', {
+            amplifyUserId: user.userId,
+            currentProfileId: state.currentProfile.id,
+            currentProfileUserId: state.currentProfile.userId,
+          });
+          clearMismatchedLocalSession();
+        }
       } catch (err) {
         console.log('No Amplify user signed in:', err);
         setAmplifyUser(null);
@@ -358,6 +380,16 @@ const App: React.FC = () => {
           console.log('Loaded', cloudRounds.length, 'individual rounds from cloud');
 
           upsertCloudProfileToStore(cloudProfile, cloudRounds);
+        }
+
+        const state = useStore.getState();
+        if (state.currentProfile?.userId && state.currentProfile.userId !== user.userId) {
+          console.warn('Clearing mismatched local profile after login', {
+            amplifyUserId: user.userId,
+            currentProfileId: state.currentProfile.id,
+            currentProfileUserId: state.currentProfile.userId,
+          });
+          clearMismatchedLocalSession();
         }
       } catch (err) {
         console.error('Failed to get user after login:', err);
