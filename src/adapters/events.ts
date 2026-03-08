@@ -15,6 +15,7 @@ export interface JoinEventResult {
  */
 export function useEventsAdapter() {
   const events = useStore((s) => s.events) as Event[];
+  const completedEvents = useStore((s) => s.completedEvents) as Event[];
   const currentProfile = useStore((s) => s.currentProfile) as GolferProfile | null;
   const currentUser = useStore((s) => s.currentUser) as User | null;
   const profiles = useStore((s) => s.profiles) as GolferProfile[];
@@ -26,14 +27,15 @@ export function useEventsAdapter() {
   const cleanupDuplicateProfiles = useStore((s) => s.cleanupDuplicateProfiles) as () => void;
   const loadEventsFromCloud = useStore((s) => s.loadEventsFromCloud) as () => Promise<void>;
 
-  // In cloud-enabled sessions, store.events is already restricted to hubs the
-  // signed-in user can access. Avoid a second local profile-id filter here,
-  // because browser/PWA profile record mismatches can hide valid joined hubs.
-  const userEvents: Event[] = currentProfile ? events : [];
+  // In cloud-enabled sessions, store.events and store.completedEvents are
+  // already restricted to hubs the signed-in user can access. Home needs both
+  // lists so History can render completed events too.
+  const userEvents: Event[] = currentProfile ? [...events, ...completedEvents] : [];
 
   return {
     // state
     events,
+    completedEvents,
     userEvents,
     currentUser,
     currentProfile,

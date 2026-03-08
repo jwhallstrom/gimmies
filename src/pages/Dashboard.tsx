@@ -41,6 +41,15 @@ const countStrokesEntered = (event: Event): number => {
   }, 0);
 };
 
+const isPastDueEvent = (event: Event): boolean => {
+  if (event.isCompleted) return false;
+  const eventDate = parseEventDate(event.date);
+  const today = new Date();
+  const eventDay = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate()).getTime();
+  const todayDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  return eventDay < todayDay;
+};
+
 // Check if an event is "live" (has scores being entered but not completed)
 const isEventLive = (event: Event): boolean => {
   if (event.isCompleted) return false;
@@ -743,7 +752,7 @@ const Dashboard: React.FC = () => {
               labelColor: 'text-gray-800',
               items: liveEvents,
               renderItem: (event) => (
-                <EventCard key={event.id} event={event} profiles={profiles} status="live" />
+                <EventCard key={event.id} event={event} profiles={profiles} currentProfileId={currentProfile?.id} status="live" />
               ),
             },
             upcoming: {
@@ -760,7 +769,7 @@ const Dashboard: React.FC = () => {
               labelColor: 'text-gray-800',
               items: upcomingEvents,
               renderItem: (event) => (
-                <EventCard key={event.id} event={event} profiles={profiles} status="upcoming" />
+                <EventCard key={event.id} event={event} profiles={profiles} currentProfileId={currentProfile?.id} status="upcoming" />
               ),
             },
             groups: {
@@ -794,7 +803,7 @@ const Dashboard: React.FC = () => {
               labelColor: 'text-gray-600',
               items: completedEvents,
               renderItem: (event) => (
-                <EventCard key={event.id} event={event} profiles={profiles} status="completed" />
+                <EventCard key={event.id} event={event} profiles={profiles} currentProfileId={currentProfile?.id} status="completed" />
               ),
             },
           };
@@ -1125,12 +1134,13 @@ const Dashboard: React.FC = () => {
 };
 
 // Event Card Component - clean text-based design
-const EventCard: React.FC<{ event: Event; profiles: any[]; status?: 'live' | 'upcoming' | 'completed' }> = ({ event, profiles, status }) => {
+const EventCard: React.FC<{ event: Event; profiles: any[]; currentProfileId?: string; status?: 'live' | 'upcoming' | 'completed' }> = ({ event, profiles, currentProfileId, status }) => {
   const navigate = useNavigate();
   
   const golferCount = event.golfers.length;
   const courseId = event.course?.courseId;
   const teeName = event.course?.teeName;
+  const showPastDue = status === 'upcoming' && currentProfileId === event.ownerProfileId && isPastDueEvent(event);
   
   // Calculate leaderboard with positions, scores, and thru
   const leaderboard = useMemo(() => {
@@ -1218,6 +1228,11 @@ const EventCard: React.FC<{ event: Event; profiles: any[]; status?: 'live' | 'up
             {status === 'live' && (
               <span className="flex-shrink-0 px-1.5 py-0.5 text-[9px] font-bold bg-red-500 text-white rounded-full uppercase">
                 Live
+              </span>
+            )}
+            {showPastDue && (
+              <span className="flex-shrink-0 px-1.5 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-800 rounded-full uppercase">
+                Past Due
               </span>
             )}
           </div>
