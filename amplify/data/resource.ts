@@ -371,8 +371,8 @@ const schema = a.schema({
     lastUpdated: a.datetime(),
   })
   .authorization(allow => [
-    allow.publicApiKey(), // Allow API key for all operations (courses are public data)
-    allow.authenticated(), // Authenticated users can do anything
+    allow.publicApiKey().to(['read']),
+    allow.authenticated().to(['read']),
   ]),
 
   CourseIssueReport: a.model({
