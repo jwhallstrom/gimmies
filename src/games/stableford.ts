@@ -1,4 +1,5 @@
 import { Event, StablefordConfig } from '../state/store';
+import { getCourseById } from '../data/cloudCourses';
 import { netScore } from './handicap';
 
 export interface StablefordSummary {
@@ -78,7 +79,6 @@ export function computeStableford(event: Event, config: StablefordConfig, profil
   });
 
   // Get par for each hole from course data
-  const { getCourseById } = require('../data/cloudCourses');
   const courseId = event.course.courseId;
   const course = courseId ? getCourseById(courseId) : null;
   const tee = course?.tees?.find((t: any) => t.name === event.course.teeName) || course?.tees?.[0];
