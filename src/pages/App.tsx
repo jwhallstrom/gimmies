@@ -60,7 +60,7 @@ const EventOrGroupRouter: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  const { currentUser, currentProfile, events, switchUser, createUser, joinEventByCode, addToast, pendingLevelUp, clearPendingLevelUp } = useStore();
+  const { currentUser, currentProfile, events, createUser, joinEventByCode, addToast, pendingLevelUp, clearPendingLevelUp } = useStore();
   const loadEventsFromCloud = useStore((s) => s.loadEventsFromCloud);
   const location = useLocation();
   const navigate = useNavigate();
@@ -99,6 +99,27 @@ const App: React.FC = () => {
     );
   };
 
+  const syncAmplifyUserToStore = (user: any, attributes: Partial<Record<string, string>>) => {
+    const canonicalUser = {
+      id: String(user.userId),
+      username: attributes.email || user.username || user.userId,
+      displayName: attributes.name || attributes.email || user.username || user.userId,
+      createdAt: new Date().toISOString(),
+      lastActive: new Date().toISOString(),
+    } as any;
+
+    useStore.setState((state: any) => {
+      const remainingUsers = Array.isArray(state.users)
+        ? state.users.filter((u: any) => String(u?.id) !== canonicalUser.id)
+        : [];
+
+      return {
+        users: [canonicalUser, ...remainingUsers],
+        currentUser: canonicalUser,
+      };
+    });
+  };
+
   const upsertCloudProfileToStore = (cloudProfile: any, cloudRounds: any[]) => {
     const normalizedRounds = normalizeCloudRounds(cloudRounds);
     const incoming = { ...cloudProfile, individualRounds: normalizedRounds } as any;
@@ -128,6 +149,8 @@ const App: React.FC = () => {
 
   const clearMismatchedLocalSession = () => {
     useStore.setState({
+      users: [],
+      currentUser: null,
       events: [],
       completedEvents: [],
       completedRounds: [],
@@ -230,14 +253,8 @@ const App: React.FC = () => {
         
         setAmplifyUser(user);
         console.log('Amplify user found:', user, 'attributes:', attributes);
-        
-        // Auto-create local user if Amplify user exists but no local user
-        if (user && !currentUser) {
-          console.log('Creating local user from Amplify user...');
-          const email = attributes.email || user.username;
-          const displayName = attributes.name || attributes.email || user.username;
-          createUser(email, displayName, true); // Skip automatic profile creation
-        }
+
+        syncAmplifyUserToStore(user, attributes);
 
         // Always rehydrate the cloud profile for the signed-in user.
         // Persisted local state can be stale or mismatched across browser/PWA sessions.
@@ -274,7 +291,7 @@ const App: React.FC = () => {
     };
     
     checkAuth();
-  }, [currentUser, createUser]);
+  }, []);
 
   // Debug logging
   console.log('App render:', { 
@@ -362,13 +379,8 @@ const App: React.FC = () => {
         
         setAmplifyUser(user);
         console.log('User after login:', user, attributes);
-        
-        // Create local user if needed
-        if (user && !currentUser) {
-          const email = attributes.email || user.username;
-          const displayName = attributes.name || attributes.email || user.username;
-          createUser(email, displayName, true); // Skip automatic profile creation
-        }
+
+        syncAmplifyUserToStore(user, attributes);
 
         const cloudProfile = await fetchCloudProfile(user.userId);
 
