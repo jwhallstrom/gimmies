@@ -225,22 +225,23 @@ const App: React.FC = () => {
           const email = attributes.email || user.username;
           const displayName = attributes.name || attributes.email || user.username;
           createUser(email, displayName, true); // Skip automatic profile creation
-          
-          // Try to fetch existing cloud profile
-          console.log('Fetching cloud profile for user:', user.userId);
-          const cloudProfile = await fetchCloudProfile(user.userId);
-          
-          if (cloudProfile) {
-            console.log('Found existing cloud profile, loading into store:', cloudProfile);
-            
-            // Also load IndividualRounds from cloud
-            const cloudRounds = await loadIndividualRoundsFromCloud(cloudProfile.id);
-            console.log('Loaded', cloudRounds.length, 'individual rounds from cloud');
-            
-            upsertCloudProfileToStore(cloudProfile, cloudRounds);
-          } else {
-            console.log('No cloud profile found - user will need to complete profile');
-          }
+        }
+
+        // Always rehydrate the cloud profile for the signed-in user.
+        // Persisted local state can be stale or mismatched across browser/PWA sessions.
+        console.log('Fetching cloud profile for user:', user.userId);
+        const cloudProfile = await fetchCloudProfile(user.userId);
+
+        if (cloudProfile) {
+          console.log('Found existing cloud profile, loading into store:', cloudProfile);
+
+          // Also load IndividualRounds from cloud
+          const cloudRounds = await loadIndividualRoundsFromCloud(cloudProfile.id);
+          console.log('Loaded', cloudRounds.length, 'individual rounds from cloud');
+
+          upsertCloudProfileToStore(cloudProfile, cloudRounds);
+        } else {
+          console.log('No cloud profile found - user will need to complete profile');
         }
       } catch (err) {
         console.log('No Amplify user signed in:', err);
@@ -345,19 +346,18 @@ const App: React.FC = () => {
           const email = attributes.email || user.username;
           const displayName = attributes.name || attributes.email || user.username;
           createUser(email, displayName, true); // Skip automatic profile creation
-          
-          // Try to fetch existing cloud profile
-          const cloudProfile = await fetchCloudProfile(user.userId);
-          
-          if (cloudProfile) {
-            console.log('Loading cloud profile after login:', cloudProfile);
-            
-            // Also load IndividualRounds from cloud
-            const cloudRounds = await loadIndividualRoundsFromCloud(cloudProfile.id);
-            console.log('Loaded', cloudRounds.length, 'individual rounds from cloud');
-            
-            upsertCloudProfileToStore(cloudProfile, cloudRounds);
-          }
+        }
+
+        const cloudProfile = await fetchCloudProfile(user.userId);
+
+        if (cloudProfile) {
+          console.log('Loading cloud profile after login:', cloudProfile);
+
+          // Also load IndividualRounds from cloud
+          const cloudRounds = await loadIndividualRoundsFromCloud(cloudProfile.id);
+          console.log('Loaded', cloudRounds.length, 'individual rounds from cloud');
+
+          upsertCloudProfileToStore(cloudProfile, cloudRounds);
         }
       } catch (err) {
         console.error('Failed to get user after login:', err);

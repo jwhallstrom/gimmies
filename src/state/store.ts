@@ -58,6 +58,7 @@ import { createTournamentSlice, initialTournamentState, type TournamentSliceActi
 const sanitizeIdPart = (value: string) => String(value || '').replace(/[^a-zA-Z0-9_-]/g, '_');
 const buildCompletedRoundId = (eventId: string, golferId: string) => `cr-${sanitizeIdPart(eventId)}-${sanitizeIdPart(golferId)}`;
 const buildIndividualRoundId = (eventId: string, profileId: string) => `ir-${sanitizeIdPart(eventId)}-${sanitizeIdPart(profileId)}`;
+let eventsCloudSyncPromise: Promise<{ totalCount: number; activeCount: number; completedCount: number; syncedAt: string }> | null = null;
 
 // ============================================================================
 // Combined State Interface
@@ -243,6 +244,8 @@ export const useStore = create<State>()(
       
       // Override complex functions that need full store access
       loadEventsFromCloud: async () => {
+        if (eventsCloudSyncPromise) return eventsCloudSyncPromise;
+        eventsCloudSyncPromise = (async () => {
         if (import.meta.env.VITE_ENABLE_CLOUD_SYNC !== 'true') {
           return { totalCount: 0, activeCount: 0, completedCount: 0, syncedAt: new Date().toISOString() };
         }
@@ -667,6 +670,12 @@ export const useStore = create<State>()(
           };
         } finally {
           set({ isLoadingEventsFromCloud: false });
+        }
+        })();
+        try {
+          return await eventsCloudSyncPromise;
+        } finally {
+          eventsCloudSyncPromise = null;
         }
       },
       
