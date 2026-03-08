@@ -380,7 +380,7 @@ export const useStore = create<State>()(
         
         try {
           set({ isLoadingEventsFromCloud: true });
-          const { loadUserEventsFromCloud, loadChatMessagesFromCloud, saveEventToCloud } = await import('../utils/eventSync');
+          const { loadUserEventsFromCloud, saveEventToCloud } = await import('../utils/eventSync');
           
           const cloudEvents = await loadUserEventsFromCloud();
           const knownProfiles = get().profiles || [];
@@ -405,11 +405,23 @@ export const useStore = create<State>()(
           const myEvents = repairedCloudEvents
             .filter((e: any) => e && typeof e.id === 'string');
 
+          const existingHubById = new Map(
+            [...(get().events || []), ...(get().completedEvents || [])].map((event: any) => [event.id, event])
+          );
+          const hydratedEvents = myEvents.map((event: any) => ({
+            ...event,
+            chat: Array.isArray(event.chat) && event.chat.length > 0
+              ? event.chat
+              : Array.isArray(existingHubById.get(event.id)?.chat)
+                ? existingHubById.get(event.id).chat
+                : [],
+          }));
+
           // Hydrate participant profiles so member cards show correct names/avatars/status.
           try {
             const participantProfileIds = Array.from(
               new Set(
-                myEvents
+                hydratedEvents
                   .flatMap((event: any) => (Array.isArray(event.golfers) ? event.golfers : []).map((g: any) => g?.profileId))
                   .filter((id): id is string => Boolean(id))
               )
@@ -436,13 +448,18 @@ export const useStore = create<State>()(
             console.error('Failed to hydrate participant profiles from cloud:', profileHydrateError);
           }
           
-          for (const event of myEvents) {
-            event.chat = await loadChatMessagesFromCloud(event.id);
-          }
-          
-          const activeEvents = myEvents.filter(e => !e.isCompleted);
-          const completedEvents = myEvents.filter(e => e.isCompleted);
+          const activeEvents = hydratedEvents.filter(e => !e.isCompleted);
+          const completedEvents = hydratedEvents.filter(e => e.isCompleted);
           const syncedAt = new Date().toISOString();
+
+          // Paint Home from the authoritative cloud hub list immediately.
+          // Avoid blocking this on per-hub chat fetches or completed-round derivation.
+          set({
+            events: activeEvents,
+            completedEvents,
+            lastEventsCloudSyncAt: syncedAt,
+            lastEventsCloudSyncCount: hydratedEvents.length,
+          });
           
           const newCompletedRoundsFromCloud: CompletedRound[] = [];
           const newIndividualRoundsFromCloud: IndividualRound[] = [];
@@ -578,7 +595,7 @@ export const useStore = create<State>()(
             completedEvents,
             completedRounds: mergedCompletedRounds,
             lastEventsCloudSyncAt: syncedAt,
-            lastEventsCloudSyncCount: myEvents.length,
+            lastEventsCloudSyncCount: hydratedEvents.length,
             profiles: get().profiles.map(p => {
               if (p.id === currentProfile.id) {
                 const existingRounds = p.individualRounds || [];
@@ -635,7 +652,7 @@ export const useStore = create<State>()(
             console.error('Failed to load CompletedRounds from cloud:', error);
           }
           return {
-            totalCount: myEvents.length,
+            totalCount: hydratedEvents.length,
             activeCount: activeEvents.length,
             completedCount: completedEvents.length,
             syncedAt,
