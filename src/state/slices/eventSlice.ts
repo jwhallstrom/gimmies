@@ -55,6 +55,8 @@ export interface EventSliceState {
   completedEvents: Event[];
   completedRounds: CompletedRound[];
   isLoadingEventsFromCloud: boolean;
+  lastEventsCloudSyncAt: string | null;
+  lastEventsCloudSyncCount: number;
 }
 
 // ============================================================================
@@ -68,7 +70,7 @@ export interface EventSliceActions {
   setEventTee: (eventId: string, teeName: string) => Promise<void>;
   updateEvent: (id: string, patch: Partial<Event>) => Promise<void>;
   deleteEvent: (eventId: string) => Promise<void>;
-  loadEventsFromCloud: () => Promise<void>;
+  loadEventsFromCloud: () => Promise<{ totalCount: number; activeCount: number; completedCount: number; syncedAt: string }>;
   refreshEventFromCloud: (eventId: string) => Promise<boolean>;
   importData: (data: Event[]) => void;
   exportData: () => string;
@@ -113,6 +115,8 @@ export const initialEventState: EventSliceState = {
   completedEvents: [],
   completedRounds: [],
   isLoadingEventsFromCloud: false,
+  lastEventsCloudSyncAt: null,
+  lastEventsCloudSyncCount: 0,
 };
 
 // ============================================================================
@@ -277,6 +281,12 @@ export const createEventSlice = (
   loadEventsFromCloud: async () => {
     // This will be implemented in store.ts using the full logic
     // The slice pattern allows us to gradually migrate
+    return {
+      totalCount: 0,
+      activeCount: 0,
+      completedCount: 0,
+      syncedAt: new Date().toISOString(),
+    };
   },
   
   refreshEventFromCloud: async (eventId: string) => {

@@ -75,6 +75,8 @@ interface State {
   completedEvents: Event[];
   completedRounds: CompletedRound[];
   isLoadingEventsFromCloud: boolean;
+  lastEventsCloudSyncAt: string | null;
+  lastEventsCloudSyncCount: number;
   
   // Verified status level-up tracking
   pendingLevelUp: {
@@ -141,7 +143,7 @@ interface State {
   votePoll: EventSliceActions['votePoll'];
   
   // Complex event actions (kept in store)
-  loadEventsFromCloud: () => Promise<void>;
+  loadEventsFromCloud: () => Promise<{ totalCount: number; activeCount: number; completedCount: number; syncedAt: string }>;
   completeEvent: (eventId: string) => boolean;
   
   // Game actions
@@ -241,11 +243,22 @@ export const useStore = create<State>()(
       
       // Override complex functions that need full store access
       loadEventsFromCloud: async () => {
-        if (import.meta.env.VITE_ENABLE_CLOUD_SYNC !== 'true') return;
-        if (get().isLoadingEventsFromCloud) return;
+        if (import.meta.env.VITE_ENABLE_CLOUD_SYNC !== 'true') {
+          return { totalCount: 0, activeCount: 0, completedCount: 0, syncedAt: new Date().toISOString() };
+        }
+        if (get().isLoadingEventsFromCloud) {
+          return {
+            totalCount: get().events.length + get().completedEvents.length,
+            activeCount: get().events.length,
+            completedCount: get().completedEvents.length,
+            syncedAt: get().lastEventsCloudSyncAt || new Date().toISOString(),
+          };
+        }
         
         const currentProfile = get().currentProfile;
-        if (!currentProfile) return;
+        if (!currentProfile) {
+          return { totalCount: 0, activeCount: 0, completedCount: 0, syncedAt: new Date().toISOString() };
+        }
         const normalize = (v: unknown) => String(v || '').trim().toLowerCase();
         const mergeScorecards = (a: any, b: any) => {
           const aScores = Array.isArray(a?.scores) ? a.scores : [];
@@ -429,6 +442,7 @@ export const useStore = create<State>()(
           
           const activeEvents = myEvents.filter(e => !e.isCompleted);
           const completedEvents = myEvents.filter(e => e.isCompleted);
+          const syncedAt = new Date().toISOString();
           
           const newCompletedRoundsFromCloud: CompletedRound[] = [];
           const newIndividualRoundsFromCloud: IndividualRound[] = [];
@@ -563,6 +577,8 @@ export const useStore = create<State>()(
             events: activeEvents,
             completedEvents,
             completedRounds: mergedCompletedRounds,
+            lastEventsCloudSyncAt: syncedAt,
+            lastEventsCloudSyncCount: myEvents.length,
             profiles: get().profiles.map(p => {
               if (p.id === currentProfile.id) {
                 const existingRounds = p.individualRounds || [];
@@ -618,8 +634,20 @@ export const useStore = create<State>()(
           } catch (error) {
             console.error('Failed to load CompletedRounds from cloud:', error);
           }
+          return {
+            totalCount: myEvents.length,
+            activeCount: activeEvents.length,
+            completedCount: completedEvents.length,
+            syncedAt,
+          };
         } catch (error) {
           console.error('loadEventsFromCloud error:', error);
+          return {
+            totalCount: get().events.length + get().completedEvents.length,
+            activeCount: get().events.length,
+            completedCount: get().completedEvents.length,
+            syncedAt: get().lastEventsCloudSyncAt || new Date().toISOString(),
+          };
         } finally {
           set({ isLoadingEventsFromCloud: false });
         }

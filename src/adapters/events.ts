@@ -19,13 +19,15 @@ export function useEventsAdapter() {
   const currentProfile = useStore((s) => s.currentProfile) as GolferProfile | null;
   const currentUser = useStore((s) => s.currentUser) as User | null;
   const profiles = useStore((s) => s.profiles) as GolferProfile[];
+  const lastEventsCloudSyncAt = useStore((s) => s.lastEventsCloudSyncAt) as string | null;
+  const lastEventsCloudSyncCount = useStore((s) => s.lastEventsCloudSyncCount) as number;
 
   const setCurrentProfile = useStore((s) => s.setCurrentProfile) as (profileId: string) => void;
   const joinEventByCode = useStore((s) => s.joinEventByCode) as (code: string) => Promise<JoinEventResult>;
   const deleteEvent = useStore((s) => s.deleteEvent) as (eventId: string) => Promise<void>;
   const createProfile = useStore((s) => s.createProfile) as (name: string) => void;
   const cleanupDuplicateProfiles = useStore((s) => s.cleanupDuplicateProfiles) as () => void;
-  const loadEventsFromCloud = useStore((s) => s.loadEventsFromCloud) as () => Promise<void>;
+  const loadEventsFromCloud = useStore((s) => s.loadEventsFromCloud) as () => Promise<{ totalCount: number; activeCount: number; completedCount: number; syncedAt: string }>;
 
   // In cloud-enabled sessions, store.events and store.completedEvents are
   // already restricted to hubs the signed-in user can access. Home needs both
@@ -40,6 +42,8 @@ export function useEventsAdapter() {
     currentUser,
     currentProfile,
     profiles,
+    lastEventsCloudSyncAt,
+    lastEventsCloudSyncCount,
 
     // actions
     setCurrentProfile,

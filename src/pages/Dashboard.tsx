@@ -110,6 +110,8 @@ const Dashboard: React.FC = () => {
     currentProfile,
     loadEventsFromCloud,
     profiles,
+    lastEventsCloudSyncAt,
+    lastEventsCloudSyncCount,
   } = useEventsAdapter();
   const { wallet } = useWalletAdapter();
   const { isGuest } = useAuthMode();
@@ -123,6 +125,7 @@ const Dashboard: React.FC = () => {
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [isRefreshingInvites, setIsRefreshingInvites] = useState(false);
   const [showInviteInfo, setShowInviteInfo] = useState(false);
+  const [lastManualRefreshAt, setLastManualRefreshAt] = useState<string | null>(null);
   
   // Section order - persisted to localStorage
   const [sectionOrder, setSectionOrder] = useState<SectionId[]>(getSavedSectionOrder);
@@ -244,14 +247,20 @@ const Dashboard: React.FC = () => {
 
     setIsRefreshingInvites(true);
     try {
-      await loadEventsFromCloud();
-      addToast?.('Invites refreshed', 'success', 2200);
+      const result = await loadEventsFromCloud();
+      setLastManualRefreshAt(result.syncedAt);
+      addToast?.(`Synced ${result.totalCount} events & groups`, 'success', 2500);
     } catch {
       addToast?.('Could not refresh invites', 'error', 3000);
     } finally {
       setIsRefreshingInvites(false);
     }
   }, [addToast, isGuest, loadEventsFromCloud]);
+
+  const syncDisplayAt = lastManualRefreshAt || lastEventsCloudSyncAt;
+  const syncSummary = syncDisplayAt
+    ? `Synced ${lastEventsCloudSyncCount} ${lastEventsCloudSyncCount === 1 ? 'item' : 'items'}`
+    : 'Not synced yet';
 
   // Separate events into categories: live, upcoming, completed, groups
   const { liveEvents, upcomingEvents, completedEvents, groups, activeEvents } = useMemo(() => {
@@ -692,6 +701,9 @@ const Dashboard: React.FC = () => {
                 Refresh events and groups you joined from a text, email, or browser link.
               </div>
             )}
+            <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+              {syncSummary}
+            </div>
           </div>
           <button
             type="button"
@@ -708,7 +720,7 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Unified Content - Draggable Accordions */}
-      <section className="space-y-3">
+      <section key={lastEventsCloudSyncAt || 'home'} className="space-y-3">
         {/* Empty state - show if no events AND no groups */}
         {liveEvents.length === 0 && upcomingEvents.length === 0 && completedEvents.length === 0 && groups.length === 0 && (
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm py-12 text-center">
