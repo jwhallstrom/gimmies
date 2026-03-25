@@ -293,14 +293,6 @@ const App: React.FC = () => {
     checkAuth();
   }, []);
 
-  // Debug logging
-  console.log('App render:', { 
-    currentUser: currentUser?.id, 
-    currentProfile: currentProfile?.id,
-    amplifyUser: amplifyUser?.userId,
-    location: location.pathname 
-  });
-
   // Canonical cloud sync loop:
   // Keep background lists converged after auth changes, focus changes, and reconnects.
   // Active event/group pages maintain their own realtime subscriptions.

@@ -130,6 +130,15 @@ function buildMembershipKeys(userId?: string | null): string[] {
   return Array.from(new Set(candidates));
 }
 
+function shouldRemoveMembershipKey(key: unknown, userId?: string | null, extraKeys: string[] = []): boolean {
+  const normalizedKey = typeof key === 'string' ? key.trim() : '';
+  const normalizedUserId = typeof userId === 'string' ? userId.trim() : '';
+  if (!normalizedKey) return false;
+  if (extraKeys.includes(normalizedKey)) return true;
+  if (!normalizedUserId) return false;
+  return normalizedKey === normalizedUserId || normalizedKey.startsWith(`${normalizedUserId}::`);
+}
+
 function parseJsonField<T>(value: unknown, fallback: T): T {
   if (value == null) return fallback;
   let current: unknown = value;
@@ -449,7 +458,8 @@ async function handleJoinHubByShareCode(
     };
   }
 
-  const nextMemberUserIds = Array.from(new Set([...(event.memberUserIds || []), ...callerMembershipKeys]));
+  const canonicalMembershipKeys = buildMembershipKeys(callerUserId);
+  const nextMemberUserIds = Array.from(new Set([...(event.memberUserIds || []), ...canonicalMembershipKeys]));
   const golfers = asObjectArray(parseJsonField(event.golfersJson, []));
   const groups = asObjectArray(parseJsonField(event.groupsJson, []));
   const scorecards = asObjectArray(parseJsonField(event.scorecardsJson, []));
@@ -493,7 +503,7 @@ async function handleJoinHubByShareCode(
     console.error('joinHubByShareCode: failed to update event membership', {
       eventId: event.id,
       profileId: args.profileId,
-      callerMembershipKeys,
+      callerMembershipKeys: canonicalMembershipKeys,
       errors: updateResult.errors,
     });
     return {
@@ -555,7 +565,9 @@ async function handleLeaveHub(
         ? group.golferIds.filter((id: string) => id !== args.profileId)
         : [],
     }));
-  const nextMemberUserIds = (event.memberUserIds || []).filter((key) => !callerMembershipKeys.includes(key));
+  const nextMemberUserIds = (event.memberUserIds || []).filter(
+    (key) => !shouldRemoveMembershipKey(key, callerUserId, callerMembershipKeys)
+  );
 
   const updateResult = await client.models.Event.update({
     id: event.id,
@@ -614,7 +626,8 @@ async function handleRemoveHubMember(
   }
 
   const targetProfile = await client.models.Profile.get({ id: args.targetProfileId });
-  const targetMembershipKeys = buildMembershipKeys((targetProfile.data as any)?.userId);
+  const targetUserId = (targetProfile.data as any)?.userId;
+  const targetMembershipKeys = buildMembershipKeys(targetUserId);
 
   const golfers = asObjectArray(parseJsonField(event.golfersJson, []))
     .filter((golfer) => golfer.profileId !== args.targetProfileId && golfer.customName !== args.targetProfileId);
@@ -627,7 +640,9 @@ async function handleRemoveHubMember(
         ? group.golferIds.filter((id: string) => id !== args.targetProfileId)
         : [],
     }));
-  const nextMemberUserIds = (event.memberUserIds || []).filter((key) => !targetMembershipKeys.includes(key));
+  const nextMemberUserIds = (event.memberUserIds || []).filter(
+    (key) => !shouldRemoveMembershipKey(key, targetUserId, targetMembershipKeys)
+  );
 
   const updateResult = await client.models.Event.update({
     id: event.id,
