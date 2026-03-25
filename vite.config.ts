@@ -41,15 +41,11 @@ export default defineConfig({
         // Check for updates every hour
         skipWaiting: false, // Let user control when to update
         clientsClaim: true, // Take control of pages immediately after activation
-        runtimeCaching: [
-          {
-            urlPattern: /.*\.(?:js|css|html)/,
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'static-resources'
-            }
-          }
-        ]
+        // Build assets are already revisioned and precached by Workbox.
+        // Runtime-caching HTML/JS with stale-while-revalidate can pin users
+        // to an older app shell after deploys, which is how old chunk bugs
+        // keep resurfacing even after the source fix is live.
+        runtimeCaching: []
       }
     })
   ],
