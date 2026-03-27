@@ -123,6 +123,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   const [showSettlements, setShowSettlements] = useState(false);
   const [expandBalance, setExpandBalance] = useState(false);
   const [payoutsView, setPayoutsView] = useState<'me' | 'admin'>('me');
+  const [autoPayoutPreviewApplied, setAutoPayoutPreviewApplied] = useState(false);
   
   const completeEvent = useStore((s) => s.completeEvent);
   const getEventSettlements = useStore((s) => s.getEventSettlements);
@@ -581,12 +582,23 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   const allScoresComplete = event.scorecards?.every((sc: any) => 
     sc.scores?.every((s: any) => s.strokes != null)
   );
+  const hasAnyScoresEntered = event.scorecards?.some((sc: any) =>
+    sc.scores?.some((s: any) => s.strokes != null)
+  );
+  const canPreviewPayouts = Boolean(isEventStarted || isEventCompleted || (allScoresComplete && hasAnyScoresEntered));
   
   // Currency formatters
   const currency = (n: number) => '$' + n.toFixed(2);
   const signedCurrency = (n: number) => (n > 0 ? '+' : n < 0 ? '−' : '') + currency(Math.abs(n));
 
   const myNetValue = myNet ?? 0;
+
+  useEffect(() => {
+    if (!autoPayoutPreviewApplied && isOwner && canPreviewPayouts && payoutsView === 'me') {
+      setPayoutsView('admin');
+      setAutoPayoutPreviewApplied(true);
+    }
+  }, [autoPayoutPreviewApplied, canPreviewPayouts, isOwner, payoutsView]);
 
   const myWinningsBreakdown = useMemo(() => {
     if (!myGolferId) return [] as { name: string; amount: number }[];
@@ -1645,6 +1657,17 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                   Admin View
                 </button>
               </div>
+              {allScoresComplete && !isEventCompleted && (
+                <div className="px-3 py-2 text-xs text-amber-700">
+                  Preview mode: admin view shows the current all-player payout ledger before completion.
+                </div>
+              )}
+            </div>
+          )}
+
+          {canPreviewPayouts && !isEventCompleted && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
+              Read-only payout preview based on current scores. Final values lock when the event is completed.
             </div>
           )}
 
@@ -1671,11 +1694,15 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
             </div>
           )}
 
-          {(isEventStarted || isEventCompleted) && allPlayerBalances.length > 0 && (payoutsView === 'admin' || !isOwner) && (
+          {canPreviewPayouts && allPlayerBalances.length > 0 && (payoutsView === 'admin' || !isOwner) && (
             <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
               <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
                 <div className="font-bold text-gray-900 dark:text-slate-100">All Players Balance</div>
-                <div className="text-xs text-gray-500 dark:text-slate-400">Buy-in vs winnings with per-game breakdown</div>
+                <div className="text-xs text-gray-500 dark:text-slate-400">
+                  {isEventCompleted
+                    ? 'Buy-in vs winnings with per-game breakdown'
+                    : 'Read-only preview based on current scores before completion'}
+                </div>
               </div>
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
                 {allPlayerBalances.map((row: any) => (
@@ -1744,7 +1771,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
           )}
 
           {/* Not Started Message */}
-          {!isEventStarted && !isEventCompleted && (
+          {!canPreviewPayouts && (
             <div className="bg-white rounded-xl border border-slate-200 p-6 text-center">
               <div className="text-3xl mb-2">⏳</div>
               <div className="font-bold text-gray-900">Event Not Started</div>

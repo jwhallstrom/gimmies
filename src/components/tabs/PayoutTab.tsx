@@ -9,7 +9,7 @@
  * - Personal settlements only (privacy)
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../../state/store';
 import { calculateEventPayouts } from '../../games/payouts';
@@ -42,6 +42,7 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
 
   const [showSettlements, setShowSettlements] = useState(false);
   const [payoutView, setPayoutView] = useState<'me' | 'admin'>('me');
+  const [autoPreviewApplied, setAutoPreviewApplied] = useState(false);
   const [teamModal, setTeamModal] = useState<{ 
     name: string; 
     members: string[]; 
@@ -226,6 +227,9 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
   const myBreakdown = myGolferId ? gameBreakdown[myGolferId] : null;
   const myBuyin = myGolferId ? buyinByGolfer[myGolferId] ?? 0 : 0;
   const incomplete = event.scorecards.some((sc: any) => sc.scores.some((s: any) => s.strokes == null));
+  const hasAnyScores = event.scorecards.some((sc: any) => sc.scores.some((s: any) => s.strokes != null));
+  const allScoresComplete = hasAnyScores && !incomplete;
+  const canPreviewAdminPayouts = Boolean(isOwner && (isStarted || isCompleted || allScoresComplete));
 
   const allSettlements = useMemo(() => getEventSettlements(eventId), [eventId, getEventSettlements]);
 
@@ -293,6 +297,13 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
 
   const settlementsForView = isOwner && payoutView === 'admin' ? allSettlements : mySettlements;
   const pendingSettlementsForView = settlementsForView.filter((s: any) => s.status === 'pending');
+
+  useEffect(() => {
+    if (!autoPreviewApplied && canPreviewAdminPayouts && payoutView === 'me') {
+      setPayoutView('admin');
+      setAutoPreviewApplied(true);
+    }
+  }, [autoPreviewApplied, canPreviewAdminPayouts, payoutView]);
 
   // Event actions
   const handleStartEvent = () => {
@@ -423,6 +434,17 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
               Admin View
             </button>
           </div>
+          {allScoresComplete && !isCompleted && (
+            <div className="px-3 py-2 text-xs text-amber-700">
+              Preview mode: admin view shows the current all-player payout ledger before completion.
+            </div>
+          )}
+        </div>
+      )}
+
+      {canPreviewAdminPayouts && !isCompleted && payoutView === 'admin' && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
+          Read-only payout preview. These numbers are based on current scores and will lock when the event is completed.
         </div>
       )}
 
@@ -852,11 +874,15 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
         </div>
       )}
 
-      {isOwner && payoutView === 'admin' && (isStarted || isCompleted) && (
+      {isOwner && payoutView === 'admin' && canPreviewAdminPayouts && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-slate-50 to-white">
             <div className="font-bold text-gray-900 text-sm">All Players Ledger</div>
-            <div className="text-xs text-gray-500">Buy-in, winnings, net, and pending settlements</div>
+            <div className="text-xs text-gray-500">
+              {isCompleted
+                ? 'Buy-in, winnings, net, and pending settlements'
+                : 'Read-only preview of buy-in, winnings, and net before completion'}
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -866,7 +892,9 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
                   <th className="text-right px-3 py-2 font-semibold text-gray-600">Buy-in</th>
                   <th className="text-right px-3 py-2 font-semibold text-gray-600">Winnings</th>
                   <th className="text-right px-3 py-2 font-semibold text-gray-600">Net</th>
-                  <th className="text-right px-3 py-2 font-semibold text-gray-600">Pending</th>
+                  {isCompleted && (
+                    <th className="text-right px-3 py-2 font-semibold text-gray-600">Pending</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -880,9 +908,11 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
                     <td className={`px-3 py-2 text-right font-bold ${row.net >= 0 ? 'text-green-700' : 'text-red-700'}`}>
                       {signedCurrency(row.net)}
                     </td>
-                    <td className={`px-3 py-2 text-right font-medium ${row.pendingNet >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {signedCurrency(row.pendingNet)}
-                    </td>
+                    {isCompleted && (
+                      <td className={`px-3 py-2 text-right font-medium ${row.pendingNet >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {signedCurrency(row.pendingNet)}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
