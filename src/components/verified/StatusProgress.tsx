@@ -29,6 +29,7 @@ export const StatusProgress: React.FC<StatusProgressProps> = ({
   const isManualTier = !!tier.isManualOnly;
   const nextTier = progress.nextTier;
   const showProgressToNext = !isManualTier && nextTier !== null;
+  const nextTierRequirement = nextTier ? `${nextTier.minRounds} verified rounds for ${nextTier.name}` : '';
   
   if (compact) {
     return (
@@ -74,7 +75,7 @@ export const StatusProgress: React.FC<StatusProgressProps> = ({
                 </span>
               </div>
               <span className="text-sm text-gray-600">
-                {progress.roundsToNext} rounds to go
+                {progress.roundsToNext} verified rounds to go
               </span>
             </div>
             
@@ -87,7 +88,7 @@ export const StatusProgress: React.FC<StatusProgressProps> = ({
             </div>
             
             <p className="text-xs text-gray-500">
-              {progress.progressPercent}% complete • Play verified events to level up
+              {progress.progressPercent}% complete • Need {nextTierRequirement}
             </p>
           </>
         ) : (

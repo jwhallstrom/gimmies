@@ -76,7 +76,7 @@ const StatusLevelsInfo: React.FC<Props> = ({ onClose, currentLevel = 0 }) => {
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-green-500 mt-0.5">•</span>
-                <span>Play with <strong>2+ other Gimmies accounts</strong> (guests don't count)</span>
+                <span>Play with <strong>at least 1 other Gimmies account</strong> (2 profiled players total; guests do not count)</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-green-500 mt-0.5">•</span>

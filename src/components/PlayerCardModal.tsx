@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import StatusLevelsInfo from './verified/StatusLevelsInfo';
 import type { StatusTier } from '../state/types';
+import { getProgressToNextTier } from '../utils/verifiedStatus';
 
 export interface PlayerCardData {
   id: string;
@@ -29,6 +30,9 @@ interface PlayerCardModalProps {
 const PlayerCardModal: React.FC<PlayerCardModalProps> = ({ player, onClose }) => {
   const navigate = useNavigate();
   const [showStatusLevels, setShowStatusLevels] = useState(false);
+  const verifiedRounds = player.verifiedStatus?.verifiedRounds || 0;
+  const progress = getProgressToNextTier(verifiedRounds);
+  const nextTierRequirement = progress.nextTier ? `${progress.nextTier.minRounds} verified rounds for ${progress.nextTier.name}` : null;
 
   return createPortal(
     <>
@@ -40,7 +44,6 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({ player, onClose }) =>
           className="w-full max-w-sm bg-white dark:bg-slate-900 rounded-2xl shadow-2xl overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Header */}
           <div className={`px-6 pt-6 pb-8 text-center relative ${player.statusTier?.badgeColor || 'bg-gray-500'}`}>
             <button
               onClick={onClose}
@@ -68,15 +71,13 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({ player, onClose }) =>
             )}
           </div>
 
-          {/* Body */}
           <div className="px-6 py-4">
             {player.hasProfile ? (
               <>
-                {/* Quick Stats */}
                 <div className="grid grid-cols-3 gap-3 mb-4">
                   <div className="text-center bg-slate-50 dark:bg-slate-800 rounded-xl py-3">
                     <div className="text-xl font-black text-gray-900 dark:text-white">
-                      {player.handicap != null ? player.handicap.toFixed(1) : '—'}
+                      {player.handicap != null ? player.handicap.toFixed(1) : '-'}
                     </div>
                     <div className="text-[10px] text-gray-500 font-medium uppercase">Handicap</div>
                   </div>
@@ -88,13 +89,12 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({ player, onClose }) =>
                   </div>
                   <div className="text-center bg-slate-50 dark:bg-slate-800 rounded-xl py-3">
                     <div className="text-xl font-black text-gray-900 dark:text-white">
-                      {player.verifiedStatus?.verifiedRounds || 0}
+                      {verifiedRounds}
                     </div>
                     <div className="text-[10px] text-gray-500 font-medium uppercase">Verified</div>
                   </div>
                 </div>
 
-                {/* Home Course */}
                 {player.homeCourse && (
                   <div className="bg-slate-50 dark:bg-slate-800 rounded-xl px-4 py-3 mb-4">
                     <div className="text-[10px] text-gray-500 font-medium uppercase mb-1">Home Course</div>
@@ -102,7 +102,6 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({ player, onClose }) =>
                   </div>
                 )}
 
-                {/* Status Progress */}
                 {player.statusTier && (
                   <div className="mb-4">
                     <div className="flex items-center justify-between mb-2">
@@ -110,9 +109,7 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({ player, onClose }) =>
                       {(player.statusTier as any).isManualOnly ? (
                         <span className="text-xs text-gray-500">Manual assignment</span>
                       ) : (
-                        <span className="text-xs text-gray-500">
-                          {player.verifiedStatus?.verifiedRounds || 0} / {player.statusTier.maxRounds || '∞'} rounds
-                        </span>
+                        <span className="text-xs text-gray-500">{verifiedRounds} verified rounds</span>
                       )}
                     </div>
                     <div className="h-2 bg-gray-200 dark:bg-slate-700 rounded-full overflow-hidden">
@@ -121,11 +118,15 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({ player, onClose }) =>
                         style={{
                           width: (player.statusTier as any).isManualOnly
                             ? '100%'
-                            : `${Math.min(100, ((player.verifiedStatus?.verifiedRounds || 0) / (player.statusTier.maxRounds || 100)) * 100)}%`,
+                            : `${Math.min(100, progress.progressPercent)}%`,
                         }}
                       />
                     </div>
-                    <p className="text-xs text-gray-500 mt-2">{player.statusTier.description}</p>
+                    <p className="text-xs text-gray-500 mt-2">
+                      {(player.statusTier as any).isManualOnly || !nextTierRequirement
+                        ? player.statusTier.description
+                        : `Need ${nextTierRequirement}. ${player.statusTier.description}`}
+                    </p>
 
                     <button
                       onClick={() => setShowStatusLevels(true)}
@@ -139,14 +140,13 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({ player, onClose }) =>
                   </div>
                 )}
 
-                {/* Badges */}
                 {player.verifiedStatus?.badges && player.verifiedStatus.badges.length > 0 && (
                   <div className="mb-4">
                     <div className="text-xs font-bold text-gray-600 dark:text-gray-400 uppercase mb-2">Badges</div>
                     <div className="flex flex-wrap gap-2">
                       {player.verifiedStatus.badges.map((badge: string) => (
                         <span key={badge} className="px-2 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 rounded-full text-xs font-medium">
-                          🏅 {badge.replace(/_/g, ' ')}
+                          Trophy {badge.replace(/_/g, ' ')}
                         </span>
                       ))}
                     </div>
@@ -155,16 +155,15 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({ player, onClose }) =>
               </>
             ) : (
               <div className="text-center py-4">
-                <div className="text-3xl mb-2">👤</div>
+                <div className="text-3xl mb-2">User</div>
                 <div className="font-medium text-gray-700 dark:text-gray-300">Guest Player</div>
                 <p className="text-sm text-gray-500 mt-1">
-                  This player hasn't created a Gimmies profile yet
+                  This player has not created a Gimmies profile yet
                 </p>
               </div>
             )}
           </div>
 
-          {/* Footer */}
           <div className="px-6 pb-6 space-y-2">
             {player.hasProfile && (
               <button

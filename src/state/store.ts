@@ -88,6 +88,7 @@ interface State {
     verifiedRounds: number;
   } | null;
   clearPendingLevelUp: () => void;
+  recomputeVerifiedStatuses: () => void;
   
   // UI slice state
   toasts: Toast[];
@@ -232,6 +233,61 @@ export const useStore = create<State>()(
       
       // Verified status actions
       clearPendingLevelUp: () => set({ pendingLevelUp: null }),
+      recomputeVerifiedStatuses: () => {
+        const profiles = get().profiles;
+        const completedEvents = [...get().completedEvents];
+
+        if (profiles.length === 0 || completedEvents.length === 0) return;
+
+        const statusByProfileId = new Map<string, GolferProfile['verifiedStatus']>();
+        profiles.forEach((profile) => {
+          const founderBadge = profile.verifiedStatus?.badges?.includes('founder') ? ['founder'] : [];
+          statusByProfileId.set(profile.id, {
+            verifiedRounds: 0,
+            statusLevel: 0,
+            badges: founderBadge,
+          });
+        });
+
+        const sortedEvents = completedEvents.sort((a, b) => {
+          const aTime = new Date(a.completedAt || a.date || 0).getTime();
+          const bTime = new Date(b.completedAt || b.date || 0).getTime();
+          return aTime - bTime;
+        });
+
+        const recomputedEvents = sortedEvents.map((event) => {
+          const verification = checkEventVerification(event, profiles);
+
+          if (verification.isVerified) {
+            event.golfers.forEach((golfer) => {
+              if (!golfer.profileId || !statusByProfileId.has(golfer.profileId)) return;
+              const currentStatus = statusByProfileId.get(golfer.profileId);
+              const result = calculateNewStatus(currentStatus, event.id);
+              statusByProfileId.set(golfer.profileId, result.newStatus);
+            });
+          }
+
+          return {
+            ...event,
+            isVerifiedRound: verification.isVerified,
+            verificationNote: verification.reason,
+          };
+        });
+
+        set((state: any) => ({
+          completedEvents: recomputedEvents,
+          profiles: state.profiles.map((profile: GolferProfile) => ({
+            ...profile,
+            verifiedStatus: statusByProfileId.get(profile.id) || profile.verifiedStatus,
+          })),
+          currentProfile: state.currentProfile
+            ? {
+                ...state.currentProfile,
+                verifiedStatus: statusByProfileId.get(state.currentProfile.id) || state.currentProfile.verifiedStatus,
+              }
+            : state.currentProfile,
+        }));
+      },
       
       // Compose slice actions
       ...createUserSlice(set, get),

@@ -36,6 +36,7 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
   const logout = useStore((s) => s.logout);
   const getProfileWallet = useStore((s) => s.getProfileWallet);
   const events = useStore((s) => s.events);
+  const recomputeVerifiedStatuses = useStore((s) => s.recomputeVerifiedStatuses);
   const { isGuest } = useAuthMode();
   const fileInputRef = useRef<HTMLInputElement>(null);
   
@@ -52,8 +53,9 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
     if (currentProfile && isOpen) {
       setEditName(currentProfile.name || '');
       setEditHandicap(currentProfile.handicapIndex?.toString() || '');
+      recomputeVerifiedStatuses();
     }
-  }, [currentProfile?.id, isOpen]);
+  }, [currentProfile?.id, isOpen, recomputeVerifiedStatuses]);
 
   // Close on escape
   useEffect(() => {
@@ -196,7 +198,7 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
   // Quick stats - with defensive checks
   const groupCount = (events || []).filter(e => e?.hubType === 'group').length;
   const eventCount = (events || []).filter(e => e?.hubType !== 'group' && !e?.isCompleted).length;
-  const roundCount = currentProfile?.stats?.roundsPlayed ?? 0;
+  const roundCount = currentProfile?.individualRounds?.length ?? currentProfile?.stats?.roundsPlayed ?? 0;
   const walletSummary = currentProfile ? getProfileWallet(currentProfile.id) : null;
   const netBalance = walletSummary?.lifetimeNet ?? 0;
   const auth = useOptionalAuth();
