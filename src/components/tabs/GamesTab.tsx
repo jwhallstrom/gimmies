@@ -124,6 +124,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   const [expandBalance, setExpandBalance] = useState(false);
   const [payoutsView, setPayoutsView] = useState<'me' | 'admin'>('me');
   const [autoPayoutPreviewApplied, setAutoPayoutPreviewApplied] = useState(false);
+  const [autoPayoutTabOpened, setAutoPayoutTabOpened] = useState(false);
   
   const completeEvent = useStore((s) => s.completeEvent);
   const getEventSettlements = useStore((s) => s.getEventSettlements);
@@ -599,6 +600,13 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
       setAutoPayoutPreviewApplied(true);
     }
   }, [autoPayoutPreviewApplied, canPreviewPayouts, isOwner, payoutsView]);
+
+  useEffect(() => {
+    if (!autoPayoutTabOpened && (isEventCompleted || allScoresComplete) && subTab === 'games') {
+      setSubTab('payouts');
+      setAutoPayoutTabOpened(true);
+    }
+  }, [allScoresComplete, autoPayoutTabOpened, isEventCompleted, subTab]);
 
   const myWinningsBreakdown = useMemo(() => {
     if (!myGolferId) return [] as { name: string; amount: number }[];
@@ -1462,9 +1470,6 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
 
       {/* Admin Control Panel moved to Event Header Command Center */}
 
-      {/* ========== OLD SUB-TAB CODE (hidden - keeping modals) ========== */}
-      {false && (
-      <>
       {/* Sub-tabs: Games / Payouts */}
       <div className="flex bg-slate-100 rounded-xl p-1">
         <button
@@ -1486,14 +1491,13 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
           }`}
         >
           💰 Payouts
-          {(isEventStarted || isEventCompleted) && myNet !== null && (
+          {canPreviewPayouts && myNet !== null && (
             <span className={`ml-2 text-xs ${myNetValue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {signedCurrency(myNetValue)}
             </span>
           )}
         </button>
       </div>
-
       {/* ========== GAMES SUB-TAB ========== */}
       {subTab === 'games' && (
         <div className="space-y-3">
@@ -1858,9 +1862,6 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
           )}
         </div>
       )}
-      </>
-      )}
-
       {/* ========== ADMIN FAB ========== */}
       {isOwner && canModify && isTabActive && (
         <button
