@@ -5,6 +5,7 @@ import useStore from '../../state/store';
 import { nanoid } from 'nanoid/non-secure';
 import { useNavigate } from 'react-router-dom';
 import { calculateEventPayouts } from '../../games/payouts';
+import { getParticipantsForConfig } from '../../games/participants';
 import { EventSettlement } from '../wallet';
 import { DOT_DEFINITIONS, DEFAULT_DOTS } from '../../games/dots';
 import type { DotCategory, BingoBangoBongoHoleResult, WolfHoleResult, DotsPlayerResult } from '../../state/types';
@@ -526,16 +527,18 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   const { myNet, myBuyin, myWinnings, buyinBreakdown } = useMemo(() => {
     if (!myGolferId || !payouts.totalByGolfer) return { myNet: null, myBuyin: 0, myWinnings: 0, buyinBreakdown: [] };
     
+    const isParticipant = (cfg: any, game: 'nassau' | 'skins' | 'stableford') =>
+      getParticipantsForConfig(event, cfg, game, {
+        restrictToGroup: game === 'nassau',
+        assignedTeamsOnly: game === 'nassau' && Array.isArray(cfg?.teams) && cfg.teams.length >= 2,
+      }).includes(myGolferId);
+
     // Calculate buy-in from all games this golfer is in
     let buyin = 0;
     const breakdown: { name: string; amount: number }[] = [];
-    
-    // All eligible event golfer IDs (used for all pot-based games)
-    const allGolferIds = event.golfers.map((g: any) => g.profileId || g.customName);
 
-    // Nassau buy-ins — include all eligible golfers, not stale participantGolferIds
     event.games.nassau.forEach((n: any, idx: number) => {
-      if (allGolferIds.includes(myGolferId)) {
+      if (isParticipant(n, 'nassau')) {
         const fees = n.fees ?? { out: n.fee, in: n.fee, total: n.fee };
         const cost = (fees.out || 0) + (fees.in || 0) + (fees.total || 0);
         buyin += cost;
@@ -543,18 +546,16 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
       }
     });
     
-    // Skins buy-ins
     skinsArray.forEach((s: any, idx: number) => {
-      if (allGolferIds.includes(myGolferId)) {
+      if (isParticipant(s, 'skins')) {
         const cost = s.fee || 0;
         buyin += cost;
         breakdown.push({ name: skinsArray.length > 1 ? `Skins ${idx + 1}` : 'Skins', amount: cost });
       }
     });
 
-    // Stableford buy-ins (pot-based like skins)
     stablefordArray.forEach((s: any, idx: number) => {
-      if (allGolferIds.includes(myGolferId)) {
+      if (isParticipant(s, 'stableford')) {
         const cost = s.fee || 0;
         buyin += cost;
         breakdown.push({ name: stablefordArray.length > 1 ? `Stableford ${idx + 1}` : 'Stableford', amount: cost });
@@ -602,11 +603,11 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   }, [autoPayoutPreviewApplied, canPreviewPayouts, isOwner, payoutsView]);
 
   useEffect(() => {
-    if (!autoPayoutTabOpened && (isEventCompleted || allScoresComplete) && subTab === 'games') {
+    if (!autoPayoutTabOpened && isEventCompleted && subTab === 'games') {
       setSubTab('payouts');
       setAutoPayoutTabOpened(true);
     }
-  }, [allScoresComplete, autoPayoutTabOpened, isEventCompleted, subTab]);
+  }, [autoPayoutTabOpened, isEventCompleted, subTab]);
 
   const myWinningsBreakdown = useMemo(() => {
     if (!myGolferId) return [] as { name: string; amount: number }[];
@@ -663,23 +664,18 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   ]);
 
   const allPlayerBalances = useMemo(() => {
-    const eventGolferIds = (event.golfers || [])
-      .map((g: any) => g.profileId || g.customName || g.displayName)
-      .filter((id: any) => !!id) as string[];
-
-    const isParticipant = (cfg: any, golferId: string) => {
-      const participantIds = Array.isArray(cfg?.participantGolferIds) && cfg.participantGolferIds.length > 0
-        ? cfg.participantGolferIds
-        : eventGolferIds;
-      return participantIds.includes(golferId);
-    };
+    const isParticipant = (cfg: any, golferId: string, game: 'nassau' | 'skins' | 'stableford') =>
+      getParticipantsForConfig(event, cfg, game, {
+        restrictToGroup: game === 'nassau',
+        assignedTeamsOnly: game === 'nassau' && Array.isArray(cfg?.teams) && cfg.teams.length >= 2,
+      }).includes(golferId);
 
     const getBuyinData = (golferId: string) => {
       let buyin = 0;
       const breakdown: { name: string; amount: number }[] = [];
 
       event.games.nassau.forEach((n: any, idx: number) => {
-        if (!isParticipant(n, golferId)) return;
+        if (!isParticipant(n, golferId, 'nassau')) return;
         const fees = n.fees ?? { out: n.fee, in: n.fee, total: n.fee };
         const cost = (fees.out || 0) + (fees.in || 0) + (fees.total || 0);
         buyin += cost;
@@ -687,14 +683,14 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
       });
 
       skinsArray.forEach((s: any, idx: number) => {
-        if (!isParticipant(s, golferId)) return;
+        if (!isParticipant(s, golferId, 'skins')) return;
         const cost = s.fee || 0;
         buyin += cost;
         breakdown.push({ name: skinsArray.length > 1 ? `Skins ${idx + 1}` : 'Skins', amount: cost });
       });
 
       stablefordArray.forEach((s: any, idx: number) => {
-        if (!isParticipant(s, golferId)) return;
+        if (!isParticipant(s, golferId, 'stableford')) return;
         const cost = s.fee || 0;
         buyin += cost;
         breakdown.push({ name: stablefordArray.length > 1 ? `Stableford ${idx + 1}` : 'Stableford', amount: cost });
@@ -970,7 +966,10 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
       {(!nassauStandings || nassauStandings.length === 0) && event.games.nassau.map((n: any) => {
         const fees = n.fees ?? { out: n.fee, in: n.fee, total: n.fee };
         const hasTeams = (n.teams || []).filter((t: any) => t.golferIds?.length > 0).length >= 2;
-        const nassauPot = allGolfers.length * ((fees.out || 0) + (fees.in || 0) + (fees.total || 0));
+        const nassauPot = getParticipantsForConfig(event, n, 'nassau', {
+          restrictToGroup: true,
+          assignedTeamsOnly: hasTeams,
+        }).length * ((fees.out || 0) + (fees.in || 0) + (fees.total || 0));
         return (
           <div
             key={n.id}
@@ -1144,7 +1143,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
 
       {/* ========== SKINS PREVIEW CARDS (pre-start / no standings yet) ========== */}
       {(!skinsStandings || skinsStandings.length === 0) && skinsArray.map((s: any) => {
-        const skinsPot = allGolfers.length * (s.fee || 0);
+        const skinsPot = getParticipantsForConfig(event, s, 'skins').length * (s.fee || 0);
         return (
           <div
             key={s.id}
@@ -1566,7 +1565,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
 
               {/* Skins Games */}
               {skinsArray.map((s: any, i: number) => {
-                const skinsPot = allGolfers.length * (s.fee || 0);
+                const skinsPot = getParticipantsForConfig(event, s, 'skins').length * (s.fee || 0);
                 return (
                   <div
                     key={s.id}

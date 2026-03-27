@@ -1,12 +1,13 @@
 import { Event, SkinsConfig } from '../state/store';
 import { netScore } from './handicap';
+import { getParticipantsForConfig } from './participants';
 
 export interface SkinsHoleResult {
   hole: number;
-  winners: string[]; // golferIds
+  winners: string[];
   carryIntoNext: boolean;
-  potValue: number; // pot value for this hole (won or carried)
-  winningScore: number | null; // gross or net score that won
+  potValue: number;
+  winningScore: number | null;
 }
 
 export interface SkinsSummary {
@@ -19,76 +20,66 @@ export interface SkinsSummary {
 }
 
 export function computeSkins(event: Event, config: SkinsConfig, profiles: any[]): SkinsSummary | null {
-  const prefFor = (gid: string): 'all' | 'nassau' | 'skins' | 'none' => {
-    const eg = event.golfers.find((g: any) => (g.profileId || g.customName || g.displayName) === gid);
-    return (eg?.gamePreference as any) || 'all';
-  };
-  const eligible = (gid: string) => {
-    const pref = prefFor(gid);
-    return pref === 'all' || pref === 'skins';
-  };
-
-  // Use all eligible golfers — participantGolferIds is a creation-time snapshot
-  // and becomes stale when new players join the event after game setup.
-  const players = event.golfers
-    .map((g: any) => g.profileId || g.customName || g.displayName)
-    .filter((id: any): id is string => id !== undefined && id !== null && id !== '')
-    .filter(eligible);
+  const players = getParticipantsForConfig(event, config, 'skins');
   if (players.length < 2) return null;
+
   const totalPot = players.length * config.fee;
   const winningsByGolfer: Record<string, number> = {};
   const winningHolesByGolfer: Record<string, number[]> = {};
-  players.forEach(p => { winningsByGolfer[p] = 0; winningHolesByGolfer[p] = []; });
+  players.forEach((playerId) => {
+    winningsByGolfer[playerId] = 0;
+    winningHolesByGolfer[playerId] = [];
+  });
 
   const buildHoleScores = (hole: number) => {
     const holeScores: Record<string, number> = {};
-    players.forEach(pid => {
-      const sc = event.scorecards.find(s => s.golferId === pid);
-      const gross = sc?.scores.find(s => s.hole === hole)?.strokes ?? null;
-      const value = config.net ? netScore(event, pid, hole, gross, profiles) : gross;
-      holeScores[pid] = value == null ? Number.POSITIVE_INFINITY : value;
+
+    players.forEach((playerId) => {
+      const scorecard = event.scorecards.find((s) => s.golferId === playerId);
+      const gross = scorecard?.scores.find((s) => s.hole === hole)?.strokes ?? null;
+      const value = config.net ? netScore(event, playerId, hole, gross, profiles) : gross;
+      holeScores[playerId] = value == null ? Number.POSITIVE_INFINITY : value;
     });
+
     const values = Object.values(holeScores);
     const min = Math.min(...values);
     const winners = Object.entries(holeScores)
-      .filter(([, v]) => v === min && Number.isFinite(v))
-      .map(([pid]) => pid);
+      .filter(([, value]) => value === min && Number.isFinite(value))
+      .map(([playerId]) => playerId);
     const winningScore = Number.isFinite(min) ? min : null;
+
     return { winners, winningScore };
   };
 
-  // Carryover mode (optional): each hole is worth 1/18th of the pot; ties carry.
   if (config.carryovers) {
     const perHole = totalPot / 18;
     let carryPot = perHole;
     const holeResults: SkinsHoleResult[] = [];
 
-    for (let h = 1; h <= 18; h++) {
-      const { winners, winningScore } = buildHoleScores(h);
-
-      const isLastHole = h === 18;
+    for (let hole = 1; hole <= 18; hole++) {
+      const { winners, winningScore } = buildHoleScores(hole);
+      const isLastHole = hole === 18;
       const isWin = winners.length === 1;
 
       if (isWin) {
         const winner = winners[0];
         winningsByGolfer[winner] += carryPot;
-        winningHolesByGolfer[winner].push(h);
-        holeResults.push({ hole: h, winners: [winner], carryIntoNext: false, potValue: carryPot, winningScore });
+        winningHolesByGolfer[winner].push(hole);
+        holeResults.push({ hole, winners: [winner], carryIntoNext: false, potValue: carryPot, winningScore });
         carryPot = perHole;
         continue;
       }
 
-      // Tie (or no valid scores) => carry, unless we're on 18 in which case split.
       if (isLastHole) {
         const splitWinners = winners.length > 0 ? winners : players;
         const split = splitWinners.length > 0 ? carryPot / splitWinners.length : 0;
-        splitWinners.forEach(w => {
-          winningsByGolfer[w] += split;
-          winningHolesByGolfer[w].push(h);
+        splitWinners.forEach((winner) => {
+          winningsByGolfer[winner] += split;
+          winningHolesByGolfer[winner].push(hole);
         });
-        holeResults.push({ hole: h, winners: splitWinners, carryIntoNext: false, potValue: carryPot, winningScore });
+        holeResults.push({ hole, winners: splitWinners, carryIntoNext: false, potValue: carryPot, winningScore });
       } else {
-        holeResults.push({ hole: h, winners, carryIntoNext: true, potValue: carryPot, winningScore });
+        holeResults.push({ hole, winners, carryIntoNext: true, potValue: carryPot, winningScore });
         carryPot += perHole;
       }
     }
@@ -96,21 +87,37 @@ export function computeSkins(event: Event, config: SkinsConfig, profiles: any[])
     return { configId: config.id, feePerPlayer: config.fee, totalPot, holeResults, winningsByGolfer, winningHolesByGolfer };
   }
 
-  // First pass: collect unique winning holes only
-  interface TempHole { hole: number; winner: string; score: number; }
-  const temp: TempHole[] = [];
-  for (let h = 1; h <= 18; h++) {
-    const { winners, winningScore } = buildHoleScores(h);
+  interface TempHole {
+    hole: number;
+    winner: string;
+    score: number;
+  }
+
+  const winningHoles: TempHole[] = [];
+  for (let hole = 1; hole <= 18; hole++) {
+    const { winners, winningScore } = buildHoleScores(hole);
     if (winners.length === 1) {
-      temp.push({ hole: h, winner: winners[0], score: winningScore ?? Number.POSITIVE_INFINITY });
+      winningHoles.push({
+        hole,
+        winner: winners[0],
+        score: winningScore ?? Number.POSITIVE_INFINITY,
+      });
     }
   }
-  const skinCount = temp.length;
+
+  const skinCount = winningHoles.length;
   const perSkin = skinCount > 0 ? totalPot / skinCount : 0;
-  const holeResults: SkinsHoleResult[] = temp.map(t => {
-    winningsByGolfer[t.winner] += perSkin;
-    winningHolesByGolfer[t.winner].push(t.hole);
-    return { hole: t.hole, winners: [t.winner], carryIntoNext: false, potValue: perSkin, winningScore: t.score };
+  const holeResults: SkinsHoleResult[] = winningHoles.map((entry) => {
+    winningsByGolfer[entry.winner] += perSkin;
+    winningHolesByGolfer[entry.winner].push(entry.hole);
+    return {
+      hole: entry.hole,
+      winners: [entry.winner],
+      carryIntoNext: false,
+      potValue: perSkin,
+      winningScore: entry.score,
+    };
   });
+
   return { configId: config.id, feePerPlayer: config.fee, totalPot, holeResults, winningsByGolfer, winningHolesByGolfer };
 }

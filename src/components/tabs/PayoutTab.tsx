@@ -13,6 +13,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../../state/store';
 import { calculateEventPayouts } from '../../games/payouts';
+import { getParticipantsForConfig } from '../../games/participants';
 import { EventSettlement } from '../wallet';
 import { distributeHandicapStrokes, calculateCourseHandicap } from '../../utils/handicap';
 import { getTee } from '../../data/cloudCourses';
@@ -122,42 +123,25 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
       }
     });
     
-    // Nassau — use all eligible event golfers (not stale participantGolferIds)
     nassauArray.forEach((n: any) => {
-      const group = event.groups.find((gr: any) => gr.id === n.groupId);
-      if (!group) return;
-      let players = (group.golferIds || []).slice();
-      players = players.filter((gid: string) => {
-        const eg = event.golfers.find((g: any) => (g.profileId || g.customName || g.displayName) === gid);
-        const pref = (eg?.gamePreference as any) || 'all';
-        return pref === 'all' || pref === 'nassau';
+      const players = getParticipantsForConfig(event, n, 'nassau', {
+        restrictToGroup: true,
+        assignedTeamsOnly: Array.isArray(n?.teams) && n.teams.length >= 2,
       });
-      if (n.teams?.length >= 2) {
-        const assigned = new Set<string>();
-        (n.teams || []).forEach((t: any) => t.golferIds?.forEach((gid: string) => { if (players.includes(gid)) assigned.add(gid); }));
-        players = players.filter((p: string) => assigned.has(p));
-      }
       if (players.length < 2) return;
       const fees = n.fees ?? { out: n.fee, in: n.fee, total: n.fee };
       const perPlayer = (fees.out || 0) + (fees.in || 0) + (fees.total || 0);
       players.forEach((pid: string) => { buyins[pid] = (buyins[pid] || 0) + perPlayer; });
     });
     
-    // Skins — use all eligible event golfers
     skinsArray.forEach((sk: any) => {
-      const eligible = (gid: string) => {
-        const eg = event.golfers.find((g: any) => (g.profileId || g.customName || g.displayName) === gid);
-        const pref = (eg?.gamePreference as any) || 'all';
-        return pref === 'all' || pref === 'skins';
-      };
-      const participants = event.golfers.map((g: any) => g.profileId || g.customName || g.displayName).filter(Boolean).filter(eligible);
+      const participants = getParticipantsForConfig(event, sk, 'skins');
       participants.forEach((gid: string) => { buyins[gid] = (buyins[gid] || 0) + sk.fee; });
     });
     
-    // Stableford buy-in (pot-based like skins) — use all event golfers
     const stablefordArr = Array.isArray(event.games.stableford) ? event.games.stableford : [];
     stablefordArr.forEach((s: any) => {
-      const participants = event.golfers.map((g: any) => g.profileId || g.customName || g.displayName).filter(Boolean);
+      const participants = getParticipantsForConfig(event, s, 'stableford');
       participants.forEach((gid: string) => { buyins[gid] = (buyins[gid] || 0) + s.fee; });
     });
 

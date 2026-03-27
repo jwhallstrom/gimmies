@@ -5,6 +5,7 @@
 
 import { nanoid } from 'nanoid/non-secure';
 import { calculateEventPayouts } from '../../games/payouts';
+import { getParticipantsForConfig } from '../../games/participants';
 import { saveSettlementsToCloud, updateSettlementStatus } from '../../utils/walletSync';
 import type { 
   Settlement, 
@@ -213,10 +214,6 @@ export const createWalletSlice = (
     // Create transactions for each participant
     const transactions: WalletTransaction[] = [];
 
-    const allGolferIds: string[] = event.golfers
-      .map(g => g.profileId || g.customName)
-      .filter((id): id is string => !!id);
-
     event.golfers.forEach(golfer => {
       const golferId = golfer.profileId || golfer.customName || '';
       const netAmount = payouts.totalByGolfer[golferId] || 0;
@@ -224,33 +221,22 @@ export const createWalletSlice = (
       // Calculate total entry for this golfer
       let totalEntry = 0;
 
-      // Nassau: per-user buy-in — use all event golfers (not stale participantGolferIds)
       (event.games.nassau || []).forEach((n: any) => {
-        const group = event.groups.find((gr: any) => gr.id === n.groupId);
-        if (!group) return;
-
-        let players: string[] = (group.golferIds || []).slice();
-
-        const isTeam = n.teams && n.teams.length >= 2;
-        if (isTeam) {
-          const assigned = new Set<string>();
-          (n.teams || []).forEach((t: any) => {
-            (t.golferIds || []).forEach((gid: string) => {
-              if (players.includes(gid)) assigned.add(gid);
-            });
-          });
-          players = players.filter((id: string) => assigned.has(id));
+        const players = getParticipantsForConfig(event, n, 'nassau', {
+          restrictToGroup: true,
+          assignedTeamsOnly: Array.isArray(n?.teams) && n.teams.length >= 2,
+        });
+        if (players.includes(golferId)) {
+          const fees = n.fees ?? { out: n.fee, in: n.fee, total: n.fee };
+          totalEntry += (Number(fees.out) || 0) + (Number(fees.in) || 0) + (Number(fees.total) || 0);
         }
-
-        if (players.includes(golferId)) totalEntry += Number(n.fee) || 0;
       });
 
-      // Skins: per-user buy-in — all event golfers participate
       const skinsConfigs: any[] = Array.isArray(event.games.skins)
         ? event.games.skins
         : (event.games.skins ? [event.games.skins] : []);
       skinsConfigs.forEach((s: any) => {
-        if (allGolferIds.includes(golferId)) totalEntry += Number(s.fee) || 0;
+        if (getParticipantsForConfig(event, s, 'skins').includes(golferId)) totalEntry += Number(s.fee) || 0;
       });
 
       // Pinky/Greenie are performance/penalty games in this app; no buy-in.
