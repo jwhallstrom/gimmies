@@ -195,20 +195,28 @@ const GroupInfoPanel: React.FC<GroupInfoPanelProps> = ({ event, onClose, onCreat
     }
   };
 
-  const handleRemoveMember = (memberId: string, name: string) => {
+  const handleRemoveMember = async (memberId: string, name: string) => {
     if (window.confirm(`Remove ${name} from this group?`)) {
-      removeGolferFromEvent(event.id, memberId);
-      addToast(`${name} removed`, 'success');
+      const result = await removeGolferFromEvent(event.id, memberId);
+      if (result.success) {
+        addToast(`${name} removed`, 'success');
+      } else {
+        addToast(result.error || `Could not remove ${name}. Try again.`, 'error');
+      }
     }
   };
 
-  const handleLeave = () => {
+  const handleLeave = async () => {
     if (!currentProfile) return;
     if (window.confirm(`Leave "${event.name}"? You can rejoin later if the group is open.`)) {
-      onClose();
-      navigate('/', { replace: true });
-      removeGolferFromEvent(event.id, currentProfile.id);
-      addToast('You left the group', 'success');
+      const result = await removeGolferFromEvent(event.id, currentProfile.id);
+      if (result.success) {
+        addToast('You left the group', 'success');
+        onClose();
+        navigate('/', { replace: true });
+      } else {
+        addToast(result.error || 'Could not leave group. Try again.', 'error');
+      }
     }
   };
 

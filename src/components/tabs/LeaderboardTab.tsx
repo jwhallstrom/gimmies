@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import useStore from '../../state/store';
 import { useCourse } from '../../hooks/useCourse';
@@ -27,7 +27,6 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
     bestCount: number;
     isNet: boolean;
   }>(null);
-  const [teamModalView, setTeamModalView] = useState<'roster' | 'scorecard'>('roster');
   
   if (!event) return null;
 
@@ -425,10 +424,9 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
                                 e.preventDefault();
                                 e.stopPropagation();
                                 setTeamModal(team);
-                                setTeamModalView('roster');
                               }}
                               className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-primary-50 text-primary-700 border border-primary-200 hover:bg-primary-100"
-                              title="View team roster"
+                              title="View team scorecard"
                             >
                               <span className="w-2 h-2 rounded-full bg-primary-500" aria-hidden="true" />
                               <span className="truncate max-w-[100px]">{team.name || 'Team'}</span>
@@ -694,7 +692,7 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
       {/* Team modal */}
       {teamModal && createPortal(
         <div className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4" onClick={() => setTeamModal(null)}>
-          <div className={`w-full bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden max-h-[calc(100dvh-2rem)] ${teamModalView === 'scorecard' ? 'max-w-2xl' : 'max-w-md'}`} onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden max-h-[calc(100dvh-2rem)]" onClick={(e) => e.stopPropagation()}>
             <div className="px-4 py-3 border-b border-slate-200 bg-slate-50">
               <div className="flex items-center justify-between gap-2">
                 <div>
@@ -713,55 +711,9 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
                   x
                 </button>
               </div>
-              <div className="flex gap-1 mt-3 p-1 bg-slate-100 rounded-lg">
-                <button
-                  onClick={() => setTeamModalView('roster')}
-                  className={`flex-1 py-2 rounded-md text-xs font-bold transition-all ${
-                    teamModalView === 'roster' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  Roster
-                </button>
-                <button
-                  onClick={() => setTeamModalView('scorecard')}
-                  className={`flex-1 py-2 rounded-md text-xs font-bold transition-all ${
-                    teamModalView === 'scorecard' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-700'
-                  }`}
-                >
-                  Scorecard
-                </button>
-              </div>
             </div>
 
-            {teamModalView === 'roster' && (
-              <div className="p-4 space-y-2 overflow-y-auto max-h-[calc(100dvh-8rem)]">
-                {(teamModal.golferIds || []).map((gid) => {
-                  const name = resolveGolferName(gid);
-                  const canEnter = typeof onEnterScores === 'function' && !event.isCompleted && canEditScore?.(eventId, gid);
-                  return (
-                    <button
-                      key={gid}
-                      type="button"
-                      onClick={() => {
-                        if (canEnter && onEnterScores) onEnterScores(gid);
-                      }}
-                      disabled={!canEnter}
-                      className="w-full flex items-center justify-between gap-2 px-3 py-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                      title={event.isCompleted ? 'Read-only' : (canEnter ? 'Enter scores' : 'You cannot edit this golfer')}
-                    >
-                      <div className="min-w-0">
-                        <div className="font-extrabold text-slate-900 truncate">{name}</div>
-                        {!canEnter && <div className="text-[10px] text-slate-500">Read-only</div>}
-                      </div>
-                      <div className="text-xs font-extrabold text-primary-700">Enter {'->'}</div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {teamModalView === 'scorecard' && (
-              <div className="p-4 overflow-x-auto max-h-[calc(100dvh-8rem)] overflow-y-auto">
+            <div className="p-4 overflow-x-auto max-h-[calc(100dvh-8rem)] overflow-y-auto">
                 {(() => {
                   const holeNumbers = holes.map((h: any) => h.number).sort((a: number, b: number) => a - b);
                   const front9 = holeNumbers.filter((h: number) => h <= 9);
@@ -933,8 +885,7 @@ const LeaderboardTab: React.FC<Props> = ({ eventId, onEnterScores }) => {
                     </>
                   );
                 })()}
-              </div>
-            )}
+            </div>
           </div>
         </div>,
         document.body

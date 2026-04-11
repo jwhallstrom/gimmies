@@ -161,7 +161,7 @@ const GolfersTab: React.FC<Props> = ({ eventId, isTabActive = true }) => {
     return { allowed: true, reason: '' };
   };
 
-  const handleRemoveGolfer = (golferId: string, name: string) => {
+  const handleRemoveGolfer = async (golferId: string, name: string) => {
     const check = canAdminRemove(golferId);
     if (!check.allowed) {
       addToast(check.reason, 'error');
@@ -177,19 +177,27 @@ const GolfersTab: React.FC<Props> = ({ eventId, isTabActive = true }) => {
     }
 
     if (window.confirm(confirmMsg)) {
-      removeGolferFromEvent(eventId, golferId);
-      addToast(`${name} removed`, 'success');
+      const result = await removeGolferFromEvent(eventId, golferId);
+      if (result.success) {
+        addToast(`${name} removed`, 'success');
+      } else {
+        addToast(result.error || `Could not remove ${name}. Try again.`, 'error');
+      }
     }
   };
 
-  const handleLeave = () => {
+  const handleLeave = async () => {
     if (!currentProfile) return;
 
     if (isGroupHub) {
       if (window.confirm(`Leave "${event.name || 'this group'}"? You can rejoin later if the group is open.`)) {
-        navigate('/', { replace: true });
-        removeGolferFromEvent(eventId, currentProfile.id);
-        addToast('You left the group', 'success');
+        const result = await removeGolferFromEvent(eventId, currentProfile.id);
+        if (result.success) {
+          addToast('You left the group', 'success');
+          navigate('/', { replace: true });
+        } else {
+          addToast(result.error || 'Could not leave group. Try again.', 'error');
+        }
       }
       return;
     }
@@ -206,9 +214,13 @@ const GolfersTab: React.FC<Props> = ({ eventId, isTabActive = true }) => {
     }
 
     if (window.confirm(msg)) {
-      navigate('/', { replace: true });
-      removeGolferFromEvent(eventId, currentProfile.id);
-      addToast('You left the event', 'success');
+      const result = await removeGolferFromEvent(eventId, currentProfile.id);
+      if (result.success) {
+        addToast('You left the event', 'success');
+        navigate('/', { replace: true });
+      } else {
+        addToast(result.error || 'Could not leave event. Try again.', 'error');
+      }
     }
   };
 

@@ -99,7 +99,7 @@ export interface EventSliceActions {
   // Golfer management
   addGolferToEvent: (eventId: string, golferId: string, teeName?: string, handicapOverride?: number | null) => Promise<void>;
   updateEventGolfer: (eventId: string, golferId: string, patch: Partial<EventGolfer>) => Promise<void>;
-  removeGolferFromEvent: (eventId: string, golferId: string) => Promise<void>;
+  removeGolferFromEvent: (eventId: string, golferId: string) => Promise<{ success: boolean; error?: string }>;
   
   // Groups
   addGroup: (eventId: string) => void;
@@ -391,7 +391,7 @@ export const createEventSlice = (
     await syncEventToCloud(eventId, get);
   },
   
-  removeGolferFromEvent: async (eventId: string, golferId: string) => {
+  removeGolferFromEvent: async (eventId: string, golferId: string): Promise<{ success: boolean; error?: string }> => {
     const currentProfile = get().currentProfile;
     const event = get().events.find((candidate: Event) => candidate.id === eventId);
     const isSelfLeave = !!currentProfile && golferId === currentProfile.id && event?.ownerProfileId !== currentProfile.id;
@@ -410,11 +410,11 @@ export const createEventSlice = (
           const result = await leaveHubInCloud(eventId, golferId);
           if (!result.success) {
             console.error('Failed to leave hub in cloud:', result.error);
-            return;
+            return { success: false, error: result.error || 'Could not leave. Try again.' };
           }
         } catch (error) {
           console.error('Failed to leave hub in cloud:', error);
-          return;
+          return { success: false, error: 'Network error. Try again.' };
         }
       }
 
@@ -422,7 +422,7 @@ export const createEventSlice = (
         events: state.events.filter((e: Event) => e.id !== eventId),
         completedEvents: state.completedEvents.filter((e: Event) => e.id !== eventId),
       }));
-      return;
+      return { success: true };
     }
 
     if (isOwnerRemovingProfileMember) {
@@ -432,11 +432,11 @@ export const createEventSlice = (
           const result = await removeHubMemberInCloud(eventId, currentProfile.id, targetGolfer!.profileId!);
           if (!result.success) {
             console.error('Failed to remove hub member in cloud:', result.error);
-            return;
+            return { success: false, error: result.error || 'Could not remove member. Try again.' };
           }
         } catch (error) {
           console.error('Failed to remove hub member in cloud:', error);
-          return;
+          return { success: false, error: 'Network error. Try again.' };
         }
       }
 
@@ -452,7 +452,7 @@ export const createEventSlice = (
           };
         })
       }));
-      return;
+      return { success: true };
     }
 
     set((state: any) => ({
@@ -468,6 +468,7 @@ export const createEventSlice = (
       })
     }));
     await syncEventToCloud(eventId, get, undefined, { preserveExistingMembers: false });
+    return { success: true };
   },
   
   // Groups

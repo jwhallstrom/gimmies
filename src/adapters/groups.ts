@@ -12,7 +12,7 @@ export function useEventGroupsAdapter(eventId: string) {
   const currentProfile = useStore((s) => s.currentProfile) as GolferProfile | null;
   const setGroupTeeTime = useStore((s) => s.setGroupTeeTime) as (eventId: string, groupId: string, teeTime: string) => void;
   const assignGolferToGroup = useStore((s) => s.assignGolferToGroup) as (eventId: string, groupId: string, golferId: string) => void;
-  const removeGolferFromEvent = useStore((s) => s.removeGolferFromEvent) as (eventId: string, golferId: string) => Promise<void>;
+  const removeGolferFromEvent = useStore((s) => s.removeGolferFromEvent) as (eventId: string, golferId: string) => Promise<{ success: boolean; error?: string }>;
   const addGroup = useStore((s) => s.addGroup) as (eventId: string) => void;
   const removeGroup = useStore((s) => s.removeGroup) as (eventId: string, groupId: string) => void;
 

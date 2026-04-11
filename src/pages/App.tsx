@@ -446,6 +446,7 @@ const App: React.FC = () => {
               }
               navigate('/', { replace: true });
             }}
+            onSuccess={handleLoginSuccess}
           />
         </Suspense>
       );
@@ -465,13 +466,20 @@ const App: React.FC = () => {
   // If we have a user but no profile, show profile completion
   if (currentUser && !currentProfile) {
     console.log('App: User exists but no profile, showing profile completion');
+
+    // If the user came through the invite flow, their name is stashed
+    let pendingName: string | undefined;
+    try { pendingName = sessionStorage.getItem('gimmies.pendingProfileName.v1') || undefined; } catch {}
+
     return (
       <ProfileCompletion
-        userId={amplifyUser?.userId || currentUser.id} // Use Amplify userId, not local ID
+        userId={amplifyUser?.userId || currentUser.id}
         email={amplifyUser?.signInDetails?.loginId || currentUser.username}
+        suggestedName={pendingName}
+        autoSubmit={!!pendingName}
         onComplete={() => {
+          try { sessionStorage.removeItem('gimmies.pendingProfileName.v1'); } catch {}
           console.log('Profile completion finished');
-          // Force a re-render to show the dashboard
           setIsCheckingAuth(true);
           setTimeout(() => setIsCheckingAuth(false), 100);
         }}

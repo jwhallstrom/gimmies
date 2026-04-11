@@ -106,10 +106,22 @@ export function LoginPage({ onSuccess, onGuestMode }: LoginPageProps) {
         },
       });
 
-      setMessage('✅ Account created! Check your email for verification code.');
-      setMode('confirm');
+      // Pre-sign-up Lambda auto-confirms — sign in immediately, no verification step
+      setMessage('✅ Account created! Signing you in...');
+      try { await signOut(); } catch {}
+      const result = await signIn({ username: email, password });
+      if (result.isSignedIn) {
+        setTimeout(() => onSuccess?.(), 500);
+      } else {
+        setMessage('Account created. Please sign in.');
+        setMode('login');
+      }
     } catch (err: any) {
-      setError(err.message || 'Failed to sign up. Try Guest Mode if cloud auth is not set up.');
+      if (err?.name === 'UserAlreadyAuthenticatedException' || err?.message?.includes('already a signed in user')) {
+        setTimeout(() => onSuccess?.(), 500);
+      } else {
+        setError(err.message || 'Failed to sign up. Try Guest Mode if cloud auth is not set up.');
+      }
     } finally {
       setLoading(false);
     }

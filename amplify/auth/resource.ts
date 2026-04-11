@@ -1,8 +1,12 @@
 import { defineAuth, secret } from '@aws-amplify/backend';
+import { preSignUp } from './pre-sign-up/resource';
 
 /**
  * Multi-provider authentication configuration for Gimmies Golf
  * Supports: Email/Password, Google OAuth (when configured)
+ *
+ * Pre-sign-up trigger auto-confirms users so they never need to
+ * leave the app to verify via email. Faster onboarding, zero friction.
  */
 export const auth = defineAuth({
   loginWith: {
@@ -25,6 +29,10 @@ export const auth = defineAuth({
     //     'https://gimmies-golf.s3-website-us-east-1.amazonaws.com/',
     //   ],
     // },
+  },
+
+  triggers: {
+    preSignUp,
   },
   
   // User attributes stored in Cognito
