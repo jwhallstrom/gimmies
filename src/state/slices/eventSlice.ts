@@ -7,6 +7,7 @@ import { nanoid } from 'nanoid/non-secure';
 import { getCourseById, getTee, getHole } from '../../data/cloudCourses';
 import { calculateEventPayouts } from '../../games/payouts';
 import { distributeHandicapStrokes, applyESCAdjustment, calculateScoreDifferential } from '../../utils/handicap';
+import { getEventSyncGuard } from '../../utils/eventSyncGuard';
 import type { 
   Event, EventGolfer, PlayerScorecard, ChatMessage, 
   CompletedRound, GolferProfile, IndividualRound 
@@ -32,18 +33,38 @@ const syncEventToCloud = async (
   if (import.meta.env.VITE_ENABLE_CLOUD_SYNC !== 'true') return;
   const event = get().events.find((e: Event) => e.id === eventId);
   const profile = get().currentProfile;
-  if (event && profile) {
-    try {
-      const { saveEventToCloud, saveEventPatchToCloud } = await import('../../utils/eventSync');
-      if (patch && Object.keys(patch).length > 0) {
-        await saveEventPatchToCloud(event, patch, profile.id);
-      } else {
-        await saveEventToCloud(event, profile.id, options);
-      }
-    } catch (error) {
-      console.error('Failed to sync event to cloud:', error);
+  if (!event || !profile) return;
+
+  const guard = getEventSyncGuard(eventId);
+  guard.markSaving();
+  try {
+    const { saveEventToCloud, saveEventPatchToCloud } = await import('../../utils/eventSync');
+    if (patch && Object.keys(patch).length > 0) {
+      await saveEventPatchToCloud(event, patch, profile.id);
+    } else {
+      await saveEventToCloud(event, profile.id, options);
     }
+    guard.markSaved();
+  } catch (error) {
+    console.error('Failed to sync event to cloud:', error);
+    guard.markFailed();
   }
+};
+
+// Debounced scorecard sync — coalesces rapid-fire hole saves into one request
+const scorecardSaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const SCORECARD_DEBOUNCE_MS = 1200;
+
+const debouncedSyncScorecards = (eventId: string, get: () => any) => {
+  const existing = scorecardSaveTimers.get(eventId);
+  if (existing) clearTimeout(existing);
+  scorecardSaveTimers.set(
+    eventId,
+    setTimeout(() => {
+      scorecardSaveTimers.delete(eventId);
+      void syncEventToCloud(eventId, get, { scorecards: [] } as Partial<Event>);
+    }, SCORECARD_DEBOUNCE_MS)
+  );
 };
 
 // ============================================================================
@@ -295,9 +316,16 @@ export const createEventSlice = (
       const { loadEventById } = await import('../../utils/eventSync');
       const updatedEvent = await loadEventById(eventId);
       if (updatedEvent) {
-        set((state: any) => ({
-          events: state.events.map((e: Event) => e.id === eventId ? updatedEvent : e)
-        }));
+        set((state: any) => {
+          const existing = state.events.find((e: Event) => e.id === eventId);
+          const merged = {
+            ...updatedEvent,
+            chat: updatedEvent.chat?.length ? updatedEvent.chat : (existing?.chat || []),
+          };
+          return {
+            events: state.events.map((e: Event) => e.id === eventId ? merged : e),
+          };
+        });
         return true;
       }
       return false;
@@ -539,7 +567,7 @@ export const createEventSlice = (
       }
     }
     
-    await syncEventToCloud(eventId, get, { scorecards: [] } as Partial<Event>);
+    debouncedSyncScorecards(eventId, get);
   },
   
   canEditScore: (eventId: string, golferId: string) => {

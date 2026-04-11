@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import useStore from '../state/store';
 import { useAuthMode } from '../hooks/useAuthMode';
-import { buildJoinInviteUrl } from '../utils/inviteLinks';
+import { buildJoinInviteUrl, buildDirectEventUrl } from '../utils/inviteLinks';
 
 type Props = { eventId: string };
 
@@ -67,7 +67,10 @@ const EventSharing: React.FC<Props> = ({ eventId }) => {
     }
   };
 
-  const shareUrl = buildJoinInviteUrl(event.shareCode);
+  const isPublic = !!event.isPublic;
+  const shareUrl = isPublic && event.id
+    ? buildDirectEventUrl(event.id)
+    : buildJoinInviteUrl(event.shareCode);
 
   return (
     <div className="space-y-6">

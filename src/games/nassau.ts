@@ -111,8 +111,8 @@ export function computeNassauForConfig(event: Event, config: NassauConfig, profi
 
       scores[team1.id] = allComplete ? -team1Wins : Number.POSITIVE_INFINITY;
       scores[team2.id] = allComplete ? -team2Wins : Number.POSITIVE_INFINITY;
-      toPar[team1.id] = team1Wins;
-      toPar[team2.id] = team2Wins;
+      toPar[team1.id] = team1Wins - team2Wins;
+      toPar[team2.id] = team2Wins - team1Wins;
     } else {
       const bestCount = config.teamBestCount && config.teamBestCount > 0 ? config.teamBestCount : 1;
 

@@ -51,7 +51,6 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
     bestCount: number;
     isNet: boolean;
   } | null>(null);
-  const [teamModalView, setTeamModalView] = useState<'roster' | 'scorecard'>('roster');
 
   if (!event) return null;
 
@@ -555,7 +554,6 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
                                         bestCount: bestCount,
                                         isNet: isNetGame
                                       });
-                                      setTeamModalView('roster');
                                     }}
                                     className="underline underline-offset-2 decoration-dotted hover:text-primary-600"
                                   >
@@ -568,7 +566,9 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
                             )}
                             {winnerToPar != null && (
                               <span className="ml-1">
-                                ({formatToPar(winnerToPar)})
+                                ({scoringType === 'match'
+                                  ? (winnerToPar === 0 ? 'AS' : `${Math.abs(winnerToPar)} UP`)
+                                  : formatToPar(winnerToPar)})
                               </span>
                             )}
                           </div>
@@ -614,7 +614,7 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
         const isNetGame = config?.net === true;
         const hasCarryovers = config?.carryovers === true;
         
-        const skinsWon = skinsResult.holeResults.filter(h => h.winners.length === 1 && !h.carryIntoNext);
+        const skinsWon = skinsResult.holeResults.filter(h => h.winners.length === 1 && !h.carryIntoNext).sort((a, b) => a.hole - b.hole);
         const carryovers = skinsResult.holeResults.filter(h => h.carryIntoNext);
         const currentCarryPot = carryovers.length > 0 ? carryovers[carryovers.length - 1]?.potValue || 0 : 0;
         const mySkins = myGolferId ? skinsResult.winningHolesByGolfer[myGolferId] || [] : [];
@@ -950,16 +950,17 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
         </button>
       )}
 
-      {/* Team Members Modal */}
+      {/* Team Scorecard Modal */}
       {teamModal && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4" onClick={() => setTeamModal(null)}>
-          <div className={`w-full bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden ${teamModalView === 'scorecard' ? 'max-w-2xl' : 'max-w-sm'}`} onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
               <div className="flex items-center justify-between gap-2">
                 <div>
-                  <div className="text-[10px] font-bold tracking-[0.15em] text-gray-400 uppercase">{teamModal.name}</div>
-                  <div className="font-extrabold text-gray-900">
-                    {teamModal.isNet ? 'Net' : 'Gross'} • Best {teamModal.bestCount === 1 ? 'Ball' : teamModal.bestCount}
+                  <div className="text-[10px] font-bold tracking-[0.15em] text-gray-400 uppercase">TEAM</div>
+                  <div className="font-extrabold text-gray-900">{teamModal.name}</div>
+                  <div className="text-xs text-gray-500">
+                    {teamModal.isNet ? 'Net' : 'Gross'} · Best {teamModal.bestCount === 1 ? 'Ball' : teamModal.bestCount}
                   </div>
                 </div>
                 <button
@@ -971,50 +972,8 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
                   ✕
                 </button>
               </div>
-              {/* View Toggle */}
-              <div className="flex gap-1 mt-3 p-1 bg-gray-100 rounded-lg">
-                <button
-                  onClick={() => setTeamModalView('roster')}
-                  className={`flex-1 py-2 rounded-md text-xs font-bold transition-all ${
-                    teamModalView === 'roster' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  👥 Roster
-                </button>
-                <button
-                  onClick={() => setTeamModalView('scorecard')}
-                  className={`flex-1 py-2 rounded-md text-xs font-bold transition-all ${
-                    teamModalView === 'scorecard' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  📊 Scorecard
-                </button>
-              </div>
             </div>
-            
-            {/* Roster View */}
-            {teamModalView === 'roster' && (
-              <div className="p-4">
-                {teamModal.members.length > 0 ? (
-                  <div className="space-y-2">
-                    {teamModal.members.map((member, i) => (
-                      <div key={i} className="flex items-center gap-3 px-3 py-2 bg-gray-50 rounded-lg">
-                        <span className="w-8 h-8 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-sm font-bold">
-                          {member.charAt(0).toUpperCase()}
-                        </span>
-                        <span className="font-medium text-gray-900">{member}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center text-gray-500 py-4">No members assigned</div>
-                )}
-              </div>
-            )}
-            
-            {/* Scorecard View */}
-            {teamModalView === 'scorecard' && (
-              <div className="p-4 overflow-x-auto">
+            <div className="p-4 overflow-x-auto">
                 {(() => {
                   // Build scorecard data for this team
                   const holes = Array.from({ length: 18 }, (_, i) => i + 1);
@@ -1201,7 +1160,6 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
                   );
                 })()}
               </div>
-            )}
           </div>
         </div>
       )}

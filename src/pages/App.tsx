@@ -19,6 +19,7 @@ const RoundDetailPage = lazy(() => import('./RoundDetailPage'));
 const EventPage = lazy(() => import('./EventPage'));
 const GroupPage = lazy(() => import('./GroupPage'));
 const JoinEventPage = lazy(() => import('./JoinEventPage'));
+const GuestJoinPage = lazy(() => import('./GuestJoinPage'));
 const CourseIssueAdminPage = lazy(() => import('./CourseIssueAdminPage'));
 const WalletPage = lazy(() => import('./WalletPage'));
 const AuthDemoPage = lazy(() => import('./AuthDemoPage').then(m => ({ default: m.AuthDemoPage })));
@@ -415,13 +416,38 @@ const App: React.FC = () => {
   }
 
   if (!amplifyUser && !currentUser) {
-    console.log('App: No user (Amplify or local), showing login');
+    console.log('App: No user (Amplify or local), checking for guest-joinable route');
+
+    const eventMatch = location.pathname.match(/^\/event\/([^/]+)/);
+    const joinMatch = location.pathname.match(/^\/join\/([^/]+)/);
+
+    if (eventMatch || joinMatch) {
+      return (
+        <Suspense fallback={
+          <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-900 via-primary-800 to-primary-950">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white"></div>
+          </div>
+        }>
+          <GuestJoinPage
+            eventId={eventMatch?.[1]}
+            shareCode={joinMatch?.[1]}
+            onSignIn={() => {
+              if (joinMatch?.[1]) {
+                try { sessionStorage.setItem('gimmies.pendingJoinCode.v1', joinMatch[1]); } catch {}
+              }
+              navigate('/', { replace: true });
+            }}
+          />
+        </Suspense>
+      );
+    }
+
     return (
       <LoginPage 
         onSuccess={handleLoginSuccess}
         onGuestMode={() => {
           console.log('Guest mode selected, creating local-only user');
-          createUser('guest@local', 'Guest User', false); // Create local guest user
+          createUser('guest@local', 'Guest User', false);
         }}
       />
     );

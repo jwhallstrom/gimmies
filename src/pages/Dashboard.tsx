@@ -550,92 +550,83 @@ const Dashboard: React.FC = () => {
         </div>
       </header>
 
-      {/* Getting Started - Onboarding Modal */}
+      {/* Getting Started - Onboarding Modal (compact for small screens) */}
       {showOnboarding && createPortal(
         <div 
-          className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-3"
           onClick={() => dismissOnboarding(false)}
         >
           <div 
-            className="bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[85vh] overflow-y-auto animate-slide-up"
+            className="bg-white rounded-2xl shadow-2xl max-w-sm w-full max-h-[75vh] flex flex-col animate-slide-up"
             onClick={e => e.stopPropagation()}
           >
-            {/* Header */}
-            <div className="relative bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 px-6 pt-8 pb-6 rounded-t-3xl text-center">
+            {/* Header — compact */}
+            <div className="relative bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 px-4 pt-5 pb-4 rounded-t-2xl text-center flex-shrink-0">
               <button
                 onClick={() => dismissOnboarding(false)}
-                className="absolute top-4 right-4 p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                className="absolute top-2.5 right-2.5 p-1.5 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
                 aria-label="Close"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
-              <div className="text-5xl mb-3">⛳</div>
-              <h2 className="text-2xl font-bold text-white mb-1">Welcome to Gimmies!</h2>
-              <p className="text-primary-100 text-sm">Your golf crew's command center</p>
+              <div className="text-3xl mb-1">⛳</div>
+              <h2 className="text-lg font-bold text-white">Welcome to Gimmies!</h2>
+              <p className="text-primary-100 text-xs">Your golf crew's command center</p>
             </div>
             
-            {/* Feature highlights */}
-            <div className="px-5 py-5 space-y-3">
-              {/* Groups */}
+            {/* Feature highlights — scrollable */}
+            <div className="px-4 py-3 space-y-2 overflow-y-auto flex-1 min-h-0">
               <button 
-                className="w-full flex items-start gap-3 p-4 bg-purple-50 rounded-xl border border-purple-100 hover:bg-purple-100 transition-colors text-left"
+                className="w-full flex items-center gap-3 p-3 bg-purple-50 rounded-xl border border-purple-100 hover:bg-purple-100 transition-colors text-left"
                 onClick={() => { setShowGroups(true); dismissOnboarding(false); }}
               >
-                <div className="w-12 h-12 rounded-full bg-purple-200 flex items-center justify-center flex-shrink-0">
-                  <span className="text-2xl">👥</span>
+                <div className="w-9 h-9 rounded-full bg-purple-200 flex items-center justify-center flex-shrink-0">
+                  <span className="text-lg">👥</span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-gray-900">Create a Group</div>
-                  <p className="text-sm text-gray-600 mt-0.5">
-                    Your golf crew's home base. Chat, share photos, and schedule tee times together.
-                  </p>
+                  <div className="font-bold text-sm text-gray-900">Create a Group</div>
+                  <p className="text-xs text-gray-500">Chat, schedule tee times, manage your crew.</p>
                 </div>
-                <span className="text-purple-400 self-center text-lg">→</span>
+                <span className="text-purple-400 text-sm">→</span>
               </button>
 
-              {/* Events */}
               <button 
-                className="w-full flex items-start gap-3 p-4 bg-primary-50 rounded-xl border border-primary-100 hover:bg-primary-100 transition-colors text-left"
+                className="w-full flex items-center gap-3 p-3 bg-primary-50 rounded-xl border border-primary-100 hover:bg-primary-100 transition-colors text-left"
                 onClick={(e) => { e.stopPropagation(); openEventWizard(); dismissOnboarding(false); }}
               >
-                <div className="w-12 h-12 rounded-full bg-primary-200 flex items-center justify-center flex-shrink-0">
-                  <span className="text-2xl">⛳</span>
+                <div className="w-9 h-9 rounded-full bg-primary-200 flex items-center justify-center flex-shrink-0">
+                  <span className="text-lg">⛳</span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-gray-900">Create an Event</div>
-                  <p className="text-sm text-gray-600 mt-0.5">
-                    Score a round, run Nassau/skins, track bets, and see the live leaderboard.
-                  </p>
+                  <div className="font-bold text-sm text-gray-900">Create an Event</div>
+                  <p className="text-xs text-gray-500">Score rounds, run side games, live leaderboard.</p>
                 </div>
-                <span className="text-primary-400 self-center text-lg">→</span>
+                <span className="text-primary-400 text-sm">→</span>
               </button>
 
-              {/* Handicap */}
               <button 
-                className="w-full flex items-start gap-3 p-4 bg-amber-50 rounded-xl border border-amber-100 hover:bg-amber-100 transition-colors text-left"
+                className="w-full flex items-center gap-3 p-3 bg-amber-50 rounded-xl border border-amber-100 hover:bg-amber-100 transition-colors text-left"
                 onClick={() => { navigate('/handicap'); dismissOnboarding(false); }}
               >
-                <div className="w-12 h-12 rounded-full bg-amber-200 flex items-center justify-center flex-shrink-0">
-                  <span className="text-2xl">📊</span>
+                <div className="w-9 h-9 rounded-full bg-amber-200 flex items-center justify-center flex-shrink-0">
+                  <span className="text-lg">📊</span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-gray-900">Track Your Handicap</div>
-                  <p className="text-sm text-gray-600 mt-0.5">
-                    Add rounds manually or score through events. We calculate your index automatically.
-                  </p>
+                  <div className="font-bold text-sm text-gray-900">Track Your Handicap</div>
+                  <p className="text-xs text-gray-500">Add rounds, auto-calculated index.</p>
                 </div>
-                <span className="text-amber-500 self-center text-lg">→</span>
+                <span className="text-amber-500 text-sm">→</span>
               </button>
             </div>
 
-            {/* Quick start CTA */}
-            <div className="px-5 pb-6 pt-2 border-t border-gray-100">
-              <div className="flex gap-3">
+            {/* Footer — always visible (sticky) */}
+            <div className="px-4 pb-4 pt-2 border-t border-gray-100 flex-shrink-0">
+              <div className="flex gap-2">
                 <button
                   onClick={(e) => { e.stopPropagation(); openGroupWizard(); dismissOnboarding(false); }}
-                  className="flex-1 py-3.5 bg-purple-600 text-white rounded-xl font-bold text-sm hover:bg-purple-700 transition-colors flex items-center justify-center gap-2 shadow-md"
+                  className="flex-1 py-2.5 bg-purple-600 text-white rounded-xl font-bold text-sm hover:bg-purple-700 transition-colors flex items-center justify-center gap-1.5 shadow-md"
                 >
                   <span>👥</span> Start a Group
                 </button>
@@ -649,16 +640,15 @@ const Dashboard: React.FC = () => {
                     navigate('/join');
                     dismissOnboarding(false);
                   }}
-                  className="flex-1 py-3.5 bg-gray-100 text-gray-700 rounded-xl font-bold text-sm hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-bold text-sm hover:bg-gray-200 transition-colors flex items-center justify-center gap-1.5"
                 >
                   <span>🎫</span> Join with Code
                 </button>
               </div>
               
-              {/* Don't show again */}
               <button
                 onClick={() => dismissOnboarding(true)}
-                className="w-full mt-4 text-sm text-gray-400 hover:text-gray-600 transition-colors py-2"
+                className="w-full mt-2.5 text-xs text-gray-400 hover:text-gray-600 transition-colors py-1.5"
               >
                 Don't show this again
               </button>

@@ -615,24 +615,37 @@ export function subscribeToEventRealtime(
   const client = getClient();
   if (!client || !eventId) return () => {};
 
+  let isUnsubscribed = false;
+
   const eventSubscription = client.models.Event.observeQuery({
     filter: { id: { eq: eventId } },
   }).subscribe({
     next: (snapshot: any) => {
-      const normalized = normalizeCloudEventRecord(snapshot?.items?.[0]);
-      if (normalized) {
-        handlers.onEvent?.(normalized);
-        void loadChatMessagesFromCloud(eventId)
-          .then((messages) => handlers.onChat?.(messages))
-          .catch((error) => handlers.onError?.('chat', error));
+      if (isUnsubscribed) return;
+      try {
+        const normalized = normalizeCloudEventRecord(snapshot?.items?.[0]);
+        if (normalized) {
+          handlers.onEvent?.(normalized);
+          void loadChatMessagesFromCloud(eventId)
+            .then((messages) => {
+              if (!isUnsubscribed) handlers.onChat?.(messages);
+            })
+            .catch((error) => {
+              if (!isUnsubscribed) handlers.onError?.('chat', error);
+            });
+        }
+      } catch (err) {
+        console.error('[subscribeToEventRealtime] Error processing snapshot:', err);
+        if (!isUnsubscribed) handlers.onError?.('event', err);
       }
     },
     error: (error: unknown) => {
-      handlers.onError?.('event', error);
+      if (!isUnsubscribed) handlers.onError?.('event', error);
     },
   });
 
   return () => {
+    isUnsubscribed = true;
     eventSubscription.unsubscribe();
   };
 }

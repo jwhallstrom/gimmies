@@ -14,6 +14,7 @@ import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import useStore from '../state/store';
 import { useEventSync } from '../hooks/useEventSync';
+import { getGuestSession } from '../utils/guestSession';
 import SetupTab from '../components/tabs/SetupTab';
 import ScoreHubTab from '../components/tabs/ScoreHubTab';
 import GolfersTab from '../components/tabs/GolfersTab';
@@ -565,6 +566,23 @@ const EventPage: React.FC = () => {
           ))}
         </div>
       </div>
+
+      {/* Guest banner */}
+      {getGuestSession() && (
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-200 px-4 py-2 flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-amber-600 font-semibold">Playing as Guest</span>
+            <span className="text-amber-500/60">·</span>
+            <span className="text-amber-600/70 text-xs">Stats won't be saved</span>
+          </div>
+          <button
+            onClick={() => navigate('/')}
+            className="text-xs font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 px-3 py-1 rounded-full transition-colors"
+          >
+            Sign Up
+          </button>
+        </div>
+      )}
       
       {/* Events Dropdown Modal - Groups only */}
       {isGroupHub && showEventsDropdown && (
@@ -971,142 +989,126 @@ const EventPage: React.FC = () => {
         document.body
       )}
 
-      {/* ========== FIRST-TIME EVENT HELP MODAL ========== */}
+      {/* ========== FIRST-TIME EVENT HELP MODAL (compact) ========== */}
       {showEventHelp && !isGroupHub && createPortal(
         <div
-          className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-3"
           onClick={() => dismissEventHelp(false)}
         >
           <div
-            className="bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[85vh] overflow-y-auto animate-slide-up"
+            className="bg-white rounded-2xl shadow-2xl max-w-sm w-full max-h-[75vh] flex flex-col animate-slide-up"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
-            <div className="relative bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 px-6 pt-8 pb-6 rounded-t-3xl text-center">
+            {/* Header — compact */}
+            <div className="relative bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 px-4 pt-5 pb-4 rounded-t-2xl text-center flex-shrink-0">
               <button
                 onClick={() => dismissEventHelp(false)}
-                className="absolute top-4 right-4 p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                className="absolute top-2.5 right-2.5 p-1.5 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
                 aria-label="Close"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
-              <div className="text-5xl mb-3">⛳</div>
-              <h2 className="text-2xl font-bold text-white mb-1">
+              <div className="text-3xl mb-1">⛳</div>
+              <h2 className="text-lg font-bold text-white">
                 {isOwner ? 'You\'re the Admin!' : 'Welcome to the Event!'}
               </h2>
-              <p className="text-primary-100 text-sm">
+              <p className="text-primary-100 text-xs">
                 {isOwner ? 'Here\'s how to run your event' : 'Here\'s what you can do'}
               </p>
             </div>
 
-            {/* Content */}
-            <div className="px-5 py-4 space-y-3">
+            {/* Content — scrollable */}
+            <div className="px-4 py-3 space-y-2 overflow-y-auto flex-1 min-h-0">
               {isOwner ? (
                 <>
-                  {/* Admin flow */}
                   <button
                     onClick={() => { dismissEventHelp(false); setShowCommandCenter(true); }}
-                    className="w-full flex items-start gap-3 p-4 bg-orange-50 rounded-xl border border-orange-200 hover:bg-orange-100 transition-colors text-left"
+                    className="w-full flex items-center gap-3 p-3 bg-orange-50 rounded-xl border border-orange-200 hover:bg-orange-100 transition-colors text-left"
                   >
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-accent to-orange-600 flex items-center justify-center flex-shrink-0">
-                      <span className="text-2xl">🎛️</span>
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-accent to-orange-600 flex items-center justify-center flex-shrink-0">
+                      <span className="text-lg">🎛️</span>
                     </div>
-                    <div>
-                      <div className="font-bold text-gray-900">Game Control</div>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        Your one-stop cockpit. Pick games, assign teams, start the event, and complete it — all from here.
-                      </p>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-sm text-gray-900">Game Control</div>
+                      <p className="text-xs text-gray-500">Pick games, teams, start & complete — all here.</p>
                     </div>
                   </button>
 
-                  <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100 text-left">
-                    <div className="w-12 h-12 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
-                      <span className="text-2xl">💰</span>
+                  <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 text-left">
+                    <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
+                      <span className="text-lg">💰</span>
                     </div>
-                    <div>
-                      <div className="font-bold text-gray-900">Games Tab</div>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        View active games, standings, and payouts. Use the orange + button for quick access to add games.
-                      </p>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-sm text-gray-900">Games Tab</div>
+                      <p className="text-xs text-gray-500">Standings, payouts & the orange + to add games.</p>
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100 text-left">
-                    <div className="w-12 h-12 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
-                      <span className="text-2xl">📋</span>
+                  <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 text-left">
+                    <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
+                      <span className="text-lg">📋</span>
                     </div>
-                    <div>
-                      <div className="font-bold text-gray-900">The Flow</div>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        Pick Games → Pick Teams → Start Event → Play Round → Complete → Send Recap. Game Control walks you through each step.
-                      </p>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-sm text-gray-900">The Flow</div>
+                      <p className="text-xs text-gray-500">Games → Teams → Start → Play → Complete → Recap.</p>
                     </div>
                   </div>
                 </>
               ) : (
                 <>
-                  {/* Player flow */}
-                  <div className="flex items-start gap-3 p-4 bg-green-50 rounded-xl border border-green-100 text-left">
-                    <div className="w-12 h-12 rounded-full bg-green-200 flex items-center justify-center flex-shrink-0">
-                      <span className="text-2xl">🏌️</span>
+                  <div className="flex items-center gap-3 p-3 bg-green-50 rounded-xl border border-green-100 text-left">
+                    <div className="w-9 h-9 rounded-full bg-green-200 flex items-center justify-center flex-shrink-0">
+                      <span className="text-lg">🏌️</span>
                     </div>
-                    <div>
-                      <div className="font-bold text-gray-900">Enter Scores</div>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        Swipe to the Leaderboard tab and tap the orange + button to enter your scores hole-by-hole or all at once.
-                      </p>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-sm text-gray-900">Enter Scores</div>
+                      <p className="text-xs text-gray-500">Tap the orange + on the Leaderboard tab.</p>
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100 text-left">
-                    <div className="w-12 h-12 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
-                      <span className="text-2xl">📊</span>
+                  <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 text-left">
+                    <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
+                      <span className="text-lg">📊</span>
                     </div>
-                    <div>
-                      <div className="font-bold text-gray-900">Leaderboard</div>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        See live standings, how you stack up, and track your position throughout the round.
-                      </p>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-sm text-gray-900">Leaderboard</div>
+                      <p className="text-xs text-gray-500">Live standings updated as scores come in.</p>
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100 text-left">
-                    <div className="w-12 h-12 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
-                      <span className="text-2xl">💰</span>
+                  <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 text-left">
+                    <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
+                      <span className="text-lg">💰</span>
                     </div>
-                    <div>
-                      <div className="font-bold text-gray-900">Games & Payouts</div>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        Check your side game matchups, standings, and what you owe or are owed. Updates live as scores come in.
-                      </p>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-sm text-gray-900">Games & Payouts</div>
+                      <p className="text-xs text-gray-500">Side games, matchups & who owes what.</p>
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100 text-left">
-                    <div className="w-12 h-12 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
-                      <span className="text-2xl">💬</span>
+                  <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 text-left">
+                    <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
+                      <span className="text-lg">💬</span>
                     </div>
-                    <div>
-                      <div className="font-bold text-gray-900">Chat</div>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        Talk trash, share photos, and coordinate with your group — all in one place.
-                      </p>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-sm text-gray-900">Chat</div>
+                      <p className="text-xs text-gray-500">Trash talk, photos & coordination.</p>
                     </div>
                   </div>
                 </>
               )}
             </div>
 
-            {/* Footer */}
-            <div className="px-5 pb-5 pt-2 border-t border-gray-100 space-y-2">
+            {/* Footer — always visible (sticky) */}
+            <div className="px-4 pb-4 pt-2 border-t border-gray-100 space-y-1.5 flex-shrink-0">
               <button
                 onClick={() => {
                   dismissEventHelp(false);
                   if (isOwner) setShowCommandCenter(true);
                 }}
-                className={`w-full py-3 rounded-xl font-bold text-sm shadow-md transition-colors flex items-center justify-center gap-2 ${
+                className={`w-full py-2.5 rounded-xl font-bold text-sm shadow-md transition-colors flex items-center justify-center gap-2 ${
                   isOwner
                     ? 'bg-gradient-to-r from-accent to-orange-600 text-white hover:opacity-90'
                     : 'bg-primary-600 text-white hover:bg-primary-700'
@@ -1120,7 +1122,7 @@ const EventPage: React.FC = () => {
               </button>
               <button
                 onClick={() => dismissEventHelp(true)}
-                className="w-full text-sm text-gray-400 hover:text-gray-600 transition-colors py-2"
+                className="w-full text-xs text-gray-400 hover:text-gray-600 transition-colors py-1.5"
               >
                 Don't show this again
               </button>

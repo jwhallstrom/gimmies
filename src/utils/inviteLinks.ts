@@ -23,3 +23,7 @@ export function buildJoinInviteUrl(shareCode?: string): string {
   if (!shareCode) return '';
   return `${getInviteBaseUrl()}/join/${encodeURIComponent(String(shareCode).trim())}`;
 }
+
+export function buildDirectEventUrl(eventId: string): string {
+  return `${getInviteBaseUrl()}/event/${encodeURIComponent(eventId)}`;
+}

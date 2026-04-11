@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import useStore from '../state/store';
 import { useAuthMode } from '../hooks/useAuthMode';
-import { buildJoinInviteUrl } from '../utils/inviteLinks';
+import { buildJoinInviteUrl, buildDirectEventUrl } from '../utils/inviteLinks';
 
 interface ShareModalProps {
   eventId: string;
@@ -55,7 +55,9 @@ const ShareModal: React.FC<ShareModalProps> = ({ eventId, isOpen, onClose }) => 
 
   const isGroupHub = event.hubType === 'group';
   const isPublic = !!event.isPublic;
-  const shareUrl = buildJoinInviteUrl(event.shareCode);
+  const shareUrl = isPublic && event.id
+    ? buildDirectEventUrl(event.id)
+    : buildJoinInviteUrl(event.shareCode);
 
   const handleCopy = (text: string, type: string) => {
     navigator.clipboard.writeText(text);
@@ -67,9 +69,11 @@ const ShareModal: React.FC<ShareModalProps> = ({ eventId, isOpen, onClose }) => 
     const title = isGroupHub 
       ? `Join my Gimmies group: ${event.name}`
       : `Join my Gimmies Golf event: ${event.name}`;
-    const text = isGroupHub
-      ? `Join my golf group "${event.name}"! Use code: ${event.shareCode}`
-      : `Join my golf game "${event.name}"! Use code: ${event.shareCode}`;
+    const text = isPublic
+      ? `Join my golf game "${event.name}"! Tap the link to jump in — no code needed.`
+      : isGroupHub
+        ? `Join my golf group "${event.name}"! Use code: ${event.shareCode}`
+        : `Join my golf game "${event.name}"! Use code: ${event.shareCode}`;
 
     if (navigator.share) {
       navigator.share({ title, text, url: shareUrl }).catch(console.error);

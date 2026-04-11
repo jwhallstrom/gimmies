@@ -15,7 +15,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../../state/store';
 import { useCourse } from '../../hooks/useCourse';
-import { buildJoinInviteUrl } from '../../utils/inviteLinks';
+import { buildJoinInviteUrl, buildDirectEventUrl } from '../../utils/inviteLinks';
 import { getStatusDisplay } from '../../utils/verifiedStatus';
 import PlayerCardModal from '../PlayerCardModal';
 import type { PlayerCardData } from '../PlayerCardModal';
@@ -217,8 +217,12 @@ const GolfersTab: React.FC<Props> = ({ eventId, isTabActive = true }) => {
     setEditingGolferId(null);
   };
 
-  // Generate share URL for invites
-  const shareUrl = buildJoinInviteUrl(event.shareCode);
+  // For public events, share a direct event link (no code needed)
+  // For private events/groups, use the code-based join link
+  const isPublicEvent = !!event.isPublic;
+  const shareUrl = isPublicEvent && event.id
+    ? buildDirectEventUrl(event.id)
+    : buildJoinInviteUrl(event.shareCode);
   
   const handleGenerateCode = async () => {
     setIsGeneratingCode(true);
@@ -231,9 +235,6 @@ const GolfersTab: React.FC<Props> = ({ eventId, isTabActive = true }) => {
       setIsGeneratingCode(false);
     }
   };
-
-  // Craft compelling invite messages
-  const isPublicEvent = !!event.isPublic;
 
   const getInviteMessage = () => {
     const groupName = event.name || 'our golf group';
