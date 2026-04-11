@@ -210,8 +210,8 @@ const ShareModal: React.FC<ShareModalProps> = ({ eventId, isOpen, onClose }) => 
                     </svg>
                   </button>
 
-                  {/* Join Code - only for private events and groups */}
-                  {(!isPublic || isGroupHub) && (
+                  {/* Join Code - only for private events and groups (never shown for public events) */}
+                  {!isPublic && event.shareCode && (
                     <>
                       <div className="flex items-center gap-3">
                         <div className="flex-1 h-px bg-gray-200" />
@@ -230,13 +230,13 @@ const ShareModal: React.FC<ShareModalProps> = ({ eventId, isOpen, onClose }) => 
                     </>
                   )}
 
-                  {/* How it works for grandma */}
+                  {/* How it works */}
                   <div className={`p-3 rounded-xl text-xs ${
                     isGroupHub ? 'bg-purple-50 text-purple-700' : 'bg-primary-50 text-primary-700'
                   }`}>
                     <p className="font-semibold mb-1">How it works:</p>
                     {isPublic ? (
-                      <p>Send the link. They tap it. They're in. No code needed.</p>
+                      <p>Send the link. They tap it, create a quick account, and they're in. No code needed.</p>
                     ) : (
                       <p>Send the link or code. They tap the link (or enter the code) and they're in.</p>
                     )}

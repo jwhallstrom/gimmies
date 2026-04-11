@@ -241,6 +241,7 @@ const GolfersTab: React.FC<Props> = ({ eventId, isTabActive = true }) => {
     const senderName = currentProfile?.name || 'A friend';
     
     if (isGroupHub) {
+      const codeLine = event.shareCode && !isPublicEvent ? `\n\nOr use code: ${event.shareCode}` : '';
       return {
         title: `Join ${groupName} on Gimmies Golf`,
         text: `Hey! ${senderName} invited you to join "${groupName}" on Gimmies Golf 🏌️
@@ -251,9 +252,7 @@ Gimmies is a free app to:
 👥 Chat with your golf crew
 📊 See live leaderboards
 
-Join here: ${shareUrl}
-
-Or use code: ${event.shareCode}`,
+Join here: ${shareUrl}${codeLine}`,
         shortText: `${senderName} invited you to "${groupName}" on Gimmies Golf! Join: ${shareUrl}`
       };
     } else if (isPublicEvent) {
@@ -638,8 +637,8 @@ Code: ${event.shareCode}`,
                     </button>
                   </div>
 
-                  {/* Or divider + code */}
-                  {event.shareCode && (
+                  {/* Or divider + code — hidden for public events */}
+                  {event.shareCode && !isPublicEvent && (
                     <>
                       <div className="flex items-center gap-3">
                         <div className="flex-1 h-px bg-gray-200" />

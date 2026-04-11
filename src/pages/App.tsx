@@ -162,36 +162,42 @@ const App: React.FC = () => {
     } as any);
   };
 
-  // If someone opens a join link before their profile is set up, we store the code in sessionStorage.
-  // Once a profile exists, auto-join and navigate them straight into the event.
+  // If someone opens a join/event link before auth, we stash the target in sessionStorage.
+  // Once a profile exists, auto-join (code) or navigate (direct ID) into the event.
   useEffect(() => {
     if (!currentProfile || pendingJoinHandled) return;
+
     let code: string | null = null;
+    let directEventId: string | null = null;
     try {
       code = sessionStorage.getItem('gimmies.pendingJoinCode.v1');
+      directEventId = sessionStorage.getItem('gimmies.pendingEventId.v1');
     } catch {
-      code = null;
+      // ignore
     }
-    if (!code) return;
+
+    if (!code && !directEventId) return;
     setPendingJoinHandled(true);
-    (async () => {
-      try {
-        const result = await joinEventByCode(String(code).toUpperCase());
+
+    if (code) {
+      (async () => {
         try {
-          sessionStorage.removeItem('gimmies.pendingJoinCode.v1');
+          const result = await joinEventByCode(String(code).toUpperCase());
+          try { sessionStorage.removeItem('gimmies.pendingJoinCode.v1'); } catch {}
+          if (result?.success && result?.eventId) {
+            addToast?.('Joined event!', 'success', 2500);
+            navigate(`/event/${result.eventId}`);
+          } else {
+            addToast?.(result?.error || 'Could not join event', 'error', 3500);
+          }
         } catch {
-          // ignore
+          addToast?.('Could not join event', 'error', 3500);
         }
-        if (result?.success && result?.eventId) {
-          addToast?.('Joined event!', 'success', 2500);
-          navigate(`/event/${result.eventId}`);
-        } else {
-          addToast?.(result?.error || 'Could not join event', 'error', 3500);
-        }
-      } catch {
-        addToast?.('Could not join event', 'error', 3500);
-      }
-    })();
+      })();
+    } else if (directEventId) {
+      try { sessionStorage.removeItem('gimmies.pendingEventId.v1'); } catch {}
+      navigate(`/event/${directEventId}`, { replace: true });
+    }
   }, [currentProfile?.id, pendingJoinHandled, joinEventByCode, addToast, navigate]);
 
   // Theme (Light/Dark/Auto) driven by profile preference.
@@ -434,6 +440,9 @@ const App: React.FC = () => {
             onSignIn={() => {
               if (joinMatch?.[1]) {
                 try { sessionStorage.setItem('gimmies.pendingJoinCode.v1', joinMatch[1]); } catch {}
+              }
+              if (eventMatch?.[1]) {
+                try { sessionStorage.setItem('gimmies.pendingEventId.v1', eventMatch[1]); } catch {}
               }
               navigate('/', { replace: true });
             }}
