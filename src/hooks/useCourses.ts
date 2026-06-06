@@ -98,10 +98,16 @@ export function useCourses() {
       do {
         page += 1;
         const result: any = await client.models.Course.list({
-          authMode: 'apiKey',
           limit: 1000,
           nextToken
         });
+        if (Array.isArray(result?.errors) && result.errors.length > 0) {
+          const message = result.errors
+            .map((error: { message?: string }) => error?.message)
+            .filter(Boolean)
+            .join('; ');
+          throw new Error(message || 'Failed to load cloud courses');
+        }
         const pageData = (result?.data ?? []) as any[];
         const pageToken = (result?.nextToken ?? (result as any)?.nextToken) as string | undefined;
         all.push(...pageData);
@@ -124,6 +130,9 @@ export function useCourses() {
       }));
 
       console.log(`✅ Loaded ${parsedCourses.length} total courses from DynamoDB`);
+      if (parsedCourses.length === 0) {
+        throw new Error('Cloud course list is empty');
+      }
       setCourses(parsedCourses);
       // Populate global cache for non-React consumers (e.g., handicap utils)
       setCoursesCache(parsedCourses as any);

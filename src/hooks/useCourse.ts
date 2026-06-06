@@ -60,12 +60,18 @@ export function useCourse(courseId?: string | null) {
         }
 
         const result: any = await client.models.Course.list({
-          authMode: 'apiKey',
           limit: 1,
           filter: {
             courseId: { eq: courseId },
           },
         });
+        if (Array.isArray(result?.errors) && result.errors.length > 0) {
+          const message = result.errors
+            .map((error: { message?: string }) => error?.message)
+            .filter(Boolean)
+            .join('; ');
+          throw new Error(message || 'Failed to load course');
+        }
 
         const item = (result?.data ?? [])[0] as any | undefined;
         if (!item) {
