@@ -131,7 +131,7 @@ export function useCourses() {
 
       console.log(`✅ Loaded ${parsedCourses.length} total courses from DynamoDB`);
       if (parsedCourses.length === 0) {
-        throw new Error('Cloud course list is empty');
+        throw new Error('Cloud returned no courses; falling back to local data');
       }
       setCourses(parsedCourses);
       // Populate global cache for non-React consumers (e.g., handicap utils)
