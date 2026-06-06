@@ -114,7 +114,7 @@ export function LoginPage({ onSuccess, onGuestMode }: LoginPageProps) {
         setTimeout(() => onSuccess?.(), 500);
       } else {
         setMessage('Account created. Please sign in.');
-        setMode('login');
+        setMode('signin');
       }
     } catch (err: any) {
       if (err?.name === 'UserAlreadyAuthenticatedException' || err?.message?.includes('already a signed in user')) {
