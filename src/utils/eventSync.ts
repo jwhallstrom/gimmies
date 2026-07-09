@@ -293,6 +293,61 @@ export async function saveChatMessageToCloud(eventId: string, message: ChatMessa
   }
 }
 
+export type InvitePreview = {
+  found: boolean;
+  eventId?: string;
+  name?: string;
+  date?: string;
+  courseId?: string | null;
+  teeName?: string | null;
+  hubType?: string;
+  isPublic?: boolean;
+  golferCount?: number;
+  error?: string;
+};
+
+export async function fetchInvitePreview(args: {
+  shareCode?: string;
+  eventId?: string;
+}): Promise<InvitePreview> {
+  try {
+    const client = getClient();
+    if (!client) return { found: false, error: 'Cloud sync unavailable.' };
+
+    const { data, errors } = await client.queries.getHubInvitePreview(
+      {
+        shareCode: args.shareCode ? String(args.shareCode).trim().toUpperCase() : undefined,
+        eventId: args.eventId ? String(args.eventId).trim() : undefined,
+      },
+      { authMode: 'apiKey' },
+    );
+
+    if (errors?.length) {
+      return { found: false, error: errors[0].message };
+    }
+
+    if (!data) {
+      return { found: false, error: 'Could not load invite details.' };
+    }
+
+    return {
+      found: !!data.found,
+      eventId: data.eventId || undefined,
+      name: data.name || undefined,
+      date: data.date || undefined,
+      courseId: data.courseId || null,
+      teeName: data.teeName || null,
+      hubType: data.hubType || undefined,
+      isPublic: data.isPublic ?? undefined,
+      golferCount: data.golferCount ?? undefined,
+      error: data.error || undefined,
+    };
+  } catch (error) {
+    console.error('❌ fetchInvitePreview: Exception:', error);
+    return { found: false, error: 'Could not load invite details.' };
+  }
+}
+
 export async function joinHubByShareCodeInCloud(
   shareCode: string,
   profileId: string,

@@ -9,6 +9,14 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import { LevelUpModal } from '../components/verified';
 import { MessagesPanel, getUnreadCount } from '../components/MessagesPanel';
 import useStore from '../state/store';
+import {
+  readJoinFailure,
+  readPendingJoinTargets,
+  saveJoinFailure,
+  stashPendingInviteTargets,
+  hasPendingInviteTarget,
+  clearPendingJoinTargets,
+} from '../utils/inviteSession';
 
 // Lazy load secondary routes for code splitting
 const EventsPage = lazy(() => import('./EventsPage'));
@@ -20,6 +28,7 @@ const EventPage = lazy(() => import('./EventPage'));
 const GroupPage = lazy(() => import('./GroupPage'));
 const JoinEventPage = lazy(() => import('./JoinEventPage'));
 const GuestJoinPage = lazy(() => import('./GuestJoinPage'));
+const InviteJoinFailedPage = lazy(() => import('./InviteJoinFailedPage'));
 const CourseIssueAdminPage = lazy(() => import('./CourseIssueAdminPage'));
 const WalletPage = lazy(() => import('./WalletPage'));
 const AuthDemoPage = lazy(() => import('./AuthDemoPage').then(m => ({ default: m.AuthDemoPage })));
@@ -63,15 +72,22 @@ const EventOrGroupRouter: React.FC = () => {
 const App: React.FC = () => {
   const { currentUser, currentProfile, events, createUser, joinEventByCode, joinEventById, addToast, pendingLevelUp, clearPendingLevelUp } = useStore();
   const loadEventsFromCloud = useStore((s) => s.loadEventsFromCloud);
+  const logout = useStore((s) => s.logout);
   const location = useLocation();
   const navigate = useNavigate();
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [amplifyUser, setAmplifyUser] = useState<any>(null);
   const [pendingJoinHandled, setPendingJoinHandled] = useState(false);
+  const [clearingGuestForInvite, setClearingGuestForInvite] = useState(false);
   const [showMessagesPanel, setShowMessagesPanel] = useState(false);
   const isCloudSyncInFlight = useRef(false);
   const lastCloudSyncAt = useRef(0);
   const isEventRoute = location.pathname.startsWith('/event/');
+
+  const eventMatch = location.pathname.match(/^\/event\/([^/]+)/);
+  const joinMatch = location.pathname.match(/^\/join\/([^/]+)/);
+  const isInviteRoute = !!(eventMatch || joinMatch);
+  const isJoinFailedRoute = location.pathname === '/invite/join-failed';
   
   // Calculate unread message count for header badge
   const unreadMessageCount = useMemo(() => {
@@ -162,6 +178,53 @@ const App: React.FC = () => {
     } as any);
   };
 
+  // Guest Mode blocks real invite joins — clear local guest session on invite URLs.
+  useEffect(() => {
+    if (isCheckingAuth || amplifyUser || !isInviteRoute || !currentUser) return;
+
+    let cancelled = false;
+    setClearingGuestForInvite(true);
+
+    (async () => {
+      try {
+        const { signOut } = await import('aws-amplify/auth');
+        await signOut();
+      } catch {
+        // ignore
+      }
+      if (!cancelled) {
+        logout();
+        setClearingGuestForInvite(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [isCheckingAuth, amplifyUser, isInviteRoute, currentUser?.id, logout]);
+
+  const readInviteEventName = (): string | undefined => {
+    try {
+      return sessionStorage.getItem('gimmies.pendingInviteEventName.v1') || undefined;
+    } catch {
+      return undefined;
+    }
+  };
+
+  const handleJoinRetry = () => {
+    setPendingJoinHandled(false);
+    const { code, eventId } = readPendingJoinTargets();
+    if (currentProfile) {
+      navigate('/', { replace: true });
+      return;
+    }
+    if (code) {
+      navigate(`/join/${code}`, { replace: true });
+    } else if (eventId) {
+      navigate(`/event/${eventId}`, { replace: true });
+    } else {
+      navigate('/', { replace: true });
+    }
+  };
+
   // If someone opens a join/event link before auth, we stash the target in sessionStorage.
   // Once a profile exists, auto-join via code or public event ID.
   useEffect(() => {
@@ -181,34 +244,52 @@ const App: React.FC = () => {
 
     (async () => {
       try {
+        const eventName = readInviteEventName();
+
         if (code) {
           const result = await joinEventByCode(String(code).toUpperCase());
-          try { sessionStorage.removeItem('gimmies.pendingJoinCode.v1'); } catch {}
-          try { sessionStorage.removeItem('gimmies.pendingEventId.v1'); } catch {}
           if (result?.success && result?.eventId) {
+            try { sessionStorage.removeItem('gimmies.pendingInviteEventName.v1'); } catch {}
+            clearPendingJoinTargets();
             addToast?.('Joined event!', 'success', 2500);
             navigate(`/event/${result.eventId}`);
           } else {
-            addToast?.(result?.error || 'Could not join event', 'error', 3500);
-            navigate('/');
+            saveJoinFailure({
+              shareCode: code,
+              eventId: directEventId || undefined,
+              error: result?.error || 'Could not join event',
+              eventName,
+            });
+            navigate('/invite/join-failed', { replace: true });
           }
           return;
         }
 
         if (directEventId) {
           const result = await joinEventById(directEventId);
-          try { sessionStorage.removeItem('gimmies.pendingEventId.v1'); } catch {}
           if (result?.success && result?.eventId) {
+            try { sessionStorage.removeItem('gimmies.pendingInviteEventName.v1'); } catch {}
+            clearPendingJoinTargets();
             addToast?.('Joined event!', 'success', 2500);
             navigate(`/event/${result.eventId}`, { replace: true });
           } else {
-            addToast?.(result?.error || 'Could not join event', 'error', 3500);
-            navigate('/');
+            saveJoinFailure({
+              eventId: directEventId,
+              error: result?.error || 'Could not join event',
+              eventName,
+            });
+            navigate('/invite/join-failed', { replace: true });
           }
         }
       } catch {
-        addToast?.('Could not join event', 'error', 3500);
-        navigate('/');
+        const { code, eventId } = readPendingJoinTargets();
+        saveJoinFailure({
+          shareCode: code || undefined,
+          eventId: eventId || undefined,
+          error: 'Could not join event',
+          eventName: readInviteEventName(),
+        });
+        navigate('/invite/join-failed', { replace: true });
       }
     })();
   }, [currentProfile?.id, pendingJoinHandled, joinEventByCode, joinEventById, addToast, navigate]);
@@ -434,40 +515,56 @@ const App: React.FC = () => {
     );
   }
 
-  if (!amplifyUser && !currentUser) {
-    console.log('App: No user (Amplify or local), checking for guest-joinable route');
-
-    const eventMatch = location.pathname.match(/^\/event\/([^/]+)/);
-    const joinMatch = location.pathname.match(/^\/join\/([^/]+)/);
-
-    if (eventMatch || joinMatch) {
+  if (isJoinFailedRoute) {
+    const failure = readJoinFailure();
+    if (failure) {
       return (
         <Suspense fallback={
           <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-900 via-primary-800 to-primary-950">
             <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white"></div>
           </div>
         }>
-          <GuestJoinPage
-            eventId={eventMatch?.[1]}
-            shareCode={joinMatch?.[1]}
-            onSignIn={() => {
-              if (joinMatch?.[1]) {
-                try { sessionStorage.setItem('gimmies.pendingJoinCode.v1', joinMatch[1]); } catch {}
-              }
-              if (eventMatch?.[1]) {
-                try { sessionStorage.setItem('gimmies.pendingEventId.v1', eventMatch[1]); } catch {}
-              }
-              navigate('/', { replace: true });
-            }}
-            onSuccess={handleLoginSuccess}
-          />
+          <InviteJoinFailedPage failure={failure} onRetry={handleJoinRetry} />
         </Suspense>
+      );
+    }
+  }
+
+  if (!amplifyUser && isInviteRoute) {
+    if (clearingGuestForInvite) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-900 via-primary-800 to-primary-950">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white"></div>
+        </div>
       );
     }
 
     return (
+      <Suspense fallback={
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-900 via-primary-800 to-primary-950">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white"></div>
+        </div>
+      }>
+        <GuestJoinPage
+          eventId={eventMatch?.[1]}
+          shareCode={joinMatch?.[1]}
+          onSignIn={() => {
+            stashPendingInviteTargets(joinMatch?.[1], eventMatch?.[1]);
+            navigate('/', { replace: true });
+          }}
+          onSuccess={handleLoginSuccess}
+        />
+      </Suspense>
+    );
+  }
+
+  if (!amplifyUser && !currentUser) {
+    console.log('App: No user (Amplify or local), showing login');
+
+    return (
       <LoginPage 
         onSuccess={handleLoginSuccess}
+        hideGuestMode={hasPendingInviteTarget()}
         onGuestMode={() => {
           console.log('Guest mode selected, creating local-only user');
           createUser('guest@local', 'Guest User', false);

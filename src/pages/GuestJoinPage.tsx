@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import {
   signUp,
@@ -7,6 +7,11 @@ import {
   resetPassword,
   confirmResetPassword,
 } from 'aws-amplify/auth';
+import { mapAuthError, PASSWORD_HINT } from '../utils/authErrors';
+import { stashPendingInviteTargets } from '../utils/inviteSession';
+import { fetchInvitePreview, type InvitePreview } from '../utils/eventSync';
+import { getCourseById } from '../data/cloudCourses';
+import { formatLocalDate } from '../utils/dateUtils';
 
 interface GuestJoinPageProps {
   onSignIn?: () => void;
@@ -16,27 +21,6 @@ interface GuestJoinPageProps {
 }
 
 type InviteMode = 'signup' | 'signin' | 'forgot' | 'reset';
-
-const PASSWORD_HINT = 'At least 8 characters with uppercase, lowercase, and a number.';
-
-function mapAuthError(err: any): string {
-  const name = err?.name || '';
-  const msg = err?.message || '';
-
-  if (name === 'UsernameExistsException' || msg.includes('already exists')) {
-    return 'That email is already registered. Sign in or reset your password below.';
-  }
-  if (name === 'NotAuthorizedException' || name === 'UserNotFoundException') {
-    return 'Incorrect email or password. Try again or reset your password.';
-  }
-  if (name === 'InvalidPasswordException' || msg.includes('Password')) {
-    return `${msg || 'Password does not meet requirements.'} ${PASSWORD_HINT}`;
-  }
-  if (name === 'UserNotConfirmedException') {
-    return 'Your account needs confirmation. Check your email for a code, or try signing in.';
-  }
-  return msg || 'Something went wrong. Please try again.';
-}
 
 /**
  * Unified invite landing: sign up, sign in, or reset password — then join the event.
@@ -60,15 +44,39 @@ const GuestJoinPage: React.FC<GuestJoinPageProps> = ({
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
+  const [preview, setPreview] = useState<InvitePreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setPreviewLoading(true);
+      const result = await fetchInvitePreview({
+        shareCode: targetShareCode,
+        eventId: targetEventId,
+      });
+      if (!cancelled) {
+        setPreview(result);
+        setPreviewLoading(false);
+        if (result.found && result.name) {
+          try { sessionStorage.setItem('gimmies.pendingInviteEventName.v1', result.name); } catch {}
+        }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [targetShareCode, targetEventId]);
 
   const stashPendingTargets = () => {
-    if (targetShareCode) {
-      try { sessionStorage.setItem('gimmies.pendingJoinCode.v1', targetShareCode); } catch {}
-    }
-    if (targetEventId) {
-      try { sessionStorage.setItem('gimmies.pendingEventId.v1', targetEventId); } catch {}
-    }
+    stashPendingInviteTargets(targetShareCode, targetEventId);
   };
+
+  const previewCourseName = preview?.courseId
+    ? getCourseById(preview.courseId)?.name
+    : undefined;
+
+  const formattedDate = preview?.date
+    ? formatLocalDate(preview.date, { weekday: 'short', month: 'short', day: 'numeric' })
+    : null;
 
   const finishAuth = async (trimmedEmail: string, trimmedPassword: string, trimmedName?: string) => {
     if (trimmedName) {
@@ -245,13 +253,42 @@ const GuestJoinPage: React.FC<GuestJoinPageProps> = ({
           </div>
 
           <div className="bg-white/10 backdrop-blur-sm rounded-2xl border border-white/20 p-5 mb-5 text-center">
-            <div className="text-3xl mb-2">⛳</div>
-            <h1 className="text-xl font-black text-white mb-1">You&apos;ve Been Invited!</h1>
-            <p className="text-white/60 text-sm leading-relaxed">
-              {mode === 'signup' && 'Create an account to join the game — no email verification needed.'}
-              {mode === 'signin' && 'Sign in to join the game.'}
-              {mode === 'forgot' && 'We\'ll email you a code to reset your password.'}
-              {mode === 'reset' && 'Enter the code from your email and choose a new password.'}
+            <div className="text-3xl mb-2">{preview?.hubType === 'group' ? '👥' : '⛳'}</div>
+            {previewLoading ? (
+              <>
+                <h1 className="text-xl font-black text-white mb-1">Loading invite...</h1>
+                <p className="text-white/60 text-sm">One moment</p>
+              </>
+            ) : preview?.found && preview.name ? (
+              <>
+                <p className="text-white/50 text-xs font-semibold uppercase tracking-wider mb-1">
+                  {preview.hubType === 'group' ? 'Join group' : 'Join game'}
+                </p>
+                <h1 className="text-xl font-black text-white mb-1">{preview.name}</h1>
+                <p className="text-white/70 text-sm">
+                  {formattedDate && <span>{formattedDate}</span>}
+                  {formattedDate && previewCourseName && <span> · </span>}
+                  {previewCourseName && <span>{previewCourseName}</span>}
+                  {!formattedDate && !previewCourseName && preview.teeName && (
+                    <span>{preview.teeName} tees</span>
+                  )}
+                </p>
+                {typeof preview.golferCount === 'number' && preview.golferCount > 0 && (
+                  <p className="text-white/50 text-xs mt-2">
+                    {preview.golferCount} player{preview.golferCount !== 1 ? 's' : ''} already in
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <h1 className="text-xl font-black text-white mb-1">You&apos;ve Been Invited!</h1>
+                <p className="text-white/60 text-sm leading-relaxed">
+                  {preview?.error || 'Sign in or create an account to join.'}
+                </p>
+              </>
+            )}
+            <p className="text-white/40 text-xs mt-3 leading-relaxed">
+              Quick sign-up — no email verification needed.
             </p>
           </div>
 
