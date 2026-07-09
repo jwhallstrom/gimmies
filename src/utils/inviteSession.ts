@@ -82,3 +82,32 @@ export function clearJoinFailure() {
     // ignore
   }
 }
+
+/** User-friendly join errors — never show raw Lambda messages on invite screens. */
+export function mapJoinErrorForUser(error?: string): string {
+  if (!error) {
+    return 'We couldn\'t add you to the game just yet. Try again in a moment.';
+  }
+  const lower = error.toLowerCase();
+  if (lower.includes('profile access')) {
+    return 'Still setting up your profile — this usually takes a few seconds.';
+  }
+  if (lower.includes('not authorized') || lower.includes('unauthorized')) {
+    return 'Almost there — tap Try Again to finish joining.';
+  }
+  if (lower.includes('not found') || lower.includes('invalid')) {
+    return 'This invite may have expired. Ask the organizer for a fresh link.';
+  }
+  return error;
+}
+
+export function isRetryableJoinError(error?: string): boolean {
+  if (!error) return true;
+  const lower = error.toLowerCase();
+  return (
+    lower.includes('profile access') ||
+    lower.includes('not authorized') ||
+    lower.includes('try again') ||
+    lower.includes('did not complete')
+  );
+}

@@ -306,6 +306,22 @@ export type InvitePreview = {
   error?: string;
 };
 
+/** Hide GraphQL/auth noise from invite landing — show friendly copy instead. */
+function sanitizeInvitePreviewError(message?: string): string | undefined {
+  if (!message) return undefined;
+  const lower = message.toLowerCase();
+  if (
+    lower.includes('not authorized') ||
+    lower.includes('unauthorized') ||
+    lower.includes('permission') ||
+    lower.includes('access denied') ||
+    lower.includes('graphql')
+  ) {
+    return undefined;
+  }
+  return message;
+}
+
 export async function fetchInvitePreview(args: {
   shareCode?: string;
   eventId?: string;
@@ -323,7 +339,7 @@ export async function fetchInvitePreview(args: {
     );
 
     if (errors?.length) {
-      return { found: false, error: errors[0].message };
+      return { found: false, error: sanitizeInvitePreviewError(errors[0].message) };
     }
 
     if (!data) {
@@ -340,7 +356,7 @@ export async function fetchInvitePreview(args: {
       hubType: data.hubType || undefined,
       isPublic: data.isPublic ?? undefined,
       golferCount: data.golferCount ?? undefined,
-      error: data.error || undefined,
+      error: sanitizeInvitePreviewError(data.error || undefined),
     };
   } catch (error) {
     console.error('❌ fetchInvitePreview: Exception:', error);

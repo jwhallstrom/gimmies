@@ -5,6 +5,7 @@ import {
   clearJoinFailure,
   clearPendingJoinTargets,
   stashPendingInviteTargets,
+  mapJoinErrorForUser,
 } from '../utils/inviteSession';
 import { buildJoinInviteUrl } from '../utils/inviteLinks';
 
@@ -46,13 +47,13 @@ const InviteJoinFailedPage: React.FC<InviteJoinFailedPageProps> = ({ failure, on
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-900 via-primary-800 to-primary-950 flex flex-col items-center justify-center px-6 py-10">
       <div className="w-full max-w-sm text-center">
-        <div className="text-5xl mb-4">😕</div>
-        <h1 className="text-2xl font-black text-white mb-2">Couldn&apos;t Join Yet</h1>
+        <div className="text-5xl mb-4">⛳</div>
+        <h1 className="text-2xl font-black text-white mb-2">Almost in the game</h1>
         {failure.eventName && (
           <p className="text-white/80 font-semibold mb-2">{failure.eventName}</p>
         )}
         <p className="text-white/60 text-sm mb-6 leading-relaxed">
-          {failure.error || 'Something went wrong joining this game. You can try again or ask the organizer for help.'}
+          {mapJoinErrorForUser(failure.error)}
         </p>
 
         <div className="bg-white rounded-2xl shadow-2xl p-5 space-y-3 text-left">
@@ -80,7 +81,7 @@ const InviteJoinFailedPage: React.FC<InviteJoinFailedPageProps> = ({ failure, on
             onClick={handleRetry}
             className="w-full py-3.5 bg-gradient-to-r from-accent to-orange-500 text-white font-bold rounded-xl shadow-lg"
           >
-            Try Again
+            Try Joining Again
           </button>
 
           <button
@@ -88,12 +89,12 @@ const InviteJoinFailedPage: React.FC<InviteJoinFailedPageProps> = ({ failure, on
             onClick={handleGoHome}
             className="w-full py-2.5 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200"
           >
-            Go to Home
+            Go to Home for Now
           </button>
         </div>
 
         <p className="text-white/40 text-xs mt-6 leading-relaxed">
-          Tip: If you just created an account, wait a moment and tap Try Again.
+          Your account is set up. Tap Try Joining Again — you won&apos;t need to sign up twice.
         </p>
       </div>
     </div>

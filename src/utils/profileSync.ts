@@ -5,6 +5,7 @@
 
 import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../amplify/data/resource';
+import useStore from '../state/store';
 
 let cachedClient: ReturnType<typeof generateClient<Schema>> | null = null;
 function getClient() {
@@ -207,10 +208,15 @@ export async function saveCloudProfile(profile: SyncableProfile): Promise<boolea
     console.log('Cloud data to save:', cloudData);
 
     if (existingProfiles && existingProfiles.length > 0) {
+      const cloudId = existingProfiles[0].id;
+      if (cloudId !== profile.id) {
+        remapLocalProfileId(profile.id, cloudId);
+      }
+
       // Update existing profile
-      console.log('Updating existing cloud profile:', existingProfiles[0].id);
+      console.log('Updating existing cloud profile:', cloudId);
       const { data, errors } = await client.models.Profile.update({
-        id: existingProfiles[0].id,
+        id: cloudId,
         ...cloudData,
       });
 
@@ -221,24 +227,79 @@ export async function saveCloudProfile(profile: SyncableProfile): Promise<boolea
 
       console.log('Profile updated successfully:', data);
       return true;
-    } else {
-      // Create new profile
-      console.log('Creating new cloud profile');
-      const { data, errors } = await client.models.Profile.create(cloudData);
-
-      if (errors) {
-        console.error('Error creating profile:', errors);
-        console.error('Error details:', JSON.stringify(errors, null, 2));
-        return false;
-      }
-
-      console.log('Profile created successfully:', data);
-      return true;
     }
+
+    // Create new profile — use the same id as local store so joins reference the right row.
+    console.log('Creating new cloud profile with id:', profile.id);
+    const { data, errors } = await client.models.Profile.create({
+      id: profile.id,
+      ...cloudData,
+    });
+
+    if (errors) {
+      console.error('Error creating profile:', errors);
+      console.error('Error details:', JSON.stringify(errors, null, 2));
+      return false;
+    }
+
+    console.log('Profile created successfully:', data);
+    return true;
   } catch (error) {
     console.error('Failed to save cloud profile:', error);
     return false;
   }
+}
+
+/** Keep local profile id aligned with DynamoDB (required for hub join mutations). */
+function remapLocalProfileId(localId: string, cloudId: string) {
+  if (!localId || !cloudId || localId === cloudId) return;
+
+  useStore.setState((state: any) => {
+    const remap = (p: any) => (p?.id === localId ? { ...p, id: cloudId } : p);
+    return {
+      profiles: (state.profiles || []).map(remap),
+      currentProfile:
+        state.currentProfile?.id === localId
+          ? { ...state.currentProfile, id: cloudId }
+          : state.currentProfile,
+    };
+  });
+}
+
+/**
+ * Wait until the cloud profile row exists and matches the signed-in user.
+ * Invite auto-join runs immediately after profile creation — this avoids races.
+ */
+export async function waitForCloudProfileReady(
+  userId: string,
+  profileId: string,
+  options?: { attempts?: number; baseDelayMs?: number },
+): Promise<boolean> {
+  const client = getClient();
+  if (!client) return true;
+
+  const attempts = options?.attempts ?? 8;
+  const baseDelayMs = options?.baseDelayMs ?? 400;
+
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const { data } = await client.models.Profile.get({ id: profileId });
+      if (data && data.userId === userId) return true;
+    } catch {
+      // ignore — row may not exist yet
+    }
+
+    const cloud = await fetchCloudProfile(userId);
+    if (cloud?.id === profileId) return true;
+    if (cloud && cloud.id !== profileId) {
+      remapLocalProfileId(profileId, cloud.id);
+      return true;
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, baseDelayMs * (i + 1)));
+  }
+
+  return false;
 }
 
 /**

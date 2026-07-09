@@ -9,6 +9,8 @@ import {
 } from 'aws-amplify/auth';
 import { mapAuthError, PASSWORD_HINT } from '../utils/authErrors';
 import { stashPendingInviteTargets } from '../utils/inviteSession';
+import { signInWithOAuth } from '../utils/oauthSignIn';
+import { GoogleSignInButton, OAuthEmailDivider } from '../components/auth/GoogleSignInButton';
 import { fetchInvitePreview, type InvitePreview } from '../utils/eventSync';
 import { getCourseById } from '../data/cloudCourses';
 import { formatLocalDate } from '../utils/dateUtils';
@@ -21,6 +23,16 @@ interface GuestJoinPageProps {
 }
 
 type InviteMode = 'signup' | 'signin' | 'forgot' | 'reset';
+
+const checkAmplifyConfigured = async (): Promise<boolean> => {
+  try {
+    const { Amplify } = await import('aws-amplify');
+    const config = (Amplify as any).getConfig?.();
+    return !!(config?.Auth?.Cognito?.userPoolId);
+  } catch {
+    return false;
+  }
+};
 
 /**
  * Unified invite landing: sign up, sign in, or reset password — then join the event.
@@ -46,6 +58,11 @@ const GuestJoinPage: React.FC<GuestJoinPageProps> = ({
   const [busy, setBusy] = useState(false);
   const [preview, setPreview] = useState<InvitePreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(true);
+  const [googleAvailable, setGoogleAvailable] = useState(false);
+
+  useEffect(() => {
+    checkAmplifyConfigured().then(setGoogleAvailable);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -242,6 +259,32 @@ const GuestJoinPage: React.FC<GuestJoinPageProps> = ({
     setMessage('');
   };
 
+  const handleGoogleSignIn = async () => {
+    setError('');
+    setMessage('');
+    setBusy(true);
+    try {
+      await signInWithOAuth('Google', { beforeRedirect: stashPendingTargets });
+    } catch (err: unknown) {
+      setError(mapAuthError(err) || 'Failed to sign in with Google');
+      setBusy(false);
+    }
+  };
+
+  const inviteHint =
+    preview?.found && preview.name
+      ? preview.hubType === 'group'
+        ? 'Create an account or sign in to join the group.'
+        : 'Create an account or sign in to join the game.'
+      : 'Your friends are waiting — join them in just a minute.';
+
+  const userFacingPreviewNote =
+    preview?.error &&
+    !preview.error.toLowerCase().includes('not authorized') &&
+    !preview.error.toLowerCase().includes('unauthorized')
+      ? preview.error
+      : null;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-900 via-primary-800 to-primary-950 flex flex-col">
       <div className="flex-shrink-0 pt-safe-top" />
@@ -281,20 +324,38 @@ const GuestJoinPage: React.FC<GuestJoinPageProps> = ({
               </>
             ) : (
               <>
-                <h1 className="text-xl font-black text-white mb-1">You&apos;ve Been Invited!</h1>
-                <p className="text-white/60 text-sm leading-relaxed">
-                  {preview?.error || 'Sign in or create an account to join.'}
+                <p className="text-white/50 text-xs font-semibold uppercase tracking-wider mb-1">
+                  You&apos;re invited
                 </p>
+                <h1 className="text-xl font-black text-white mb-1">Join your friends on Gimmies</h1>
+                <p className="text-white/70 text-sm leading-relaxed">{inviteHint}</p>
+                {userFacingPreviewNote && (
+                  <p className="text-white/50 text-xs mt-2 leading-relaxed">{userFacingPreviewNote}</p>
+                )}
               </>
             )}
             <p className="text-white/40 text-xs mt-3 leading-relaxed">
-              Quick sign-up — no email verification needed.
+              No email verification — you&apos;ll be in the game right after sign-up.
             </p>
           </div>
 
           <div className="bg-white rounded-2xl shadow-2xl p-5">
             {mode !== 'forgot' && mode !== 'reset' && (
-              <div className="flex rounded-xl bg-gray-100 p-1 mb-4">
+              <>
+                <p className="text-sm text-gray-600 text-center mb-4 leading-relaxed">
+                  {mode === 'signup' ? (
+                    <>
+                      <span className="font-semibold text-gray-800">First time here?</span>
+                      {' '}Pick a display name and create your login below — takes about a minute.
+                    </>
+                  ) : (
+                    <>
+                      <span className="font-semibold text-gray-800">Already have an account?</span>
+                      {' '}Sign in below to jump into the game.
+                    </>
+                  )}
+                </p>
+                <div className="flex rounded-xl bg-gray-100 p-1 mb-4">
                 <button
                   type="button"
                   onClick={() => switchMode('signup')}
@@ -314,6 +375,7 @@ const GuestJoinPage: React.FC<GuestJoinPageProps> = ({
                   Sign in
                 </button>
               </div>
+              </>
             )}
 
             {message && (
@@ -321,6 +383,18 @@ const GuestJoinPage: React.FC<GuestJoinPageProps> = ({
             )}
             {error && (
               <p className="text-sm text-red-500 font-medium text-center mb-3">{error}</p>
+            )}
+
+            {googleAvailable && mode !== 'forgot' && mode !== 'reset' && (
+              <>
+                <GoogleSignInButton
+                  variant="invite"
+                  onClick={handleGoogleSignIn}
+                  disabled={busy}
+                  label={mode === 'signin' ? 'Sign in with Google' : 'Continue with Google'}
+                />
+                <OAuthEmailDivider />
+              </>
             )}
 
             {mode === 'signup' && (

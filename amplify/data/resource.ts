@@ -137,7 +137,11 @@ const schema = a.schema({
       eventId: a.id(),
     })
     .returns(a.ref('HubInvitePreview'))
-    .authorization((allow) => [allow.guest(), allow.authenticated()])
+    .authorization((allow) => [
+      allow.publicApiKey(),
+      allow.guest(),
+      allow.authenticated(),
+    ])
     .handler(a.handler.function(eventAccess)),
 
   joinHubByShareCode: a

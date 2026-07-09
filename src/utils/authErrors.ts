@@ -21,5 +21,8 @@ export function mapAuthError(err: unknown): string {
   if (name === 'UserAlreadyAuthenticatedException' || msg.includes('already a signed in user')) {
     return '';
   }
+  if (msg.includes('PreSignUp failed') || msg.includes('already exists')) {
+    return 'That email is already registered with a password. Sign in with email or reset your password.';
+  }
   return msg || 'Something went wrong. Please try again.';
 }

@@ -13,22 +13,27 @@ export const auth = defineAuth({
     // Email/Password authentication
     email: true,
     
-    // Google OAuth configuration - disabled temporarily (secret corruption issue)
-    // externalProviders: {
-    //   google: {
-    //     clientId: secret('GOOGLE_CLIENT_ID'),
-    //     clientSecret: secret('GOOGLE_CLIENT_SECRET'),
-    //     scopes: ['email', 'profile', 'openid'],
-    //   },
-    //   callbackUrls: [
-    //     'http://localhost:5173/',
-    //     'https://gimmies-golf.s3-website-us-east-1.amazonaws.com/',
-    //   ],
-    //   logoutUrls: [
-    //     'http://localhost:5173/',
-    //     'https://gimmies-golf.s3-website-us-east-1.amazonaws.com/',
-    //   ],
-    // },
+    // Google OAuth — set secrets before deploy:
+    //   npx ampx sandbox secret set GOOGLE_CLIENT_ID
+    //   npx ampx sandbox secret set GOOGLE_CLIENT_SECRET
+    // Amplify Console → Hosting → Backend → Secrets (production pipeline).
+    externalProviders: {
+      google: {
+        clientId: secret('GOOGLE_CLIENT_ID'),
+        clientSecret: secret('GOOGLE_CLIENT_SECRET'),
+        scopes: ['email', 'profile', 'openid'],
+      },
+      callbackUrls: [
+        'http://localhost:5173/',
+        'https://app.golfwithgimmies.com/',
+        'https://play.golfwithgimmies.com/',
+      ],
+      logoutUrls: [
+        'http://localhost:5173/',
+        'https://app.golfwithgimmies.com/',
+        'https://play.golfwithgimmies.com/',
+      ],
+    },
   },
 
   triggers: {

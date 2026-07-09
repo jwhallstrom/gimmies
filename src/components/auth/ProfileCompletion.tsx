@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import useStore from '../../state/store';
 
 interface ProfileCompletionProps {
@@ -24,7 +23,6 @@ export function ProfileCompletion({
   onComplete 
 }: ProfileCompletionProps) {
   const { createProfile } = useStore();
-  const navigate = useNavigate();
   
   // Pre-fill with OAuth data
   const [profileName, setProfileName] = useState(suggestedName || '');
@@ -86,40 +84,34 @@ export function ProfileCompletion({
         });
       }
 
-      // Save profile to cloud
+      // Save profile to cloud before continuing (invite join depends on this row).
       console.log('Saving profile to cloud...');
+      let cloudSaved = false;
       try {
         const { saveCloudProfile } = await import('../../utils/profileSync');
         const { profiles } = useStore.getState();
         const profileToSave = profiles[profiles.length - 1];
-        
-        console.log('Profile to save:', profileToSave);
-        console.log('Amplify userId:', userId);
-        
+
         if (profileToSave) {
-          const success = await saveCloudProfile(profileToSave);
-          if (success) {
-            console.log('✅ Profile saved to cloud successfully!');
-          } else {
-            console.error('❌ Failed to save profile to cloud!');
-            // Show error to user but continue
-            setError('Warning: Profile saved locally but not synced to cloud. You may need to re-enter it next time.');
+          for (let attempt = 0; attempt < 3 && !cloudSaved; attempt++) {
+            if (attempt > 0) {
+              await new Promise((r) => setTimeout(r, 600 * attempt));
+            }
+            cloudSaved = await saveCloudProfile(profileToSave);
           }
-        } else {
-          console.error('❌ No profile found to save!');
-          setError('Warning: Profile creation may have failed. Please try again.');
         }
       } catch (syncError) {
         console.error('❌ Cloud sync error:', syncError);
-        setError('Warning: Profile saved locally but not synced to cloud.');
-        // Continue anyway - offline mode
       }
 
-      // Complete
-      setTimeout(() => {
-        onComplete();
-        navigate('/');
-      }, 100);
+      if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true' && !cloudSaved) {
+        setError('Could not finish setting up your profile. Please try again.');
+        setLoading(false);
+        autoSubmitted.current = false;
+        return;
+      }
+
+      onComplete();
     } catch (err: any) {
       console.error('Profile creation error:', err);
       setError(err.message || 'Failed to create profile');

@@ -16,7 +16,12 @@ import {
   stashPendingInviteTargets,
   hasPendingInviteTarget,
   clearPendingJoinTargets,
+  clearJoinFailure,
+  mapJoinErrorForUser,
+  isRetryableJoinError,
 } from '../utils/inviteSession';
+import { oauthProfileHints } from '../utils/oauthSignIn';
+import { Hub } from 'aws-amplify/utils';
 
 // Lazy load secondary routes for code splitting
 const EventsPage = lazy(() => import('./EventsPage'));
@@ -77,7 +82,9 @@ const App: React.FC = () => {
   const navigate = useNavigate();
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [amplifyUser, setAmplifyUser] = useState<any>(null);
+  const [amplifyAttributes, setAmplifyAttributes] = useState<Partial<Record<string, string>>>({});
   const [pendingJoinHandled, setPendingJoinHandled] = useState(false);
+  const [inviteJoinInProgress, setInviteJoinInProgress] = useState(false);
   const [clearingGuestForInvite, setClearingGuestForInvite] = useState(false);
   const [showMessagesPanel, setShowMessagesPanel] = useState(false);
   const isCloudSyncInFlight = useRef(false);
@@ -210,16 +217,18 @@ const App: React.FC = () => {
   };
 
   const handleJoinRetry = () => {
-    setPendingJoinHandled(false);
+    clearJoinFailure();
     const { code, eventId } = readPendingJoinTargets();
-    if (currentProfile) {
-      navigate('/', { replace: true });
-      return;
+    if (!code && !eventId) {
+      const failure = readJoinFailure();
+      stashPendingInviteTargets(failure?.shareCode, failure?.eventId);
     }
-    if (code) {
-      navigate(`/join/${code}`, { replace: true });
-    } else if (eventId) {
-      navigate(`/event/${eventId}`, { replace: true });
+    setPendingJoinHandled(false);
+    const targets = readPendingJoinTargets();
+    if (targets.code) {
+      navigate(`/join/${targets.code}`, { replace: true });
+    } else if (targets.eventId) {
+      navigate(`/event/${targets.eventId}`, { replace: true });
     } else {
       navigate('/', { replace: true });
     }
@@ -241,13 +250,42 @@ const App: React.FC = () => {
 
     if (!code && !directEventId) return;
     setPendingJoinHandled(true);
+    setInviteJoinInProgress(true);
+
+    const attemptJoin = async (
+      joinFn: () => Promise<{ success: boolean; error?: string; eventId?: string } | undefined>,
+    ) => {
+      const delays = [0, 700, 1400, 2100, 2800];
+      let lastResult: { success: boolean; error?: string; eventId?: string } | undefined;
+
+      for (const delay of delays) {
+        if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+        lastResult = await joinFn();
+        if (lastResult?.success) return lastResult;
+        if (!isRetryableJoinError(lastResult?.error)) break;
+      }
+
+      return lastResult;
+    };
 
     (async () => {
       try {
         const eventName = readInviteEventName();
+        const profileUserId = amplifyUser?.userId || currentProfile.userId;
+
+        if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true' && profileUserId) {
+          const { waitForCloudProfileReady, saveCloudProfile } = await import('../utils/profileSync');
+          let ready = await waitForCloudProfileReady(profileUserId, currentProfile.id);
+          if (!ready) {
+            await saveCloudProfile(currentProfile as any);
+            ready = await waitForCloudProfileReady(profileUserId, currentProfile.id, { attempts: 6 });
+          }
+        }
 
         if (code) {
-          const result = await joinEventByCode(String(code).toUpperCase());
+          const result = await attemptJoin(() =>
+            joinEventByCode(String(code).toUpperCase()),
+          );
           if (result?.success && result?.eventId) {
             try { sessionStorage.removeItem('gimmies.pendingInviteEventName.v1'); } catch {}
             clearPendingJoinTargets();
@@ -257,7 +295,7 @@ const App: React.FC = () => {
             saveJoinFailure({
               shareCode: code,
               eventId: directEventId || undefined,
-              error: result?.error || 'Could not join event',
+              error: mapJoinErrorForUser(result?.error),
               eventName,
             });
             navigate('/invite/join-failed', { replace: true });
@@ -266,7 +304,7 @@ const App: React.FC = () => {
         }
 
         if (directEventId) {
-          const result = await joinEventById(directEventId);
+          const result = await attemptJoin(() => joinEventById(directEventId));
           if (result?.success && result?.eventId) {
             try { sessionStorage.removeItem('gimmies.pendingInviteEventName.v1'); } catch {}
             clearPendingJoinTargets();
@@ -275,7 +313,7 @@ const App: React.FC = () => {
           } else {
             saveJoinFailure({
               eventId: directEventId,
-              error: result?.error || 'Could not join event',
+              error: mapJoinErrorForUser(result?.error),
               eventName,
             });
             navigate('/invite/join-failed', { replace: true });
@@ -286,13 +324,15 @@ const App: React.FC = () => {
         saveJoinFailure({
           shareCode: code || undefined,
           eventId: eventId || undefined,
-          error: 'Could not join event',
+          error: mapJoinErrorForUser('Could not join event'),
           eventName: readInviteEventName(),
         });
         navigate('/invite/join-failed', { replace: true });
+      } finally {
+        setInviteJoinInProgress(false);
       }
     })();
-  }, [currentProfile?.id, pendingJoinHandled, joinEventByCode, joinEventById, addToast, navigate]);
+  }, [currentProfile?.id, pendingJoinHandled, joinEventByCode, joinEventById, addToast, navigate, amplifyUser?.userId]);
 
   // Theme (Light/Dark/Auto) driven by profile preference.
   useEffect(() => {
@@ -341,6 +381,7 @@ const App: React.FC = () => {
           // No Amplify backend configured -- skip cloud auth entirely
           console.log('[Auth] Amplify not configured, running in local/offline mode');
           setAmplifyUser(null);
+          setAmplifyAttributes({});
           setIsCheckingAuth(false);
           return;
         }
@@ -353,6 +394,7 @@ const App: React.FC = () => {
         const attributes = await fetchUserAttributes();
         
         setAmplifyUser(user);
+        setAmplifyAttributes(attributes);
         console.log('Amplify user found:', user, 'attributes:', attributes);
 
         syncAmplifyUserToStore(user, attributes);
@@ -386,6 +428,7 @@ const App: React.FC = () => {
       } catch (err) {
         console.log('No Amplify user signed in:', err);
         setAmplifyUser(null);
+        setAmplifyAttributes({});
       } finally {
         setIsCheckingAuth(false);
       }
@@ -471,6 +514,7 @@ const App: React.FC = () => {
         const attributes = await fetchUserAttributes();
         
         setAmplifyUser(user);
+        setAmplifyAttributes(attributes);
         console.log('User after login:', user, attributes);
 
         syncAmplifyUserToStore(user, attributes);
@@ -504,12 +548,34 @@ const App: React.FC = () => {
     }, 100);
   };
 
+  // OAuth redirect completes without a full remount — refresh session when Amplify signs in.
+  useEffect(() => {
+    const cancel = Hub.listen('auth', ({ payload }) => {
+      if (payload.event === 'signedIn') {
+        handleLoginSuccess();
+      }
+    });
+    return () => cancel();
+  }, []);
+
   if (isCheckingAuth) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 via-white to-primary-100">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (inviteJoinInProgress && hasPendingInviteTarget()) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-900 via-primary-800 to-primary-950">
+        <div className="text-center px-6">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <p className="text-white font-semibold text-lg mb-1">Joining your game...</p>
+          <p className="text-white/60 text-sm">Setting up your profile and adding you to the group</p>
         </div>
       </div>
     );
@@ -577,16 +643,23 @@ const App: React.FC = () => {
   if (currentUser && !currentProfile) {
     console.log('App: User exists but no profile, showing profile completion');
 
-    // If the user came through the invite flow, their name is stashed
+    // Invite stash or Google OAuth attributes for profile pre-fill
     let pendingName: string | undefined;
     try { pendingName = sessionStorage.getItem('gimmies.pendingProfileName.v1') || undefined; } catch {}
+
+    const oauth = oauthProfileHints(amplifyAttributes);
+    const profileName = pendingName || oauth.suggestedName;
+    const shouldAutoSubmit = Boolean(pendingName || oauth.canAutoSubmit);
 
     return (
       <ProfileCompletion
         userId={amplifyUser?.userId || currentUser.id}
-        email={amplifyUser?.signInDetails?.loginId || currentUser.username}
-        suggestedName={pendingName}
-        autoSubmit={!!pendingName}
+        email={oauth.email || amplifyAttributes.email || amplifyUser?.signInDetails?.loginId || currentUser.username}
+        suggestedName={profileName}
+        firstName={oauth.firstName}
+        lastName={oauth.lastName}
+        photoUrl={oauth.photoUrl}
+        autoSubmit={shouldAutoSubmit}
         onComplete={() => {
           try { sessionStorage.removeItem('gimmies.pendingProfileName.v1'); } catch {}
           console.log('Profile completion finished');
