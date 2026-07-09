@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { signIn, signInWithRedirect, signUp, confirmSignUp, resetPassword, confirmResetPassword, signOut } from 'aws-amplify/auth';
+import { mapAuthError, PASSWORD_HINT } from '../../utils/authErrors';
 
 // Check if Amplify is properly configured
 const checkAmplifyConfigured = async (): Promise<boolean> => {
@@ -15,11 +16,12 @@ const checkAmplifyConfigured = async (): Promise<boolean> => {
 interface LoginPageProps {
   onSuccess?: () => void;
   onGuestMode?: () => void;
+  hideGuestMode?: boolean;
 }
 
 type AuthMode = 'signin' | 'signup' | 'forgot' | 'confirm' | 'reset';
 
-export function LoginPage({ onSuccess, onGuestMode }: LoginPageProps) {
+export function LoginPage({ onSuccess, onGuestMode, hideGuestMode }: LoginPageProps) {
   const [mode, setMode] = useState<AuthMode>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -68,15 +70,15 @@ export function LoginPage({ onSuccess, onGuestMode }: LoginPageProps) {
         setTimeout(() => onSuccess?.(), 500);
       }
     } catch (err: any) {
+      const mapped = mapAuthError(err);
       if (err.name === 'UserNotConfirmedException') {
         setMode('confirm');
         setError('Please confirm your email address');
       } else if (err.name === 'UserAlreadyAuthenticatedException' || err.message?.includes('already a signed in user')) {
-        // User is already signed in, just proceed
         setMessage('✅ Already signed in!');
         setTimeout(() => onSuccess?.(), 500);
       } else {
-        setError(err.message || 'Failed to sign in. Try Guest Mode if cloud auth is not set up.');
+        setError(mapped || err.message || 'Failed to sign in. Try Guest Mode if cloud auth is not set up.');
       }
     } finally {
       setLoading(false);
@@ -120,7 +122,7 @@ export function LoginPage({ onSuccess, onGuestMode }: LoginPageProps) {
       if (err?.name === 'UserAlreadyAuthenticatedException' || err?.message?.includes('already a signed in user')) {
         setTimeout(() => onSuccess?.(), 500);
       } else {
-        setError(err.message || 'Failed to sign up. Try Guest Mode if cloud auth is not set up.');
+        setError(mapAuthError(err) || err.message || 'Failed to sign up. Try Guest Mode if cloud auth is not set up.');
       }
     } finally {
       setLoading(false);
@@ -386,7 +388,7 @@ export function LoginPage({ onSuccess, onGuestMode }: LoginPageProps) {
                     placeholder="At least 8 characters"
                   />
                   <p className="mt-1 text-xs text-gray-500">
-                    Must be at least 8 characters with uppercase, lowercase, and number
+                    {PASSWORD_HINT}
                   </p>
                 </div>
 
@@ -545,7 +547,8 @@ export function LoginPage({ onSuccess, onGuestMode }: LoginPageProps) {
           )}
         </div>
 
-        {/* Guest Mode - More Prominent */}
+        {/* Guest Mode - hidden when user arrived from an invite link */}
+        {!hideGuestMode && (
         <div className="mt-6 text-center relative z-10">
           <button
             onClick={() => onGuestMode?.()}
@@ -558,6 +561,7 @@ export function LoginPage({ onSuccess, onGuestMode }: LoginPageProps) {
             No account needed • Sign in required to create/join games
           </p>
         </div>
+        )}
       </div>
     </div>
   );

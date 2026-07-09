@@ -43,6 +43,19 @@ const schema = a.schema({
     hubType: a.string(),
   }),
 
+  HubInvitePreview: a.customType({
+    found: a.boolean().required(),
+    eventId: a.id(),
+    name: a.string(),
+    date: a.date(),
+    courseId: a.string(),
+    teeName: a.string(),
+    hubType: a.string(),
+    isPublic: a.boolean(),
+    golferCount: a.integer(),
+    error: a.string(),
+  }),
+
   LeaveHubResult: a.customType({
     success: a.boolean().required(),
     eventId: a.id(),
@@ -115,6 +128,16 @@ const schema = a.schema({
     })
     .returns(a.ref('PublicHubSummary'))
     .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(eventAccess)),
+
+  getHubInvitePreview: a
+    .query()
+    .arguments({
+      shareCode: a.string(),
+      eventId: a.id(),
+    })
+    .returns(a.ref('HubInvitePreview'))
+    .authorization((allow) => [allow.guest(), allow.authenticated()])
     .handler(a.handler.function(eventAccess)),
 
   joinHubByShareCode: a

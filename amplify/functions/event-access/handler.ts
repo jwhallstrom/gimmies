@@ -388,6 +388,54 @@ async function handleListAccessibleHubs(
     }));
 }
 
+async function handleGetHubInvitePreview(
+  client: ReturnType<typeof generateClient<Schema>>,
+  args: { shareCode?: string | null; eventId?: string | null },
+) {
+  const normalizedCode = String(args.shareCode || '').trim().toUpperCase();
+  const eventId = String(args.eventId || '').trim();
+
+  if (!normalizedCode && !eventId) {
+    return { found: false, error: 'Missing invite target.' };
+  }
+
+  const allEvents = await listAllEventRecords(client);
+  let event: EventRecord | null = null;
+
+  if (normalizedCode) {
+    event = allEvents.find(
+      (candidate) => String(candidate.shareCode || '').trim().toUpperCase() === normalizedCode,
+    ) || null;
+  } else if (eventId) {
+    event = allEvents.find((candidate) => candidate.id === eventId) || null;
+    if (event && !event.isPublic) {
+      return {
+        found: false,
+        error: 'This event is private. Use the join link or code from your invite.',
+      };
+    }
+  }
+
+  if (!event) {
+    return { found: false, error: 'Invite not found. Check the link or ask the organizer.' };
+  }
+
+  const golfers = asObjectArray(parseJsonField(event.golfersJson, []));
+  const hubType = normalizeHubType(event);
+
+  return {
+    found: true,
+    eventId: event.id,
+    name: event.name,
+    date: event.date,
+    courseId: event.courseId || null,
+    teeName: event.teeName || null,
+    hubType,
+    isPublic: Boolean(event.isPublic),
+    golferCount: golfers.length,
+  };
+}
+
 async function handleGetAccessibleHubById(
   client: ReturnType<typeof generateClient<Schema>>,
   callerMembershipKeys: string[],
@@ -946,6 +994,8 @@ export const handler = async (event: AppSyncResolverEvent<Record<string, any>>) 
       return handleListAccessibleHubs(client, callerMembershipKeys);
     case 'getAccessibleHubById':
       return handleGetAccessibleHubById(client, callerMembershipKeys, event.arguments as any);
+    case 'getHubInvitePreview':
+      return handleGetHubInvitePreview(client, event.arguments as any);
     case 'joinHubByShareCode':
       return handleJoinHubByShareCode(client, callerMembershipKeys, callerUserId, event.arguments as any);
     case 'joinHubByEventId':
