@@ -324,6 +324,37 @@ export async function joinHubByShareCodeInCloud(
   }
 }
 
+export async function joinHubByEventIdInCloud(
+  eventId: string,
+  profileId: string,
+  displayName?: string
+): Promise<{ success: boolean; eventId?: string; error?: string; hubType?: string }> {
+  try {
+    const client = getClient();
+    if (!client) return { success: false, error: 'Cloud sync unavailable.' };
+
+    const { data, errors } = await client.mutations.joinHubByEventId({
+      eventId: String(eventId || '').trim(),
+      profileId,
+      displayName: displayName || undefined,
+    });
+
+    if (errors?.length) {
+      return { success: false, error: errors[0].message };
+    }
+
+    return {
+      success: !!data?.success,
+      eventId: data?.eventId || undefined,
+      error: data?.error || undefined,
+      hubType: data?.hubType || undefined,
+    };
+  } catch (error) {
+    console.error('❌ joinHubByEventIdInCloud: Exception:', error);
+    return { success: false, error: 'Could not join right now.' };
+  }
+}
+
 export async function leaveHubInCloud(
   eventId: string,
   profileId: string

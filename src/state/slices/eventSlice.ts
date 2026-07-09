@@ -116,6 +116,7 @@ export interface EventSliceActions {
   // Sharing
   generateShareCode: (eventId: string) => Promise<string>;
   joinEventByCode: (shareCode: string) => Promise<{ success: boolean; error?: string; eventId?: string }>;
+  joinEventById: (eventId: string) => Promise<{ success: boolean; error?: string; eventId?: string }>;
   
   // Chat
   addChatMessage: (eventId: string, text: string, options?: { replyTo?: string; type?: string; metadata?: Record<string, any>; pollQuestion?: string; pollOptions?: { id: string; text: string; votes: string[] }[]; mentions?: string[] }) => Promise<void>;
@@ -677,31 +678,73 @@ export const createEventSlice = (
       }
     }
 
-    // Local-only fallback: allow joining invite-only games (not necessarily public/discoverable)
+    // Local-only fallback: share code is the invite (ignore joinPolicy restrictions).
     const event = get().events.find((e: Event) => (e.shareCode || '').toUpperCase() === normalized);
     if (!event) {
       return { success: false, error: 'Event not found or share code is invalid.' };
     }
 
-    if (event.hubType === 'group') {
-      const groupSettings = event.groupSettings || {
-        visibility: 'private' as const,
-        joinPolicy: 'open' as const,
-        membersCanInvite: true,
-      };
-      if (groupSettings.joinPolicy !== 'open') {
-        if (groupSettings.joinPolicy === 'invite_only') {
-          return { success: false, error: 'This group is invite-only. Ask an admin to add you.' };
-        }
-        return { success: false, error: 'This group requires join approval. Request flow is not enabled yet.' };
-      }
-    }
-    
     const alreadyJoined = event.golfers.some((g: EventGolfer) => g.profileId === currentProfile.id);
     if (alreadyJoined) {
       return { success: true, eventId: event.id };
     }
     
+    await get().addGolferToEvent(event.id, currentProfile.id);
+    return { success: true, eventId: event.id };
+  },
+
+  joinEventById: async (eventId: string) => {
+    const currentProfile = get().currentProfile;
+    if (!currentProfile) {
+      return { success: false, error: 'Please create a profile first to join events.' };
+    }
+
+    const normalizedId = String(eventId || '').trim();
+    if (!normalizedId) {
+      return { success: false, error: 'Please enter a valid event.' };
+    }
+
+    const existing = get().events.find((e: Event) => e.id === normalizedId);
+    if (existing?.golfers.some((g: EventGolfer) => g.profileId === currentProfile.id)) {
+      return { success: true, eventId: normalizedId };
+    }
+
+    if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+      try {
+        const { joinHubByEventIdInCloud, loadEventById } = await import('../../utils/eventSync');
+        const joinResult = await joinHubByEventIdInCloud(normalizedId, currentProfile.id, currentProfile.name);
+        if (joinResult.success && joinResult.eventId) {
+          const cloudEvent = await loadEventById(joinResult.eventId);
+          if (!cloudEvent) {
+            return {
+              success: false,
+              error: 'Join did not complete in cloud. Please try again.',
+            };
+          }
+          const localEvent = get().events.find((e: Event) => e.id === cloudEvent.id);
+          if (!localEvent) {
+            set((state: any) => ({ events: [...state.events, cloudEvent] }));
+          } else {
+            set((state: any) => ({ events: state.events.map((e: Event) => e.id === cloudEvent.id ? cloudEvent : e) }));
+          }
+          return { success: true, eventId: joinResult.eventId };
+        }
+        return { success: false, error: joinResult.error || 'Could not join this event right now.' };
+      } catch (error) {
+        console.error('Failed to join event by ID from cloud:', error);
+        return { success: false, error: 'Could not join this event right now.' };
+      }
+    }
+
+    const event = get().events.find((e: Event) => e.id === normalizedId);
+    if (!event) {
+      return { success: false, error: 'Event not found.' };
+    }
+
+    if (!event.isPublic) {
+      return { success: false, error: 'This event is private. Use the join link or code you were sent.' };
+    }
+
     await get().addGolferToEvent(event.id, currentProfile.id);
     return { success: true, eventId: event.id };
   },

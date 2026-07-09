@@ -128,6 +128,17 @@ const schema = a.schema({
     .authorization((allow) => [allow.authenticated()])
     .handler(a.handler.function(eventAccess)),
 
+  joinHubByEventId: a
+    .mutation()
+    .arguments({
+      eventId: a.id().required(),
+      profileId: a.id().required(),
+      displayName: a.string(),
+    })
+    .returns(a.ref('JoinHubResult'))
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(eventAccess)),
+
   leaveHub: a
     .mutation()
     .arguments({

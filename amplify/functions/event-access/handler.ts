@@ -426,38 +426,19 @@ async function handleGetAccessibleHubById(
   };
 }
 
-async function handleJoinHubByShareCode(
+type JoinHubArgs = {
+  profileId: string;
+  displayName?: string | null;
+};
+
+async function applyHubMembership(
   client: ReturnType<typeof generateClient<Schema>>,
-  callerMembershipKeys: string[],
   callerUserId: string,
-  args: { shareCode: string; profileId: string; displayName?: string | null },
+  event: EventRecord,
+  profile: { name?: string | null; handicapIndex?: number | null },
+  args: JoinHubArgs,
 ) {
-  const normalizedCode = String(args.shareCode || '').trim().toUpperCase();
-  if (!normalizedCode) {
-    return { success: false, error: 'Please enter a valid join code.' };
-  }
-
-  const profile = await requireOwnedProfile(client, args.profileId, callerUserId);
-  const allEvents = await listAllEventRecords(client);
-  const event = allEvents.find((candidate) => String(candidate.shareCode || '').trim().toUpperCase() === normalizedCode) || null;
-
-  if (!event) {
-    console.warn('joinHubByShareCode: no event found for code', normalizedCode, 'visibleEvents', allEvents.length);
-    return { success: false, error: 'Event not found or share code is invalid.' };
-  }
-
   const hubType = normalizeHubType(event);
-  const settings = groupSettings(event);
-  if (hubType === 'group' && (settings.joinPolicy || 'open') !== 'open') {
-    return {
-      success: false,
-      error: settings.joinPolicy === 'invite_only'
-        ? 'This group is invite-only. Ask an admin to add you.'
-        : 'This group requires join approval. Request flow is not enabled yet.',
-      hubType,
-    };
-  }
-
   const canonicalMembershipKeys = buildMembershipKeys(callerUserId);
   const nextMemberUserIds = Array.from(new Set([...(event.memberUserIds || []), ...canonicalMembershipKeys]));
   const golfers = asObjectArray(parseJsonField(event.golfersJson, []));
@@ -500,7 +481,7 @@ async function handleJoinHubByShareCode(
   });
 
   if (updateResult.errors?.length || !updateResult.data) {
-    console.error('joinHubByShareCode: failed to update event membership', {
+    console.error('applyHubMembership: failed to update event membership', {
       eventId: event.id,
       profileId: args.profileId,
       callerMembershipKeys: canonicalMembershipKeys,
@@ -513,7 +494,7 @@ async function handleJoinHubByShareCode(
     };
   }
 
-  console.log('joinHubByShareCode: membership updated', {
+  console.log('applyHubMembership: membership updated', {
     eventId: event.id,
     profileId: args.profileId,
     memberUserIds: nextMemberUserIds,
@@ -525,6 +506,74 @@ async function handleJoinHubByShareCode(
     eventId: event.id,
     hubType,
   };
+}
+
+async function handleJoinHubByShareCode(
+  client: ReturnType<typeof generateClient<Schema>>,
+  callerMembershipKeys: string[],
+  callerUserId: string,
+  args: { shareCode: string; profileId: string; displayName?: string | null },
+) {
+  const normalizedCode = String(args.shareCode || '').trim().toUpperCase();
+  if (!normalizedCode) {
+    return { success: false, error: 'Please enter a valid join code.' };
+  }
+
+  const profile = await requireOwnedProfile(client, args.profileId, callerUserId);
+  const allEvents = await listAllEventRecords(client);
+  const event = allEvents.find((candidate) => String(candidate.shareCode || '').trim().toUpperCase() === normalizedCode) || null;
+
+  if (!event) {
+    console.warn('joinHubByShareCode: no event found for code', normalizedCode, 'visibleEvents', allEvents.length);
+    return { success: false, error: 'Event not found or share code is invalid.' };
+  }
+
+  // A valid share code is the invite — bypass joinPolicy restrictions.
+  if (isMember(event, callerMembershipKeys)) {
+    return {
+      success: true,
+      eventId: event.id,
+      hubType: normalizeHubType(event),
+    };
+  }
+
+  return applyHubMembership(client, callerUserId, event, profile, args);
+}
+
+async function handleJoinHubByEventId(
+  client: ReturnType<typeof generateClient<Schema>>,
+  callerMembershipKeys: string[],
+  callerUserId: string,
+  args: { eventId: string; profileId: string; displayName?: string | null },
+) {
+  const eventId = String(args.eventId || '').trim();
+  if (!eventId) {
+    return { success: false, error: 'Missing event ID.' };
+  }
+
+  const profile = await requireOwnedProfile(client, args.profileId, callerUserId);
+  const allEvents = await listAllEventRecords(client);
+  const event = allEvents.find((candidate) => candidate.id === eventId) || null;
+
+  if (!event) {
+    return { success: false, error: 'Event not found.' };
+  }
+
+  const hubType = normalizeHubType(event);
+
+  if (isMember(event, callerMembershipKeys)) {
+    return { success: true, eventId: event.id, hubType };
+  }
+
+  if (!event.isPublic) {
+    return {
+      success: false,
+      error: 'This event is private. Use the join link or code you were sent.',
+      hubType,
+    };
+  }
+
+  return applyHubMembership(client, callerUserId, event, profile, args);
 }
 
 async function handleLeaveHub(
@@ -899,6 +948,8 @@ export const handler = async (event: AppSyncResolverEvent<Record<string, any>>) 
       return handleGetAccessibleHubById(client, callerMembershipKeys, event.arguments as any);
     case 'joinHubByShareCode':
       return handleJoinHubByShareCode(client, callerMembershipKeys, callerUserId, event.arguments as any);
+    case 'joinHubByEventId':
+      return handleJoinHubByEventId(client, callerMembershipKeys, callerUserId, event.arguments as any);
     case 'leaveHub':
       return handleLeaveHub(client, callerMembershipKeys, callerUserId, event.arguments as any);
     case 'removeHubMember':

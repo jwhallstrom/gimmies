@@ -138,6 +138,7 @@ interface State {
   setScorecardView: EventSliceActions['setScorecardView'];
   generateShareCode: EventSliceActions['generateShareCode'];
   joinEventByCode: EventSliceActions['joinEventByCode'];
+  joinEventById: EventSliceActions['joinEventById'];
   addChatMessage: EventSliceActions['addChatMessage'];
   clearChat: EventSliceActions['clearChat'];
   toggleReaction: EventSliceActions['toggleReaction'];

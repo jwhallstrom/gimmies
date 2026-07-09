@@ -12,7 +12,7 @@ type Props = {
  * Guest-mode gate: provides a consistent way to return to LoginPage.
  *
  * In this app, showing LoginPage requires `currentUser` to be null.
- * Calling `logout()` clears the local guest user so the auth UI can appear.
+ * Clears Amplify session first so sign-in does not get stuck on stale tokens.
  */
 export const SignInRequired: React.FC<Props> = ({
   title = '🔒 Sign in required',
@@ -21,6 +21,17 @@ export const SignInRequired: React.FC<Props> = ({
   onAction,
 }) => {
   const logout = useStore((s) => s.logout);
+
+  const handleSignIn = async () => {
+    onAction?.();
+    try {
+      const { signOut } = await import('aws-amplify/auth');
+      await signOut();
+    } catch {
+      // ignore — may not have an Amplify session
+    }
+    logout();
+  };
 
   return (
     <div className="bg-gradient-to-r from-blue-50 to-green-50 border-2 border-blue-200 rounded-xl p-5">
@@ -41,10 +52,7 @@ export const SignInRequired: React.FC<Props> = ({
           <h3 className="text-lg font-extrabold text-gray-900 mb-1">{title}</h3>
           <p className="text-sm text-gray-700 mb-4">{message}</p>
           <button
-            onClick={() => {
-              onAction?.();
-              logout();
-            }}
+            onClick={() => { void handleSignIn(); }}
             className="inline-flex items-center justify-center px-5 py-2.5 rounded-xl font-extrabold text-white bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 transition-all shadow-md"
           >
             {actionLabel}

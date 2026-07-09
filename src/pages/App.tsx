@@ -61,7 +61,7 @@ const EventOrGroupRouter: React.FC = () => {
 };
 
 const App: React.FC = () => {
-  const { currentUser, currentProfile, events, createUser, joinEventByCode, addToast, pendingLevelUp, clearPendingLevelUp } = useStore();
+  const { currentUser, currentProfile, events, createUser, joinEventByCode, joinEventById, addToast, pendingLevelUp, clearPendingLevelUp } = useStore();
   const loadEventsFromCloud = useStore((s) => s.loadEventsFromCloud);
   const location = useLocation();
   const navigate = useNavigate();
@@ -163,7 +163,7 @@ const App: React.FC = () => {
   };
 
   // If someone opens a join/event link before auth, we stash the target in sessionStorage.
-  // Once a profile exists, auto-join (code) or navigate (direct ID) into the event.
+  // Once a profile exists, auto-join via code or public event ID.
   useEffect(() => {
     if (!currentProfile || pendingJoinHandled) return;
 
@@ -179,26 +179,39 @@ const App: React.FC = () => {
     if (!code && !directEventId) return;
     setPendingJoinHandled(true);
 
-    if (code) {
-      (async () => {
-        try {
+    (async () => {
+      try {
+        if (code) {
           const result = await joinEventByCode(String(code).toUpperCase());
           try { sessionStorage.removeItem('gimmies.pendingJoinCode.v1'); } catch {}
+          try { sessionStorage.removeItem('gimmies.pendingEventId.v1'); } catch {}
           if (result?.success && result?.eventId) {
             addToast?.('Joined event!', 'success', 2500);
             navigate(`/event/${result.eventId}`);
           } else {
             addToast?.(result?.error || 'Could not join event', 'error', 3500);
+            navigate('/');
           }
-        } catch {
-          addToast?.('Could not join event', 'error', 3500);
+          return;
         }
-      })();
-    } else if (directEventId) {
-      try { sessionStorage.removeItem('gimmies.pendingEventId.v1'); } catch {}
-      navigate(`/event/${directEventId}`, { replace: true });
-    }
-  }, [currentProfile?.id, pendingJoinHandled, joinEventByCode, addToast, navigate]);
+
+        if (directEventId) {
+          const result = await joinEventById(directEventId);
+          try { sessionStorage.removeItem('gimmies.pendingEventId.v1'); } catch {}
+          if (result?.success && result?.eventId) {
+            addToast?.('Joined event!', 'success', 2500);
+            navigate(`/event/${result.eventId}`, { replace: true });
+          } else {
+            addToast?.(result?.error || 'Could not join event', 'error', 3500);
+            navigate('/');
+          }
+        }
+      } catch {
+        addToast?.('Could not join event', 'error', 3500);
+        navigate('/');
+      }
+    })();
+  }, [currentProfile?.id, pendingJoinHandled, joinEventByCode, joinEventById, addToast, navigate]);
 
   // Theme (Light/Dark/Auto) driven by profile preference.
   useEffect(() => {
