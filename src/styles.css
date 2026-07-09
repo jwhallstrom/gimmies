@@ -3,38 +3,40 @@
 @tailwind utilities;
 
 /* ==========================================================================
-   Root Layout - iOS PWA Safe Area & Dynamic Viewport
-   CRITICAL: This layout structure is tuned for iOS 26.2 PWA safe areas
-   DO NOT MODIFY without extensive iOS testing - position:fixed on body is required!
+   Root Layout - iOS PWA Safe Area Chain Fix
+   KEY INSIGHT (community-proven for iOS 11–18+ PWAs):
+   html + body must use height:100% (NOT 100vh/100dvh) with position:relative
+   to create a proper height chain from the viewport. This prevents iOS Safari
+   from miscalculating viewport dimensions when the keyboard opens, the home
+   indicator toggles, or safe area insets change.
+   See: Stack Overflow, r/Frontend, r/vuejs — battle-tested since iOS 11.
    ========================================================================== */
 
 html {
-  height: 100dvh;
   height: 100%;
   background-color: #09243F;
   overflow: hidden;
   overscroll-behavior-y: contain;
+  position: relative;
 }
 
 body {
   font-family: ui-sans-serif, system-ui, sans-serif;
-  height: 100dvh;
-  /* Fallback */
-  height: 100%;
-  margin: 0;
-  /* CRITICAL: Safe area insets - NO bottom padding, footer handles it with -mb-4 */
-  padding-top: env(safe-area-inset-top, 0px);
-  padding-left: env(safe-area-inset-left, 0px);
-  padding-right: env(safe-area-inset-right, 0px);
-  background-color: #09243F;
-  overflow: hidden;
-  /* CRITICAL: position:fixed required for iOS safe areas - DO NOT REMOVE */
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
+  height: 100dvh;
+  margin: 0;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  /* NO padding-bottom — footer handles bottom safe area */
+  background-color: #09243F;
+  overflow: hidden;
   box-sizing: border-box;
+  -webkit-overflow-scrolling: touch;
 }
 
 #root {
@@ -46,37 +48,31 @@ body {
   overflow: hidden;
 }
 
-/* Header - safe area padding for notch/Dynamic Island (iOS) and status bar (Android).
-   Uses max() to guarantee a minimum 10px pad even when env() returns 0 (Android non-notch). */
+/* Header - minimum top padding for status bar clearance.
+   NOTE: Body padding-top already handles env(safe-area-inset-top) for notch/Dynamic Island.
+   Do NOT add env(safe-area-inset-top) here — it would double-count with body padding. */
 header {
-  /* Ancient browser fallback */
   padding-top: 10px;
-  /* Modern: at least 10px, or the safe-area value for devices with notches */
-  padding-top: max(10px, env(safe-area-inset-top, 10px));
 }
 
-/* CSS custom property for footer height - single source of truth.
-   Ticker, chat composer, and footer all reference this so they're always in sync. */
+/* Footer height variables — single source of truth.
+   Footer uses h-[68px] with -mb-4 (16px) negative margin, so 52px is visible
+   above the viewport bottom. Add safe-area-inset-bottom for content/ticker clearance. */
 :root {
   --footer-nav-height: 68px;
-  --footer-total-height: 68px;
+  --footer-total-height: 52px;
 }
 @supports (padding: env(safe-area-inset-bottom, 0px)) {
   :root {
-    --footer-total-height: calc(68px + env(safe-area-inset-bottom, 0px));
+    --footer-total-height: calc(52px + env(safe-area-inset-bottom, 0px));
   }
 }
 
-/* Fixed footer - extends into home indicator area (iOS) / gesture bar (Android) */
+/* Fixed footer — height and safe-area padding are controlled by Tailwind classes
+   in App.tsx (h-[68px] pb-safe-bottom -mb-4). Do NOT add height or padding-bottom
+   here — it conflicts with Tailwind and causes double safe-area on iOS. */
 footer {
-  /* Fallback for browsers that don't support env() */
-  padding-bottom: 8px;
-  /* On iOS: adds home indicator inset. On Android: env() is 0 so just 8px base. */
-  padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
-  /* Fixed height to ensure perfect alignment with ticker. */
-  height: var(--footer-total-height);
   background-color: inherit;
-  /* Ensure padding doesn't add to height */
   box-sizing: border-box;
 }
 /* ==========================================================================
@@ -107,30 +103,21 @@ button, a, [role="button"], .no-select {
   user-select: none;
 }
 
-/* Hide bottom nav when chat input is focused (mobile keyboard visible) */
-body.chat-input-focused footer {
+/* ==========================================================================
+   Chat Composer — In-flow at bottom of flex layout (Gemini-inspired).
+   The composer sits naturally at the bottom of the chat flex container.
+   When the input is focused, the footer hides via CSS :has() to give
+   more room to the keyboard. No JavaScript keyboard handling needed.
+   ========================================================================== */
+
+/* When the chat input is focused (keyboard visible), hide the bottom nav
+   and collapse the footer-clearance padding so the composer sits flush.
+   Uses CSS :has() — supported in Safari 15.4+, Chrome 105+, Firefox 121+. */
+body:has(.chat-composer-input:focus) footer {
   display: none !important;
 }
-
-/* When footer is hidden (keyboard up), remove the footer-clearance padding
-   so the chat composer sits flush above the keyboard instead of floating. */
-body.chat-input-focused .event-page-container {
+body:has(.chat-composer-input:focus) .pb-\[var\(--footer-total-height\)\] {
   padding-bottom: 0 !important;
-}
-
-body.chat-input-focused .content-with-footer {
-  padding-bottom: 0 !important;
-}
-
-/* When the bottom nav is part of flex layout, content scrolls within the main area naturally.
-   This class is kept for backward compat but no longer needs bottom offset. */
-.app-scroll-with-bottom-nav {
-  /* Content now sits naturally above footer in flex layout */
-}
-
-/* When the keyboard is up, we hide the bottom nav. */
-body.chat-input-focused .app-scroll-with-bottom-nav {
-  /* No bottom offset needed with flex layout */
 }
 
 /* Smooth momentum scrolling (iOS Safari; no-op on Android/Chrome) */
@@ -189,10 +176,11 @@ a:active,
 .pl-safe-base-0 { --pl-safe-base: 0; }
 .pr-safe-base-0 { --pr-safe-base: 0; }
 
-/* Ticker positioning - sits flush against top of the fixed bottom nav.
-   Uses the same CSS variable as the footer so they always match. */
+/* Ticker positioning - sits flush against top of the visible footer nav.
+   Footer is 68px with -mb-4 (16px pushdown), so visible top edge = 52px from bottom.
+   We skip the safe-area offset here since the footer's -mb-4 already accounts for it. */
 .ticker-above-footer {
-  bottom: var(--footer-total-height);
+  bottom: 52px;
 }
 
 /* FAB positioning - sits above ticker and bottom nav */
@@ -259,17 +247,14 @@ a:active,
   .min-h-dvh { min-height: -webkit-fill-available; }
 }
 
-/* Full-screen overlay for modals/profile editor */
+/* Full-screen overlay for modals/profile editor.
+   Uses inset:0 instead of 100vh/100dvh — avoids iOS viewport miscalculation. */
 .fullscreen-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  width: 100vw;
-  height: 100vh;
-  height: 100dvh;
-  height: var(--app-height, 100vh);
   z-index: 10000;
 }
 
@@ -603,14 +588,15 @@ body.pwa-standalone .fullscreen-overlay {
    Applied via JS-set body class 'platform-android'
    ========================================================================== */
 
-/* Android doesn't have iOS home indicator, so footer doesn't need extra bottom padding */
+/* Android doesn't have iOS home indicator — footer is full 68px with no negative margin */
 body.platform-android {
   --footer-total-height: 68px;
 }
 
 body.platform-android footer {
-  padding-bottom: 8px;
+  padding-bottom: 0;
   height: 68px;
+  margin-bottom: 0;
 }
 
 /* Android header: no notch on most devices, but ensure readable spacing */

@@ -49,7 +49,19 @@ export async function saveIndividualRoundToCloud(round: IndividualRound): Promis
 
     const { data, errors } = await client.models.IndividualRound.create(cloudData);
 
-    if (errors) {
+    if (errors && errors.length > 0) {
+      // Idempotency fallback: if the row already exists, update it instead of failing.
+      const isAlreadyExists = errors.some((e: any) =>
+        String(e?.message || '').toLowerCase().includes('already exists')
+      );
+      if (isAlreadyExists) {
+        const { errors: updateErrors } = await client.models.IndividualRound.update(cloudData);
+        if (!updateErrors || updateErrors.length === 0) {
+          console.log('Individual round already existed; updated successfully:', round.id);
+          return true;
+        }
+      }
+
       console.error('❌ Error saving individual round:', errors);
       console.error('❌ Round data that failed:', cloudData);
       return false;

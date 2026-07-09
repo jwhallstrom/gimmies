@@ -30,6 +30,7 @@ export interface StatusTier {
   badgeColor: string; // Badge background color
   description: string;
   perks: string[];
+  isManualOnly?: boolean; // Reserved tiers that cannot be earned via rounds
 }
 
 /**
@@ -90,6 +91,18 @@ export const STATUS_TIERS: StatusTier[] = [
     badgeColor: 'bg-amber-600',
     description: 'Hall of Fame status. Your handicap is ironclad—emblematic of lifelong commitment, excellence, and community respect.',
     perks: ['Gold Jacket badge', 'HOF status', 'Handicap fully verified', 'Lifetime recognition']
+  },
+  {
+    level: 5,
+    name: 'Founder',
+    emoji: '\u{1F451}',
+    minRounds: 0,
+    maxRounds: null,
+    color: 'slate',
+    badgeColor: 'bg-slate-900',
+    description: 'Permanent platform architect status. Signed and authenticated by the creators of Gimmies. Reserved and unattainable through play.',
+    perks: ['Founder Seal', 'Signed Verification', 'Lifetime Platform Authority'],
+    isManualOnly: true
   }
 ];
 
@@ -98,7 +111,7 @@ export const STATUS_TIERS: StatusTier[] = [
  */
 export interface VerifiedStatus {
   verifiedRounds: number;      // Count of qualified verified events
-  statusLevel: number;         // 0-4 matching STATUS_TIERS
+  statusLevel: number;         // 0-5 matching STATUS_TIERS
   badges: string[];            // Earned badges e.g., ['par_player', 'first_event', 'streak_5']
   lastVerifiedEventId?: string;
   lastVerifiedEventDate?: string;
@@ -440,6 +453,9 @@ export interface ChatMessage {
   pollQuestion?: string;
   pollOptions?: ChatPollOption[];
   pollClosed?: boolean;
+
+  /** Profile IDs of users @mentioned in this message */
+  mentions?: string[];
 }
 
 export interface ChatAttachment {
@@ -505,6 +521,12 @@ export interface GroupSettings {
    * Optional location/region for discovery
    */
   location?: string;
+
+  /**
+   * Group avatar: emoji string (rendered on gradient bg),
+   * data: URI, or https URL for uploaded images.
+   */
+  avatar?: string;
 }
 
 export interface JoinRequest {

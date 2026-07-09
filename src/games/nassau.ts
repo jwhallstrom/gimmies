@@ -1,24 +1,23 @@
 import { Event, NassauConfig, NassauTeam } from '../state/store';
-import { netScore } from './handicap';
 import { courseMap } from '../data/courses';
+import { netScore } from './handicap';
+import { getParticipantsForConfig } from './participants';
 
 export interface NassauSegmentResult {
   segment: 'front' | 'back' | 'total';
-  winners: string[]; // golferIds or team ids depending on mode
-  scores: Record<string, number>; // id -> strokes for that segment
-  toPar: Record<string, number>; // id -> strokes relative to par (negative = under)
-  pot: number; // portion of nassau pot assigned to this segment
+  winners: string[];
+  scores: Record<string, number>;
+  toPar: Record<string, number>;
+  pot: number;
   mode: 'individual' | 'team';
 }
 
 export interface NassauPayoutSummary {
   configId: string;
   groupId: string;
-  /** Total per-player buy-in across all segments. */
   feePerPlayer: number;
-  /** Per-segment fees per player. */
   feesPerPlayer: { out: number; in: number; total: number };
-  pot: number; // total pot for this nassau (players * fee)
+  pot: number;
   segments: NassauSegmentResult[];
   winningsByGolfer: Record<string, number>;
 }
@@ -30,222 +29,179 @@ function segmentHoles(segment: 'front' | 'back' | 'total'): number[] {
 }
 
 export function computeNassauForConfig(event: Event, config: NassauConfig, profiles: any[]): NassauPayoutSummary | null {
-  const group = event.groups.find(g => g.id === config.groupId);
+  const group = event.groups.find((g) => g.id === config.groupId);
   if (!group || group.golferIds.length < 2) return null;
-  const prefFor = (gid: string): 'all' | 'nassau' | 'skins' | 'none' => {
-    const eg = event.golfers.find((g: any) => (g.profileId || g.customName || g.displayName) === gid);
-    return (eg?.gamePreference as any) || 'all';
-  };
-  // Nassau is for "All games" or "Nassau only" participants.
-  const eligible = (gid: string) => {
-    const pref = prefFor(gid);
-    return pref === 'all' || pref === 'nassau';
-  };
-  // Use all eligible golfers — participantGolferIds is a creation-time snapshot
-  // and becomes stale when new players join the event after game setup.
-  const players = group.golferIds.filter(eligible);
+
+  const isTeam = Boolean(config.teams && config.teams.length >= 2);
+  const players = getParticipantsForConfig(event, config, 'nassau', {
+    restrictToGroup: true,
+    assignedTeamsOnly: isTeam,
+  });
   if (players.length < 2) return null;
-  const isTeam = !!(config.teams && config.teams.length >= 2);
 
-  // Determine who is participating/paying.
-  // Fee semantics:
-  // - If `config.fees` exists, those are per-player segment fees.
-  // - Otherwise treat legacy `config.fee` as a per-segment fee (i.e., 5 => 5/5/5).
-  let payingPlayers = players;
-  if (isTeam) {
-    const teamGolferIds = new Set<string>();
-    (config.teams || []).forEach(t => t.golferIds.forEach(gid => { if (players.includes(gid)) teamGolferIds.add(gid); }));
-    payingPlayers = players.filter(p => teamGolferIds.has(p));
-  }
-
-  if (payingPlayers.length < 2) return null; // not enough paying participants
+  const payingPlayers = players;
   const feesPerPlayer = config.fees ?? { out: config.fee, in: config.fee, total: config.fee };
-  const pot =
-    payingPlayers.length * (feesPerPlayer.out + feesPerPlayer.in + feesPerPlayer.total);
+  if (payingPlayers.length < 2) return null;
+
+  const pot = payingPlayers.length * (feesPerPlayer.out + feesPerPlayer.in + feesPerPlayer.total);
   const winningsByGolfer: Record<string, number> = {};
-  payingPlayers.forEach(p => (winningsByGolfer[p] = 0));
+  payingPlayers.forEach((playerId) => {
+    winningsByGolfer[playerId] = 0;
+  });
 
   const segmentFee = (segment: 'front' | 'back' | 'total') =>
     segment === 'front' ? feesPerPlayer.out : segment === 'back' ? feesPerPlayer.in : feesPerPlayer.total;
 
-  // Check if this is a 2-team match play game
   const is2TeamMatch = isTeam && config.teams?.length === 2 && config.scoringType === 'match';
 
-  const segments: NassauSegmentResult[] = (['front', 'back', 'total'] as const).map(segment => {
+  const segments: NassauSegmentResult[] = (['front', 'back', 'total'] as const).map((segment) => {
     const holes = segmentHoles(segment);
     const segmentPot = payingPlayers.length * segmentFee(segment);
-  const scores: Record<string, number> = {};
-  const toPar: Record<string, number> = {};
-    
-    console.log(`🏌️ Nassau ${segment} calculation:`, { holes, isTeam, is2TeamMatch });
-    
+    const scores: Record<string, number> = {};
+    const toPar: Record<string, number> = {};
+
     if (!isTeam) {
-  players.forEach(pid => {
-        const sc = event.scorecards.find(s => s.golferId === pid);
-        if (!sc) return;
-        const relevantScores = sc.scores.filter(s => holes.includes(s.hole) && s.strokes != null);
-        const sum = relevantScores.reduce((acc, s) => acc + (config.net ? (netScore(event, pid, s.hole, s.strokes, profiles) ?? 0) : (s.strokes ?? 0)), 0);
-        const playedHoles = relevantScores.length;
-        scores[pid] = playedHoles === holes.length ? sum : Number.POSITIVE_INFINITY;
-        
-        console.log(`  Player ${pid}: ${playedHoles}/${holes.length} holes, score=${scores[pid]} (sum=${sum})`);
+      players.forEach((playerId) => {
+        const scorecard = event.scorecards.find((s) => s.golferId === playerId);
+        if (!scorecard) return;
+        const relevantScores = scorecard.scores.filter((score) => holes.includes(score.hole) && score.strokes != null);
+        const sum = relevantScores.reduce((acc, score) => {
+          if (!config.net) return acc + (score.strokes ?? 0);
+          return acc + (netScore(event, playerId, score.hole, score.strokes, profiles) ?? 0);
+        }, 0);
+        scores[playerId] = relevantScores.length === holes.length ? sum : Number.POSITIVE_INFINITY;
       });
-      // compute par baseline for holes from course data if available
-      const courseDef = event.course.courseId ? event.course.courseId : null;
-      let parSum = 0;
-      if (courseDef) {
-        // dynamic import courseMap inline to avoid circular (already imported in other modules but safe)
-        // We'll require caller already has correct par values via scorecards; using scorecards would be simpler.
-      }
-      // derive par per hole via first golfer scorecard metadata (par not stored there), so skip; we can't compute without course map here.
     } else if (is2TeamMatch) {
-      // 2-Team Match Play: Count holes won by each team
       const team1 = config.teams![0];
       const team2 = config.teams![1];
       const bestCount = config.teamBestCount && config.teamBestCount > 0 ? config.teamBestCount : 1;
-      
+
       let team1Wins = 0;
       let team2Wins = 0;
       let allComplete = true;
-      
-      console.log(`  Match Play mode: ${team1.name} vs ${team2.name}, bestCount=${bestCount}`);
-      
-      for (const h of holes) {
+
+      for (const hole of holes) {
         const getTeamBestScore = (team: NassauTeam): number | null => {
           const memberScores: number[] = [];
-          const teamMembers = team.golferIds.filter(gid => players.includes(gid));
-          
-          teamMembers.forEach(pid => {
-            const sc = event.scorecards.find(s => s.golferId === pid);
-            const gross = sc?.scores.find(s => s.hole === h)?.strokes ?? null;
-            const value = gross == null ? null : (config.net ? (netScore(event, pid, h, gross, profiles) ?? gross) : gross);
+          const teamMembers = team.golferIds.filter((golferId) => players.includes(golferId));
+
+          teamMembers.forEach((playerId) => {
+            const scorecard = event.scorecards.find((s) => s.golferId === playerId);
+            const gross = scorecard?.scores.find((s) => s.hole === hole)?.strokes ?? null;
+            const value = gross == null ? null : (config.net ? (netScore(event, playerId, hole, gross, profiles) ?? gross) : gross);
             if (value != null) memberScores.push(value);
           });
-          
+
           if (memberScores.length === 0) return null;
           memberScores.sort((a, b) => a - b);
           const used = memberScores.slice(0, Math.min(bestCount, memberScores.length));
           return used.reduce((a, b) => a + b, 0);
         };
-        
+
         const score1 = getTeamBestScore(team1);
         const score2 = getTeamBestScore(team2);
-        
         if (score1 === null || score2 === null) {
           allComplete = false;
           break;
         }
-        
-        if (score1 < score2) {
-          team1Wins++;
-          console.log(`    Hole ${h}: ${team1.name} wins (${score1} vs ${score2})`);
-        } else if (score2 < score1) {
-          team2Wins++;
-          console.log(`    Hole ${h}: ${team2.name} wins (${score2} vs ${score1})`);
-        } else {
-          console.log(`    Hole ${h}: Tie (${score1} vs ${score2})`);
-        }
+
+        if (score1 < score2) team1Wins++;
+        else if (score2 < score1) team2Wins++;
       }
-      
-      // In match play, the score is holes won (higher is better, so we negate for sorting)
-      // We store negative holes won so lowest "score" wins (consistent with stroke play logic)
+
       scores[team1.id] = allComplete ? -team1Wins : Number.POSITIVE_INFINITY;
       scores[team2.id] = allComplete ? -team2Wins : Number.POSITIVE_INFINITY;
-      toPar[team1.id] = team1Wins; // Store actual holes won in toPar for display
-      toPar[team2.id] = team2Wins;
-      
-      console.log(`  Match Play results: ${team1.name}=${team1Wins} holes, ${team2.name}=${team2Wins} holes`);
+      toPar[team1.id] = team1Wins - team2Wins;
+      toPar[team2.id] = team2Wins - team1Wins;
     } else {
-      // Standard team stroke play
       const bestCount = config.teamBestCount && config.teamBestCount > 0 ? config.teamBestCount : 1;
-      console.log(`  Team mode: bestCount=${bestCount}, teams=${config.teams?.length || 0}`);
-      
-      (config.teams || []).forEach(team => {
-        const teamMembers = team.golferIds.filter(gid => players.includes(gid));
-        if (teamMembers.length === 0) {
-          return;
-        }
-        // aggregate per hole: sort team members' scores (net/gross) and take best N
+
+      (config.teams || []).forEach((team) => {
+        const teamMembers = team.golferIds.filter((golferId) => players.includes(golferId));
+        if (teamMembers.length === 0) return;
+
         let total = 0;
         let parTotal = 0;
         let allComplete = true;
-        console.log(`  Calculating team ${team.id} (${team.name}):`, teamMembers);
-        
-        for (const h of holes) {
+
+        for (const hole of holes) {
           const memberScores: number[] = [];
-          let holePar = 4; // default par
-          
-          // Get hole par from course data
+          let holePar = 4;
+
           if (event.course.courseId) {
             const course = courseMap[event.course.courseId];
-            if (course) {
-              const holeData = course.holes.find((hole: any) => hole.number === h);
-              if (holeData) holePar = holeData.par;
-            }
+            const holeData = course?.holes.find((item: any) => item.number === hole);
+            if (holeData) holePar = holeData.par;
           }
-          
-            teamMembers.forEach(pid => {
-              const sc = event.scorecards.find(s => s.golferId === pid);
-              const gross = sc?.scores.find(s => s.hole === h)?.strokes ?? null;
-              const value = gross == null ? null : (config.net ? (netScore(event, pid, h, gross, profiles) ?? gross) : gross);
-              if (value != null) memberScores.push(value);
-            });
-          if (memberScores.length === 0) { allComplete = false; break; }
-          memberScores.sort((a,b)=>a-b);
+
+          teamMembers.forEach((playerId) => {
+            const scorecard = event.scorecards.find((s) => s.golferId === playerId);
+            const gross = scorecard?.scores.find((s) => s.hole === hole)?.strokes ?? null;
+            const value = gross == null ? null : (config.net ? (netScore(event, playerId, hole, gross, profiles) ?? gross) : gross);
+            if (value != null) memberScores.push(value);
+          });
+
+          if (memberScores.length === 0) {
+            allComplete = false;
+            break;
+          }
+
+          memberScores.sort((a, b) => a - b);
           const used = memberScores.slice(0, Math.min(bestCount, memberScores.length));
-          const holeTotal = used.reduce((a,b)=>a+b,0);
-          total += holeTotal;
-          parTotal += holePar * used.length; // par for the number of scores used
-          console.log(`    Hole ${h}: par=${holePar}, memberScores=[${memberScores.join(', ')}], used=[${used.join(', ')}], holeTotal=${holeTotal}`);
+          total += used.reduce((a, b) => a + b, 0);
+          parTotal += holePar * used.length;
         }
-        // Store the raw total strokes AND compute toPar using the accumulated parTotal
+
         scores[team.id] = allComplete ? total : Number.POSITIVE_INFINITY;
         toPar[team.id] = allComplete ? total - parTotal : 0;
-        console.log(`  Team ${team.id} final: total=${total}, parTotal=${parTotal}, toPar=${total - parTotal}`);
       });
     }
+
     const minScore = Math.min(...Object.values(scores));
     const winners = Object.entries(scores)
-      .filter(([, v]) => v === minScore && Number.isFinite(v))
+      .filter(([, score]) => score === minScore && Number.isFinite(score))
       .map(([id]) => id);
-    if (winners.length) {
+
+    if (winners.length > 0) {
       const share = segmentPot / winners.length;
       if (!isTeam) {
-        winners.forEach(w => (winningsByGolfer[w] += share));
+        winners.forEach((winnerId) => {
+          winningsByGolfer[winnerId] += share;
+        });
       } else {
-        winners.forEach(teamId => {
-          const team = (config.teams || []).find(t => t.id === teamId);
-          if (team) {
-            const participatingGolferIds = team.golferIds.filter(gid => payingPlayers.includes(gid));
-            if (participatingGolferIds.length === 0) return;
-            const perGolfer = share / participatingGolferIds.length;
-            participatingGolferIds.forEach(gid => { winningsByGolfer[gid] = (winningsByGolfer[gid] || 0) + perGolfer; });
-          }
+        winners.forEach((teamId) => {
+          const team = (config.teams || []).find((candidate) => candidate.id === teamId);
+          if (!team) return;
+          const participatingGolferIds = team.golferIds.filter((golferId) => payingPlayers.includes(golferId));
+          if (participatingGolferIds.length === 0) return;
+          const perGolfer = share / participatingGolferIds.length;
+          participatingGolferIds.forEach((golferId) => {
+            winningsByGolfer[golferId] = (winningsByGolfer[golferId] || 0) + perGolfer;
+          });
         });
       }
     }
-    // compute toPar for INDIVIDUAL mode (team mode already computed toPar above)
-    let parForSegment = 0;
-    if (!isTeam) {
-      if (event.course.courseId) {
-        const course = courseMap[event.course.courseId];
-        if (course) {
-          parForSegment = course.holes.filter((h: any)=>holes.includes(h.number)).reduce((a: number,h: any)=>a+h.par,0);
-        }
-      }
+
+    if (!isTeam && event.course.courseId) {
+      const course = courseMap[event.course.courseId];
+      const parForSegment = course
+        ? course.holes.filter((hole: any) => holes.includes(hole.number)).reduce((acc: number, hole: any) => acc + hole.par, 0)
+        : 0;
       if (parForSegment > 0) {
-        Object.entries(scores).forEach(([id, val]) => {
-          if (Number.isFinite(val)) {
-            toPar[id] = val - parForSegment;
-            console.log(`  ${id} toPar: ${val} - ${parForSegment} = ${toPar[id]}`);
-          }
+        Object.entries(scores).forEach(([id, value]) => {
+          if (Number.isFinite(value)) toPar[id] = value - parForSegment;
         });
       }
     }
-    
-    console.log(`🏌️ Nassau ${segment} results:`, { scores, toPar, winners, parForSegment: isTeam ? 'N/A (team mode)' : parForSegment });
-    
-    return { segment, winners, scores, toPar, pot: segmentPot, mode: isTeam ? 'team' : 'individual' };
+
+    return {
+      segment,
+      winners,
+      scores,
+      toPar,
+      pot: segmentPot,
+      mode: isTeam ? 'team' : 'individual',
+    };
   });
 
   return {
@@ -261,6 +217,6 @@ export function computeNassauForConfig(event: Event, config: NassauConfig, profi
 
 export function computeAllNassau(event: Event, profiles: any[]): NassauPayoutSummary[] {
   return event.games.nassau
-    .map(cfg => computeNassauForConfig(event, cfg, profiles))
-    .filter((r): r is NassauPayoutSummary => !!r);
+    .map((config) => computeNassauForConfig(event, config, profiles))
+    .filter((summary): summary is NassauPayoutSummary => Boolean(summary));
 }

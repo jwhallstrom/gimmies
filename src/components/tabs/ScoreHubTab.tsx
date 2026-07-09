@@ -89,40 +89,69 @@ const ScoreHubTab: React.FC<Props> = ({ eventId, isTabActive = true }) => {
         }));
   }, [event?.course?.teeName, selectedCourse]);
 
-  // Find the next hole to enter for quick entry
-  const nextHoleInfo = useMemo(() => {
-    if (!currentProfile || !event) return { hole: 1, par: 4, existingScore: null };
+  // Track which hole the quick entry widget is showing (null = auto / next empty)
+  const [quickEntryHole, setQuickEntryHole] = useState<number | null>(null);
+
+  // Find the next empty hole for quick entry
+  const nextEmptyHole = useMemo(() => {
+    if (!currentProfile || !event) return 1;
     const myScorecard = event.scorecards.find((sc: any) => sc.golferId === currentProfile.id);
-    if (!myScorecard) return { hole: 1, par: 4, existingScore: null };
-    
+    if (!myScorecard) return 1;
     const firstEmpty = myScorecard.scores.find((s: any) => s.strokes == null);
-    const holeNum = firstEmpty ? firstEmpty.hole : 18;
+    return firstEmpty ? firstEmpty.hole : null;
+  }, [event?.scorecards, currentProfile?.id]);
+
+  const holesCompleted = useMemo(() => {
+    if (!currentProfile || !event) return 0;
+    const myScorecard = event.scorecards.find((sc: any) => sc.golferId === currentProfile.id);
+    if (!myScorecard) return 0;
+    return myScorecard.scores.filter((s: any) => s.strokes != null).length;
+  }, [event?.scorecards, currentProfile?.id]);
+
+  const totalHoles = holes.length || 18;
+
+  const nextHoleInfo = useMemo(() => {
+    const holeNum = quickEntryHole ?? nextEmptyHole ?? 18;
     const holeMeta = holes.find((h: any) => h.number === holeNum);
     const par = holeMeta?.par ?? 4;
-    
-    // Check if there's an existing score for this hole
-    const existingScore = myScorecard.scores.find((s: any) => s.hole === holeNum)?.strokes ?? null;
-    
-    return { hole: holeNum, par, existingScore };
-  }, [event?.scorecards, currentProfile?.id, holes]);
 
-  // Initialize quick score to par when FAB opens
+    if (!currentProfile || !event) return { hole: holeNum, par, existingScore: null };
+    const myScorecard = event.scorecards.find((sc: any) => sc.golferId === currentProfile.id);
+    const existingScore = myScorecard?.scores.find((s: any) => s.hole === holeNum)?.strokes ?? null;
+
+    return { hole: holeNum, par, existingScore };
+  }, [event?.scorecards, currentProfile?.id, holes, quickEntryHole, nextEmptyHole]);
+
+  // Reset quick entry hole when FAB opens
   useEffect(() => {
     if (showFabMenu) {
-      // If there's an existing score, use it; otherwise start at par
+      setQuickEntryHole(null);
+    }
+  }, [showFabMenu]);
+
+  // Update quick score whenever the displayed hole changes
+  useEffect(() => {
+    if (showFabMenu) {
       setQuickScore(nextHoleInfo.existingScore ?? nextHoleInfo.par);
     }
-  }, [showFabMenu, nextHoleInfo.par, nextHoleInfo.existingScore]);
+  }, [showFabMenu, nextHoleInfo.hole, nextHoleInfo.par, nextHoleInfo.existingScore]);
 
-  // Handle quick save
+  // Handle quick save — saves current hole and auto-advances to next
   const handleQuickSave = async () => {
     if (!currentProfile || quickScore === null) return;
-    
+
+    const savedHole = nextHoleInfo.hole;
     setQuickSaving(true);
     try {
-      await updateScore(eventId, currentProfile.id, nextHoleInfo.hole, quickScore);
-      addToast?.(`Hole ${nextHoleInfo.hole}: ${quickScore} saved!`, 'success', 1500);
-      setShowFabMenu(false);
+      await updateScore(eventId, currentProfile.id, savedHole, quickScore);
+
+      if (savedHole >= totalHoles) {
+        addToast?.(`Hole ${savedHole} saved — all done! 🎉`, 'success', 2000);
+        setShowFabMenu(false);
+      } else {
+        addToast?.(`Hole ${savedHole}: ${quickScore} ✓`, 'success', 800);
+        setQuickEntryHole(savedHole + 1);
+      }
     } catch {
       addToast?.('Could not save score', 'error');
     } finally {
@@ -171,15 +200,28 @@ const ScoreHubTab: React.FC<Props> = ({ eventId, isTabActive = true }) => {
                 onClick={(e) => e.stopPropagation()}
               >
                 {/* QUICK ENTRY - Inline score entry */}
-                <div className="p-4 bg-gradient-to-br from-green-500 to-emerald-600">
-                  <div className="flex items-center justify-between mb-3">
+                <div className="p-4 bg-gradient-to-br from-green-500 to-emerald-600 relative">
+                  {/* Close button */}
+                  <button
+                    onClick={() => setShowFabMenu(false)}
+                    className="absolute top-3 right-3 w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 active:bg-white/40 flex items-center justify-center transition z-10"
+                    aria-label="Close quick entry"
+                  >
+                    <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+
+                  <div className="flex items-center justify-between mb-3 pr-10">
                     <div className="text-white">
-                      <div className="text-sm font-medium opacity-90">Quick Entry</div>
+                      <div className="text-sm font-medium opacity-90 flex items-center gap-2">
+                        Quick Entry
+                        <span className="opacity-70">{holesCompleted} / {totalHoles}</span>
+                      </div>
                       <div className="text-2xl font-black">
                         Hole {nextHoleInfo.hole} <span className="text-lg font-medium opacity-80">• Par {nextHoleInfo.par}</span>
                       </div>
                     </div>
-                    {/* Score name (Par/Birdie/Bogey) in top right */}
                     {quickScore !== null && (
                       <div className={`px-3 py-1.5 rounded-xl text-sm font-bold ${
                         quickScore <= nextHoleInfo.par - 2 ? 'bg-amber-400 text-amber-950' :
@@ -197,49 +239,107 @@ const ScoreHubTab: React.FC<Props> = ({ eventId, isTabActive = true }) => {
                       </div>
                     )}
                   </div>
+
+                  {/* Hole progress dots */}
+                  <div className="flex gap-0.5 mb-3">
+                    {Array.from({ length: totalHoles }).map((_, i) => {
+                      const holeNum = i + 1;
+                      const myScorecard = event.scorecards.find((sc: any) => sc.golferId === currentProfile?.id);
+                      const hasScore = myScorecard?.scores.find((s: any) => s.hole === holeNum)?.strokes != null;
+                      const isCurrent = holeNum === nextHoleInfo.hole;
+                      return (
+                        <button
+                          key={holeNum}
+                          onClick={() => setQuickEntryHole(holeNum)}
+                          className={`h-1.5 flex-1 rounded-full transition-all ${
+                            isCurrent ? 'bg-white scale-y-150' :
+                            hasScore ? 'bg-white/60' :
+                            'bg-white/20'
+                          }`}
+                          aria-label={`Go to hole ${holeNum}`}
+                        />
+                      );
+                    })}
+                  </div>
                   
-                  {/* +/- Controls with BIG score number in center */}
-                  <div className="flex items-center gap-3">
+                  {/* Hole navigation arrows + score controls */}
+                  <div className="flex items-center gap-2">
+                    {/* Previous hole */}
                     <button
-                      onClick={() => setQuickScore((s) => Math.max(1, (s ?? nextHoleInfo.par) - 1))}
-                      className="w-16 h-16 rounded-2xl bg-white/20 hover:bg-white/30 active:bg-white/40 flex items-center justify-center text-white text-3xl font-bold transition"
+                      onClick={() => setQuickEntryHole(Math.max(1, nextHoleInfo.hole - 1))}
+                      disabled={nextHoleInfo.hole <= 1}
+                      className="w-10 h-16 rounded-xl bg-white/10 hover:bg-white/20 active:bg-white/30 disabled:opacity-20 disabled:pointer-events-none flex items-center justify-center text-white transition"
+                      aria-label="Previous hole"
                     >
-                      −
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                      </svg>
                     </button>
-                    
-                    {/* BIG score number in center */}
-                    <div className="flex-1 flex items-center justify-center">
-                      <div className={`text-7xl font-black tabular-nums ${
-                        quickScore !== null && quickScore < nextHoleInfo.par ? 'text-red-300' :
-                        quickScore !== null && quickScore > nextHoleInfo.par ? 'text-blue-200' :
-                        'text-white'
-                      }`}>
-                        {quickScore ?? nextHoleInfo.par}
+
+                    {/* Score -/+ and number */}
+                    <div className="flex-1 flex items-center gap-2">
+                      <button
+                        onClick={() => setQuickScore((s) => Math.max(1, (s ?? nextHoleInfo.par) - 1))}
+                        className="w-14 h-16 rounded-2xl bg-white/20 hover:bg-white/30 active:bg-white/40 flex items-center justify-center text-white text-3xl font-bold transition"
+                      >
+                        −
+                      </button>
+
+                      <div className="flex-1 flex items-center justify-center">
+                        <div className={`text-7xl font-black tabular-nums ${
+                          quickScore !== null && quickScore < nextHoleInfo.par ? 'text-red-300' :
+                          quickScore !== null && quickScore > nextHoleInfo.par ? 'text-blue-200' :
+                          'text-white'
+                        }`}>
+                          {quickScore ?? nextHoleInfo.par}
+                        </div>
                       </div>
+
+                      <button
+                        onClick={() => setQuickScore((s) => Math.min(15, (s ?? nextHoleInfo.par) + 1))}
+                        className="w-14 h-16 rounded-2xl bg-white/20 hover:bg-white/30 active:bg-white/40 flex items-center justify-center text-white text-3xl font-bold transition"
+                      >
+                        +
+                      </button>
                     </div>
-                    
+
+                    {/* Next hole */}
                     <button
-                      onClick={() => setQuickScore((s) => Math.min(15, (s ?? nextHoleInfo.par) + 1))}
-                      className="w-16 h-16 rounded-2xl bg-white/20 hover:bg-white/30 active:bg-white/40 flex items-center justify-center text-white text-3xl font-bold transition"
+                      onClick={() => setQuickEntryHole(Math.min(totalHoles, nextHoleInfo.hole + 1))}
+                      disabled={nextHoleInfo.hole >= totalHoles}
+                      className="w-10 h-16 rounded-xl bg-white/10 hover:bg-white/20 active:bg-white/30 disabled:opacity-20 disabled:pointer-events-none flex items-center justify-center text-white transition"
+                      aria-label="Next hole"
                     >
-                      +
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                      </svg>
                     </button>
                   </div>
                   
-                  {/* Save Button */}
+                  {/* Save Button — shows intent to advance */}
                   <button
                     onClick={handleQuickSave}
                     disabled={quickSaving}
-                    className="w-full mt-3 py-3 bg-white text-green-700 font-extrabold text-lg rounded-2xl shadow-lg hover:bg-green-50 active:scale-[0.98] disabled:opacity-60 transition-all flex items-center justify-center gap-2"
+                    className="w-full mt-3 py-3.5 bg-white text-green-700 font-extrabold text-lg rounded-2xl shadow-lg hover:bg-green-50 active:scale-[0.98] disabled:opacity-60 transition-all flex items-center justify-center gap-2"
                   >
                     {quickSaving ? (
                       'Saving...'
+                    ) : nextHoleInfo.hole >= totalHoles ? (
+                      <>
+                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+                        </svg>
+                        Save &amp; Finish
+                      </>
                     ) : (
                       <>
                         <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
                         </svg>
                         Save Hole {nextHoleInfo.hole}
+                        <svg className="w-4 h-4 ml-1 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                        </svg>
                       </>
                     )}
                   </button>

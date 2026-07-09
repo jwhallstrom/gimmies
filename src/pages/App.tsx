@@ -1,4 +1,4 @@
-import React, { useEffect, useState, Suspense, lazy, useMemo } from 'react';
+import React, { useEffect, useState, Suspense, lazy, useMemo, useRef } from 'react';
 import { Routes, Route, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { LoginPage } from '../components/auth/LoginPage';
 import { ProfileCompletion } from '../components/auth/ProfileCompletion';
@@ -17,7 +17,10 @@ const HandicapPage = lazy(() => import('./HandicapPage'));
 const AddScorePage = lazy(() => import('./AddScorePage'));
 const RoundDetailPage = lazy(() => import('./RoundDetailPage'));
 const EventPage = lazy(() => import('./EventPage'));
+const GroupPage = lazy(() => import('./GroupPage'));
 const JoinEventPage = lazy(() => import('./JoinEventPage'));
+const GuestJoinPage = lazy(() => import('./GuestJoinPage'));
+const CourseIssueAdminPage = lazy(() => import('./CourseIssueAdminPage'));
 const WalletPage = lazy(() => import('./WalletPage'));
 const AuthDemoPage = lazy(() => import('./AuthDemoPage').then(m => ({ default: m.AuthDemoPage })));
 
@@ -43,55 +46,172 @@ const NassauTeamsRoute: React.FC = () => {
   return <NassauTeamsPage eventId={id} />;
 };
 
+/**
+ * Route hub: renders GroupPage for groups, EventPage for events.
+ * Keeps the /event/:id URL scheme for both (backward-compatible links).
+ */
+const EventOrGroupRouter: React.FC = () => {
+  const { id } = useParams();
+  const hubType = useStore((s) => {
+    const evt = s.events.find((e: any) => e.id === id) || s.completedEvents.find((e: any) => e.id === id);
+    return evt?.hubType;
+  });
+  if (hubType === 'group') return <GroupPage />;
+  return <EventPage />;
+};
+
 const App: React.FC = () => {
-  const { currentUser, currentProfile, events, switchUser, createUser, joinEventByCode, addToast, pendingLevelUp, clearPendingLevelUp } = useStore();
+  const { currentUser, currentProfile, events, createUser, joinEventByCode, joinEventById, addToast, pendingLevelUp, clearPendingLevelUp } = useStore();
+  const loadEventsFromCloud = useStore((s) => s.loadEventsFromCloud);
   const location = useLocation();
   const navigate = useNavigate();
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [amplifyUser, setAmplifyUser] = useState<any>(null);
   const [pendingJoinHandled, setPendingJoinHandled] = useState(false);
   const [showMessagesPanel, setShowMessagesPanel] = useState(false);
+  const isCloudSyncInFlight = useRef(false);
+  const lastCloudSyncAt = useRef(0);
   const isEventRoute = location.pathname.startsWith('/event/');
-  const isEventChatRoute =
-    isEventRoute &&
-    (location.pathname.endsWith('/chat') || /^\/event\/[^/]+\/?$/.test(location.pathname));
   
   // Calculate unread message count for header badge
   const unreadMessageCount = useMemo(() => {
     return getUnreadCount(events, currentProfile?.id);
   }, [events, currentProfile?.id]);
 
-  // If someone opens a join link before their profile is set up, we store the code in sessionStorage.
-  // Once a profile exists, auto-join and navigate them straight into the event.
+  const normalizeCloudRounds = (cloudRounds: any[]) => {
+    const rounds = Array.isArray(cloudRounds) ? cloudRounds : [];
+    const byKey = new Map<string, any>();
+    for (const r of rounds) {
+      const key =
+        (r?.eventId && `event:${r.eventId}:${r.profileId || ''}`) ||
+        (r?.completedRoundId && `completed:${r.completedRoundId}`) ||
+        `manual:${r?.date || ''}:${r?.courseId || ''}:${r?.teeName || ''}:${r?.grossScore || ''}`;
+      const existing = byKey.get(key);
+      if (!existing) {
+        byKey.set(key, r);
+        continue;
+      }
+      const existingTs = new Date(existing.createdAt || existing.date || 0).getTime();
+      const currentTs = new Date(r.createdAt || r.date || 0).getTime();
+      if (currentTs > existingTs) byKey.set(key, r);
+    }
+    return Array.from(byKey.values()).sort(
+      (a, b) => new Date(b.date || b.createdAt || 0).getTime() - new Date(a.date || a.createdAt || 0).getTime()
+    );
+  };
+
+  const syncAmplifyUserToStore = (user: any, attributes: Partial<Record<string, string>>) => {
+    const canonicalUser = {
+      id: String(user.userId),
+      username: attributes.email || user.username || user.userId,
+      displayName: attributes.name || attributes.email || user.username || user.userId,
+      createdAt: new Date().toISOString(),
+      lastActive: new Date().toISOString(),
+    } as any;
+
+    useStore.setState((state: any) => {
+      const remainingUsers = Array.isArray(state.users)
+        ? state.users.filter((u: any) => String(u?.id) !== canonicalUser.id)
+        : [];
+
+      return {
+        users: [canonicalUser, ...remainingUsers],
+        currentUser: canonicalUser,
+      };
+    });
+  };
+
+  const upsertCloudProfileToStore = (cloudProfile: any, cloudRounds: any[]) => {
+    const normalizedRounds = normalizeCloudRounds(cloudRounds);
+    const incoming = { ...cloudProfile, individualRounds: normalizedRounds } as any;
+    const state = useStore.getState();
+    const existing = state.profiles.find((p: any) => p.userId === cloudProfile.userId || p.id === cloudProfile.id);
+    const nextProfiles = existing
+      ? state.profiles.map((p: any) =>
+          (p.userId === cloudProfile.userId || p.id === cloudProfile.id)
+            ? { ...p, ...incoming, individualRounds: normalizedRounds }
+            : p
+        )
+      : [...state.profiles, incoming];
+
+    useStore.setState({
+      profiles: nextProfiles as any,
+      currentProfile: incoming as any,
+    });
+
+    setTimeout(() => {
+      try {
+        useStore.getState().calculateAndUpdateHandicap(incoming.id);
+      } catch (e) {
+        console.error('Failed to recalculate handicap from cloud profile:', e);
+      }
+    }, 0);
+  };
+
+  const clearMismatchedLocalSession = () => {
+    useStore.setState({
+      users: [],
+      currentUser: null,
+      events: [],
+      completedEvents: [],
+      completedRounds: [],
+      currentProfile: null,
+      profiles: [],
+      lastEventsCloudSyncAt: null,
+      lastEventsCloudSyncCount: 0,
+    } as any);
+  };
+
+  // If someone opens a join/event link before auth, we stash the target in sessionStorage.
+  // Once a profile exists, auto-join via code or public event ID.
   useEffect(() => {
     if (!currentProfile || pendingJoinHandled) return;
+
     let code: string | null = null;
+    let directEventId: string | null = null;
     try {
       code = sessionStorage.getItem('gimmies.pendingJoinCode.v1');
+      directEventId = sessionStorage.getItem('gimmies.pendingEventId.v1');
     } catch {
-      code = null;
+      // ignore
     }
-    if (!code) return;
+
+    if (!code && !directEventId) return;
     setPendingJoinHandled(true);
+
     (async () => {
       try {
-        const result = await joinEventByCode(String(code).toUpperCase());
-        try {
-          sessionStorage.removeItem('gimmies.pendingJoinCode.v1');
-        } catch {
-          // ignore
+        if (code) {
+          const result = await joinEventByCode(String(code).toUpperCase());
+          try { sessionStorage.removeItem('gimmies.pendingJoinCode.v1'); } catch {}
+          try { sessionStorage.removeItem('gimmies.pendingEventId.v1'); } catch {}
+          if (result?.success && result?.eventId) {
+            addToast?.('Joined event!', 'success', 2500);
+            navigate(`/event/${result.eventId}`);
+          } else {
+            addToast?.(result?.error || 'Could not join event', 'error', 3500);
+            navigate('/');
+          }
+          return;
         }
-        if (result?.success && result?.eventId) {
-          addToast?.('Joined event!', 'success', 2500);
-          navigate(`/event/${result.eventId}`);
-        } else {
-          addToast?.(result?.error || 'Could not join event', 'error', 3500);
+
+        if (directEventId) {
+          const result = await joinEventById(directEventId);
+          try { sessionStorage.removeItem('gimmies.pendingEventId.v1'); } catch {}
+          if (result?.success && result?.eventId) {
+            addToast?.('Joined event!', 'success', 2500);
+            navigate(`/event/${result.eventId}`, { replace: true });
+          } else {
+            addToast?.(result?.error || 'Could not join event', 'error', 3500);
+            navigate('/');
+          }
         }
       } catch {
         addToast?.('Could not join event', 'error', 3500);
+        navigate('/');
       }
     })();
-  }, [currentProfile?.id, pendingJoinHandled, joinEventByCode, addToast, navigate]);
+  }, [currentProfile?.id, pendingJoinHandled, joinEventByCode, joinEventById, addToast, navigate]);
 
   // Theme (Light/Dark/Auto) driven by profile preference.
   useEffect(() => {
@@ -153,38 +273,34 @@ const App: React.FC = () => {
         
         setAmplifyUser(user);
         console.log('Amplify user found:', user, 'attributes:', attributes);
-        
-        // Auto-create local user if Amplify user exists but no local user
-        if (user && !currentUser) {
-          console.log('Creating local user from Amplify user...');
-          const email = attributes.email || user.username;
-          const displayName = attributes.name || attributes.email || user.username;
-          createUser(email, displayName, true); // Skip automatic profile creation
-          
-          // Try to fetch existing cloud profile
-          console.log('Fetching cloud profile for user:', user.userId);
-          const cloudProfile = await fetchCloudProfile(user.userId);
-          
-          if (cloudProfile) {
-            console.log('Found existing cloud profile, loading into store:', cloudProfile);
-            
-            // Also load IndividualRounds from cloud
-            const cloudRounds = await loadIndividualRoundsFromCloud(cloudProfile.id);
-            console.log('Loaded', cloudRounds.length, 'individual rounds from cloud');
-            
-            // Import the store's profiles array and add this profile
-            const { profiles } = useStore.getState();
-            const existingProfile = profiles.find(p => p.userId === user.userId);
-            
-            if (!existingProfile) {
-              useStore.setState({ 
-                profiles: [...profiles, { ...cloudProfile, individualRounds: cloudRounds } as any],
-                currentProfile: { ...cloudProfile, individualRounds: cloudRounds } as any
-              });
-            }
-          } else {
-            console.log('No cloud profile found - user will need to complete profile');
-          }
+
+        syncAmplifyUserToStore(user, attributes);
+
+        // Always rehydrate the cloud profile for the signed-in user.
+        // Persisted local state can be stale or mismatched across browser/PWA sessions.
+        console.log('Fetching cloud profile for user:', user.userId);
+        const cloudProfile = await fetchCloudProfile(user.userId);
+
+        if (cloudProfile) {
+          console.log('Found existing cloud profile, loading into store:', cloudProfile);
+
+          // Also load IndividualRounds from cloud
+          const cloudRounds = await loadIndividualRoundsFromCloud(cloudProfile.id);
+          console.log('Loaded', cloudRounds.length, 'individual rounds from cloud');
+
+          upsertCloudProfileToStore(cloudProfile, cloudRounds);
+        } else {
+          console.log('No cloud profile found - user will need to complete profile');
+        }
+
+        const state = useStore.getState();
+        if (state.currentProfile?.userId && state.currentProfile.userId !== user.userId) {
+          console.warn('Clearing mismatched local profile for signed-in user', {
+            amplifyUserId: user.userId,
+            currentProfileId: state.currentProfile.id,
+            currentProfileUserId: state.currentProfile.userId,
+          });
+          clearMismatchedLocalSession();
         }
       } catch (err) {
         console.log('No Amplify user signed in:', err);
@@ -195,15 +311,58 @@ const App: React.FC = () => {
     };
     
     checkAuth();
-  }, [currentUser, createUser]);
+  }, []);
 
-  // Debug logging
-  console.log('App render:', { 
-    currentUser: currentUser?.id, 
-    currentProfile: currentProfile?.id,
-    amplifyUser: amplifyUser?.userId,
-    location: location.pathname 
-  });
+  // Canonical cloud sync loop:
+  // Keep background lists converged after auth changes, focus changes, and reconnects.
+  // Active event/group pages maintain their own realtime subscriptions.
+  useEffect(() => {
+    if (!currentProfile?.id || !amplifyUser?.userId) return;
+
+    const MIN_GAP_MS = 5000;
+    const PERIODIC_MS = isEventRoute ? 180000 : 120000;
+
+    const syncFromCloud = async (reason: string) => {
+      if (isCloudSyncInFlight.current) return;
+      const now = Date.now();
+      if (now - lastCloudSyncAt.current < MIN_GAP_MS) return;
+      isCloudSyncInFlight.current = true;
+      try {
+        await loadEventsFromCloud();
+        lastCloudSyncAt.current = Date.now();
+      } catch (err) {
+        console.error(`[CloudSync] ${reason} failed:`, err);
+      } finally {
+        isCloudSyncInFlight.current = false;
+      }
+    };
+
+    // Initial and route-change sync
+    void syncFromCloud(`route:${location.pathname}`);
+
+    const onFocus = () => { void syncFromCloud('window-focus'); };
+    const onOnline = () => { void syncFromCloud('network-online'); };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        void syncFromCloud('visibility-visible');
+      }
+    };
+
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('online', onOnline);
+    document.addEventListener('visibilitychange', onVisible);
+
+    const periodic = window.setInterval(() => {
+      void syncFromCloud('periodic');
+    }, PERIODIC_MS);
+
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('online', onOnline);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.clearInterval(periodic);
+    };
+  }, [currentProfile?.id, amplifyUser?.userId, isEventRoute, location.pathname, loadEventsFromCloud]);
 
 
   const handleLoginSuccess = () => {
@@ -232,29 +391,29 @@ const App: React.FC = () => {
         
         setAmplifyUser(user);
         console.log('User after login:', user, attributes);
-        
-        // Create local user if needed
-        if (user && !currentUser) {
-          const email = attributes.email || user.username;
-          const displayName = attributes.name || attributes.email || user.username;
-          createUser(email, displayName, true); // Skip automatic profile creation
-          
-          // Try to fetch existing cloud profile
-          const cloudProfile = await fetchCloudProfile(user.userId);
-          
-          if (cloudProfile) {
-            console.log('Loading cloud profile after login:', cloudProfile);
-            
-            // Also load IndividualRounds from cloud
-            const cloudRounds = await loadIndividualRoundsFromCloud(cloudProfile.id);
-            console.log('Loaded', cloudRounds.length, 'individual rounds from cloud');
-            
-            const { profiles } = useStore.getState();
-            useStore.setState({ 
-              profiles: [...profiles, { ...cloudProfile, individualRounds: cloudRounds } as any],
-              currentProfile: { ...cloudProfile, individualRounds: cloudRounds } as any
-            });
-          }
+
+        syncAmplifyUserToStore(user, attributes);
+
+        const cloudProfile = await fetchCloudProfile(user.userId);
+
+        if (cloudProfile) {
+          console.log('Loading cloud profile after login:', cloudProfile);
+
+          // Also load IndividualRounds from cloud
+          const cloudRounds = await loadIndividualRoundsFromCloud(cloudProfile.id);
+          console.log('Loaded', cloudRounds.length, 'individual rounds from cloud');
+
+          upsertCloudProfileToStore(cloudProfile, cloudRounds);
+        }
+
+        const state = useStore.getState();
+        if (state.currentProfile?.userId && state.currentProfile.userId !== user.userId) {
+          console.warn('Clearing mismatched local profile after login', {
+            amplifyUserId: user.userId,
+            currentProfileId: state.currentProfile.id,
+            currentProfileUserId: state.currentProfile.userId,
+          });
+          clearMismatchedLocalSession();
         }
       } catch (err) {
         console.error('Failed to get user after login:', err);
@@ -276,13 +435,42 @@ const App: React.FC = () => {
   }
 
   if (!amplifyUser && !currentUser) {
-    console.log('App: No user (Amplify or local), showing login');
+    console.log('App: No user (Amplify or local), checking for guest-joinable route');
+
+    const eventMatch = location.pathname.match(/^\/event\/([^/]+)/);
+    const joinMatch = location.pathname.match(/^\/join\/([^/]+)/);
+
+    if (eventMatch || joinMatch) {
+      return (
+        <Suspense fallback={
+          <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-900 via-primary-800 to-primary-950">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white"></div>
+          </div>
+        }>
+          <GuestJoinPage
+            eventId={eventMatch?.[1]}
+            shareCode={joinMatch?.[1]}
+            onSignIn={() => {
+              if (joinMatch?.[1]) {
+                try { sessionStorage.setItem('gimmies.pendingJoinCode.v1', joinMatch[1]); } catch {}
+              }
+              if (eventMatch?.[1]) {
+                try { sessionStorage.setItem('gimmies.pendingEventId.v1', eventMatch[1]); } catch {}
+              }
+              navigate('/', { replace: true });
+            }}
+            onSuccess={handleLoginSuccess}
+          />
+        </Suspense>
+      );
+    }
+
     return (
       <LoginPage 
         onSuccess={handleLoginSuccess}
         onGuestMode={() => {
           console.log('Guest mode selected, creating local-only user');
-          createUser('guest@local', 'Guest User', false); // Create local guest user
+          createUser('guest@local', 'Guest User', false);
         }}
       />
     );
@@ -291,13 +479,20 @@ const App: React.FC = () => {
   // If we have a user but no profile, show profile completion
   if (currentUser && !currentProfile) {
     console.log('App: User exists but no profile, showing profile completion');
+
+    // If the user came through the invite flow, their name is stashed
+    let pendingName: string | undefined;
+    try { pendingName = sessionStorage.getItem('gimmies.pendingProfileName.v1') || undefined; } catch {}
+
     return (
       <ProfileCompletion
-        userId={amplifyUser?.userId || currentUser.id} // Use Amplify userId, not local ID
+        userId={amplifyUser?.userId || currentUser.id}
         email={amplifyUser?.signInDetails?.loginId || currentUser.username}
+        suggestedName={pendingName}
+        autoSubmit={!!pendingName}
         onComplete={() => {
+          try { sessionStorage.removeItem('gimmies.pendingProfileName.v1'); } catch {}
           console.log('Profile completion finished');
-          // Force a re-render to show the dashboard
           setIsCheckingAuth(true);
           setTimeout(() => setIsCheckingAuth(false), 100);
         }}
@@ -307,16 +502,18 @@ const App: React.FC = () => {
 
   return (
     <div className="h-full flex flex-col bg-gradient-to-b from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 text-gray-900 dark:text-slate-100">
-      {/* ⚠️ CRITICAL: Header - body CSS handles safe area top padding, no pt-safe-top needed */}
-      <header className="flex-shrink-0 bg-primary-900/85 backdrop-blur text-white px-4 py-3 flex items-center justify-between shadow-md z-40 border-b border-white/10">
-        <Link to="/">
-          <img src="/gimmies-logo.png" alt="Gimmies" className="h-10 w-auto" />
-        </Link>
-        
-        <div className="flex items-center gap-2">
-          <UserMenu />
-        </div>
-      </header>
+      {/* Header — only visible on the Home screen to maximise real estate elsewhere */}
+      {location.pathname === '/' && (
+        <header className="flex-shrink-0 bg-primary-900/85 backdrop-blur text-white px-4 py-3 flex items-center justify-between shadow-md z-40 border-b border-white/10">
+          <Link to="/">
+            <img src="/gimmies-logo.png" alt="Gimmies" className="h-10 w-auto" />
+          </Link>
+          
+          <div className="flex items-center gap-2">
+            <UserMenu />
+          </div>
+        </header>
+      )}
       
       {/* Messages Panel */}
       <MessagesPanel 
@@ -326,18 +523,12 @@ const App: React.FC = () => {
       {/* Main content area */}
       <main className="flex-1 min-h-0 overflow-hidden relative w-full">
         <div
-          className={`absolute inset-0 ${
-            isEventRoute
-              ? `${isEventChatRoute ? 'overflow-hidden' : 'overflow-y-auto'}`
-              : 'overflow-y-auto'
-          }`}
+          className={`absolute inset-0 ${isEventRoute ? 'overflow-hidden' : 'overflow-y-auto'}`}
         >
           <div
             className={
               isEventRoute
-                ? (isEventChatRoute
-                    ? 'px-4 pt-4 h-full max-w-5xl w-full mx-auto'
-                    : 'px-4 pt-4 content-with-footer max-w-5xl w-full mx-auto')
+                ? 'px-4 pt-4 h-full max-w-5xl w-full mx-auto'
                 : 'px-4 pt-4 content-with-footer max-w-5xl w-full mx-auto'
             }
           >
@@ -351,9 +542,10 @@ const App: React.FC = () => {
                 <Route path="/analytics" element={<AnalyticsPage />} />
                 <Route path="/wallet/*" element={<WalletPage />} />
                 <Route path="/event/:id/games/nassau/:nassauId/teams" element={<NassauTeamsRoute />} />
-                <Route path="/event/:id/*" element={<EventPage />} />
+                <Route path="/event/:id/*" element={<EventOrGroupRouter />} />
                 <Route path="/join" element={<JoinEventPage />} />
                 <Route path="/join/:code" element={<JoinEventPage />} />
+                <Route path="/admin/course-issues" element={<CourseIssueAdminPage />} />
                 <Route path="/auth-demo" element={<AuthDemoPage />} />
                 
                 {/* Tournament & Club - redirect to standalone apps */}
@@ -367,12 +559,8 @@ const App: React.FC = () => {
           </div>
         </div>
       </main>
-      {/* ⚠️ CRITICAL iOS PWA Layout - DO NOT MODIFY without testing on iOS 26.2+
-          - h-[68px]: Fixed height prevents expansion
-          - pb-safe-bottom: Extends into safe area (Tailwind utility)
-          - -mb-4: 16px negative margin (sweet spot - tested -3 to -6)
-          - pt-1: Minimal padding (4px) prevents text cutoff
-          See docs/IOS_PWA_LAYOUT_CRITICAL.md for full details */}
+      {/* Footer nav — h-[68px] with pb-safe-bottom and -mb-4 pushes 16px into
+          home indicator zone (iOS). Ticker/FAB use --footer-total-height. */}
       <footer className="fixed bottom-0 left-0 right-0 z-40 bg-white dark:bg-[#09243F] border-t border-gray-200 dark:border-white/10 h-[68px] pb-safe-bottom -mb-4 flex items-start justify-around px-2 pt-1">
         <Link
           to="/"

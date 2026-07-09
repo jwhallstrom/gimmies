@@ -13,6 +13,8 @@ import React, { useState, useMemo } from 'react';
 import type { Event } from '../state/types';
 import { generateRoundRecap, generateRecapPushMessage } from '../utils/roundRecap';
 import useStore from '../state/store';
+import { getCourseById } from '../data/cloudCourses';
+import { formatLocalDate } from '../utils/dateUtils';
 
 interface Props {
   event: Event;
@@ -29,6 +31,10 @@ const EventNotifications: React.FC<Props> = ({ event, onClose }) => {
   const [sent, setSent] = useState(false);
   
   const updateEvent = useStore(s => s.updateEvent);
+  const addChatMessage = useStore(s => s.addChatMessage);
+  const currentProfile = useStore(s => s.currentProfile);
+  const addToast = useStore(s => s.addToast);
+  const profiles = useStore(s => s.profiles);
   const autoRecapDisabled = event.settings?.disableAutoRecap ?? false;
   
   const handleToggleAutoRecap = () => {
@@ -43,39 +49,76 @@ const EventNotifications: React.FC<Props> = ({ event, onClose }) => {
   const golferCount = event.golfers.length;
   
   // Generate round recap
-  const recap = useMemo(() => generateRoundRecap(event), [event]);
+  const recap = useMemo(() => generateRoundRecap(event, profiles), [event, profiles]);
   const recapPush = useMemo(() => generateRecapPushMessage(recap), [recap]);
   
-  // Check if round has scores
+  // Recap content should only be shared once results are final.
   const hasScores = event.scorecards.some(sc => sc.scores.length > 0);
+  const isCompleted = event.isCompleted || event.status === 'completed';
+  const canSendRecap = hasScores && isCompleted;
   
   // Helper to get golfer name
   const getGolferName = (golfer: typeof event.golfers[0]) => {
     return golfer.displayName || golfer.customName || 'Unknown';
   };
   
-  // Get course name - blank for now, could be looked up by courseId
-  const courseName = '';
+  const courseName = event.course?.courseId ? getCourseById(event.course.courseId)?.name || '' : '';
+  const chatTargetId = event.parentGroupId || event.id;
   
   const handleSend = async () => {
     if (!selectedType) return;
+    if (!currentProfile) return;
     
     setIsSending(true);
-    
-    // Simulate sending (in production, call notification service)
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    console.log('Sending notification:', {
-      type: selectedType,
-      eventId: event.id,
-      golferCount,
-      teeTime: selectedType === 'tee_time' ? teeTime : undefined,
-      message: selectedType === 'custom' ? customMessage : undefined,
-      recap: selectedType === 'recap' ? recap : undefined,
-    });
-    
-    setIsSending(false);
-    setSent(true);
+
+    try {
+      let messageText = '';
+      let messageType: 'text' | 'system' = 'system';
+
+      if (selectedType === 'tee_time') {
+        const teeTimeText = new Date(`2000-01-01T${teeTime}`).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+        const dateText = formatLocalDate(event.date, { weekday: 'long', month: 'long', day: 'numeric' });
+        messageText = [
+          '⛳ Tee Time Alert',
+          `${event.name}`,
+          `${dateText} at ${teeTimeText}${courseName ? ` • ${courseName}` : ''}`,
+          `From ${currentProfile.name}`,
+        ].join('\n');
+      } else if (selectedType === 'reminder') {
+        const dateText = formatLocalDate(event.date, { weekday: 'long', month: 'long', day: 'numeric' });
+        messageText = [
+          '📅 Game Reminder',
+          `Reminder: ${event.name}`,
+          `We\'re playing ${dateText}${courseName ? ` at ${courseName}` : ''}.`,
+          'See you on the course! ⛳',
+        ].join('\n');
+      } else if (selectedType === 'recap') {
+        messageText = [
+          '🏁 Round Recap',
+          recapPush.body,
+          ...recap.highlights.slice(0, 5).map(h => `${h.emoji} ${h.title}: ${h.description}`),
+        ].join('\n');
+      } else {
+        messageType = 'text';
+        messageText = customMessage.trim();
+      }
+
+      await addChatMessage(chatTargetId, messageText, {
+        type: messageType,
+        metadata: {
+          source: 'event_notifications',
+          notificationType: selectedType,
+          eventId: event.id,
+        },
+      });
+
+      setSent(true);
+    } catch (error) {
+      console.error('Failed to send event notification:', error);
+      addToast('Failed to send reminder. Please try again.', 'error');
+    } finally {
+      setIsSending(false);
+    }
   };
   
   // Success state
@@ -165,8 +208,8 @@ const EventNotifications: React.FC<Props> = ({ event, onClose }) => {
                 </div>
               </button>
               
-              {/* Round Recap (only if scores exist) */}
-              {hasScores && (
+              {/* Round Recap (only after the event is complete) */}
+              {canSendRecap && (
                 <button
                   onClick={() => setSelectedType('recap')}
                   className="w-full p-4 bg-white border-2 border-gray-200 rounded-xl text-left hover:border-primary-300 hover:bg-primary-50 transition-colors"
@@ -176,7 +219,7 @@ const EventNotifications: React.FC<Props> = ({ event, onClose }) => {
                     <div>
                       <div className="font-semibold text-gray-900">Round Recap</div>
                       <div className="text-sm text-gray-500">
-                        Share highlights: low score, birdies, skins & more
+                        Share finalized highlights, payouts, and results
                       </div>
                     </div>
                   </div>
@@ -262,7 +305,7 @@ const EventNotifications: React.FC<Props> = ({ event, onClose }) => {
                   <div className="text-gray-600 mt-1">
                     Tee time: {new Date(`2000-01-01T${teeTime}`).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
                     <br />
-                    {courseName || 'Course'} • {new Date(event.date).toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
+                    {courseName || 'Course'} • {formatLocalDate(event.date, { weekday: 'short', month: 'short', day: 'numeric' })}
                     <br />
                     <br />
                     Playing: {event.golfers.slice(0, 3).map(g => getGolferName(g)).join(', ')}
@@ -297,7 +340,7 @@ const EventNotifications: React.FC<Props> = ({ event, onClose }) => {
                 <div className="text-sm">
                   <div className="font-semibold text-gray-900">📅 Reminder: {event.name}</div>
                   <div className="text-gray-600 mt-1">
-                    Don't forget! We're playing {new Date(event.date).toLocaleDateString([], { weekday: 'long', month: 'long', day: 'numeric' })}
+                    Don't forget! We're playing {formatLocalDate(event.date, { weekday: 'long', month: 'long', day: 'numeric' })}
                     {courseName && ` at ${courseName}`}.
                     <br /><br />
                     See you on the course! ⛳

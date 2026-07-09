@@ -5,8 +5,12 @@ import useStore from '../../state/store';
 import { nanoid } from 'nanoid/non-secure';
 import { useNavigate } from 'react-router-dom';
 import { calculateEventPayouts } from '../../games/payouts';
+import { getParticipantsForConfig } from '../../games/participants';
 import { EventSettlement } from '../wallet';
 import { DOT_DEFINITIONS, DEFAULT_DOTS } from '../../games/dots';
+import { distributeHandicapStrokes, calculateCourseHandicap } from '../../utils/handicap';
+import { getTee } from '../../data/cloudCourses';
+import { courseMap } from '../../data/courses';
 import type { DotCategory, BingoBangoBongoHoleResult, WolfHoleResult, DotsPlayerResult } from '../../state/types';
 import type { NassauPayoutSummary, NassauSegmentResult } from '../../games/nassau';
 import type { SkinsSummary } from '../../games/skins';
@@ -92,7 +96,7 @@ const GAME_TYPES = [
 
 const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGame }) => {
   const navigate = useNavigate();
-  const event = useStore((s: any) => 
+  const rawEvent = useStore((s: any) => 
     s.events.find((e: any) => e.id === eventId) || 
     s.completedEvents.find((e: any) => e.id === eventId)
   );
@@ -122,11 +126,37 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   const [dotsSetupId, setDotsSetupId] = useState<string | null>(null);
   const [showSettlements, setShowSettlements] = useState(false);
   const [expandBalance, setExpandBalance] = useState(false);
+  const [payoutsView, setPayoutsView] = useState<'me' | 'admin'>('me');
+  const [autoPayoutPreviewApplied, setAutoPayoutPreviewApplied] = useState(false);
+  const [autoPayoutTabOpened, setAutoPayoutTabOpened] = useState(false);
+  const [teamModal, setTeamModal] = useState<{ name: string; members: string[]; golferIds: string[]; bestCount: number; isNet: boolean } | null>(null);
   
   const completeEvent = useStore((s) => s.completeEvent);
   const getEventSettlements = useStore((s) => s.getEventSettlements);
 
-  if (!event) return null;
+  if (!rawEvent) return null;
+
+  const safeGames = {
+    nassau: Array.isArray(rawEvent.games?.nassau) ? rawEvent.games.nassau : [],
+    skins: Array.isArray(rawEvent.games?.skins) ? rawEvent.games.skins : [],
+    pinky: Array.isArray(rawEvent.games?.pinky) ? rawEvent.games.pinky : [],
+    greenie: Array.isArray(rawEvent.games?.greenie) ? rawEvent.games.greenie : [],
+    stableford: Array.isArray(rawEvent.games?.stableford) ? rawEvent.games.stableford : [],
+    ninePoint: Array.isArray(rawEvent.games?.ninePoint) ? rawEvent.games.ninePoint : [],
+    bingoBangoBongo: Array.isArray(rawEvent.games?.bingoBangoBongo) ? rawEvent.games.bingoBangoBongo : [],
+    wolf: Array.isArray(rawEvent.games?.wolf) ? rawEvent.games.wolf : [],
+    dots: Array.isArray(rawEvent.games?.dots) ? rawEvent.games.dots : [],
+  };
+  const event = {
+    ...rawEvent,
+    golfers: Array.isArray(rawEvent.golfers) ? rawEvent.golfers : [],
+    groups: Array.isArray(rawEvent.groups) ? rawEvent.groups : [],
+    scorecards: Array.isArray(rawEvent.scorecards) ? rawEvent.scorecards : [],
+    games: {
+      ...(rawEvent.games || {}),
+      ...safeGames,
+    },
+  };
   
   // Check if current user is the event owner
   const isOwner = currentProfile && event.ownerProfileId === currentProfile.id;
@@ -151,22 +181,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   
   // Get all golfers with their data
   const allGolfers = event.golfers.map(getGolferData).filter(Boolean);
-  const gameEligibleIds = (game: 'nassau' | 'skins' | 'pinky' | 'greenie') => {
-    const ids = (event.golfers || [])
-      .map((g: any) => g.profileId || g.customName || g.displayName)
-      .filter((id: any) => !!id) as string[];
-    return ids.filter((gid) => {
-      const eg = (event.golfers || []).find((x: any) => (x.profileId || x.customName || x.displayName) === gid);
-      const pref: 'all' | 'nassau' | 'skins' | 'none' = (eg?.gamePreference as any) || 'all';
-      if (pref === 'none') return false;
-      if (pref === 'skins') return game === 'skins';
-      if (pref === 'nassau') return game === 'nassau';
-      // 'all'
-      return true;
-    });
-  };
   const addNassau = (net: boolean) => {
-    // Use the default group (first group) for the Nassau game
     const defaultGroupId = event.groups.length > 0 ? event.groups[0].id : null;
     if (!defaultGroupId) {
       alert('Please create an event with golfers first before adding games.');
@@ -175,10 +190,10 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
     const id = nanoid(6);
     updateEvent(eventId, {
       games: {
-        ...event.games,
+        ...safeGames,
         nassau: [
-          ...event.games.nassau,
-          { id, groupId: defaultGroupId, fee: 5, fees: { out: 5, in: 5, total: 5 }, net, participantGolferIds: gameEligibleIds('nassau') },
+          ...safeGames.nassau,
+          { id, groupId: defaultGroupId, fee: 5, fees: { out: 5, in: 5, total: 5 }, net },
         ],
       },
     });
@@ -187,13 +202,13 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   const removeNassau = (id: string) => {
     useStore.getState().removeNassau(eventId, id);
   };
-  const skinsArray: any[] = Array.isArray(event.games.skins) ? event.games.skins : (event.games.skins ? [event.games.skins] : []);
+  const skinsArray: any[] = safeGames.skins;
   const addSkins = (net: boolean) => {
     const id = nanoid(6);
     updateEvent(eventId, {
       games: {
-        ...event.games,
-        skins: [...skinsArray, { id, fee: 10, net, carryovers: false, participantGolferIds: gameEligibleIds('skins') }],
+        ...safeGames,
+        skins: [...skinsArray, { id, fee: 10, net, carryovers: false }],
       },
     });
     setSkinsSetupId(id);
@@ -203,15 +218,15 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   };
   
   // Pinky game management
-  const pinkyArray: any[] = Array.isArray(event.games.pinky) ? event.games.pinky : [];
+  const pinkyArray: any[] = safeGames.pinky;
   const addPinky = () => {
     const id = nanoid(6);
     updateEvent(eventId, { 
       games: { 
-        nassau: event.games.nassau || [],
-        skins: event.games.skins || [],
-        pinky: [...pinkyArray, { id, fee: 1, participantGolferIds: gameEligibleIds('pinky') }],
-        greenie: event.games.greenie || []
+        nassau: safeGames.nassau,
+        skins: safeGames.skins,
+        pinky: [...pinkyArray, { id, fee: 1 }],
+        greenie: safeGames.greenie
       } 
     });
     setPinkySetupId(id);
@@ -229,15 +244,15 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   };
   
   // Greenie game management
-  const greenieArray: any[] = Array.isArray(event.games.greenie) ? event.games.greenie : [];
+  const greenieArray: any[] = safeGames.greenie;
   const addGreenie = () => {
     const id = nanoid(6);
     updateEvent(eventId, { 
       games: { 
-        nassau: event.games.nassau || [],
-        skins: event.games.skins || [],
-        pinky: event.games.pinky || [],
-        greenie: [...greenieArray, { id, fee: 1, participantGolferIds: gameEligibleIds('greenie') }]
+        nassau: safeGames.nassau,
+        skins: safeGames.skins,
+        pinky: safeGames.pinky,
+        greenie: [...greenieArray, { id, fee: 1 }]
       } 
     });
     setGreenieSetupId(id);
@@ -257,25 +272,24 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   // ============================================================================
   // New game type arrays and management functions
   // ============================================================================
-  const stablefordArray: any[] = Array.isArray(event.games.stableford) ? event.games.stableford : [];
-  const ninePointArray: any[] = Array.isArray(event.games.ninePoint) ? event.games.ninePoint : [];
-  const bbbArray: any[] = Array.isArray(event.games.bingoBangoBongo) ? event.games.bingoBangoBongo : [];
-  const wolfArray: any[] = Array.isArray(event.games.wolf) ? event.games.wolf : [];
-  const dotsArray: any[] = Array.isArray(event.games.dots) ? event.games.dots : [];
+  const stablefordArray: any[] = safeGames.stableford;
+  const ninePointArray: any[] = safeGames.ninePoint;
+  const bbbArray: any[] = safeGames.bingoBangoBongo;
+  const wolfArray: any[] = safeGames.wolf;
+  const dotsArray: any[] = safeGames.dots;
 
   const addStableford = (net: boolean) => {
     const id = nanoid(6);
     updateEvent(eventId, {
-      games: { ...event.games, stableford: [...stablefordArray, { id, fee: 10, net, system: 'standard', participantGolferIds: gameEligibleIds('nassau') }] }
+      games: { ...safeGames, stableford: [...stablefordArray, { id, fee: 10, net, system: 'standard' }] }
     });
     setStablefordSetupId(id);
   };
 
   const addNinePoint = (net: boolean) => {
     const id = nanoid(6);
-    const eligible = gameEligibleIds('nassau').slice(0, 3);
     updateEvent(eventId, {
-      games: { ...event.games, ninePoint: [...ninePointArray, { id, fee: 1, net, participantGolferIds: eligible, sweepEnabled: false }] }
+      games: { ...safeGames, ninePoint: [...ninePointArray, { id, fee: 1, net, sweepEnabled: false }] }
     });
     setNinePointSetupId(id);
   };
@@ -283,16 +297,15 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   const addBingoBangoBongo = () => {
     const id = nanoid(6);
     updateEvent(eventId, {
-      games: { ...event.games, bingoBangoBongo: [...bbbArray, { id, fee: 1, participantGolferIds: gameEligibleIds('nassau') }] }
+      games: { ...safeGames, bingoBangoBongo: [...bbbArray, { id, fee: 1 }] }
     });
     setBbbSetupId(id);
   };
 
   const addWolf = () => {
     const id = nanoid(6);
-    const eligible = gameEligibleIds('nassau').slice(0, 4);
     updateEvent(eventId, {
-      games: { ...event.games, wolf: [...wolfArray, { id, fee: 1, participantGolferIds: eligible, wolfOrder: eligible, blindWolfEnabled: false }] }
+      games: { ...safeGames, wolf: [...wolfArray, { id, fee: 1, wolfOrder: [], blindWolfEnabled: false }] }
     });
     setWolfSetupId(id);
   };
@@ -300,7 +313,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   const addDots = () => {
     const id = nanoid(6);
     updateEvent(eventId, {
-      games: { ...event.games, dots: [...dotsArray, { id, fee: 1, participantGolferIds: gameEligibleIds('nassau'), activeDots: [...DEFAULT_DOTS] }] }
+      games: { ...safeGames, dots: [...dotsArray, { id, fee: 1, activeDots: [...DEFAULT_DOTS] }] }
     });
     setDotsSetupId(id);
   };
@@ -501,16 +514,18 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   const { myNet, myBuyin, myWinnings, buyinBreakdown } = useMemo(() => {
     if (!myGolferId || !payouts.totalByGolfer) return { myNet: null, myBuyin: 0, myWinnings: 0, buyinBreakdown: [] };
     
+    const isParticipant = (cfg: any, game: 'nassau' | 'skins' | 'stableford') =>
+      getParticipantsForConfig(event, cfg, game, {
+        restrictToGroup: game === 'nassau',
+        assignedTeamsOnly: game === 'nassau' && Array.isArray(cfg?.teams) && cfg.teams.length >= 2,
+      }).includes(myGolferId);
+
     // Calculate buy-in from all games this golfer is in
     let buyin = 0;
     const breakdown: { name: string; amount: number }[] = [];
-    
-    // All eligible event golfer IDs (used for all pot-based games)
-    const allGolferIds = event.golfers.map((g: any) => g.profileId || g.customName);
 
-    // Nassau buy-ins — include all eligible golfers, not stale participantGolferIds
     event.games.nassau.forEach((n: any, idx: number) => {
-      if (allGolferIds.includes(myGolferId)) {
+      if (isParticipant(n, 'nassau')) {
         const fees = n.fees ?? { out: n.fee, in: n.fee, total: n.fee };
         const cost = (fees.out || 0) + (fees.in || 0) + (fees.total || 0);
         buyin += cost;
@@ -518,18 +533,16 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
       }
     });
     
-    // Skins buy-ins
     skinsArray.forEach((s: any, idx: number) => {
-      if (allGolferIds.includes(myGolferId)) {
+      if (isParticipant(s, 'skins')) {
         const cost = s.fee || 0;
         buyin += cost;
         breakdown.push({ name: skinsArray.length > 1 ? `Skins ${idx + 1}` : 'Skins', amount: cost });
       }
     });
 
-    // Stableford buy-ins (pot-based like skins)
     stablefordArray.forEach((s: any, idx: number) => {
-      if (allGolferIds.includes(myGolferId)) {
+      if (isParticipant(s, 'stableford')) {
         const cost = s.fee || 0;
         buyin += cost;
         breakdown.push({ name: stablefordArray.length > 1 ? `Stableford ${idx + 1}` : 'Stableford', amount: cost });
@@ -551,19 +564,192 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   
   const mySettlements = useMemo(() => {
     if (!myGolferId) return [];
-    return allSettlements.filter((s: any) => s.fromId === myGolferId || s.toId === myGolferId);
+    return allSettlements.filter((s: any) => s.fromProfileId === myGolferId || s.toProfileId === myGolferId);
   }, [allSettlements, myGolferId]);
   
   // Check if all scores are complete
   const allScoresComplete = event.scorecards?.every((sc: any) => 
     sc.scores?.every((s: any) => s.strokes != null)
   );
+  const hasAnyScoresEntered = event.scorecards?.some((sc: any) =>
+    sc.scores?.some((s: any) => s.strokes != null)
+  );
+  const canPreviewPayouts = Boolean(isEventStarted || isEventCompleted || (allScoresComplete && hasAnyScoresEntered));
   
   // Currency formatters
   const currency = (n: number) => '$' + n.toFixed(2);
   const signedCurrency = (n: number) => (n > 0 ? '+' : n < 0 ? '−' : '') + currency(Math.abs(n));
 
   const myNetValue = myNet ?? 0;
+
+  useEffect(() => {
+    if (!autoPayoutPreviewApplied && isOwner && canPreviewPayouts && payoutsView === 'me') {
+      setPayoutsView('admin');
+      setAutoPayoutPreviewApplied(true);
+    }
+  }, [autoPayoutPreviewApplied, canPreviewPayouts, isOwner, payoutsView]);
+
+  useEffect(() => {
+    if (!autoPayoutTabOpened && isEventCompleted && subTab === 'games') {
+      setSubTab('payouts');
+      setAutoPayoutTabOpened(true);
+    }
+  }, [autoPayoutTabOpened, isEventCompleted, subTab]);
+
+  const myWinningsBreakdown = useMemo(() => {
+    if (!myGolferId) return [] as { name: string; amount: number }[];
+    const items: { name: string; amount: number }[] = [];
+
+    const nassauAmt = (payouts.nassau || []).reduce((t: number, n: any) => t + (n?.winningsByGolfer?.[myGolferId] || 0), 0);
+    if ((event.games?.nassau || []).length > 0) items.push({ name: 'Nassau', amount: nassauAmt });
+
+    const skinsAmt = (payouts.skins || []).reduce((t: number, s: any) => t + (s?.winningsByGolfer?.[myGolferId] || 0), 0);
+    if (skinsArray.length > 0) items.push({ name: 'Skins', amount: skinsAmt });
+
+    const pinkyAmt = (payouts.pinky || []).reduce((t: number, p: any) => t + (p?.owingsByGolfer?.[myGolferId] || 0), 0);
+    if (pinkyArray.length > 0) items.push({ name: 'Pinky', amount: pinkyAmt });
+
+    const greenieAmt = (payouts.greenie || []).reduce((t: number, g: any) => t + (g?.owingsByGolfer?.[myGolferId] || 0), 0);
+    if (greenieArray.length > 0) items.push({ name: 'Greenie', amount: greenieAmt });
+
+    const stablefordAmt = (payouts.stableford || []).reduce((t: number, s: any) => t + (s?.winningsByGolfer?.[myGolferId] || 0), 0);
+    if (stablefordArray.length > 0) items.push({ name: 'Stableford', amount: stablefordAmt });
+
+    const ninePointAmt = (payouts.ninePoint || []).reduce((t: number, np: any) => t + (np?.owingsByGolfer?.[myGolferId] || 0), 0);
+    if (ninePointArray.length > 0) items.push({ name: '9-Point', amount: ninePointAmt });
+
+    const bbbAmt = (payouts.bingoBangoBongo || []).reduce((t: number, b: any) => t + (b?.owingsByGolfer?.[myGolferId] || 0), 0);
+    if (bbbArray.length > 0) items.push({ name: 'BBB', amount: bbbAmt });
+
+    const wolfAmt = (payouts.wolf || []).reduce((t: number, w: any) => t + (w?.owingsByGolfer?.[myGolferId] || 0), 0);
+    if (wolfArray.length > 0) items.push({ name: 'Wolf', amount: wolfAmt });
+
+    const dotsAmt = (payouts.dots || []).reduce((t: number, d: any) => t + (d?.owingsByGolfer?.[myGolferId] || 0), 0);
+    if (dotsArray.length > 0) items.push({ name: 'Dots', amount: dotsAmt });
+
+    return items;
+  }, [
+    myGolferId,
+    payouts.nassau,
+    payouts.skins,
+    payouts.pinky,
+    payouts.greenie,
+    payouts.stableford,
+    payouts.ninePoint,
+    payouts.bingoBangoBongo,
+    payouts.wolf,
+    payouts.dots,
+    event.games?.nassau,
+    skinsArray,
+    pinkyArray,
+    greenieArray,
+    stablefordArray,
+    ninePointArray,
+    bbbArray,
+    wolfArray,
+    dotsArray,
+  ]);
+
+  const allPlayerBalances = useMemo(() => {
+    const isParticipant = (cfg: any, golferId: string, game: 'nassau' | 'skins' | 'stableford') =>
+      getParticipantsForConfig(event, cfg, game, {
+        restrictToGroup: game === 'nassau',
+        assignedTeamsOnly: game === 'nassau' && Array.isArray(cfg?.teams) && cfg.teams.length >= 2,
+      }).includes(golferId);
+
+    const getBuyinData = (golferId: string) => {
+      let buyin = 0;
+      const breakdown: { name: string; amount: number }[] = [];
+
+      event.games.nassau.forEach((n: any, idx: number) => {
+        if (!isParticipant(n, golferId, 'nassau')) return;
+        const fees = n.fees ?? { out: n.fee, in: n.fee, total: n.fee };
+        const cost = (fees.out || 0) + (fees.in || 0) + (fees.total || 0);
+        buyin += cost;
+        breakdown.push({ name: event.games.nassau.length > 1 ? `Nassau ${idx + 1}` : 'Nassau', amount: cost });
+      });
+
+      skinsArray.forEach((s: any, idx: number) => {
+        if (!isParticipant(s, golferId, 'skins')) return;
+        const cost = s.fee || 0;
+        buyin += cost;
+        breakdown.push({ name: skinsArray.length > 1 ? `Skins ${idx + 1}` : 'Skins', amount: cost });
+      });
+
+      stablefordArray.forEach((s: any, idx: number) => {
+        if (!isParticipant(s, golferId, 'stableford')) return;
+        const cost = s.fee || 0;
+        buyin += cost;
+        breakdown.push({ name: stablefordArray.length > 1 ? `Stableford ${idx + 1}` : 'Stableford', amount: cost });
+      });
+
+      return { buyin, breakdown };
+    };
+
+    const getWinningsBreakdown = (golferId: string) => {
+      const items: { name: string; amount: number }[] = [];
+
+      const nassauAmt = (payouts.nassau || []).reduce((t: number, n: any) => t + (n?.winningsByGolfer?.[golferId] || 0), 0);
+      if ((event.games?.nassau || []).length > 0) items.push({ name: 'Nassau', amount: nassauAmt });
+
+      const skinsAmt = (payouts.skins || []).reduce((t: number, s: any) => t + (s?.winningsByGolfer?.[golferId] || 0), 0);
+      if (skinsArray.length > 0) items.push({ name: 'Skins', amount: skinsAmt });
+
+      const pinkyAmt = (payouts.pinky || []).reduce((t: number, p: any) => t + (p?.owingsByGolfer?.[golferId] || 0), 0);
+      if (pinkyArray.length > 0) items.push({ name: 'Pinky', amount: pinkyAmt });
+
+      const greenieAmt = (payouts.greenie || []).reduce((t: number, g: any) => t + (g?.owingsByGolfer?.[golferId] || 0), 0);
+      if (greenieArray.length > 0) items.push({ name: 'Greenie', amount: greenieAmt });
+
+      const stablefordAmt = (payouts.stableford || []).reduce((t: number, s: any) => t + (s?.winningsByGolfer?.[golferId] || 0), 0);
+      if (stablefordArray.length > 0) items.push({ name: 'Stableford', amount: stablefordAmt });
+
+      const ninePointAmt = (payouts.ninePoint || []).reduce((t: number, np: any) => t + (np?.owingsByGolfer?.[golferId] || 0), 0);
+      if (ninePointArray.length > 0) items.push({ name: '9-Point', amount: ninePointAmt });
+
+      const bbbAmt = (payouts.bingoBangoBongo || []).reduce((t: number, b: any) => t + (b?.owingsByGolfer?.[golferId] || 0), 0);
+      if (bbbArray.length > 0) items.push({ name: 'BBB', amount: bbbAmt });
+
+      const wolfAmt = (payouts.wolf || []).reduce((t: number, w: any) => t + (w?.owingsByGolfer?.[golferId] || 0), 0);
+      if (wolfArray.length > 0) items.push({ name: 'Wolf', amount: wolfAmt });
+
+      const dotsAmt = (payouts.dots || []).reduce((t: number, d: any) => t + (d?.owingsByGolfer?.[golferId] || 0), 0);
+      if (dotsArray.length > 0) items.push({ name: 'Dots', amount: dotsAmt });
+
+      return items;
+    };
+
+    return allGolfers
+      .map((g: any) => {
+        const { buyin, breakdown } = getBuyinData(g.id);
+        const winnings = payouts.totalByGolfer?.[g.id] || 0;
+        const net = winnings - buyin;
+        return {
+          golferId: g.id,
+          golferName: g.name,
+          buyin,
+          winnings,
+          net,
+          buyinBreakdown: breakdown,
+          winningsBreakdown: getWinningsBreakdown(g.id),
+        };
+      })
+      .sort((a: any, b: any) => b.net - a.net);
+  }, [
+    allGolfers,
+    event.golfers,
+    event.games.nassau,
+    event.games,
+    payouts,
+    skinsArray,
+    stablefordArray,
+    pinkyArray,
+    greenieArray,
+    ninePointArray,
+    bbbArray,
+    wolfArray,
+    dotsArray,
+  ]);
 
   // Helper to get golfer name
   const getGolferName = (golferId: string) => {
@@ -666,55 +852,127 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
       };
     }).filter(Boolean);
   }, [payouts.skins, skinsArray]);
+
+  const balanceSummaryCard = hasAnyGames && myNet !== null ? (
+    <div className={`rounded-xl overflow-hidden ${myNetValue >= 0 ? 'bg-green-500' : 'bg-red-500'}`}>
+      <div
+        className="px-4 py-3 flex items-center justify-between cursor-pointer"
+        onClick={() => setExpandBalance(!expandBalance)}
+      >
+        <div className="text-white">
+          <div className="text-xs font-medium opacity-90 flex items-center gap-1">
+            YOUR BALANCE
+            <svg className={`w-3 h-3 transition-transform ${expandBalance ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </div>
+          <div className="text-2xl font-black">{signedCurrency(myNetValue)}</div>
+        </div>
+        <div className="text-right text-white text-xs opacity-90">
+          <div>Buy-in: {currency(myBuyin)}</div>
+          <div>Winnings: {signedCurrency(myWinnings)}</div>
+        </div>
+      </div>
+
+      {expandBalance && (
+        <div className="px-4 pb-4 pt-0 border-t border-white/20">
+          <div className="mt-3 text-xs font-bold text-white/90 uppercase tracking-wide">Buy-in Breakdown</div>
+          <div className="mt-1 space-y-1">
+            {buyinBreakdown.length > 0 ? (
+              buyinBreakdown.map((item, idx) => (
+                <div key={idx} className="flex justify-between text-sm text-white">
+                  <span>{item.name}</span>
+                  <span className="font-medium">{currency(item.amount)}</span>
+                </div>
+              ))
+            ) : (
+              <div className="text-xs text-white/60 italic">No buy-ins</div>
+            )}
+            <div className="border-t border-white/20 mt-2 pt-1 flex justify-between text-sm font-bold text-white">
+              <span>Total</span>
+              <span>{currency(myBuyin)}</span>
+            </div>
+          </div>
+
+          <div className="mt-4 text-xs font-bold text-white/90 uppercase tracking-wide">Winnings Breakdown</div>
+          <div className="mt-1 space-y-1">
+            {myWinningsBreakdown.length > 0 ? (
+              myWinningsBreakdown.map((item, idx) => (
+                <div key={`${item.name}-${idx}`} className="flex justify-between text-sm text-white">
+                  <span>{item.name}</span>
+                  <span className="font-medium">{signedCurrency(item.amount)}</span>
+                </div>
+              ))
+            ) : (
+              <div className="text-xs text-white/60 italic">No winnings entries yet</div>
+            )}
+            <div className="border-t border-white/20 mt-2 pt-1 flex justify-between text-sm font-bold text-white">
+              <span>Total</span>
+              <span>{signedCurrency(myWinnings)}</span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  ) : null;
   
   return (
     <div className="space-y-4">
-      {/* Personal Summary - Always visible if games exist */}
-      {hasAnyGames && myNet !== null && (
-        <div className={`rounded-xl overflow-hidden ${myNetValue >= 0 ? 'bg-green-500' : 'bg-red-500'}`}>
-          <div 
-            className="px-4 py-3 flex items-center justify-between cursor-pointer"
-            onClick={() => setExpandBalance(!expandBalance)}
-          >
-            <div className="text-white">
-              <div className="text-xs font-medium opacity-90 flex items-center gap-1">
-                YOUR BALANCE
-                <svg className={`w-3 h-3 transition-transform ${expandBalance ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </div>
-              <div className="text-2xl font-black">{signedCurrency(myNetValue)}</div>
-            </div>
-            <div className="text-right text-white text-xs opacity-90">
-              <div>Buy-in: {currency(myBuyin)}</div>
-              <div>Winnings: +{currency(myWinnings)}</div>
-            </div>
-          </div>
-          
-          {/* Expanded Breakdown */}
-          {expandBalance && (
-            <div className="px-4 pb-4 pt-0 border-t border-white/20">
-              <div className="mt-3 text-xs font-bold text-white/90 uppercase tracking-wide">Buy-in Breakdown</div>
-              <div className="mt-1 space-y-1">
-                {buyinBreakdown.length > 0 ? (
-                  buyinBreakdown.map((item, idx) => (
-                    <div key={idx} className="flex justify-between text-sm text-white">
-                      <span>{item.name}</span>
-                      <span className="font-medium">{currency(item.amount)}</span>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-xs text-white/60 italic">No buy-ins</div>
-                )}
-                <div className="border-t border-white/20 mt-2 pt-1 flex justify-between text-sm font-bold text-white">
-                  <span>Total</span>
-                  <span>{currency(myBuyin)}</span>
-                </div>
-              </div>
+      {/* Sub-tabs: Games / Payouts */}
+      <div className="flex bg-slate-100 rounded-xl p-1">
+        <button
+          onClick={() => setSubTab('games')}
+          className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-bold transition-all ${
+            subTab === 'games'
+              ? 'bg-white text-gray-900 shadow-sm'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          🎯 Games
+        </button>
+        <button
+          onClick={() => setSubTab('payouts')}
+          className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-bold transition-all ${
+            subTab === 'payouts'
+              ? 'bg-white text-gray-900 shadow-sm'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          💰 Payouts
+          {canPreviewPayouts && myNet !== null && (
+            <span className={`ml-2 text-xs ${myNetValue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+              {signedCurrency(myNetValue)}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {subTab === 'games' && (
+        <>
+          {isEventCompleted && (
+            <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2 flex items-center gap-2 text-sm text-green-800">
+              <span>✓</span>
+              <span className="font-medium">Event Completed</span>
+              <span className="text-xs text-green-600">· Games locked</span>
             </div>
           )}
-        </div>
-      )}
+
+          {isEventStarted && !isEventCompleted && (
+            <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm text-amber-800">
+                <span>🔒</span>
+                <span className="font-medium">In Progress</span>
+              </div>
+              {isOwner && (
+                <button
+                  onClick={handleUnlockEvent}
+                  className="text-xs font-bold text-amber-700 hover:text-amber-900"
+                >
+                  Unlock
+                </button>
+              )}
+            </div>
+          )}
 
       {/* No Games State */}
       {!hasAnyGames && (
@@ -749,7 +1007,10 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
       {(!nassauStandings || nassauStandings.length === 0) && event.games.nassau.map((n: any) => {
         const fees = n.fees ?? { out: n.fee, in: n.fee, total: n.fee };
         const hasTeams = (n.teams || []).filter((t: any) => t.golferIds?.length > 0).length >= 2;
-        const nassauPot = allGolfers.length * ((fees.out || 0) + (fees.in || 0) + (fees.total || 0));
+        const nassauPot = getParticipantsForConfig(event, n, 'nassau', {
+          restrictToGroup: true,
+          assignedTeamsOnly: hasTeams,
+        }).length * ((fees.out || 0) + (fees.in || 0) + (fees.total || 0));
         return (
           <div
             key={n.id}
@@ -780,7 +1041,11 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
         
         const formatScore = (row: any) => {
           if (!row || !Number.isFinite(row.score)) return '—';
-          if (nassau.isMatch) return `${row.score}`; // Holes won
+          if (nassau.isMatch) {
+            const margin = row.score as number;
+            if (margin === 0) return 'AS';
+            return margin > 0 ? `${margin} UP` : `${Math.abs(margin)} DN`;
+          }
           const toPar = row.toPar;
           if (toPar === 0) return 'E';
           return toPar > 0 ? `+${toPar}` : `${toPar}`;
@@ -859,13 +1124,31 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                     (frontRow?.isWinner ? (frontSeg?.payoutPerWinner || 0) : 0) +
                     (backRow?.isWinner ? (backSeg?.payoutPerWinner || 0) : 0) +
                     (totalRow?.isWinner ? (totalSeg?.payoutPerWinner || 0) : 0);
+
+                  const nassauConfig = event.games.nassau.find((cfg: any) => cfg.id === nassau.id);
+                  const bestCount = nassauConfig?.teamBestCount || 1;
+                  const isNetGame = nassauConfig?.net === true;
                   
                   return (
                     <tr key={team.id} className="border-t border-slate-100">
                       <td className="py-2.5 px-3">
                         <div className="flex items-center justify-between">
                           <div>
-                            <div className="font-semibold text-gray-900">{team.name}</div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setTeamModal({
+                                  name: team.name,
+                                  members: team.golferIds.map((gid: string) => getGolferName(gid)),
+                                  golferIds: team.golferIds,
+                                  bestCount,
+                                  isNet: isNetGame
+                                });
+                              }}
+                              className="font-semibold text-primary-600 underline underline-offset-2 decoration-dotted hover:text-primary-800"
+                            >
+                              {team.name}
+                            </button>
                             <div className="text-[10px] text-gray-500">
                               {team.golferIds.map((gid: string) => getGolferName(gid)).join(', ')}
                             </div>
@@ -923,7 +1206,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
 
       {/* ========== SKINS PREVIEW CARDS (pre-start / no standings yet) ========== */}
       {(!skinsStandings || skinsStandings.length === 0) && skinsArray.map((s: any) => {
-        const skinsPot = allGolfers.length * (s.fee || 0);
+        const skinsPot = getParticipantsForConfig(event, s, 'skins').length * (s.fee || 0);
         return (
           <div
             key={s.id}
@@ -970,29 +1253,46 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
             )}
           </div>
           
-          {/* Winners List */}
-          {skins.winners.length > 0 ? (
-            <div className="divide-y divide-slate-100">
-              {skins.winners.map((winner: any, idx: number) => (
-                <div key={idx} className="px-4 py-3 flex items-center justify-between">
-                  <div>
-                    <div className="font-semibold text-gray-900">{winner.name}</div>
-                    <div className="text-xs text-gray-500">
-                      Holes: {winner.holes.sort((a: number, b: number) => a - b).join(', ')}
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="font-bold text-green-600">{currency(winner.amount)}</div>
-                    <div className="text-[10px] text-gray-500">{winner.holes.length} skin{winner.holes.length !== 1 ? 's' : ''}</div>
-                  </div>
+          {/* Skins Won - by hole */}
+          {(() => {
+            const skinsWonByHole = skins.holeResults
+              .filter((r: any) => r.winners.length === 1 && !r.carryIntoNext)
+              .sort((a: any, b: any) => a.hole - b.hole);
+            return skinsWonByHole.length > 0 ? (
+              <div className="px-4 py-3">
+                <div className="bg-gray-50 rounded-lg overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-[10px] text-gray-500 uppercase">
+                        <th className="text-left py-2 px-3 font-semibold">Hole</th>
+                        <th className="text-left py-2 px-3 font-semibold">Winner</th>
+                        <th className="text-right py-2 px-3 font-semibold">Score</th>
+                        <th className="text-right py-2 px-3 font-semibold">Won</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {skinsWonByHole.map((h: any) => {
+                        const winnerName = getGolferName(h.winners[0]);
+                        const isMe = h.winners[0] === myGolferId;
+                        return (
+                          <tr key={h.hole} className={isMe ? 'bg-green-50' : ''}>
+                            <td className={`py-2 px-3 font-semibold ${isMe ? 'text-green-700' : 'text-gray-900'}`}>#{h.hole}</td>
+                            <td className={`py-2 px-3 ${isMe ? 'text-green-700 font-semibold' : 'text-gray-700'}`}>{isMe ? 'You' : winnerName}</td>
+                            <td className={`py-2 px-3 text-right font-mono ${isMe ? 'text-green-700' : 'text-gray-600'}`}>{h.winningScore}</td>
+                            <td className={`py-2 px-3 text-right font-semibold ${isMe ? 'text-green-700' : 'text-gray-700'}`}>{currency(h.potValue)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <div className="py-6 text-center text-gray-500 text-sm">
-              No skins won yet
-            </div>
-          )}
+              </div>
+            ) : (
+              <div className="py-6 text-center text-gray-500 text-sm">
+                No skins won yet
+              </div>
+            );
+          })()}
           
           {/* Hole Grid - Visual representation */}
           {skins.holeResults.length > 0 && (
@@ -1247,11 +1547,14 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
         );
       })}
 
+        </>
+      )}
+
+      {false && (
+        <>
+
       {/* Admin Control Panel moved to Event Header Command Center */}
 
-      {/* ========== OLD SUB-TAB CODE (hidden - keeping modals) ========== */}
-      {false && (
-      <>
       {/* Sub-tabs: Games / Payouts */}
       <div className="flex bg-slate-100 rounded-xl p-1">
         <button
@@ -1273,14 +1576,13 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
           }`}
         >
           💰 Payouts
-          {(isEventStarted || isEventCompleted) && myNet !== null && (
+          {canPreviewPayouts && myNet !== null && (
             <span className={`ml-2 text-xs ${myNetValue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {signedCurrency(myNetValue)}
             </span>
           )}
         </button>
       </div>
-
       {/* ========== GAMES SUB-TAB ========== */}
       {subTab === 'games' && (
         <div className="space-y-3">
@@ -1349,7 +1651,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
 
               {/* Skins Games */}
               {skinsArray.map((s: any, i: number) => {
-                const skinsPot = allGolfers.length * (s.fee || 0);
+                const skinsPot = getParticipantsForConfig(event, s, 'skins').length * (s.fee || 0);
                 return (
                   <div
                     key={s.id}
@@ -1417,11 +1719,54 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
         </div>
       )}
 
+        </>
+      )}
+
       {/* ========== PAYOUTS SUB-TAB ========== */}
       {subTab === 'payouts' && (
         <div className="space-y-4">
+          {balanceSummaryCard}
+
+          {isOwner && (
+            <div className="bg-white rounded-xl border border-slate-200 p-1">
+              <div className="grid grid-cols-2 gap-1">
+                <button
+                  onClick={() => setPayoutsView('me')}
+                  className={`py-2 rounded-lg text-sm font-bold transition-colors ${
+                    payoutsView === 'me'
+                      ? 'bg-primary-600 text-white'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  My View
+                </button>
+                <button
+                  onClick={() => setPayoutsView('admin')}
+                  className={`py-2 rounded-lg text-sm font-bold transition-colors ${
+                    payoutsView === 'admin'
+                      ? 'bg-primary-600 text-white'
+                      : 'text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  Admin View
+                </button>
+              </div>
+              {allScoresComplete && !isEventCompleted && (
+                <div className="px-3 py-2 text-xs text-amber-700">
+                  Preview mode: admin view shows the current all-player payout ledger before completion.
+                </div>
+              )}
+            </div>
+          )}
+
+          {canPreviewPayouts && !isEventCompleted && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
+              Read-only payout preview based on current scores. Final values lock when the event is completed.
+            </div>
+          )}
+
           {/* Your Position Summary */}
-          {myNet !== null && (
+          {false && (payoutsView === 'me' || !isOwner) && myNet !== null && (
             <div className={`rounded-xl p-4 ${myNetValue >= 0 ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
               <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-2">Your Position</div>
               <div className="grid grid-cols-3 gap-3 text-center">
@@ -1443,8 +1788,84 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
             </div>
           )}
 
+          {canPreviewPayouts && allPlayerBalances.length > 0 && (payoutsView === 'admin' || !isOwner) && (
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl overflow-hidden">
+              <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+                <div className="font-bold text-gray-900 dark:text-slate-100">All Players Balance</div>
+                <div className="text-xs text-gray-500 dark:text-slate-400">
+                  {isEventCompleted
+                    ? 'Buy-in vs winnings with per-game breakdown'
+                    : 'Read-only preview based on current scores before completion'}
+                </div>
+              </div>
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {allPlayerBalances.map((row: any) => (
+                  <details key={row.golferId} className="group">
+                    <summary className="list-none px-4 py-3 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/70">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="font-semibold text-gray-900 dark:text-slate-100 truncate">{row.golferName}</div>
+                          <div className="text-xs text-gray-500 dark:text-slate-400">
+                            Buy-in {currency(row.buyin)} • Winnings {signedCurrency(row.winnings)}
+                          </div>
+                        </div>
+                        <div className={`font-black text-lg ${row.net > 0 ? 'text-green-600 dark:text-green-300' : row.net < 0 ? 'text-red-600 dark:text-red-300' : 'text-gray-600 dark:text-slate-300'}`}>
+                          {signedCurrency(row.net)}
+                        </div>
+                      </div>
+                    </summary>
+                    <div className="px-4 pb-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 bg-slate-50 dark:bg-slate-800/60">
+                          <div className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Buy-in Breakdown</div>
+                          <div className="mt-2 space-y-1">
+                            {row.buyinBreakdown.length === 0 ? (
+                              <div className="text-xs text-gray-400 dark:text-slate-500 italic">No buy-ins</div>
+                            ) : (
+                              row.buyinBreakdown.map((item: any, idx: number) => (
+                                <div key={`${row.golferId}-buyin-${idx}`} className="flex items-center justify-between text-sm text-gray-700 dark:text-slate-200">
+                                  <span>{item.name}</span>
+                                  <span className="font-semibold">{currency(item.amount)}</span>
+                                </div>
+                              ))
+                            )}
+                            <div className="pt-1 mt-1 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between text-sm font-bold text-gray-900 dark:text-slate-100">
+                              <span>Total</span>
+                              <span>{currency(row.buyin)}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-3 bg-slate-50 dark:bg-slate-800/60">
+                          <div className="text-xs font-bold text-gray-500 dark:text-slate-400 uppercase tracking-wide">Winnings Breakdown</div>
+                          <div className="mt-2 space-y-1">
+                            {row.winningsBreakdown.length === 0 ? (
+                              <div className="text-xs text-gray-400 dark:text-slate-500 italic">No winnings entries yet</div>
+                            ) : (
+                              row.winningsBreakdown.map((item: any, idx: number) => (
+                                <div key={`${row.golferId}-winnings-${idx}`} className="flex items-center justify-between text-sm text-gray-700 dark:text-slate-200">
+                                  <span>{item.name}</span>
+                                  <span className={`font-semibold ${item.amount > 0 ? 'text-green-600 dark:text-green-300' : item.amount < 0 ? 'text-red-600 dark:text-red-300' : 'text-gray-500 dark:text-slate-400'}`}>
+                                    {signedCurrency(item.amount)}
+                                  </span>
+                                </div>
+                              ))
+                            )}
+                            <div className="pt-1 mt-1 border-t border-slate-200 dark:border-slate-700 flex items-center justify-between text-sm font-bold text-gray-900 dark:text-slate-100">
+                              <span>Total</span>
+                              <span>{signedCurrency(row.winnings)}</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </details>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Not Started Message */}
-          {!isEventStarted && !isEventCompleted && (
+          {!canPreviewPayouts && (
             <div className="bg-white rounded-xl border border-slate-200 p-6 text-center">
               <div className="text-3xl mb-2">⏳</div>
               <div className="font-bold text-gray-900">Event Not Started</div>
@@ -1455,7 +1876,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
           )}
 
           {/* Skins Standings */}
-          {(isEventStarted || isEventCompleted) && payouts.skins.length > 0 && payouts.skins.map((skinResult: any, idx: number) => {
+          {false && (isEventStarted || isEventCompleted) && payouts.skins.length > 0 && payouts.skins.map((skinResult: any, idx: number) => {
             if (!skinResult) return null;
             const standings = Object.entries(skinResult.winningsByGolfer || {})
               .map(([id, amt]) => ({ id, amount: amt as number, holes: skinResult.winningHolesByGolfer?.[id] || [] }))
@@ -1531,9 +1952,6 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
           )}
         </div>
       )}
-      </>
-      )}
-
       {/* ========== ADMIN FAB ========== */}
       {isOwner && canModify && isTabActive && (
         <button
@@ -1960,7 +2378,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
         const setFees = (next: { out: number; in: number; total: number }) => updateCfg({ fees: next });
 
         return createPortal(
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setNassauSetupId(null)}>
+          <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setNassauSetupId(null)}>
             <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
               <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                 <div>
@@ -2141,7 +2559,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
         };
 
         return createPortal(
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setSkinsSetupId(null)}>
+          <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setSkinsSetupId(null)}>
             <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
               <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                 <div>
@@ -2312,7 +2730,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
         const getCount = (gid: string) => results.find((r: any) => r.golferId === gid)?.count || 0;
 
         return createPortal(
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setPinkySetupId(null)}>
+          <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setPinkySetupId(null)}>
             <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
               <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                 <div>
@@ -2469,7 +2887,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
         const getCount = (gid: string) => results.find((r: any) => r.golferId === gid)?.count || 0;
 
         return createPortal(
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setGreenieSetupId(null)}>
+          <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setGreenieSetupId(null)}>
             <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
               <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                 <div>
@@ -2605,7 +3023,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
         const updateCfg = (patch: any) =>
           updateEvent(eventId, { games: { ...event.games, stableford: stablefordArray.map((s: any) => (s.id === cfg.id ? { ...s, ...patch } : s)) } });
         return createPortal(
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setStablefordSetupId(null)}>
+          <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setStablefordSetupId(null)}>
             <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
               <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                 <div>
@@ -2675,7 +3093,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
         const participantIds = cfg.participantGolferIds || [];
         const activeGolfers9 = allGolfers.filter((g: any) => participantIds.includes(g.id));
         return createPortal(
-          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setNinePointSetupId(null)}>
+          <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setNinePointSetupId(null)}>
             <div className="w-full max-w-md max-h-[85vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
               <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
                 <div>
@@ -3166,6 +3584,26 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                       <span>{currency(myBuyin)}</span>
                     </div>
                   </div>
+
+                  <div className="mt-4 text-xs font-bold text-gray-500 uppercase tracking-wide">Winnings Breakdown</div>
+                  <div className="mt-1 space-y-1">
+                    {myWinningsBreakdown.length > 0 ? (
+                      myWinningsBreakdown.map((item, idx) => (
+                        <div key={`${item.name}-${idx}`} className="flex justify-between text-sm text-gray-700">
+                          <span>{item.name}</span>
+                          <span className={`font-medium ${item.amount > 0 ? 'text-green-600' : item.amount < 0 ? 'text-red-600' : 'text-gray-500'}`}>
+                            {signedCurrency(item.amount)}
+                          </span>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="text-xs text-gray-400 italic">No winnings entries yet</div>
+                    )}
+                    <div className="border-t border-gray-200/50 mt-2 pt-1 flex justify-between text-sm font-bold text-gray-900">
+                      <span>Total</span>
+                      <span>{signedCurrency(myWinnings)}</span>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -3280,6 +3718,164 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
           document.body
         );
       })()}
+
+      {/* Team Scorecard Modal */}
+      {teamModal && createPortal(
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4" onClick={() => setTeamModal(null)}>
+          <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden" onClick={(e) => e.stopPropagation()}>
+            <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-[10px] font-bold tracking-[0.15em] text-gray-400 uppercase">TEAM</div>
+                  <div className="font-extrabold text-gray-900">{teamModal.name}</div>
+                  <div className="text-xs text-gray-500">{teamModal.isNet ? 'Net' : 'Gross'} · Best {teamModal.bestCount === 1 ? 'Ball' : teamModal.bestCount}</div>
+                </div>
+                <button type="button" onClick={() => setTeamModal(null)} className="w-8 h-8 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold flex items-center justify-center" aria-label="Close">✕</button>
+              </div>
+            </div>
+            <div className="p-4 overflow-x-auto">
+                {(() => {
+                  const holes = Array.from({ length: 18 }, (_, i) => i + 1);
+                  const front9 = holes.slice(0, 9);
+                  const back9 = holes.slice(9);
+                  const isNet = teamModal.isNet;
+
+                  const cloudTee = getTee(event.course.courseId, event.course.teeName);
+                  const localCourse = courseMap[event.course.courseId];
+                  const courseRating = cloudTee?.courseRating ?? 72;
+                  const slopeRating = cloudTee?.slopeRating ?? 113;
+                  const par = cloudTee?.par ?? localCourse?.holes?.reduce((sum: number, h: any) => sum + h.par, 0) ?? 72;
+
+                  const golferScores = teamModal.golferIds.map((gid, idx) => {
+                    const scorecard = event.scorecards.find((sc: any) => sc.golferId === gid);
+                    const eventGolfer = event.golfers.find((g: any) => g.profileId === gid || g.customName === gid);
+                    const profile = profiles.find((p: any) => p.id === gid);
+                    const handicapIndex = eventGolfer?.handicapOverride ?? eventGolfer?.handicapSnapshot ?? profile?.handicapIndex ?? 0;
+                    const courseHcp = calculateCourseHandicap(handicapIndex, slopeRating, courseRating, par);
+                    const strokeDist = isNet && event.course.courseId ? distributeHandicapStrokes(courseHcp, event.course.courseId, event.course.teeName) : {};
+                    const scores: Record<number, { gross: number | null; net: number | null; strokes: number }> = {};
+                    holes.forEach(h => {
+                      const s = scorecard?.scores?.find((s: any) => s.hole === h);
+                      const gross = s?.strokes ?? null;
+                      const handicapStrokes = strokeDist[h] || 0;
+                      const net = gross != null ? gross - handicapStrokes : null;
+                      scores[h] = { gross, net, strokes: handicapStrokes };
+                    });
+                    return { id: gid, name: teamModal.members[idx] || gid, scores, courseHcp };
+                  });
+
+                  const usedScoresPerHole: Record<number, Set<string>> = {};
+                  holes.forEach(h => {
+                    const scoresWithId = golferScores
+                      .filter(g => g.scores[h].gross != null)
+                      .map(g => ({ id: g.id, score: isNet ? g.scores[h].net! : g.scores[h].gross! }))
+                      .sort((a, b) => a.score - b.score);
+                    const used = scoresWithId.slice(0, teamModal.bestCount);
+                    usedScoresPerHole[h] = new Set(used.map(u => u.id));
+                  });
+
+                  const renderHalfTable = (holeRange: number[], label: string) => (
+                    <div className="mb-4">
+                      <div className="text-[10px] font-bold text-gray-400 uppercase mb-2">{label}</div>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-[11px] border-collapse">
+                          <thead>
+                            <tr className="bg-gray-100">
+                              <th className="px-2 py-1.5 text-left font-bold text-gray-600 sticky left-0 bg-gray-100 min-w-[80px]">Player</th>
+                              {holeRange.map(h => (<th key={h} className="px-1.5 py-1.5 text-center font-bold text-gray-600 min-w-[28px]">{h}</th>))}
+                              <th className="px-2 py-1.5 text-center font-bold text-gray-700 bg-gray-200 min-w-[36px]">Tot</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {golferScores.map((golfer) => {
+                              const halfTotalNet = holeRange.reduce((sum, h) => sum + (golfer.scores[h].net || 0), 0);
+                              const halfTotalGross = holeRange.reduce((sum, h) => sum + (golfer.scores[h].gross || 0), 0);
+                              const hasAnyScore = holeRange.some(h => golfer.scores[h].gross != null);
+                              return (
+                                <tr key={golfer.id} className="border-t border-gray-100">
+                                  <td className="px-2 py-1.5 font-medium text-gray-900 sticky left-0 bg-white truncate max-w-[80px]">
+                                    <div>{golfer.name.split(' ')[0]}</div>
+                                    {isNet && <div className="text-[9px] text-purple-600 font-normal">CH {golfer.courseHcp}</div>}
+                                  </td>
+                                  {holeRange.map(h => {
+                                    const { gross, net, strokes } = golfer.scores[h];
+                                    const isUsed = usedScoresPerHole[h]?.has(golfer.id);
+                                    const displayScore = isNet ? net : gross;
+                                    return (
+                                      <td key={h} className={`px-0.5 py-1 text-center font-mono relative ${gross == null ? 'text-gray-300' : isUsed ? 'bg-green-100 text-green-800 font-bold' : 'text-gray-500'}`}>
+                                        {isNet && strokes > 0 && (
+                                          <div className="absolute top-0 left-0 right-0 flex justify-center gap-0.5 -mt-0.5">
+                                            {Array.from({ length: Math.min(strokes, 3) }).map((_, i) => (<span key={i} className="w-1 h-1 rounded-full bg-purple-500"></span>))}
+                                          </div>
+                                        )}
+                                        <span className="text-[10px]">{displayScore ?? '-'}</span>
+                                        {isNet && gross != null && net !== gross && (<div className="text-[8px] text-gray-400 leading-none">{gross}</div>)}
+                                      </td>
+                                    );
+                                  })}
+                                  <td className="px-2 py-1.5 text-center font-mono font-bold text-gray-700 bg-gray-50">{hasAnyScore ? (isNet ? halfTotalNet : halfTotalGross) : '-'}</td>
+                                </tr>
+                              );
+                            })}
+                            <tr className="border-t-2 border-gray-300 bg-blue-50">
+                              <td className="px-2 py-1.5 font-bold text-blue-800 sticky left-0 bg-blue-50">Team</td>
+                              {holeRange.map(h => {
+                                const usedGolfers = Array.from(usedScoresPerHole[h] || []);
+                                const teamScore = usedGolfers.reduce((sum, gid) => {
+                                  const g = golferScores.find(gs => gs.id === gid);
+                                  const score = isNet ? g?.scores[h]?.net : g?.scores[h]?.gross;
+                                  return sum + (score || 0);
+                                }, 0);
+                                return (<td key={h} className="px-1.5 py-1.5 text-center font-mono font-bold text-blue-800">{usedGolfers.length > 0 ? teamScore : '-'}</td>);
+                              })}
+                              <td className="px-2 py-1.5 text-center font-mono font-bold text-blue-900 bg-blue-100">
+                                {holeRange.reduce((sum, h) => {
+                                  const usedGolfers = Array.from(usedScoresPerHole[h] || []);
+                                  return sum + usedGolfers.reduce((s, gid) => {
+                                    const g = golferScores.find(gs => gs.id === gid);
+                                    const score = isNet ? g?.scores[h]?.net : g?.scores[h]?.gross;
+                                    return s + (score || 0);
+                                  }, 0);
+                                }, 0) || '-'}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+
+                  return (
+                    <>
+                      {renderHalfTable(front9, 'FRONT 9')}
+                      {renderHalfTable(back9, 'BACK 9')}
+                      <div className="mt-3 space-y-2">
+                        <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                          <div className="flex items-center gap-2 text-xs">
+                            <span className="w-4 h-4 bg-green-100 border border-green-300 rounded"></span>
+                            <span className="text-green-800">Highlighted scores counted toward team total</span>
+                          </div>
+                        </div>
+                        {isNet && (
+                          <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                            <div className="flex items-center gap-2 text-xs">
+                              <div className="flex gap-0.5">
+                                <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                                <span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span>
+                              </div>
+                              <span className="text-purple-800">Dots = handicap strokes received on that hole</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };

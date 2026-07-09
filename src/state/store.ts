@@ -55,6 +55,11 @@ import { createUISlice, initialUIState, type UISliceActions } from './slices/uiS
 import { createWalletSlice, initialWalletState, type WalletSliceActions } from './slices/walletSlice';
 import { createTournamentSlice, initialTournamentState, type TournamentSliceActions } from './slices/tournamentSlice';
 
+const sanitizeIdPart = (value: string) => String(value || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+const buildCompletedRoundId = (eventId: string, golferId: string) => `cr-${sanitizeIdPart(eventId)}-${sanitizeIdPart(golferId)}`;
+const buildIndividualRoundId = (eventId: string, profileId: string) => `ir-${sanitizeIdPart(eventId)}-${sanitizeIdPart(profileId)}`;
+let eventsCloudSyncPromise: Promise<{ totalCount: number; activeCount: number; completedCount: number; syncedAt: string }> | null = null;
+
 // ============================================================================
 // Combined State Interface
 // ============================================================================
@@ -71,6 +76,8 @@ interface State {
   completedEvents: Event[];
   completedRounds: CompletedRound[];
   isLoadingEventsFromCloud: boolean;
+  lastEventsCloudSyncAt: string | null;
+  lastEventsCloudSyncCount: number;
   
   // Verified status level-up tracking
   pendingLevelUp: {
@@ -81,6 +88,7 @@ interface State {
     verifiedRounds: number;
   } | null;
   clearPendingLevelUp: () => void;
+  recomputeVerifiedStatuses: () => void;
   
   // UI slice state
   toasts: Toast[];
@@ -130,6 +138,7 @@ interface State {
   setScorecardView: EventSliceActions['setScorecardView'];
   generateShareCode: EventSliceActions['generateShareCode'];
   joinEventByCode: EventSliceActions['joinEventByCode'];
+  joinEventById: EventSliceActions['joinEventById'];
   addChatMessage: EventSliceActions['addChatMessage'];
   clearChat: EventSliceActions['clearChat'];
   toggleReaction: EventSliceActions['toggleReaction'];
@@ -137,7 +146,7 @@ interface State {
   votePoll: EventSliceActions['votePoll'];
   
   // Complex event actions (kept in store)
-  loadEventsFromCloud: () => Promise<void>;
+  loadEventsFromCloud: () => Promise<{ totalCount: number; activeCount: number; completedCount: number; syncedAt: string }>;
   completeEvent: (eventId: string) => boolean;
   
   // Game actions
@@ -225,6 +234,61 @@ export const useStore = create<State>()(
       
       // Verified status actions
       clearPendingLevelUp: () => set({ pendingLevelUp: null }),
+      recomputeVerifiedStatuses: () => {
+        const profiles = get().profiles;
+        const completedEvents = [...get().completedEvents];
+
+        if (profiles.length === 0 || completedEvents.length === 0) return;
+
+        const statusByProfileId = new Map<string, GolferProfile['verifiedStatus']>();
+        profiles.forEach((profile) => {
+          const founderBadge = profile.verifiedStatus?.badges?.includes('founder') ? ['founder'] : [];
+          statusByProfileId.set(profile.id, {
+            verifiedRounds: 0,
+            statusLevel: 0,
+            badges: founderBadge,
+          });
+        });
+
+        const sortedEvents = completedEvents.sort((a, b) => {
+          const aTime = new Date(a.completedAt || a.date || 0).getTime();
+          const bTime = new Date(b.completedAt || b.date || 0).getTime();
+          return aTime - bTime;
+        });
+
+        const recomputedEvents = sortedEvents.map((event) => {
+          const verification = checkEventVerification(event, profiles);
+
+          if (verification.isVerified) {
+            event.golfers.forEach((golfer) => {
+              if (!golfer.profileId || !statusByProfileId.has(golfer.profileId)) return;
+              const currentStatus = statusByProfileId.get(golfer.profileId);
+              const result = calculateNewStatus(currentStatus, event.id);
+              statusByProfileId.set(golfer.profileId, result.newStatus);
+            });
+          }
+
+          return {
+            ...event,
+            isVerifiedRound: verification.isVerified,
+            verificationNote: verification.reason,
+          };
+        });
+
+        set((state: any) => ({
+          completedEvents: recomputedEvents,
+          profiles: state.profiles.map((profile: GolferProfile) => ({
+            ...profile,
+            verifiedStatus: statusByProfileId.get(profile.id) || profile.verifiedStatus,
+          })),
+          currentProfile: state.currentProfile
+            ? {
+                ...state.currentProfile,
+                verifiedStatus: statusByProfileId.get(state.currentProfile.id) || state.currentProfile.verifiedStatus,
+              }
+            : state.currentProfile,
+        }));
+      },
       
       // Compose slice actions
       ...createUserSlice(set, get),
@@ -237,44 +301,243 @@ export const useStore = create<State>()(
       
       // Override complex functions that need full store access
       loadEventsFromCloud: async () => {
-        if (import.meta.env.VITE_ENABLE_CLOUD_SYNC !== 'true') return;
-        if (get().isLoadingEventsFromCloud) return;
+        if (eventsCloudSyncPromise) return eventsCloudSyncPromise;
+        eventsCloudSyncPromise = (async () => {
+        if (import.meta.env.VITE_ENABLE_CLOUD_SYNC !== 'true') {
+          return { totalCount: 0, activeCount: 0, completedCount: 0, syncedAt: new Date().toISOString() };
+        }
+        if (get().isLoadingEventsFromCloud) {
+          return {
+            totalCount: get().events.length + get().completedEvents.length,
+            activeCount: get().events.length,
+            completedCount: get().completedEvents.length,
+            syncedAt: get().lastEventsCloudSyncAt || new Date().toISOString(),
+          };
+        }
         
         const currentProfile = get().currentProfile;
-        if (!currentProfile) return;
+        if (!currentProfile) {
+          return { totalCount: 0, activeCount: 0, completedCount: 0, syncedAt: new Date().toISOString() };
+        }
+        const normalize = (v: unknown) => String(v || '').trim().toLowerCase();
+        const mergeScorecards = (a: any, b: any) => {
+          const aScores = Array.isArray(a?.scores) ? a.scores : [];
+          const bScores = Array.isArray(b?.scores) ? b.scores : [];
+          const byHole = new Map<number, any>();
+          for (const s of aScores) if (typeof s?.hole === 'number') byHole.set(s.hole, s);
+          for (const s of bScores) {
+            if (typeof s?.hole !== 'number') continue;
+            const existing = byHole.get(s.hole);
+            if (!existing || (existing.strokes == null && s.strokes != null)) byHole.set(s.hole, s);
+          }
+          return {
+            ...a,
+            ...b,
+            golferId: b?.golferId || a?.golferId,
+            scores: Array.from(byHole.values()).sort((x: any, y: any) => (x.hole || 0) - (y.hole || 0)),
+          };
+        };
+        const repairEventGolferProfileIds = (event: any, knownProfiles: any[]) => {
+          if (!event) return { event, changed: false };
+          const profilesByName = new Map<string, any[]>();
+          for (const p of knownProfiles || []) {
+            const key = normalize(p?.name);
+            if (!key) continue;
+            const arr = profilesByName.get(key) || [];
+            arr.push(p);
+            profilesByName.set(key, arr);
+          }
+
+          let changed = false;
+          const tokenRemap = new Map<string, string>();
+          const golfersRaw = Array.isArray(event.golfers) ? event.golfers : [];
+          const golfersRepaired = golfersRaw.map((g: any) => {
+            if (!g || g.profileId) return g;
+            const sourceName = String(g.customName || g.displayName || '').trim();
+            if (!sourceName) return g;
+            const matches = profilesByName.get(normalize(sourceName)) || [];
+            if (matches.length !== 1) return g;
+            const profile = matches[0];
+            changed = true;
+            if (g.customName) tokenRemap.set(String(g.customName), profile.id);
+            if (g.displayName) tokenRemap.set(String(g.displayName), profile.id);
+            return {
+              ...g,
+              profileId: profile.id,
+              customName: undefined,
+              displayName: g.displayName || profile.name,
+            };
+          });
+
+          const golfersByKey = new Map<string, any>();
+          for (const g of golfersRepaired) {
+            if (!g) continue;
+            const key = g.profileId ? `p:${g.profileId}` : `c:${String(g.customName || g.displayName || '')}`;
+            const existing = golfersByKey.get(key);
+            if (!existing) {
+              golfersByKey.set(key, g);
+            } else {
+              changed = true;
+              golfersByKey.set(key, {
+                ...existing,
+                ...g,
+                displayName: g.displayName || existing.displayName,
+                handicapSnapshot: g.handicapSnapshot ?? existing.handicapSnapshot ?? null,
+                handicapOverride: g.handicapOverride ?? existing.handicapOverride ?? null,
+                teeName: g.teeName || existing.teeName,
+                gamePreference: g.gamePreference || existing.gamePreference || 'all',
+              });
+            }
+          }
+          const golfers = Array.from(golfersByKey.values());
+
+          const groupsRaw = Array.isArray(event.groups) ? event.groups : [];
+          const groups = groupsRaw.map((gr: any) => {
+            const ids = Array.isArray(gr?.golferIds) ? gr.golferIds : [];
+            const mapped = ids.map((id: string) => tokenRemap.get(String(id)) || id);
+            const deduped = Array.from(new Set(mapped));
+            if (deduped.length !== ids.length || deduped.some((id, i) => id !== ids[i])) changed = true;
+            return { ...gr, golferIds: deduped };
+          });
+
+          const scorecardsRaw = Array.isArray(event.scorecards) ? event.scorecards : [];
+          const scorecardsByGolfer = new Map<string, any>();
+          for (const sc of scorecardsRaw) {
+            if (!sc?.golferId) continue;
+            const mappedGolferId = tokenRemap.get(String(sc.golferId)) || sc.golferId;
+            if (mappedGolferId !== sc.golferId) changed = true;
+            const nextSc = { ...sc, golferId: mappedGolferId };
+            const existing = scorecardsByGolfer.get(mappedGolferId);
+            if (!existing) scorecardsByGolfer.set(mappedGolferId, nextSc);
+            else {
+              changed = true;
+              scorecardsByGolfer.set(mappedGolferId, mergeScorecards(existing, nextSc));
+            }
+          }
+          const scorecards = Array.from(scorecardsByGolfer.values());
+
+          if (!changed) return { event, changed: false };
+          return {
+            event: {
+              ...event,
+              golfers,
+              groups,
+              scorecards,
+              lastModified: new Date().toISOString(),
+            },
+            changed: true,
+          };
+        };
+        const isCurrentProfileMember = (event: any) => {
+          if (!event) return false;
+          if (event.ownerProfileId === currentProfile.id) return true;
+          const golfers = Array.isArray(event.golfers) ? event.golfers : [];
+          if (golfers.some((g: any) => g?.profileId === currentProfile.id)) return true;
+          const groups = Array.isArray(event.groups) ? event.groups : [];
+          if (groups.some((gr: any) => Array.isArray(gr?.golferIds) && gr.golferIds.includes(currentProfile.id))) return true;
+          return false;
+        };
         
         try {
           set({ isLoadingEventsFromCloud: true });
-          const { loadUserEventsFromCloud, loadChatMessagesFromCloud } = await import('../utils/eventSync');
+          const { loadUserEventsFromCloud, saveEventToCloud } = await import('../utils/eventSync');
           
           const cloudEvents = await loadUserEventsFromCloud();
-          const myEvents = cloudEvents.filter(event => 
-            event.golfers.some(g => g.profileId === currentProfile.id)
+          const knownProfiles = get().profiles || [];
+          const repairedResults = cloudEvents.map((e) => repairEventGolferProfileIds(e, knownProfiles));
+          const repairedCloudEvents = repairedResults.map((r) => r.event);
+
+          const changedEvents = repairedResults.filter((r) => r.changed).map((r) => r.event);
+          if (changedEvents.length > 0) {
+            console.log(`Repairing ${changedEvents.length} legacy event/group golfer records with missing profileId...`);
+            for (const fixedEvent of changedEvents) {
+              try {
+                await saveEventToCloud(fixedEvent as any, currentProfile.id);
+              } catch (repairError) {
+                console.error('Failed to persist repaired event golfer IDs:', fixedEvent?.id, repairError);
+              }
+            }
+          }
+
+          // listAccessibleHubs is already backend-authorized for the signed-in user.
+          // Do not re-filter by local profile membership here, or PWA/browser profile
+          // mismatches can hide legitimately joined events/groups after refresh.
+          const myEvents = repairedCloudEvents
+            .filter((e: any) => e && typeof e.id === 'string');
+
+          const existingHubById = new Map(
+            [...(get().events || []), ...(get().completedEvents || [])].map((event: any) => [event.id, event])
           );
-          
-          for (const event of myEvents) {
-            event.chat = await loadChatMessagesFromCloud(event.id);
+          const hydratedEvents = myEvents.map((event: any) => ({
+            ...event,
+            chat: Array.isArray(event.chat) && event.chat.length > 0
+              ? event.chat
+              : Array.isArray(existingHubById.get(event.id)?.chat)
+                ? existingHubById.get(event.id).chat
+                : [],
+          }));
+
+          // Hydrate participant profiles so member cards show correct names/avatars/status.
+          try {
+            const participantProfileIds = Array.from(
+              new Set(
+                hydratedEvents
+                  .flatMap((event: any) => (Array.isArray(event.golfers) ? event.golfers : []).map((g: any) => g?.profileId))
+                  .filter((id): id is string => Boolean(id))
+              )
+            );
+            if (participantProfileIds.length > 0) {
+              const { loadCloudProfilesByIds } = await import('../utils/profileSync');
+              const cloudParticipantProfiles = await loadCloudProfilesByIds(participantProfileIds);
+              if (cloudParticipantProfiles.length > 0) {
+                const existingProfiles = get().profiles;
+                const byId = new Map(existingProfiles.map((p) => [p.id, p]));
+                for (const p of cloudParticipantProfiles) {
+                  const existing = byId.get(p.id);
+                  byId.set(p.id, existing ? { ...existing, ...p } as any : p as any);
+                }
+                const nextProfiles = Array.from(byId.values()) as any[];
+                const nextCurrentProfile = nextProfiles.find((p) => p.id === currentProfile.id) || get().currentProfile;
+                set({
+                  profiles: nextProfiles as any,
+                  currentProfile: nextCurrentProfile as any,
+                });
+              }
+            }
+          } catch (profileHydrateError) {
+            console.error('Failed to hydrate participant profiles from cloud:', profileHydrateError);
           }
           
-          const activeEvents = myEvents.filter(e => !e.isCompleted);
-          const completedEvents = myEvents.filter(e => e.isCompleted);
+          const activeEvents = hydratedEvents.filter(e => !e.isCompleted);
+          const completedEvents = hydratedEvents.filter(e => e.isCompleted);
+          const syncedAt = new Date().toISOString();
+
+          // Paint Home from the authoritative cloud hub list immediately.
+          // Avoid blocking this on per-hub chat fetches or completed-round derivation.
+          set({
+            events: activeEvents,
+            completedEvents,
+            lastEventsCloudSyncAt: syncedAt,
+            lastEventsCloudSyncCount: hydratedEvents.length,
+          });
           
           const newCompletedRoundsFromCloud: CompletedRound[] = [];
           const newIndividualRoundsFromCloud: IndividualRound[] = [];
           
           // Process completed events
           completedEvents.forEach(event => {
-            const eventGolfer = event.golfers.find(g => g.profileId === currentProfile.id);
-            const scorecard = event.scorecards.find(sc => sc.golferId === currentProfile.id);
+            const eventGolfers = Array.isArray(event.golfers) ? event.golfers : [];
+            const eventScorecards = Array.isArray(event.scorecards) ? event.scorecards : [];
+            const eventGolfer = eventGolfers.find((g: any) => g?.profileId === currentProfile.id);
+            const scorecard = eventScorecards.find((sc: any) => sc?.golferId === currentProfile.id);
             if (!eventGolfer || !scorecard) return;
+            const stableCompletedRoundId = buildCompletedRoundId(event.id, currentProfile.id);
+            const stableIndividualRoundId = buildIndividualRoundId(event.id, currentProfile.id);
             
             const existingCompletedRound = get().completedRounds.find(
-              r => r.eventId === event.id && r.golferId === currentProfile.id
+              r => (r.eventId === event.id && r.golferId === currentProfile.id) || r.id === stableCompletedRoundId
             );
             const effectiveTeeName = eventGolfer.teeName || event.course.teeName || currentProfile.preferredTee;
-            const existingIndividualRound = currentProfile.individualRounds?.find(
-              r => r.date === event.date && r.courseId === event.course.courseId && r.teeName === effectiveTeeName
-            );
             
             let totalScore = 0, totalPar = 0, holesPlayed = 0;
             const holeScores: any[] = [];
@@ -301,7 +564,7 @@ export const useStore = create<State>()(
             let completedRoundForLinking: CompletedRound | undefined;
             if (!existingCompletedRound) {
               const completedRound: CompletedRound = {
-                id: nanoid(8), eventId: event.id, eventName: event.name, datePlayed: event.date,
+                id: stableCompletedRoundId, eventId: event.id, eventName: event.name, datePlayed: event.date,
                 courseId: event.course.courseId,
                 courseName: event.course.courseId ? (getCourseById(event.course.courseId)?.name || 'Unknown Course') : 'Custom Course',
                 teeName: eventGolfer.teeName, golferId: currentProfile.id, golferName: currentProfile.name,
@@ -314,6 +577,16 @@ export const useStore = create<State>()(
             } else {
               completedRoundForLinking = existingCompletedRound;
             }
+
+            const existingIndividualRound = currentProfile.individualRounds?.find((r) =>
+              r.id === stableIndividualRoundId ||
+              (r.eventId && r.eventId === event.id) ||
+              (completedRoundForLinking?.id && r.completedRoundId === completedRoundForLinking.id) ||
+              (r.date === event.date &&
+                r.courseId === event.course.courseId &&
+                r.teeName === effectiveTeeName &&
+                r.grossScore === totalScore)
+            );
             
             if (!existingIndividualRound && event.course.courseId && holesPlayed >= 14) {
               const course = getCourseById(event.course.courseId);
@@ -349,7 +622,7 @@ export const useStore = create<State>()(
                 const scoreDifferential = calculateScoreDifferential(adjustedGross, cr, sl);
                 
                 const individualRound: IndividualRound = {
-                  id: nanoid(8), profileId: currentProfile.id, date: event.date, courseId: event.course.courseId,
+                  id: stableIndividualRoundId, profileId: currentProfile.id, date: event.date, courseId: event.course.courseId,
                   teeName: tee.name, grossScore: totalScore, netScore: totalScore - courseHandicap, courseHandicap,
                   scoreDifferential, courseRating: cr, slopeRating: sl, scores: roundScores,
                   adjustedGrossScore: adjustedGross,
@@ -360,47 +633,69 @@ export const useStore = create<State>()(
             }
           });
           
-          const localEventIds = new Set(get().events.map(e => e.id));
-          const localCompletedEventIds = new Set(get().completedEvents.map(e => e.id));
-          const newActiveEvents = activeEvents.filter(e => !localEventIds.has(e.id));
-          const newCompletedEventsToAdd = completedEvents.filter(e => !localCompletedEventIds.has(e.id));
-          const completedEventIds = new Set(completedEvents.map(e => e.id));
-          const cleanedActiveEvents = get().events.filter(e => !completedEventIds.has(e.id));
-          
-          if (newActiveEvents.length > 0 || newCompletedEventsToAdd.length > 0 || cleanedActiveEvents.length !== get().events.length || newCompletedRoundsFromCloud.length > 0 || newIndividualRoundsFromCloud.length > 0) {
-            set({
-              events: [...cleanedActiveEvents, ...newActiveEvents],
-              completedEvents: [...get().completedEvents, ...newCompletedEventsToAdd],
-              completedRounds: [...get().completedRounds, ...newCompletedRoundsFromCloud],
-              profiles: get().profiles.map(p => {
-                if (p.id === currentProfile.id) {
-                  const existingRounds = p.individualRounds || [];
-                  const roundsToAdd = newIndividualRoundsFromCloud.filter(newRound => 
-                    !existingRounds.some(existing => existing.id === newRound.id || 
-                      (existing.date === newRound.date && existing.courseId === newRound.courseId && 
-                       existing.teeName === newRound.teeName && existing.grossScore === newRound.grossScore))
-                  );
-                  return { ...p, individualRounds: [...existingRounds, ...roundsToAdd] };
-                }
-                return p;
-              })
-            });
-            
-            if (newIndividualRoundsFromCloud.length > 0) {
-              const existingRounds = currentProfile.individualRounds || [];
-              const roundsToAdd = newIndividualRoundsFromCloud.filter(newRound => 
-                !existingRounds.some(existing => existing.id === newRound.id || 
-                  (existing.date === newRound.date && existing.courseId === newRound.courseId && 
-                   existing.teeName === newRound.teeName && existing.grossScore === newRound.grossScore))
-              );
-              if (roundsToAdd.length > 0) {
-                import('../utils/roundSync').then(({ batchSaveIndividualRoundsToCloud }) => {
-                  batchSaveIndividualRoundsToCloud(roundsToAdd).catch(console.error);
-                });
+          const existingCompleted = get().completedRounds || [];
+          const mergedCompletedByKey = new Map<string, CompletedRound>();
+          [...existingCompleted, ...newCompletedRoundsFromCloud].forEach((round) => {
+            const key = `${round.eventId}:${round.golferId}`;
+            const existing = mergedCompletedByKey.get(key);
+            if (!existing) {
+              mergedCompletedByKey.set(key, round);
+              return;
+            }
+            const existingTs = new Date(existing.createdAt || existing.datePlayed || 0).getTime();
+            const currentTs = new Date(round.createdAt || round.datePlayed || 0).getTime();
+            if (currentTs >= existingTs) mergedCompletedByKey.set(key, round);
+          });
+          const mergedCompletedRounds = Array.from(mergedCompletedByKey.values());
+
+          // Authoritative replacement for cloud-enabled sessions:
+          // active/completed event lists come from cloud membership, preventing stale local rosters.
+          set({
+            events: activeEvents,
+            completedEvents,
+            completedRounds: mergedCompletedRounds,
+            lastEventsCloudSyncAt: syncedAt,
+            lastEventsCloudSyncCount: hydratedEvents.length,
+            profiles: get().profiles.map(p => {
+              if (p.id === currentProfile.id) {
+                const existingRounds = p.individualRounds || [];
+                const roundsToAdd = newIndividualRoundsFromCloud.filter((newRound) =>
+                  !existingRounds.some((existing) =>
+                    existing.id === newRound.id ||
+                    (newRound.eventId && existing.eventId === newRound.eventId) ||
+                    (newRound.completedRoundId && existing.completedRoundId === newRound.completedRoundId) ||
+                    (existing.date === newRound.date &&
+                      existing.courseId === newRound.courseId &&
+                      existing.teeName === newRound.teeName &&
+                      existing.grossScore === newRound.grossScore)
+                  )
+                );
+                return { ...p, individualRounds: [...existingRounds, ...roundsToAdd] };
               }
-              setTimeout(() => get().calculateAndUpdateHandicap(currentProfile.id), 0);
+              return p;
+            })
+          });
+
+          if (newIndividualRoundsFromCloud.length > 0) {
+            const existingRounds = currentProfile.individualRounds || [];
+            const roundsToAdd = newIndividualRoundsFromCloud.filter((newRound) =>
+              !existingRounds.some((existing) =>
+                existing.id === newRound.id ||
+                (newRound.eventId && existing.eventId === newRound.eventId) ||
+                (newRound.completedRoundId && existing.completedRoundId === newRound.completedRoundId) ||
+                (existing.date === newRound.date &&
+                  existing.courseId === newRound.courseId &&
+                  existing.teeName === newRound.teeName &&
+                  existing.grossScore === newRound.grossScore)
+              )
+            );
+            if (roundsToAdd.length > 0) {
+              import('../utils/roundSync').then(({ batchSaveIndividualRoundsToCloud }) => {
+                batchSaveIndividualRoundsToCloud(roundsToAdd).catch(console.error);
+              });
             }
           }
+          setTimeout(() => get().calculateAndUpdateHandicap(currentProfile.id), 0);
           
           // Load CompletedRounds from cloud
           try {
@@ -416,10 +711,28 @@ export const useStore = create<State>()(
           } catch (error) {
             console.error('Failed to load CompletedRounds from cloud:', error);
           }
+          return {
+            totalCount: hydratedEvents.length,
+            activeCount: activeEvents.length,
+            completedCount: completedEvents.length,
+            syncedAt,
+          };
         } catch (error) {
           console.error('loadEventsFromCloud error:', error);
+          return {
+            totalCount: get().events.length + get().completedEvents.length,
+            activeCount: get().events.length,
+            completedCount: get().completedEvents.length,
+            syncedAt: get().lastEventsCloudSyncAt || new Date().toISOString(),
+          };
         } finally {
           set({ isLoadingEventsFromCloud: false });
+        }
+        })();
+        try {
+          return await eventsCloudSyncPromise;
+        } finally {
+          eventsCloudSyncPromise = null;
         }
       },
       
@@ -435,6 +748,7 @@ export const useStore = create<State>()(
         event.golfers.forEach(eventGolfer => {
           const golferId = eventGolfer.profileId || eventGolfer.customName;
           if (!golferId) return;
+          const stableCompletedRoundId = buildCompletedRoundId(event.id, golferId);
           
           const profile = eventGolfer.profileId ? get().profiles.find(p => p.id === eventGolfer.profileId) : null;
           const golferName = profile ? profile.name : eventGolfer.customName || 'Unknown';
@@ -470,7 +784,7 @@ export const useStore = create<State>()(
           if (skinsWinnings !== 0) gameResults.skins = { winnings: skinsWinnings, skinsWon: 0 };
           
           const completedRound: CompletedRound = {
-            id: nanoid(8), eventId: event.id, eventName: event.name, datePlayed: event.date,
+            id: stableCompletedRoundId, eventId: event.id, eventName: event.name, datePlayed: event.date,
             courseId: event.course.courseId,
             courseName: event.course.courseId ? (getCourseById(event.course.courseId)?.name || 'Unknown Course') : 'Custom Course',
             teeName: eventGolfer.teeName, golferId, golferName,
@@ -537,9 +851,10 @@ export const useStore = create<State>()(
               
               let adjustedGross = 0;
               roundScores.forEach(s => { adjustedGross += applyESCAdjustment(s.strokes ?? 0, s.par, s.handicapStrokes || 0); });
+              const stableIndividualRoundId = buildIndividualRoundId(event.id, eventGolfer.profileId);
               
               const individualRound: IndividualRound = {
-                id: nanoid(8), profileId: eventGolfer.profileId, date: event.date,
+                id: stableIndividualRoundId, profileId: eventGolfer.profileId, date: event.date,
                 courseId: event.course.courseId!, teeName: completedRound.teeName || tee.name,
                 grossScore: completedRound.finalScore, netScore: completedRound.finalScore - courseHandicap,
                 courseHandicap, scoreDifferential: calculateScoreDifferential(adjustedGross, cr, sl),
@@ -579,6 +894,7 @@ export const useStore = create<State>()(
               const filteredToAdd = toAdd.filter((nr: IndividualRound) =>
                 !existing.some((er: IndividualRound) =>
                   er.id === nr.id ||
+                  (er.eventId && nr.eventId && er.eventId === nr.eventId) ||
                   (er.completedRoundId && nr.completedRoundId && er.completedRoundId === nr.completedRoundId) ||
                   (er.date === nr.date && er.courseId === nr.courseId && er.teeName === nr.teeName && er.grossScore === nr.grossScore)
                 )
@@ -729,7 +1045,7 @@ export const useStore = create<State>()(
         const autoRecapDisabled = completedEvent.settings?.disableAutoRecap === true;
         if (!autoRecapDisabled) {
           try {
-            const recap = generateRoundRecap(completedEvent);
+            const recap = generateRoundRecap(completedEvent, get().profiles);
             const recapMsg = generateRecapPushMessage(recap);
             
             // Build a nice recap message for chat
@@ -751,14 +1067,27 @@ export const useStore = create<State>()(
               text: recapLines.join('\n'),
               createdAt: new Date().toISOString(),
             };
-            
+
+            const chatTargetId = completedEvent.parentGroupId || eventId;
+
             set((state: any) => ({
+              events: state.events.map((e: Event) =>
+                e.id === chatTargetId
+                  ? { ...e, chat: [...(e.chat || []), recapChatMessage], lastModified: new Date().toISOString() }
+                  : e
+              ),
               completedEvents: state.completedEvents.map((e: Event) =>
-                e.id === eventId 
-                  ? { ...e, chat: [...(e.chat || []), recapChatMessage] }
+                e.id === chatTargetId
+                  ? { ...e, chat: [...(e.chat || []), recapChatMessage], lastModified: new Date().toISOString() }
                   : e
               )
             }));
+
+            if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+              import('../utils/eventSync').then(({ saveChatMessageToCloud }) => {
+                saveChatMessageToCloud(chatTargetId, recapChatMessage).catch(console.error);
+              });
+            }
             
             console.log('📤 Auto-sent event recap to chat');
           } catch (e) {

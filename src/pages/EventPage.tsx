@@ -14,15 +14,18 @@ import { createPortal } from 'react-dom';
 import { useParams, useNavigate } from 'react-router-dom';
 import useStore from '../state/store';
 import { useEventSync } from '../hooks/useEventSync';
+import { getGuestSession } from '../utils/guestSession';
 import SetupTab from '../components/tabs/SetupTab';
 import ScoreHubTab from '../components/tabs/ScoreHubTab';
 import GolfersTab from '../components/tabs/GolfersTab';
 import GamesTab from '../components/tabs/GamesTab';
 import ChatTab from '../components/tabs/ChatTab';
+import GroupEventsTab from '../components/tabs/GroupEventsTab';
 import EventNotifications from '../components/EventNotifications';
 import { CreateEventWizard } from '../components/CreateEventWizard';
 import { getCourseById } from '../data/cloudCourses';
 import { LeaderboardIcon } from '../components/icons/LeaderboardIcon';
+import { formatLocalDate } from '../utils/dateUtils';
 
 // Mark group chat as read (stores in localStorage)
 const LAST_READ_KEY = 'gimmies.chatLastRead.v1';
@@ -37,7 +40,7 @@ function markChatAsRead(groupId: string) {
 }
 
 const formatDateShort = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  formatLocalDate(iso, { month: 'short', day: 'numeric' });
 
 const EventPage: React.FC = () => {
   const { id } = useParams();
@@ -48,7 +51,6 @@ const EventPage: React.FC = () => {
   const [showPlayerGuide, setShowPlayerGuide] = useState(false);
   const [triggerAddGame, setTriggerAddGame] = useState(0);
   const [activePageIndex, setActivePageIndex] = useState(0);
-  const [dismissedBannerIds, setDismissedBannerIds] = useState<Set<string>>(new Set());
   const [joiningEventId, setJoiningEventId] = useState<string | null>(null);
   const [showCreateEvent, setShowCreateEvent] = useState(false);
 
@@ -62,17 +64,21 @@ const EventPage: React.FC = () => {
   };
   const navigate = useNavigate();
   
-  // Auto-sync event from cloud - faster polling when on chat tab (8s) vs other tabs (20s)
-  // Chat is index 0 for groups, index 1 for events
-  useEventSync(id, 15000);
+  // Keep the active event page on realtime cloud sync while it is open.
+  useEventSync(id);
   
-  const event = useStore(s => 
+  const rawEvent = useStore(s => 
     s.events.find(e => e.id === id) || 
     s.completedEvents.find(e => e.id === id)
   );
+  const parentGroup = useStore((s) =>
+    rawEvent?.parentGroupId
+      ? (s.events.find((e: any) => e.id === rawEvent.parentGroupId) as any | undefined)
+      : undefined
+  );
   const { deleteEvent, currentProfile, joinEventByCode, generateShareCode, addToast } = useStore();
   
-  if (!event) {
+  if (!rawEvent) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="text-center">
@@ -89,10 +95,30 @@ const EventPage: React.FC = () => {
     );
   }
 
+  const event = {
+    ...rawEvent,
+    golfers: Array.isArray(rawEvent.golfers) ? rawEvent.golfers : [],
+    groups: Array.isArray(rawEvent.groups) ? rawEvent.groups : [],
+    scorecards: Array.isArray(rawEvent.scorecards) ? rawEvent.scorecards : [],
+    games: {
+      ...(rawEvent.games || {}),
+      nassau: Array.isArray(rawEvent.games?.nassau) ? rawEvent.games.nassau : [],
+      skins: Array.isArray(rawEvent.games?.skins) ? rawEvent.games.skins : [],
+      pinky: Array.isArray(rawEvent.games?.pinky) ? rawEvent.games.pinky : [],
+      greenie: Array.isArray(rawEvent.games?.greenie) ? rawEvent.games.greenie : [],
+      stableford: Array.isArray(rawEvent.games?.stableford) ? rawEvent.games.stableford : [],
+      ninePoint: Array.isArray(rawEvent.games?.ninePoint) ? rawEvent.games.ninePoint : [],
+      bingoBangoBongo: Array.isArray(rawEvent.games?.bingoBangoBongo) ? rawEvent.games.bingoBangoBongo : [],
+      wolf: Array.isArray(rawEvent.games?.wolf) ? rawEvent.games.wolf : [],
+      dots: Array.isArray(rawEvent.games?.dots) ? rawEvent.games.dots : [],
+    },
+  };
+
   const isGroupHub = event.hubType === 'group';
   const isOwner = Boolean(currentProfile && event.ownerProfileId === currentProfile.id);
   const courseName = event.course.courseId ? getCourseById(event.course.courseId)?.name : null;
   
+  // Parent group context (Phase 4) — for child events within groups
   // Get child events for this group (both active and completed)
   const { activeChildEvents, completedChildEvents } = useStore((s) => {
     if (!isGroupHub) return { activeChildEvents: [], completedChildEvents: [] };
@@ -149,10 +175,9 @@ const EventPage: React.FC = () => {
   const tabs = isGroupHub
     ? [
         { id: 'chat', label: 'Chat', icon: '💬' },
+        { id: 'events', label: 'Events', icon: '🎯', badge: activeChildEvents.length || undefined },
         { id: 'golfers', label: 'Members', icon: '👥', badge: stats.golferCount },
-        { id: 'events', label: 'Events', icon: '🎯', badge: activeChildEvents.length || undefined, isModal: true },
         ...(isOwner ? [
-          { id: 'alerts', label: 'Alerts', icon: '🔔', isModal: true },
           { id: 'settings', label: 'Settings', icon: '⚙️' },
         ] : []),
       ]
@@ -168,7 +193,7 @@ const EventPage: React.FC = () => {
       ];
   
   // Filter out modal-only tabs for swipeable pages
-  const swipeableTabs = tabs.filter(t => !t.isModal);
+  const swipeableTabs = tabs.filter(t => !(t as any).isModal);
   
   // Handle scroll to update active page index
   const handleScroll = useCallback(() => {
@@ -204,12 +229,19 @@ const EventPage: React.FC = () => {
   const chatSwipeIndex = isGroupHub ? 0 : swipeableTabs.findIndex(t => t.id === 'chat');
   const isChatPage = activePageIndex === chatSwipeIndex;
   
-  // Mark group chat as read when viewing chat tab
+  // Mark group chat as read when viewing chat tab.
+  // For group hubs, mark this group's chat. For child events of a group,
+  // mark the parent group's chat (since Phase 2 unified chat routing means
+  // child events display the parent group's conversation).
   useEffect(() => {
-    if (isGroupHub && isChatPage && event?.id) {
-      markChatAsRead(event.id);
+    if (isChatPage) {
+      if (isGroupHub && event?.id) {
+        markChatAsRead(event.id);
+      } else if (event?.parentGroupId) {
+        markChatAsRead(event.parentGroupId);
+      }
     }
-  }, [isGroupHub, isChatPage, event?.id]);
+  }, [isGroupHub, isChatPage, event?.id, event?.parentGroupId]);
 
   
   
@@ -348,10 +380,8 @@ const EventPage: React.FC = () => {
     }
   };
 
-  // Events that should show as banners (active, not dismissed)
-  const bannerEvents = isGroupHub
-    ? activeChildEvents.filter((e: any) => !dismissedBannerIds.has(e.id))
-    : [];
+  // Event banners now live inside ChatTab (Phase 3C) — this var kept for old events dropdown compat
+  const bannerEvents: any[] = [];
 
   // Icon-only tabs (no labels): saves space and removes sideways scrolling.
   const tabPillClass =
@@ -364,20 +394,51 @@ const EventPage: React.FC = () => {
       <div className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 px-3 py-2 shadow-lg sticky top-0 z-30 flex-shrink-0">
         {/* Event Info Row */}
         <div className="flex items-center gap-2">
+          {/* Back button — child events navigate back to parent group */}
+          {parentGroup && (
+            <button
+              onClick={() => navigate(`/event/${parentGroup.id}`)}
+              className="flex-shrink-0 p-1.5 -ml-1 rounded-lg hover:bg-white/10 transition-colors"
+              aria-label="Back to group"
+            >
+              <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+              </svg>
+            </button>
+          )}
           <div className="flex-1 min-w-0">
             <h1 className="text-sm font-bold text-white truncate leading-tight">
               {event.name || 'Untitled Event'}
             </h1>
             <div className="flex items-center gap-1.5 text-[10px] text-primary-200">
+              {/* Breadcrumb: show parent group name for child events */}
+              {parentGroup && (
+                <>
+                  <span className="truncate max-w-[120px] text-primary-300">{parentGroup.name}</span>
+                  <span className="text-primary-400">·</span>
+                </>
+              )}
               {courseName && <span className="truncate max-w-[120px]">{courseName}</span>}
               {courseName && <span className="text-primary-400">•</span>}
               <span className="flex-shrink-0">
-                {new Date(event.date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+                {formatLocalDate(event.date, { weekday: 'short', month: 'short', day: 'numeric' })}
               </span>
               {event.isCompleted && (
                 <span className="px-1 py-0.5 bg-green-500/20 text-green-300 rounded text-[8px] font-bold flex-shrink-0">
                   DONE
                 </span>
+              )}
+              {event.shareCode && (
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(event.shareCode || '');
+                    addToast('Join code copied!', 'success');
+                  }}
+                  className="px-1.5 py-0.5 bg-white/10 hover:bg-white/15 text-white rounded text-[8px] font-bold tracking-[0.18em] flex-shrink-0"
+                  title="Copy join code"
+                >
+                  {event.shareCode}
+                </button>
               )}
             </div>
           </div>
@@ -398,7 +459,6 @@ const EventPage: React.FC = () => {
               }`}
             >
               <span className="text-base leading-none">🎛️</span>
-              <span className="leading-none">Game Control</span>
               {ccData.isStarted && !ccData.isCompleted && (
                 <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-red-500 border-2 border-primary-800 animate-pulse-subtle" />
               )}
@@ -409,7 +469,6 @@ const EventPage: React.FC = () => {
               className="relative flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl text-xs font-extrabold shadow-lg transition-all active:scale-95 flex-shrink-0 bg-gradient-to-r from-accent to-orange-500 text-white"
             >
               <span className="text-base leading-none">🎛️</span>
-              <span className="leading-none">Game Control</span>
             </button>
           ) : (
             <div className="w-0" />
@@ -507,6 +566,23 @@ const EventPage: React.FC = () => {
           ))}
         </div>
       </div>
+
+      {/* Guest banner */}
+      {getGuestSession() && (
+        <div className="bg-gradient-to-r from-amber-50 to-orange-50 border-b border-amber-200 px-4 py-2 flex items-center justify-between flex-shrink-0">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-amber-600 font-semibold">Playing as Guest</span>
+            <span className="text-amber-500/60">·</span>
+            <span className="text-amber-600/70 text-xs">Stats won't be saved</span>
+          </div>
+          <button
+            onClick={() => navigate('/')}
+            className="text-xs font-bold text-amber-700 bg-amber-100 hover:bg-amber-200 px-3 py-1 rounded-full transition-colors"
+          >
+            Sign Up
+          </button>
+        </div>
+      )}
       
       {/* Events Dropdown Modal - Groups only */}
       {isGroupHub && showEventsDropdown && (
@@ -671,71 +747,9 @@ const EventPage: React.FC = () => {
         </>
       )}
       
-      {/* Group Event Banners - Show active events prominently so members can join easily */}
-      {isGroupHub && bannerEvents.length > 0 && (
-        <div className="flex-shrink-0 px-3 py-2 space-y-2 bg-gradient-to-b from-primary-900/50 to-transparent">
-          {bannerEvents.map((evt: any) => {
-            const isJoined = currentProfile && evt.golfers?.some((g: any) => g.profileId === currentProfile.id);
-            const isJoining = joiningEventId === evt.id;
-            const playerCount = evt.golfers?.length || 0;
-            const evtDate = evt.date ? new Date(evt.date) : null;
-            const isToday = evtDate && new Date().toDateString() === evtDate.toDateString();
-            const isFuture = evtDate && evtDate > new Date();
-            const statusLabel = isToday ? 'TODAY' : (evt.isCompleted ? 'FINAL' : (isFuture ? 'UPCOMING' : 'LIVE'));
-            const statusColor = isToday ? 'bg-orange-500' : (evt.isCompleted ? 'bg-gray-500' : (isFuture ? 'bg-blue-500' : 'bg-red-500'));
-
-            return (
-              <div
-                key={evt.id}
-                className="relative bg-white/10 backdrop-blur-sm border border-white/20 rounded-xl px-3 py-2.5 flex items-center gap-3"
-              >
-                {/* Dismiss button */}
-                <button
-                  onClick={() => setDismissedBannerIds(prev => new Set([...prev, evt.id]))}
-                  className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center rounded-full text-white/40 hover:text-white/80 hover:bg-white/10"
-                  aria-label="Dismiss"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-
-                {/* Event info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className={`${statusColor} text-white text-[8px] font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-wide`}>
-                      {statusLabel}
-                    </span>
-                    <span className="text-white font-bold text-sm truncate">{evt.name || 'Event'}</span>
-                  </div>
-                  <div className="text-[10px] text-white/60 mt-0.5">
-                    {evtDate ? evtDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) : ''}
-                    {playerCount > 0 && <> · {playerCount} player{playerCount !== 1 ? 's' : ''}</>}
-                    {evt.course?.teeName && <> · {evt.course.teeName}</>}
-                  </div>
-                </div>
-
-                {/* Action button */}
-                {isJoined ? (
-                  <button
-                    onClick={() => navigate(`/event/${evt.id}`)}
-                    className="flex-shrink-0 bg-white text-primary-700 font-extrabold text-xs px-4 py-2 rounded-lg shadow-sm hover:bg-primary-50 transition-colors"
-                  >
-                    Open →
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleInlineJoin(evt)}
-                    disabled={isJoining}
-                    className="flex-shrink-0 bg-green-500 hover:bg-green-600 disabled:opacity-60 text-white font-extrabold text-xs px-4 py-2 rounded-lg shadow-sm transition-colors"
-                  >
-                    {isJoining ? 'Joining...' : 'Join'}
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
+      {/* Group event banners moved into ChatTab (Phase 3C) and Events into GroupEventsTab (Phase 3B) */}
+      {false && (
+        <div></div>
       )}
 
       {/* Swipeable Content Area - Horizontal scroll-snap */}
@@ -751,11 +765,12 @@ const EventPage: React.FC = () => {
         {swipeableTabs.map((tab) => (
           <div 
             key={tab.id}
-            className={`w-full flex-shrink-0 snap-center ${tab.id === 'chat' ? 'overflow-hidden' : 'overflow-y-auto'}`}
+            className="w-full flex-shrink-0 snap-center overflow-y-auto"
             style={{ minWidth: '100%' }}
           >
-            <div className={tab.id === 'chat' ? 'h-full px-2 pt-1' : 'px-4 py-2 pb-32'}>
+            <div className={tab.id === 'chat' ? 'h-full' : 'px-4 py-2 pb-32'}>
               {tab.id === 'chat' && <ChatTab eventId={event.id} isActive={isChatPage} />}
+              {tab.id === 'events' && <GroupEventsTab eventId={event.id} />}
               {tab.id === 'scorecard' && <ScoreHubTab eventId={event.id} isTabActive={swipeableTabs[activePageIndex]?.id === 'scorecard'} />}
               {tab.id === 'games' && <GamesTab eventId={event.id} isTabActive={swipeableTabs[activePageIndex]?.id === 'games'} autoOpenAddGame={triggerAddGame} />}
               {tab.id === 'golfers' && <GolfersTab eventId={event.id} isTabActive={swipeableTabs[activePageIndex]?.id === 'golfers'} />}
@@ -974,142 +989,126 @@ const EventPage: React.FC = () => {
         document.body
       )}
 
-      {/* ========== FIRST-TIME EVENT HELP MODAL ========== */}
+      {/* ========== FIRST-TIME EVENT HELP MODAL (compact) ========== */}
       {showEventHelp && !isGroupHub && createPortal(
         <div
-          className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-3"
           onClick={() => dismissEventHelp(false)}
         >
           <div
-            className="bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[85vh] overflow-y-auto animate-slide-up"
+            className="bg-white rounded-2xl shadow-2xl max-w-sm w-full max-h-[75vh] flex flex-col animate-slide-up"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Header */}
-            <div className="relative bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 px-6 pt-8 pb-6 rounded-t-3xl text-center">
+            {/* Header — compact */}
+            <div className="relative bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 px-4 pt-5 pb-4 rounded-t-2xl text-center flex-shrink-0">
               <button
                 onClick={() => dismissEventHelp(false)}
-                className="absolute top-4 right-4 p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                className="absolute top-2.5 right-2.5 p-1.5 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
                 aria-label="Close"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
-              <div className="text-5xl mb-3">⛳</div>
-              <h2 className="text-2xl font-bold text-white mb-1">
+              <div className="text-3xl mb-1">⛳</div>
+              <h2 className="text-lg font-bold text-white">
                 {isOwner ? 'You\'re the Admin!' : 'Welcome to the Event!'}
               </h2>
-              <p className="text-primary-100 text-sm">
+              <p className="text-primary-100 text-xs">
                 {isOwner ? 'Here\'s how to run your event' : 'Here\'s what you can do'}
               </p>
             </div>
 
-            {/* Content */}
-            <div className="px-5 py-4 space-y-3">
+            {/* Content — scrollable */}
+            <div className="px-4 py-3 space-y-2 overflow-y-auto flex-1 min-h-0">
               {isOwner ? (
                 <>
-                  {/* Admin flow */}
                   <button
                     onClick={() => { dismissEventHelp(false); setShowCommandCenter(true); }}
-                    className="w-full flex items-start gap-3 p-4 bg-orange-50 rounded-xl border border-orange-200 hover:bg-orange-100 transition-colors text-left"
+                    className="w-full flex items-center gap-3 p-3 bg-orange-50 rounded-xl border border-orange-200 hover:bg-orange-100 transition-colors text-left"
                   >
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-accent to-orange-600 flex items-center justify-center flex-shrink-0">
-                      <span className="text-2xl">🎛️</span>
+                    <div className="w-9 h-9 rounded-full bg-gradient-to-br from-accent to-orange-600 flex items-center justify-center flex-shrink-0">
+                      <span className="text-lg">🎛️</span>
                     </div>
-                    <div>
-                      <div className="font-bold text-gray-900">Game Control</div>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        Your one-stop cockpit. Pick games, assign teams, start the event, and complete it — all from here.
-                      </p>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-sm text-gray-900">Game Control</div>
+                      <p className="text-xs text-gray-500">Pick games, teams, start & complete — all here.</p>
                     </div>
                   </button>
 
-                  <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100 text-left">
-                    <div className="w-12 h-12 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
-                      <span className="text-2xl">💰</span>
+                  <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 text-left">
+                    <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
+                      <span className="text-lg">💰</span>
                     </div>
-                    <div>
-                      <div className="font-bold text-gray-900">Games Tab</div>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        View active games, standings, and payouts. Use the orange + button for quick access to add games.
-                      </p>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-sm text-gray-900">Games Tab</div>
+                      <p className="text-xs text-gray-500">Standings, payouts & the orange + to add games.</p>
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100 text-left">
-                    <div className="w-12 h-12 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
-                      <span className="text-2xl">📋</span>
+                  <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 text-left">
+                    <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
+                      <span className="text-lg">📋</span>
                     </div>
-                    <div>
-                      <div className="font-bold text-gray-900">The Flow</div>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        Pick Games → Pick Teams → Start Event → Play Round → Complete → Send Recap. Game Control walks you through each step.
-                      </p>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-sm text-gray-900">The Flow</div>
+                      <p className="text-xs text-gray-500">Games → Teams → Start → Play → Complete → Recap.</p>
                     </div>
                   </div>
                 </>
               ) : (
                 <>
-                  {/* Player flow */}
-                  <div className="flex items-start gap-3 p-4 bg-green-50 rounded-xl border border-green-100 text-left">
-                    <div className="w-12 h-12 rounded-full bg-green-200 flex items-center justify-center flex-shrink-0">
-                      <span className="text-2xl">🏌️</span>
+                  <div className="flex items-center gap-3 p-3 bg-green-50 rounded-xl border border-green-100 text-left">
+                    <div className="w-9 h-9 rounded-full bg-green-200 flex items-center justify-center flex-shrink-0">
+                      <span className="text-lg">🏌️</span>
                     </div>
-                    <div>
-                      <div className="font-bold text-gray-900">Enter Scores</div>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        Swipe to the Leaderboard tab and tap the orange + button to enter your scores hole-by-hole or all at once.
-                      </p>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-sm text-gray-900">Enter Scores</div>
+                      <p className="text-xs text-gray-500">Tap the orange + on the Leaderboard tab.</p>
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100 text-left">
-                    <div className="w-12 h-12 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
-                      <span className="text-2xl">📊</span>
+                  <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 text-left">
+                    <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
+                      <span className="text-lg">📊</span>
                     </div>
-                    <div>
-                      <div className="font-bold text-gray-900">Leaderboard</div>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        See live standings, how you stack up, and track your position throughout the round.
-                      </p>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-sm text-gray-900">Leaderboard</div>
+                      <p className="text-xs text-gray-500">Live standings updated as scores come in.</p>
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100 text-left">
-                    <div className="w-12 h-12 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
-                      <span className="text-2xl">💰</span>
+                  <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 text-left">
+                    <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
+                      <span className="text-lg">💰</span>
                     </div>
-                    <div>
-                      <div className="font-bold text-gray-900">Games & Payouts</div>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        Check your side game matchups, standings, and what you owe or are owed. Updates live as scores come in.
-                      </p>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-sm text-gray-900">Games & Payouts</div>
+                      <p className="text-xs text-gray-500">Side games, matchups & who owes what.</p>
                     </div>
                   </div>
 
-                  <div className="flex items-start gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100 text-left">
-                    <div className="w-12 h-12 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
-                      <span className="text-2xl">💬</span>
+                  <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100 text-left">
+                    <div className="w-9 h-9 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
+                      <span className="text-lg">💬</span>
                     </div>
-                    <div>
-                      <div className="font-bold text-gray-900">Chat</div>
-                      <p className="text-xs text-gray-500 mt-0.5">
-                        Talk trash, share photos, and coordinate with your group — all in one place.
-                      </p>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-sm text-gray-900">Chat</div>
+                      <p className="text-xs text-gray-500">Trash talk, photos & coordination.</p>
                     </div>
                   </div>
                 </>
               )}
             </div>
 
-            {/* Footer */}
-            <div className="px-5 pb-5 pt-2 border-t border-gray-100 space-y-2">
+            {/* Footer — always visible (sticky) */}
+            <div className="px-4 pb-4 pt-2 border-t border-gray-100 space-y-1.5 flex-shrink-0">
               <button
                 onClick={() => {
                   dismissEventHelp(false);
                   if (isOwner) setShowCommandCenter(true);
                 }}
-                className={`w-full py-3 rounded-xl font-bold text-sm shadow-md transition-colors flex items-center justify-center gap-2 ${
+                className={`w-full py-2.5 rounded-xl font-bold text-sm shadow-md transition-colors flex items-center justify-center gap-2 ${
                   isOwner
                     ? 'bg-gradient-to-r from-accent to-orange-600 text-white hover:opacity-90'
                     : 'bg-primary-600 text-white hover:bg-primary-700'
@@ -1123,7 +1122,7 @@ const EventPage: React.FC = () => {
               </button>
               <button
                 onClick={() => dismissEventHelp(true)}
-                className="w-full text-sm text-gray-400 hover:text-gray-600 transition-colors py-2"
+                className="w-full text-xs text-gray-400 hover:text-gray-600 transition-colors py-1.5"
               >
                 Don't show this again
               </button>

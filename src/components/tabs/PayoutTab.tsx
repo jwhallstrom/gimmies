@@ -9,10 +9,11 @@
  * - Personal settlements only (privacy)
  */
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../../state/store';
 import { calculateEventPayouts } from '../../games/payouts';
+import { getParticipantsForConfig } from '../../games/participants';
 import { EventSettlement } from '../wallet';
 import { distributeHandicapStrokes, calculateCourseHandicap } from '../../utils/handicap';
 import { getTee } from '../../data/cloudCourses';
@@ -41,6 +42,8 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
   const getEventSettlements = useStore((s) => s.getEventSettlements);
 
   const [showSettlements, setShowSettlements] = useState(false);
+  const [payoutView, setPayoutView] = useState<'me' | 'admin'>('me');
+  const [autoPreviewApplied, setAutoPreviewApplied] = useState(false);
   const [teamModal, setTeamModal] = useState<{ 
     name: string; 
     members: string[]; 
@@ -48,7 +51,6 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
     bestCount: number;
     isNet: boolean;
   } | null>(null);
-  const [teamModalView, setTeamModalView] = useState<'roster' | 'scorecard'>('roster');
 
   if (!event) return null;
 
@@ -120,42 +122,25 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
       }
     });
     
-    // Nassau — use all eligible event golfers (not stale participantGolferIds)
     nassauArray.forEach((n: any) => {
-      const group = event.groups.find((gr: any) => gr.id === n.groupId);
-      if (!group) return;
-      let players = (group.golferIds || []).slice();
-      players = players.filter((gid: string) => {
-        const eg = event.golfers.find((g: any) => (g.profileId || g.customName || g.displayName) === gid);
-        const pref = (eg?.gamePreference as any) || 'all';
-        return pref === 'all' || pref === 'nassau';
+      const players = getParticipantsForConfig(event, n, 'nassau', {
+        restrictToGroup: true,
+        assignedTeamsOnly: Array.isArray(n?.teams) && n.teams.length >= 2,
       });
-      if (n.teams?.length >= 2) {
-        const assigned = new Set<string>();
-        (n.teams || []).forEach((t: any) => t.golferIds?.forEach((gid: string) => { if (players.includes(gid)) assigned.add(gid); }));
-        players = players.filter((p: string) => assigned.has(p));
-      }
       if (players.length < 2) return;
       const fees = n.fees ?? { out: n.fee, in: n.fee, total: n.fee };
       const perPlayer = (fees.out || 0) + (fees.in || 0) + (fees.total || 0);
       players.forEach((pid: string) => { buyins[pid] = (buyins[pid] || 0) + perPlayer; });
     });
     
-    // Skins — use all eligible event golfers
     skinsArray.forEach((sk: any) => {
-      const eligible = (gid: string) => {
-        const eg = event.golfers.find((g: any) => (g.profileId || g.customName || g.displayName) === gid);
-        const pref = (eg?.gamePreference as any) || 'all';
-        return pref === 'all' || pref === 'skins';
-      };
-      const participants = event.golfers.map((g: any) => g.profileId || g.customName || g.displayName).filter(Boolean).filter(eligible);
+      const participants = getParticipantsForConfig(event, sk, 'skins');
       participants.forEach((gid: string) => { buyins[gid] = (buyins[gid] || 0) + sk.fee; });
     });
     
-    // Stableford buy-in (pot-based like skins) — use all event golfers
     const stablefordArr = Array.isArray(event.games.stableford) ? event.games.stableford : [];
     stablefordArr.forEach((s: any) => {
-      const participants = event.golfers.map((g: any) => g.profileId || g.customName || g.displayName).filter(Boolean);
+      const participants = getParticipantsForConfig(event, s, 'stableford');
       participants.forEach((gid: string) => { buyins[gid] = (buyins[gid] || 0) + s.fee; });
     });
 
@@ -225,12 +210,83 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
   const myBreakdown = myGolferId ? gameBreakdown[myGolferId] : null;
   const myBuyin = myGolferId ? buyinByGolfer[myGolferId] ?? 0 : 0;
   const incomplete = event.scorecards.some((sc: any) => sc.scores.some((s: any) => s.strokes == null));
+  const hasAnyScores = event.scorecards.some((sc: any) => sc.scores.some((s: any) => s.strokes != null));
+  const allScoresComplete = hasAnyScores && !incomplete;
+  const canPreviewAdminPayouts = Boolean(isOwner && (isStarted || isCompleted || allScoresComplete));
+
+  const allSettlements = useMemo(() => getEventSettlements(eventId), [eventId, getEventSettlements]);
 
   // Get my settlements only
   const mySettlements = useMemo(() => {
-    const all = getEventSettlements(eventId);
-    return all.filter((s: any) => s.fromProfileId === myGolferId || s.toProfileId === myGolferId);
-  }, [eventId, myGolferId, getEventSettlements]);
+    return allSettlements.filter((s: any) => s.fromProfileId === myGolferId || s.toProfileId === myGolferId);
+  }, [allSettlements, myGolferId]);
+
+  const adminRows = useMemo(() => {
+    const rows = event.golfers
+      .map((eg: any) => {
+        const golferId = eg.profileId || eg.customName || eg.displayName;
+        if (!golferId) return null;
+
+        const breakdown = gameBreakdown[golferId] || {
+          nassau: 0,
+          skins: 0,
+          pinky: 0,
+          greenie: 0,
+          stableford: 0,
+          ninePoint: 0,
+          bingoBangoBongo: 0,
+          wolf: 0,
+          dots: 0,
+        };
+        const winnings =
+          (breakdown.nassau || 0) +
+          (breakdown.skins || 0) +
+          (breakdown.pinky || 0) +
+          (breakdown.greenie || 0) +
+          (breakdown.stableford || 0) +
+          (breakdown.ninePoint || 0) +
+          (breakdown.bingoBangoBongo || 0) +
+          (breakdown.wolf || 0) +
+          (breakdown.dots || 0);
+
+        const pendingToPay = allSettlements
+          .filter((s: any) => s.status === 'pending' && s.fromProfileId === golferId)
+          .reduce((sum: number, s: any) => sum + (s.roundedAmount || 0), 0);
+        const pendingToCollect = allSettlements
+          .filter((s: any) => s.status === 'pending' && s.toProfileId === golferId)
+          .reduce((sum: number, s: any) => sum + (s.roundedAmount || 0), 0);
+
+        return {
+          golferId,
+          name: golfersById[golferId] || golferId,
+          buyin: buyinByGolfer[golferId] || 0,
+          winnings,
+          net: netByGolfer[golferId] || 0,
+          pendingNet: pendingToCollect - pendingToPay,
+        };
+      })
+      .filter(Boolean) as Array<{
+        golferId: string;
+        name: string;
+        buyin: number;
+        winnings: number;
+        net: number;
+        pendingNet: number;
+      }>;
+
+    rows.sort((a, b) => b.net - a.net);
+    return rows;
+  }, [event.golfers, gameBreakdown, golfersById, buyinByGolfer, netByGolfer, allSettlements]);
+
+  const settlementsForView = isOwner && payoutView === 'admin' ? allSettlements : mySettlements;
+  const pendingSettlementsForView = settlementsForView.filter((s: any) => s.status === 'pending');
+
+  useEffect(() => {
+    if (!autoPreviewApplied && canPreviewAdminPayouts && payoutView === 'me') {
+      setPayoutView('admin');
+      setAutoPreviewApplied(true);
+    }
+  }, [autoPreviewApplied, canPreviewAdminPayouts, payoutView]);
 
   // Event actions
   const handleStartEvent = () => {
@@ -341,6 +397,40 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
   // ============ STARTED OR COMPLETED - Show Game Results ============
   return (
     <div className="space-y-4">
+      {isOwner && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-1">
+          <div className="flex gap-1">
+            <button
+              onClick={() => setPayoutView('me')}
+              className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${
+                payoutView === 'me' ? 'bg-primary-600 text-white' : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              My View
+            </button>
+            <button
+              onClick={() => setPayoutView('admin')}
+              className={`flex-1 py-2 rounded-lg text-sm font-bold transition-colors ${
+                payoutView === 'admin' ? 'bg-primary-600 text-white' : 'text-gray-600 hover:bg-gray-100'
+              }`}
+            >
+              Admin View
+            </button>
+          </div>
+          {allScoresComplete && !isCompleted && (
+            <div className="px-3 py-2 text-xs text-amber-700">
+              Preview mode: admin view shows the current all-player payout ledger before completion.
+            </div>
+          )}
+        </div>
+      )}
+
+      {canPreviewAdminPayouts && !isCompleted && payoutView === 'admin' && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
+          Read-only payout preview. These numbers are based on current scores and will lock when the event is completed.
+        </div>
+      )}
+
       {/* Completed: Big Net Result Banner */}
       {isCompleted && myNet != null && (
         <div className={`rounded-2xl p-6 text-center ${myNet >= 0 ? 'bg-gradient-to-br from-green-500 to-green-600' : 'bg-gradient-to-br from-red-500 to-red-600'} text-white shadow-lg`}>
@@ -464,7 +554,6 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
                                         bestCount: bestCount,
                                         isNet: isNetGame
                                       });
-                                      setTeamModalView('roster');
                                     }}
                                     className="underline underline-offset-2 decoration-dotted hover:text-primary-600"
                                   >
@@ -477,7 +566,9 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
                             )}
                             {winnerToPar != null && (
                               <span className="ml-1">
-                                ({formatToPar(winnerToPar)})
+                                ({scoringType === 'match'
+                                  ? (winnerToPar === 0 ? 'AS' : `${Math.abs(winnerToPar)} UP`)
+                                  : formatToPar(winnerToPar)})
                               </span>
                             )}
                           </div>
@@ -523,7 +614,7 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
         const isNetGame = config?.net === true;
         const hasCarryovers = config?.carryovers === true;
         
-        const skinsWon = skinsResult.holeResults.filter(h => h.winners.length === 1 && !h.carryIntoNext);
+        const skinsWon = skinsResult.holeResults.filter(h => h.winners.length === 1 && !h.carryIntoNext).sort((a, b) => a.hole - b.hole);
         const carryovers = skinsResult.holeResults.filter(h => h.carryIntoNext);
         const currentCarryPot = carryovers.length > 0 ? carryovers[carryovers.length - 1]?.potValue || 0 : 0;
         const mySkins = myGolferId ? skinsResult.winningHolesByGolfer[myGolferId] || [] : [];
@@ -767,8 +858,55 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
         </div>
       )}
 
-      {/* Settlements - Only show user's */}
-      {(isStarted || isCompleted) && mySettlements.length > 0 && (
+      {isOwner && payoutView === 'admin' && canPreviewAdminPayouts && (
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100 bg-gradient-to-r from-slate-50 to-white">
+            <div className="font-bold text-gray-900 text-sm">All Players Ledger</div>
+            <div className="text-xs text-gray-500">
+              {isCompleted
+                ? 'Buy-in, winnings, net, and pending settlements'
+                : 'Read-only preview of buy-in, winnings, and net before completion'}
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="text-left px-3 py-2 font-semibold text-gray-600">Player</th>
+                  <th className="text-right px-3 py-2 font-semibold text-gray-600">Buy-in</th>
+                  <th className="text-right px-3 py-2 font-semibold text-gray-600">Winnings</th>
+                  <th className="text-right px-3 py-2 font-semibold text-gray-600">Net</th>
+                  {isCompleted && (
+                    <th className="text-right px-3 py-2 font-semibold text-gray-600">Pending</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {adminRows.map((row) => (
+                  <tr key={row.golferId} className="border-t border-gray-100">
+                    <td className="px-3 py-2 text-gray-900">{row.name}</td>
+                    <td className="px-3 py-2 text-right text-gray-700">{currency(row.buyin)}</td>
+                    <td className={`px-3 py-2 text-right font-medium ${row.winnings >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {signedCurrency(row.winnings)}
+                    </td>
+                    <td className={`px-3 py-2 text-right font-bold ${row.net >= 0 ? 'text-green-700' : 'text-red-700'}`}>
+                      {signedCurrency(row.net)}
+                    </td>
+                    {isCompleted && (
+                      <td className={`px-3 py-2 text-right font-medium ${row.pendingNet >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {signedCurrency(row.pendingNet)}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Settlements */}
+      {(isStarted || isCompleted) && (settlementsForView.length > 0 || (isOwner && payoutView === 'admin')) && (
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <button
             onClick={() => setShowSettlements(!showSettlements)}
@@ -777,9 +915,11 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
             <div className="flex items-center gap-3">
               <span className="text-lg">💸</span>
               <div className="text-left">
-                <div className="font-bold text-gray-900 text-sm">Settle Up</div>
+                <div className="font-bold text-gray-900 text-sm">
+                  {isOwner && payoutView === 'admin' ? 'Settle Up (All Players)' : 'Settle Up'}
+                </div>
                 <div className="text-xs text-gray-500">
-                  {mySettlements.filter((s: any) => s.status === 'pending').length} pending
+                  {pendingSettlementsForView.length} pending
                 </div>
               </div>
             </div>
@@ -810,16 +950,17 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
         </button>
       )}
 
-      {/* Team Members Modal */}
+      {/* Team Scorecard Modal */}
       {teamModal && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-end sm:items-center justify-center p-4" onClick={() => setTeamModal(null)}>
-          <div className={`w-full bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden ${teamModalView === 'scorecard' ? 'max-w-2xl' : 'max-w-sm'}`} onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl border border-gray-200 overflow-hidden" onClick={(e) => e.stopPropagation()}>
             <div className="px-4 py-3 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
               <div className="flex items-center justify-between gap-2">
                 <div>
-                  <div className="text-[10px] font-bold tracking-[0.15em] text-gray-400 uppercase">{teamModal.name}</div>
-                  <div className="font-extrabold text-gray-900">
-                    {teamModal.isNet ? 'Net' : 'Gross'} • Best {teamModal.bestCount === 1 ? 'Ball' : teamModal.bestCount}
+                  <div className="text-[10px] font-bold tracking-[0.15em] text-gray-400 uppercase">TEAM</div>
+                  <div className="font-extrabold text-gray-900">{teamModal.name}</div>
+                  <div className="text-xs text-gray-500">
+                    {teamModal.isNet ? 'Net' : 'Gross'} · Best {teamModal.bestCount === 1 ? 'Ball' : teamModal.bestCount}
                   </div>
                 </div>
                 <button
@@ -831,50 +972,8 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
                   ✕
                 </button>
               </div>
-              {/* View Toggle */}
-              <div className="flex gap-1 mt-3 p-1 bg-gray-100 rounded-lg">
-                <button
-                  onClick={() => setTeamModalView('roster')}
-                  className={`flex-1 py-2 rounded-md text-xs font-bold transition-all ${
-                    teamModalView === 'roster' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  👥 Roster
-                </button>
-                <button
-                  onClick={() => setTeamModalView('scorecard')}
-                  className={`flex-1 py-2 rounded-md text-xs font-bold transition-all ${
-                    teamModalView === 'scorecard' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  📊 Scorecard
-                </button>
-              </div>
             </div>
-            
-            {/* Roster View */}
-            {teamModalView === 'roster' && (
-              <div className="p-4">
-                {teamModal.members.length > 0 ? (
-                  <div className="space-y-2">
-                    {teamModal.members.map((member, i) => (
-                      <div key={i} className="flex items-center gap-3 px-3 py-2 bg-gray-50 rounded-lg">
-                        <span className="w-8 h-8 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-sm font-bold">
-                          {member.charAt(0).toUpperCase()}
-                        </span>
-                        <span className="font-medium text-gray-900">{member}</span>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center text-gray-500 py-4">No members assigned</div>
-                )}
-              </div>
-            )}
-            
-            {/* Scorecard View */}
-            {teamModalView === 'scorecard' && (
-              <div className="p-4 overflow-x-auto">
+            <div className="p-4 overflow-x-auto">
                 {(() => {
                   // Build scorecard data for this team
                   const holes = Array.from({ length: 18 }, (_, i) => i + 1);
@@ -1061,7 +1160,6 @@ const PayoutTab: React.FC<Props> = ({ eventId }) => {
                   );
                 })()}
               </div>
-            )}
           </div>
         </div>
       )}

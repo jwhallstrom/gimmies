@@ -11,6 +11,7 @@
  */
 
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { STATUS_TIERS } from '../../state/types';
 
 interface Props {
@@ -19,13 +20,13 @@ interface Props {
 }
 
 const StatusLevelsInfo: React.FC<Props> = ({ onClose, currentLevel = 0 }) => {
-  return (
+  const content = (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-[10020] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 pt-safe pb-safe"
       onClick={onClose}
     >
       <div 
-        className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+        className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden max-h-[calc(100vh-2rem)] flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         {/* Header */}
@@ -36,7 +37,7 @@ const StatusLevelsInfo: React.FC<Props> = ({ onClose, currentLevel = 0 }) => {
                 🏆 Status Levels
               </h2>
               <p className="text-emerald-100 text-sm mt-0.5">
-                Your journey to the Gold Jacket
+                Your journey through Gimmies status tiers
               </p>
             </div>
             <button
@@ -75,7 +76,7 @@ const StatusLevelsInfo: React.FC<Props> = ({ onClose, currentLevel = 0 }) => {
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-green-500 mt-0.5">•</span>
-                <span>Play with <strong>2+ other Gimmies accounts</strong> (guests don't count)</span>
+                <span>Play with <strong>at least 1 other Gimmies account</strong> (2 profiled players total; guests do not count)</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-green-500 mt-0.5">•</span>
@@ -129,11 +130,13 @@ const StatusLevelsInfo: React.FC<Props> = ({ onClose, currentLevel = 0 }) => {
                           )}
                         </div>
                         <div className="text-xs text-gray-500">
-                          {tier.minRounds === 0 
-                            ? `0-${tier.maxRounds} verified rounds`
-                            : tier.maxRounds 
-                              ? `${tier.minRounds}-${tier.maxRounds} verified rounds`
-                              : `${tier.minRounds}+ verified rounds`
+                          {tier.isManualOnly
+                            ? 'Manual assignment only'
+                            : tier.minRounds === 0
+                              ? `0-${tier.maxRounds} verified rounds`
+                              : tier.maxRounds
+                                ? `${tier.minRounds}-${tier.maxRounds} verified rounds`
+                                : `${tier.minRounds}+ verified rounds`
                           }
                         </div>
                       </div>
@@ -190,6 +193,8 @@ const StatusLevelsInfo: React.FC<Props> = ({ onClose, currentLevel = 0 }) => {
       </div>
     </div>
   );
+
+  return createPortal(content, document.body);
 };
 
 export default StatusLevelsInfo;

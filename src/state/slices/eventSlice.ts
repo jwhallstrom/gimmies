@@ -7,6 +7,7 @@ import { nanoid } from 'nanoid/non-secure';
 import { getCourseById, getTee, getHole } from '../../data/cloudCourses';
 import { calculateEventPayouts } from '../../games/payouts';
 import { distributeHandicapStrokes, applyESCAdjustment, calculateScoreDifferential } from '../../utils/handicap';
+import { getEventSyncGuard } from '../../utils/eventSyncGuard';
 import type { 
   Event, EventGolfer, PlayerScorecard, ChatMessage, 
   CompletedRound, GolferProfile, IndividualRound 
@@ -23,18 +24,47 @@ const defaultScoreArray = (courseId?: string) => {
   return holes.map((h: any) => ({ hole: h.number, strokes: null }));
 };
 
-const syncEventToCloud = async (eventId: string, get: () => any) => {
+const syncEventToCloud = async (
+  eventId: string,
+  get: () => any,
+  patch?: Partial<Event>,
+  options?: { preserveExistingMembers?: boolean }
+) => {
   if (import.meta.env.VITE_ENABLE_CLOUD_SYNC !== 'true') return;
   const event = get().events.find((e: Event) => e.id === eventId);
   const profile = get().currentProfile;
-  if (event && profile) {
-    try {
-      const { saveEventToCloud } = await import('../../utils/eventSync');
-      await saveEventToCloud(event, profile.id);
-    } catch (error) {
-      console.error('Failed to sync event to cloud:', error);
+  if (!event || !profile) return;
+
+  const guard = getEventSyncGuard(eventId);
+  guard.markSaving();
+  try {
+    const { saveEventToCloud, saveEventPatchToCloud } = await import('../../utils/eventSync');
+    if (patch && Object.keys(patch).length > 0) {
+      await saveEventPatchToCloud(event, patch, profile.id);
+    } else {
+      await saveEventToCloud(event, profile.id, options);
     }
+    guard.markSaved();
+  } catch (error) {
+    console.error('Failed to sync event to cloud:', error);
+    guard.markFailed();
   }
+};
+
+// Debounced scorecard sync — coalesces rapid-fire hole saves into one request
+const scorecardSaveTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const SCORECARD_DEBOUNCE_MS = 1200;
+
+const debouncedSyncScorecards = (eventId: string, get: () => any) => {
+  const existing = scorecardSaveTimers.get(eventId);
+  if (existing) clearTimeout(existing);
+  scorecardSaveTimers.set(
+    eventId,
+    setTimeout(() => {
+      scorecardSaveTimers.delete(eventId);
+      void syncEventToCloud(eventId, get, { scorecards: [] } as Partial<Event>);
+    }, SCORECARD_DEBOUNCE_MS)
+  );
 };
 
 // ============================================================================
@@ -46,6 +76,8 @@ export interface EventSliceState {
   completedEvents: Event[];
   completedRounds: CompletedRound[];
   isLoadingEventsFromCloud: boolean;
+  lastEventsCloudSyncAt: string | null;
+  lastEventsCloudSyncCount: number;
 }
 
 // ============================================================================
@@ -59,7 +91,7 @@ export interface EventSliceActions {
   setEventTee: (eventId: string, teeName: string) => Promise<void>;
   updateEvent: (id: string, patch: Partial<Event>) => Promise<void>;
   deleteEvent: (eventId: string) => Promise<void>;
-  loadEventsFromCloud: () => Promise<void>;
+  loadEventsFromCloud: () => Promise<{ totalCount: number; activeCount: number; completedCount: number; syncedAt: string }>;
   refreshEventFromCloud: (eventId: string) => Promise<boolean>;
   importData: (data: Event[]) => void;
   exportData: () => string;
@@ -67,7 +99,7 @@ export interface EventSliceActions {
   // Golfer management
   addGolferToEvent: (eventId: string, golferId: string, teeName?: string, handicapOverride?: number | null) => Promise<void>;
   updateEventGolfer: (eventId: string, golferId: string, patch: Partial<EventGolfer>) => Promise<void>;
-  removeGolferFromEvent: (eventId: string, golferId: string) => Promise<void>;
+  removeGolferFromEvent: (eventId: string, golferId: string) => Promise<{ success: boolean; error?: string }>;
   
   // Groups
   addGroup: (eventId: string) => void;
@@ -84,9 +116,10 @@ export interface EventSliceActions {
   // Sharing
   generateShareCode: (eventId: string) => Promise<string>;
   joinEventByCode: (shareCode: string) => Promise<{ success: boolean; error?: string; eventId?: string }>;
+  joinEventById: (eventId: string) => Promise<{ success: boolean; error?: string; eventId?: string }>;
   
   // Chat
-  addChatMessage: (eventId: string, text: string, options?: { replyTo?: string; type?: string; metadata?: Record<string, any>; pollQuestion?: string; pollOptions?: { id: string; text: string; votes: string[] }[] }) => Promise<void>;
+  addChatMessage: (eventId: string, text: string, options?: { replyTo?: string; type?: string; metadata?: Record<string, any>; pollQuestion?: string; pollOptions?: { id: string; text: string; votes: string[] }[]; mentions?: string[] }) => Promise<void>;
   clearChat: (eventId: string) => void;
   toggleReaction: (eventId: string, messageId: string, emoji: string) => void;
   deleteMessage: (eventId: string, messageId: string) => void;
@@ -104,6 +137,8 @@ export const initialEventState: EventSliceState = {
   completedEvents: [],
   completedRounds: [],
   isLoadingEventsFromCloud: false,
+  lastEventsCloudSyncAt: null,
+  lastEventsCloudSyncCount: 0,
 };
 
 // ============================================================================
@@ -132,6 +167,8 @@ export const createEventSlice = (
     };
     const group = { id: nanoid(5), golferIds: [currentProfile.id] };
     
+    const isGroup = ((initialData as any)?.hubType || 'event') === 'group';
+    
     const newEvent: Event = {
       id,
       hubType: (initialData as any)?.hubType || 'event',
@@ -144,13 +181,24 @@ export const createEventSlice = (
       games: { nassau: [], skins: [], pinky: [], greenie: [], stableford: [], ninePoint: [], bingoBangoBongo: [], wolf: [], dots: [] },
       ownerProfileId: currentProfile.id,
       scorecardView: 'individual',
-      isPublic: true,
+      isPublic: isGroup ? false : true,
       createdAt: new Date().toISOString(),
       lastModified: new Date().toISOString(),
       chat: [],
+      // Groups default to private + invite-only (Phase 1)
+      ...(isGroup ? {
+        groupSettings: {
+          visibility: 'private' as const,
+          joinPolicy: 'invite_only' as const,
+          membersCanInvite: true,
+        },
+      } : {}),
       ...initialData
     };
     set((state: any) => ({ events: [...state.events, newEvent] }));
+    if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+      void syncEventToCloud(id, get);
+    }
     return id;
   },
   
@@ -212,7 +260,28 @@ export const createEventSlice = (
         return { ...e, ...patch, games: updatedGames, lastModified: new Date().toISOString() };
       })
     }));
-    await syncEventToCloud(id, get);
+
+    if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+      const rosterKeysTouched =
+        'golfers' in patch ||
+        'groups' in patch ||
+        'scorecards' in patch;
+
+      if (rosterKeysTouched) {
+        await syncEventToCloud(id, get);
+      } else {
+        try {
+          const event = get().events.find((e: Event) => e.id === id);
+          const profile = get().currentProfile;
+          if (event && profile) {
+            const { saveEventPatchToCloud } = await import('../../utils/eventSync');
+            await saveEventPatchToCloud(event, patch, profile.id);
+          }
+        } catch (error) {
+          console.error('Failed to sync event patch to cloud:', error);
+        }
+      }
+    }
   },
   
   deleteEvent: async (eventId: string) => {
@@ -234,6 +303,12 @@ export const createEventSlice = (
   loadEventsFromCloud: async () => {
     // This will be implemented in store.ts using the full logic
     // The slice pattern allows us to gradually migrate
+    return {
+      totalCount: 0,
+      activeCount: 0,
+      completedCount: 0,
+      syncedAt: new Date().toISOString(),
+    };
   },
   
   refreshEventFromCloud: async (eventId: string) => {
@@ -242,9 +317,16 @@ export const createEventSlice = (
       const { loadEventById } = await import('../../utils/eventSync');
       const updatedEvent = await loadEventById(eventId);
       if (updatedEvent) {
-        set((state: any) => ({
-          events: state.events.map((e: Event) => e.id === eventId ? updatedEvent : e)
-        }));
+        set((state: any) => {
+          const existing = state.events.find((e: Event) => e.id === eventId);
+          const merged = {
+            ...updatedEvent,
+            chat: updatedEvent.chat?.length ? updatedEvent.chat : (existing?.chat || []),
+          };
+          return {
+            events: state.events.map((e: Event) => e.id === eventId ? merged : e),
+          };
+        });
         return true;
       }
       return false;
@@ -262,6 +344,16 @@ export const createEventSlice = (
     set((state: any) => ({
       events: state.events.map((e: Event) => {
         if (e.id !== eventId) return e;
+
+        const alreadyInEvent = e.golfers.some(
+          (g: EventGolfer) => g.profileId === golferId || g.customName === golferId
+        );
+        const hasScorecard = e.scorecards.some((sc: PlayerScorecard) => sc.golferId === golferId);
+
+        if (alreadyInEvent && hasScorecard) {
+          return e;
+        }
+
         const isProfileId = state.profiles.some((p: GolferProfile) => p.id === golferId);
         const profile = isProfileId ? state.profiles.find((p: GolferProfile) => p.id === golferId) : null;
         
@@ -279,8 +371,11 @@ export const createEventSlice = (
         } else {
           groups = groups.map(g => ({ ...g, golferIds: Array.from(new Set([...g.golferIds, golferId])) }));
         }
-        
-        return { ...e, golfers: [...e.golfers, eventGolfer], scorecards: [...e.scorecards, scorecard], groups, lastModified: new Date().toISOString() };
+
+        const golfers = alreadyInEvent ? e.golfers : [...e.golfers, eventGolfer];
+        const scorecards = hasScorecard ? e.scorecards : [...e.scorecards, scorecard];
+
+        return { ...e, golfers, scorecards, groups, lastModified: new Date().toISOString() };
       })
     }));
     await syncEventToCloud(eventId, get);
@@ -297,7 +392,70 @@ export const createEventSlice = (
     await syncEventToCloud(eventId, get);
   },
   
-  removeGolferFromEvent: async (eventId: string, golferId: string) => {
+  removeGolferFromEvent: async (eventId: string, golferId: string): Promise<{ success: boolean; error?: string }> => {
+    const currentProfile = get().currentProfile;
+    const event = get().events.find((candidate: Event) => candidate.id === eventId);
+    const isSelfLeave = !!currentProfile && golferId === currentProfile.id && event?.ownerProfileId !== currentProfile.id;
+    const targetGolfer = event?.golfers.find((golfer: EventGolfer) => golfer.profileId === golferId || golfer.customName === golferId);
+    const isOwnerRemovingProfileMember =
+      !!currentProfile &&
+      !!event &&
+      event.ownerProfileId === currentProfile.id &&
+      golferId !== currentProfile.id &&
+      !!targetGolfer?.profileId;
+
+    if (isSelfLeave) {
+      if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+        try {
+          const { leaveHubInCloud } = await import('../../utils/eventSync');
+          const result = await leaveHubInCloud(eventId, golferId);
+          if (!result.success) {
+            console.error('Failed to leave hub in cloud:', result.error);
+            return { success: false, error: result.error || 'Could not leave. Try again.' };
+          }
+        } catch (error) {
+          console.error('Failed to leave hub in cloud:', error);
+          return { success: false, error: 'Network error. Try again.' };
+        }
+      }
+
+      set((state: any) => ({
+        events: state.events.filter((e: Event) => e.id !== eventId),
+        completedEvents: state.completedEvents.filter((e: Event) => e.id !== eventId),
+      }));
+      return { success: true };
+    }
+
+    if (isOwnerRemovingProfileMember) {
+      if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+        try {
+          const { removeHubMemberInCloud } = await import('../../utils/eventSync');
+          const result = await removeHubMemberInCloud(eventId, currentProfile.id, targetGolfer!.profileId!);
+          if (!result.success) {
+            console.error('Failed to remove hub member in cloud:', result.error);
+            return { success: false, error: result.error || 'Could not remove member. Try again.' };
+          }
+        } catch (error) {
+          console.error('Failed to remove hub member in cloud:', error);
+          return { success: false, error: 'Network error. Try again.' };
+        }
+      }
+
+      set((state: any) => ({
+        events: state.events.map((e: Event) => {
+          if (e.id !== eventId) return e;
+          return {
+            ...e,
+            golfers: e.golfers.filter(g => g.profileId !== golferId && g.customName !== golferId),
+            scorecards: e.scorecards.filter(sc => sc.golferId !== golferId),
+            groups: e.groups.map(g => ({ ...g, golferIds: g.golferIds.filter(id => id !== golferId) })),
+            lastModified: new Date().toISOString()
+          };
+        })
+      }));
+      return { success: true };
+    }
+
     set((state: any) => ({
       events: state.events.map((e: Event) => {
         if (e.id !== eventId) return e;
@@ -310,7 +468,8 @@ export const createEventSlice = (
         };
       })
     }));
-    await syncEventToCloud(eventId, get);
+    await syncEventToCloud(eventId, get, undefined, { preserveExistingMembers: false });
+    return { success: true };
   },
   
   // Groups
@@ -356,6 +515,7 @@ export const createEventSlice = (
     const state = get();
     const event = state.events.find((e: Event) => e.id === eventId);
     if (!event) return;
+    if (!get().canEditScore(eventId, golferId)) return;
 
     const eventGolfer = event.golfers.find((g: EventGolfer) => g.profileId === golferId || g.customName === golferId);
     const profile = eventGolfer?.profileId ? state.profiles.find((p: GolferProfile) => p.id === eventGolfer.profileId) : null;
@@ -386,16 +546,30 @@ export const createEventSlice = (
 
     if (chatMessage.trim()) {
       const msg: ChatMessage = { id: nanoid(10), profileId: 'gimmies-bot', senderName: '🤖 Gimmies Bot', text: chatMessage.trim(), createdAt: new Date().toISOString() };
+      const chatTargetId = event.parentGroupId || eventId;
       set((s: any) => ({
         events: s.events.map((e: Event) => {
-          if (e.id !== eventId) return e;
+          if (e.id !== chatTargetId) return e;
           return { ...e, chat: [...(e.chat || []), msg].slice(-500), lastModified: new Date().toISOString() };
-        })
+        }),
+        completedEvents: s.completedEvents.map((e: Event) => {
+          if (e.id !== chatTargetId) return e;
+          return { ...e, chat: [...(e.chat || []), msg].slice(-500), lastModified: new Date().toISOString() };
+        }),
       }));
       get().addToast(chatMessage.trim(), 'achievement', 5000);
+
+      if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+        try {
+          const { saveChatMessageToCloud } = await import('../../utils/eventSync');
+          await saveChatMessageToCloud(chatTargetId, msg);
+        } catch (error) {
+          console.error('Failed to save bot message to cloud:', error);
+        }
+      }
     }
     
-    await syncEventToCloud(eventId, get);
+    debouncedSyncScorecards(eventId, get);
   },
   
   canEditScore: (eventId: string, golferId: string) => {
@@ -405,11 +579,12 @@ export const createEventSlice = (
     if (event.isCompleted) return false;
     if (event.ownerProfileId === currentProfile.id) return true;
     if (golferId === currentProfile.id) return true;
-    if (event.scorecardView === 'team') {
-      const userTeams = event.games.nassau.flatMap((nassau: any) => nassau.teams?.filter((team: any) => team.golferIds.includes(currentProfile.id)) || []);
-      const teamGolferIds = userTeams.flatMap((team: any) => team.golferIds);
-      return teamGolferIds.includes(golferId);
-    }
+    const nassauGames = Array.isArray(event.games?.nassau) ? event.games.nassau : [];
+    const userTeams = nassauGames.flatMap(
+      (nassau: any) => nassau.teams?.filter((team: any) => (team.golferIds || []).includes(currentProfile.id)) || []
+    );
+    const teamGolferIds = new Set(userTeams.flatMap((team: any) => team.golferIds || []));
+    if (teamGolferIds.has(golferId)) return true;
     return false;
   },
   
@@ -478,40 +653,37 @@ export const createEventSlice = (
 
     if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
       try {
-        const { loadEventByShareCode } = await import('../../utils/eventSync');
-        const cloudEvent = await loadEventByShareCode(normalized);
-        
-        if (cloudEvent) {
-          const alreadyJoined = cloudEvent.golfers.some((g: EventGolfer) => g.profileId === currentProfile.id);
-          if (alreadyJoined) {
-            const localEvent = get().events.find((e: Event) => e.id === cloudEvent.id);
-            if (!localEvent) {
-              set((state: any) => ({ events: [...state.events, cloudEvent] }));
-            }
-            return { success: true, eventId: cloudEvent.id };
+        const { joinHubByShareCodeInCloud, loadEventById } = await import('../../utils/eventSync');
+        const joinResult = await joinHubByShareCodeInCloud(normalized, currentProfile.id, currentProfile.name);
+        if (joinResult.success && joinResult.eventId) {
+          const cloudEvent = await loadEventById(joinResult.eventId);
+          if (!cloudEvent) {
+            return {
+              success: false,
+              error: 'Join did not complete in cloud. Please try again.',
+            };
           }
-
           const localEvent = get().events.find((e: Event) => e.id === cloudEvent.id);
           if (!localEvent) {
             set((state: any) => ({ events: [...state.events, cloudEvent] }));
           } else {
             set((state: any) => ({ events: state.events.map((e: Event) => e.id === cloudEvent.id ? cloudEvent : e) }));
           }
-
-          await get().addGolferToEvent(cloudEvent.id, currentProfile.id);
-          return { success: true, eventId: cloudEvent.id };
+          return { success: true, eventId: joinResult.eventId };
         }
+        return { success: false, error: joinResult.error || 'Could not join this event right now.' };
       } catch (error) {
         console.error('Failed to load event from cloud:', error);
+        return { success: false, error: 'Could not join this event right now.' };
       }
     }
 
-    // Local-only fallback: allow joining invite-only games (not necessarily public/discoverable)
+    // Local-only fallback: share code is the invite (ignore joinPolicy restrictions).
     const event = get().events.find((e: Event) => (e.shareCode || '').toUpperCase() === normalized);
     if (!event) {
       return { success: false, error: 'Event not found or share code is invalid.' };
     }
-    
+
     const alreadyJoined = event.golfers.some((g: EventGolfer) => g.profileId === currentProfile.id);
     if (alreadyJoined) {
       return { success: true, eventId: event.id };
@@ -520,9 +692,65 @@ export const createEventSlice = (
     await get().addGolferToEvent(event.id, currentProfile.id);
     return { success: true, eventId: event.id };
   },
+
+  joinEventById: async (eventId: string) => {
+    const currentProfile = get().currentProfile;
+    if (!currentProfile) {
+      return { success: false, error: 'Please create a profile first to join events.' };
+    }
+
+    const normalizedId = String(eventId || '').trim();
+    if (!normalizedId) {
+      return { success: false, error: 'Please enter a valid event.' };
+    }
+
+    const existing = get().events.find((e: Event) => e.id === normalizedId);
+    if (existing?.golfers.some((g: EventGolfer) => g.profileId === currentProfile.id)) {
+      return { success: true, eventId: normalizedId };
+    }
+
+    if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+      try {
+        const { joinHubByEventIdInCloud, loadEventById } = await import('../../utils/eventSync');
+        const joinResult = await joinHubByEventIdInCloud(normalizedId, currentProfile.id, currentProfile.name);
+        if (joinResult.success && joinResult.eventId) {
+          const cloudEvent = await loadEventById(joinResult.eventId);
+          if (!cloudEvent) {
+            return {
+              success: false,
+              error: 'Join did not complete in cloud. Please try again.',
+            };
+          }
+          const localEvent = get().events.find((e: Event) => e.id === cloudEvent.id);
+          if (!localEvent) {
+            set((state: any) => ({ events: [...state.events, cloudEvent] }));
+          } else {
+            set((state: any) => ({ events: state.events.map((e: Event) => e.id === cloudEvent.id ? cloudEvent : e) }));
+          }
+          return { success: true, eventId: joinResult.eventId };
+        }
+        return { success: false, error: joinResult.error || 'Could not join this event right now.' };
+      } catch (error) {
+        console.error('Failed to join event by ID from cloud:', error);
+        return { success: false, error: 'Could not join this event right now.' };
+      }
+    }
+
+    const event = get().events.find((e: Event) => e.id === normalizedId);
+    if (!event) {
+      return { success: false, error: 'Event not found.' };
+    }
+
+    if (!event.isPublic) {
+      return { success: false, error: 'This event is private. Use the join link or code you were sent.' };
+    }
+
+    await get().addGolferToEvent(event.id, currentProfile.id);
+    return { success: true, eventId: event.id };
+  },
   
   // Chat
-  addChatMessage: async (eventId: string, text: string, options?: { replyTo?: string; type?: string; metadata?: Record<string, any>; pollQuestion?: string; pollOptions?: { id: string; text: string; votes: string[] }[] }) => {
+  addChatMessage: async (eventId: string, text: string, options?: { replyTo?: string; type?: string; metadata?: Record<string, any>; pollQuestion?: string; pollOptions?: { id: string; text: string; votes: string[] }[]; mentions?: string[] }) => {
     const trimmed = text.trim();
     if (!trimmed && !options?.pollQuestion) return;
     const currentProfile = get().currentProfile;
@@ -540,6 +768,7 @@ export const createEventSlice = (
       pollQuestion: options?.pollQuestion,
       pollOptions: options?.pollOptions,
       reactions: {},
+      mentions: options?.mentions?.length ? options.mentions : undefined,
     };
     
     set((state: any) => ({
@@ -569,6 +798,8 @@ export const createEventSlice = (
     const currentProfile = get().currentProfile;
     if (!currentProfile) return;
     
+    let updatedMessage: ChatMessage | null = null;
+
     set((state: any) => ({
       events: state.events.map((e: Event) => {
         if (e.id !== eventId) return e;
@@ -584,18 +815,54 @@ export const createEventSlice = (
             } else {
               reactions[emoji] = [...current, currentProfile.id];
             }
-            return { ...m, reactions };
+            const next = { ...m, reactions };
+            updatedMessage = next;
+            return next;
           }),
           lastModified: new Date().toISOString(),
         };
-      })
+      }),
+      completedEvents: state.completedEvents.map((e: Event) => {
+        if (e.id !== eventId) return e;
+        return {
+          ...e,
+          chat: (e.chat || []).map((m: ChatMessage) => {
+            if (m.id !== messageId) return m;
+            const reactions = { ...(m.reactions || {}) };
+            const current = reactions[emoji] || [];
+            if (current.includes(currentProfile.id)) {
+              reactions[emoji] = current.filter((id: string) => id !== currentProfile.id);
+              if (reactions[emoji].length === 0) delete reactions[emoji];
+            } else {
+              reactions[emoji] = [...current, currentProfile.id];
+            }
+            const next = { ...m, reactions };
+            updatedMessage = next;
+            return next;
+          }),
+          lastModified: new Date().toISOString(),
+        };
+      }),
     }));
+
+    if (updatedMessage && import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+      void (async () => {
+        try {
+          const { updateChatMessageInCloud } = await import('../../utils/eventSync');
+          await updateChatMessageInCloud(eventId, updatedMessage as ChatMessage);
+        } catch (error) {
+          console.error('Failed to sync reaction to cloud:', error);
+        }
+      })();
+    }
   },
   
   deleteMessage: (eventId: string, messageId: string) => {
     const currentProfile = get().currentProfile;
     if (!currentProfile) return;
     
+    let updatedMessage: ChatMessage | null = null;
+
     set((state: any) => ({
       events: state.events.map((e: Event) => {
         if (e.id !== eventId) return e;
@@ -603,18 +870,46 @@ export const createEventSlice = (
           ...e,
           chat: (e.chat || []).map((m: ChatMessage) => {
             if (m.id !== messageId || m.profileId !== currentProfile.id) return m;
-            return { ...m, isDeleted: true, text: '' };
+            const next = { ...m, isDeleted: true, text: '', editedAt: new Date().toISOString() };
+            updatedMessage = next;
+            return next;
           }),
           lastModified: new Date().toISOString(),
         };
-      })
+      }),
+      completedEvents: state.completedEvents.map((e: Event) => {
+        if (e.id !== eventId) return e;
+        return {
+          ...e,
+          chat: (e.chat || []).map((m: ChatMessage) => {
+            if (m.id !== messageId || m.profileId !== currentProfile.id) return m;
+            const next = { ...m, isDeleted: true, text: '', editedAt: new Date().toISOString() };
+            updatedMessage = next;
+            return next;
+          }),
+          lastModified: new Date().toISOString(),
+        };
+      }),
     }));
+
+    if (updatedMessage && import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+      void (async () => {
+        try {
+          const { updateChatMessageInCloud } = await import('../../utils/eventSync');
+          await updateChatMessageInCloud(eventId, updatedMessage as ChatMessage);
+        } catch (error) {
+          console.error('Failed to sync message delete to cloud:', error);
+        }
+      })();
+    }
   },
   
   votePoll: (eventId: string, messageId: string, optionId: string) => {
     const currentProfile = get().currentProfile;
     if (!currentProfile) return;
     
+    let updatedMessage: ChatMessage | null = null;
+
     set((state: any) => ({
       events: state.events.map((e: Event) => {
         if (e.id !== eventId) return e;
@@ -629,12 +924,43 @@ export const createEventSlice = (
               if (opt.id === optionId) votes.push(currentProfile.id);
               return { ...opt, votes };
             });
-            return { ...m, pollOptions: options };
+            const next = { ...m, pollOptions: options };
+            updatedMessage = next;
+            return next;
           }),
           lastModified: new Date().toISOString(),
         };
-      })
+      }),
+      completedEvents: state.completedEvents.map((e: Event) => {
+        if (e.id !== eventId) return e;
+        return {
+          ...e,
+          chat: (e.chat || []).map((m: ChatMessage) => {
+            if (m.id !== messageId || m.type !== 'poll' || m.pollClosed) return m;
+            const options = (m.pollOptions || []).map(opt => {
+              const votes = (opt.votes || []).filter((id: string) => id !== currentProfile.id);
+              if (opt.id === optionId) votes.push(currentProfile.id);
+              return { ...opt, votes };
+            });
+            const next = { ...m, pollOptions: options };
+            updatedMessage = next;
+            return next;
+          }),
+          lastModified: new Date().toISOString(),
+        };
+      }),
     }));
+
+    if (updatedMessage && import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+      void (async () => {
+        try {
+          const { updateChatMessageInCloud } = await import('../../utils/eventSync');
+          await updateChatMessageInCloud(eventId, updatedMessage as ChatMessage);
+        } catch (error) {
+          console.error('Failed to sync poll vote to cloud:', error);
+        }
+      })();
+    }
   },
   
   // completeEvent is complex - keeping in main store.ts for now

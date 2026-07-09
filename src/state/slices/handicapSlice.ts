@@ -19,6 +19,34 @@ import type {
 } from '../types';
 import { ScoreEntry as HandicapScoreEntry } from '../../types/handicap';
 
+const getRoundTimestamp = (round: IndividualRound): number =>
+  new Date(round.createdAt || round.date || 0).getTime();
+const sanitizeIdPart = (value: string) => String(value || '').replace(/[^a-zA-Z0-9_-]/g, '_');
+const buildIndividualRoundId = (eventId: string, profileId: string) => `ir-${sanitizeIdPart(eventId)}-${sanitizeIdPart(profileId)}`;
+
+const getRoundDedupKey = (round: IndividualRound): string => {
+  if (round.eventId) return `event:${round.eventId}:${round.profileId}`;
+  if (round.completedRoundId) return `completed:${round.completedRoundId}`;
+  return `manual:${round.date}:${round.courseId}:${round.teeName}:${round.grossScore}`;
+};
+
+const normalizeIndividualRounds = (rounds: IndividualRound[] = []): IndividualRound[] => {
+  const byKey = new Map<string, IndividualRound>();
+  rounds.forEach((round) => {
+    const key = getRoundDedupKey(round);
+    const existing = byKey.get(key);
+    if (!existing) {
+      byKey.set(key, round);
+      return;
+    }
+    if (getRoundTimestamp(round) >= getRoundTimestamp(existing)) {
+      byKey.set(key, round);
+    }
+  });
+
+  return Array.from(byKey.values()).sort((a, b) => getRoundTimestamp(b) - getRoundTimestamp(a));
+};
+
 // ============================================================================
 // Actions Interface
 // ============================================================================
@@ -96,10 +124,11 @@ export const createHandicapSlice = (
     const profile = get().profiles.find((p: GolferProfile) => p.id === profileId);
     const completedEvents = get().completedEvents || [];
     const rounds: CombinedRound[] = [];
+    const normalizedRounds = normalizeIndividualRounds(profile?.individualRounds || []);
 
     // Add individual rounds (includes converted event rounds)
-    if (profile?.individualRounds) {
-      profile.individualRounds.forEach((round: IndividualRound) => {
+    if (normalizedRounds.length > 0) {
+      normalizedRounds.forEach((round: IndividualRound) => {
         const course = getCourseById(round.courseId);
         
         // If this round came from an event, get the event name
@@ -133,16 +162,21 @@ export const createHandicapSlice = (
   calculateAndUpdateHandicap: (profileId: string): void => {
     const profile = get().profiles.find((p: GolferProfile) => p.id === profileId);
     if (!profile?.individualRounds) return;
+    const normalizedRounds = normalizeIndividualRounds(profile.individualRounds);
+    if (normalizedRounds.length === 0) return;
+
+    // Self-heal profile data if duplicates exist.
+    const didNormalize = normalizedRounds.length !== profile.individualRounds.length;
 
     // Get all score differentials
-    const differentials = profile.individualRounds
+    const differentials = normalizedRounds
       .map((round: IndividualRound) => round.scoreDifferential)
       .filter((diff: number | undefined) => diff !== undefined && !isNaN(diff));
 
     if (differentials.length === 0) return;
 
     // Calculate WHS handicap index - pass ids so we can know which rounds were used
-    const roundEntries = profile.individualRounds.map((r: IndividualRound) => ({ 
+    const roundEntries = normalizedRounds.map((r: IndividualRound) => ({ 
       id: r.id, 
       differential: r.scoreDifferential 
     }));
@@ -157,11 +191,12 @@ export const createHandicapSlice = (
         {
           date: whsResult.calculationDate,
           handicapIndex: whsResult.handicapIndex,
-          rounds: profile.individualRounds || [],
+          rounds: normalizedRounds,
           usedRoundIds: whsResult.usedRoundIds,
           source: 'calculation' as const
         }
-      ]
+      ],
+      individualRounds: didNormalize ? normalizedRounds : profile.individualRounds
     };
 
     // Update profile with new handicap and record which rounds were used
@@ -229,7 +264,7 @@ export const createHandicapSlice = (
           const scoreDifferential = calculateScoreDifferential(adjustedGross, cr1, sl1);
           
           const newIndividualRound: IndividualRound = {
-            id: nanoid(8),
+            id: buildIndividualRoundId(completedRound.eventId, profile.id),
             profileId: profile.id,
             date: completedRound.datePlayed,
             courseId: completedRound.courseId,

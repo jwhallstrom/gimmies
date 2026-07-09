@@ -63,6 +63,38 @@ export interface SyncableProfile {
   lastActive: string;
 }
 
+function mapCloudProfileToSyncable(cloudProfile: any): SyncableProfile {
+  return {
+    id: cloudProfile.id,
+    userId: cloudProfile.userId,
+    name: cloudProfile.name,
+    firstName: cloudProfile.firstName || undefined,
+    lastName: cloudProfile.lastName || undefined,
+    email: cloudProfile.email || undefined,
+    avatar: cloudProfile.avatar || undefined,
+    handicapIndex: cloudProfile.handicapIndex || undefined,
+    preferredTee: cloudProfile.preferredTee || undefined,
+    stats: cloudProfile.statsJson ? JSON.parse(cloudProfile.statsJson as string) : {
+      roundsPlayed: 0,
+      averageScore: 0,
+      bestScore: 0,
+      totalBirdies: 0,
+      totalEagles: 0,
+    },
+    preferences: cloudProfile.preferencesJson ? JSON.parse(cloudProfile.preferencesJson as string) : {
+      theme: 'auto',
+      defaultNetScoring: false,
+      autoAdvanceScores: true,
+      showHandicapStrokes: true,
+    },
+    verifiedStatus: cloudProfile.verifiedStatusJson
+      ? JSON.parse(cloudProfile.verifiedStatusJson as string)
+      : undefined,
+    createdAt: cloudProfile.createdAt || new Date().toISOString(),
+    lastActive: cloudProfile.lastActive || new Date().toISOString(),
+  };
+}
+
 /**
  * Fetch user's profile from cloud (DynamoDB)
  */
@@ -91,37 +123,38 @@ export async function fetchCloudProfile(userId: string): Promise<SyncableProfile
     console.log('Found cloud profile:', cloudProfile);
 
     // Convert cloud profile to local format
-    return {
-      id: cloudProfile.id,
-      userId: cloudProfile.userId,
-      name: cloudProfile.name,
-      firstName: cloudProfile.firstName || undefined,
-      lastName: cloudProfile.lastName || undefined,
-      email: cloudProfile.email || undefined,
-      avatar: cloudProfile.avatar || undefined,
-      handicapIndex: cloudProfile.handicapIndex || undefined,
-      preferredTee: cloudProfile.preferredTee || undefined,
-      stats: cloudProfile.statsJson ? JSON.parse(cloudProfile.statsJson as string) : {
-        roundsPlayed: 0,
-        averageScore: 0,
-        bestScore: 0,
-        totalBirdies: 0,
-        totalEagles: 0,
-      },
-      preferences: cloudProfile.preferencesJson ? JSON.parse(cloudProfile.preferencesJson as string) : {
-        theme: 'auto',
-        defaultNetScoring: false,
-        autoAdvanceScores: true,
-        showHandicapStrokes: true,
-      },
-        // verifiedStatus is currently local-only unless the cloud schema includes a verifiedStatusJson field
-        verifiedStatus: undefined,
-      createdAt: cloudProfile.createdAt || new Date().toISOString(),
-      lastActive: cloudProfile.lastActive || new Date().toISOString(),
-    };
+    return mapCloudProfileToSyncable(cloudProfile);
   } catch (error) {
     console.error('Failed to fetch cloud profile:', error);
     return null;
+  }
+}
+
+/**
+ * Fetch many cloud profiles by profile ID.
+ * Used to hydrate participant cards (name/avatar/status) for other users.
+ */
+export async function loadCloudProfilesByIds(profileIds: string[]): Promise<SyncableProfile[]> {
+  try {
+    const client = getClient();
+    if (!client) return [];
+
+    const ids = Array.from(new Set((profileIds || []).filter(Boolean)));
+    if (ids.length === 0) return [];
+
+    const { data: profiles, errors } = await client.models.Profile.list();
+    if (errors) {
+      console.error('Error loading profiles by ids:', errors);
+      return [];
+    }
+
+    const idSet = new Set(ids);
+    return (profiles || [])
+      .filter((p: any) => idSet.has(p.id))
+      .map(mapCloudProfileToSyncable);
+  } catch (error) {
+    console.error('Failed to load profiles by ids:', error);
+    return [];
   }
 }
 
@@ -167,6 +200,7 @@ export async function saveCloudProfile(profile: SyncableProfile): Promise<boolea
       preferredTee: profile.preferredTee || null,
       statsJson: JSON.stringify(statsJson), // Stringify for storage
       preferencesJson: JSON.stringify(preferencesJson), // Stringify for storage
+      verifiedStatusJson: profile.verifiedStatus ? JSON.stringify(profile.verifiedStatus) : null,
       lastActive: new Date().toISOString(),
     };
 

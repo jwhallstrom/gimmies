@@ -1,10 +1,215 @@
-import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
+import { type ClientSchema, a, defineData, defineFunction } from '@aws-amplify/backend';
+
+const eventAccess = defineFunction({
+  name: 'event-access',
+  entry: '../functions/event-access/handler.ts',
+});
 
 /**
  * Gimmies Golf Data Schema - Amplify GraphQL API
  * Mirrors existing Dexie/Zustand structure for seamless migration
  */
 const schema = a.schema({
+  PublicHubSummary: a.customType({
+    id: a.id().required(),
+    name: a.string().required(),
+    date: a.date().required(),
+    courseId: a.string(),
+    teeName: a.string(),
+    ownerProfileId: a.id().required(),
+    isPublic: a.boolean(),
+    isCompleted: a.boolean(),
+    hubType: a.string(),
+    parentGroupId: a.string(),
+    shareCode: a.string(),
+    scorecardView: a.string(),
+    status: a.string(),
+    golfersJson: a.json(),
+    groupsJson: a.json(),
+    scorecardsJson: a.json(),
+    gamesJson: a.json(),
+    pinkyResultsJson: a.json(),
+    greenieResultsJson: a.json(),
+    groupSettingsJson: a.json(),
+    createdAt: a.datetime(),
+    lastModified: a.datetime(),
+    completedAt: a.datetime(),
+  }),
+
+  JoinHubResult: a.customType({
+    success: a.boolean().required(),
+    eventId: a.id(),
+    error: a.string(),
+    hubType: a.string(),
+  }),
+
+  LeaveHubResult: a.customType({
+    success: a.boolean().required(),
+    eventId: a.id(),
+    error: a.string(),
+    hubType: a.string(),
+  }),
+
+  EventChatMessage: a.customType({
+    id: a.id().required(),
+    eventId: a.id().required(),
+    profileId: a.string().required(),
+    senderName: a.string(),
+    text: a.string().required(),
+    isBot: a.boolean(),
+    createdAt: a.datetime(),
+    updatedAt: a.datetime(),
+  }),
+
+  EventChatMutationResult: a.customType({
+    success: a.boolean().required(),
+    error: a.string(),
+  }),
+
+  CourseIssueReportAdmin: a.customType({
+    id: a.id().required(),
+    reporterProfileId: a.id(),
+    reporterName: a.string(),
+    reporterEmail: a.string(),
+    source: a.string(),
+    issueType: a.string(),
+    courseId: a.string(),
+    courseName: a.string(),
+    teeName: a.string(),
+    notes: a.string(),
+    imageName: a.string(),
+    imageMimeType: a.string(),
+    imageDataUrl: a.string(),
+    status: a.string(),
+    createdAt: a.datetime(),
+    updatedAt: a.datetime(),
+  }),
+
+  CourseIssueReportStatusResult: a.customType({
+    success: a.boolean().required(),
+    error: a.string(),
+  }),
+
+  listPublicEvents: a
+    .query()
+    .returns(a.ref('PublicHubSummary').array())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(eventAccess)),
+
+  listPublicGroups: a
+    .query()
+    .returns(a.ref('PublicHubSummary').array())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(eventAccess)),
+
+  listAccessibleHubs: a
+    .query()
+    .returns(a.ref('PublicHubSummary').array())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(eventAccess)),
+
+  getAccessibleHubById: a
+    .query()
+    .arguments({
+      eventId: a.id().required(),
+    })
+    .returns(a.ref('PublicHubSummary'))
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(eventAccess)),
+
+  joinHubByShareCode: a
+    .mutation()
+    .arguments({
+      shareCode: a.string().required(),
+      profileId: a.id().required(),
+      displayName: a.string(),
+    })
+    .returns(a.ref('JoinHubResult'))
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(eventAccess)),
+
+  joinHubByEventId: a
+    .mutation()
+    .arguments({
+      eventId: a.id().required(),
+      profileId: a.id().required(),
+      displayName: a.string(),
+    })
+    .returns(a.ref('JoinHubResult'))
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(eventAccess)),
+
+  leaveHub: a
+    .mutation()
+    .arguments({
+      eventId: a.id().required(),
+      profileId: a.id().required(),
+    })
+    .returns(a.ref('LeaveHubResult'))
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(eventAccess)),
+
+  removeHubMember: a
+    .mutation()
+    .arguments({
+      eventId: a.id().required(),
+      actorProfileId: a.id().required(),
+      targetProfileId: a.id().required(),
+    })
+    .returns(a.ref('LeaveHubResult'))
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(eventAccess)),
+
+  listEventChatMessages: a
+    .query()
+    .arguments({
+      eventId: a.id().required(),
+    })
+    .returns(a.ref('EventChatMessage').array())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(eventAccess)),
+
+  createEventChatMessage: a
+    .mutation()
+    .arguments({
+      eventId: a.id().required(),
+      messageId: a.id().required(),
+      profileId: a.string().required(),
+      senderName: a.string(),
+      text: a.string().required(),
+      isBot: a.boolean(),
+    })
+    .returns(a.ref('EventChatMutationResult'))
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(eventAccess)),
+
+  updateEventChatMessage: a
+    .mutation()
+    .arguments({
+      eventId: a.id().required(),
+      messageId: a.id().required(),
+      text: a.string().required(),
+    })
+    .returns(a.ref('EventChatMutationResult'))
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(eventAccess)),
+
+  listCourseIssueReportsAdmin: a
+    .query()
+    .returns(a.ref('CourseIssueReportAdmin').array())
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(eventAccess)),
+
+  updateCourseIssueReportStatus: a
+    .mutation()
+    .arguments({
+      reportId: a.id().required(),
+      status: a.string().required(),
+    })
+    .returns(a.ref('CourseIssueReportStatusResult'))
+    .authorization((allow) => [allow.authenticated()])
+    .handler(a.handler.function(eventAccess)),
+
   // User Profile - extends Cognito user attributes
   Profile: a.model({
     userId: a.string().required(), // Cognito user ID (for our reference)
@@ -19,6 +224,7 @@ const schema = a.schema({
     // Stats (stored as JSON for flexibility) - made optional
     statsJson: a.string(), // Store as JSON string instead of json type
     preferencesJson: a.string(), // Store as JSON string instead of json type
+    verifiedStatusJson: a.string(), // Store verified status as JSON string
     
     // Individual handicap rounds
     individualRounds: a.hasMany('IndividualRound', 'profileId'),
@@ -61,7 +267,6 @@ const schema = a.schema({
   })
   .authorization(allow => [
     allow.owner(),
-    allow.authenticated().to(['read']),
   ]),
 
   // Golf Event (Round with multiple players) or Group (chat hub)
@@ -96,6 +301,7 @@ const schema = a.schema({
     status: a.enum(['setup', 'started', 'completed']),
     
     // Related data (stored as JSON for flexibility)
+    memberUserIds: a.string().array(),
     golfersJson: a.json(), // EventGolfer[]
     groupsJson: a.json(), // Group[]
     scorecardsJson: a.json(), // PlayerScorecard[]
@@ -115,7 +321,7 @@ const schema = a.schema({
   })
   .authorization(allow => [
     allow.owner(), // Owner can CRUD
-    allow.authenticated(), // ALL authenticated users can read/update/create (for collaborative events)
+    allow.ownersDefinedIn('memberUserIds').to(['read', 'update']),
   ]),
 
   // Chat Message (scoped to event)
@@ -131,8 +337,7 @@ const schema = a.schema({
     isBot: a.boolean().default(false),
   })
   .authorization(allow => [
-    allow.authenticated().to(['read', 'create']),
-    allow.owner().to(['delete']), // Can delete own messages
+    allow.owner().to(['read', 'update', 'delete']),
   ]),
 
   // Completed Round (analytics/history)
@@ -160,7 +365,6 @@ const schema = a.schema({
   })
   .authorization(allow => [
     allow.owner(),
-    allow.authenticated().to(['read']),
   ]),
 
   // Course Data (for admin management)
@@ -178,10 +382,33 @@ const schema = a.schema({
     lastUpdated: a.datetime(),
   })
   .authorization(allow => [
-    allow.publicApiKey(), // Allow API key for all operations (courses are public data)
-    allow.authenticated(), // Authenticated users can do anything
+    allow.publicApiKey().to(['read']),
+    allow.authenticated().to(['read']),
+  ]),
+
+  CourseIssueReport: a.model({
+    reporterProfileId: a.id().required(),
+    reporterName: a.string(),
+    reporterEmail: a.string(),
+    source: a.string().required(), // create_event | add_score
+    issueType: a.string().required(), // missing_course | missing_tee | wrong_rating | wrong_slope | other
+    courseId: a.string(),
+    courseName: a.string(),
+    teeName: a.string(),
+    notes: a.string(),
+    imageName: a.string(),
+    imageMimeType: a.string(),
+    imageDataUrl: a.string(),
+    status: a.string().default('open'),
+  })
+  .authorization(allow => [
+    allow.owner(),
   ]),
 });
+
+schema.authorization((allow) => [
+  (allow as any).resource(eventAccess).to(['query', 'mutate']),
+]);
 
 export type Schema = ClientSchema<typeof schema>;
 

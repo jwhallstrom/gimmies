@@ -14,7 +14,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuthMode } from '../hooks/useAuthMode';
 import { CreateEventWizard } from '../components/CreateEventWizard';
 import { CreateGroupWizard } from '../components/CreateGroupWizard';
-import { DiscoverGroupsModal } from '../components/DiscoverGroupsModal';
 import SettingsPanel from '../components/SettingsPanel';
 import { SignInRequired } from '../components/SignInRequired';
 import { useEventsAdapter, useWalletAdapter } from '../adapters';
@@ -22,8 +21,16 @@ import type { Event } from '../state/types';
 import useStore from '../state/store';
 import { getHole } from '../data/cloudCourses';
 
+const parseEventDate = (value: string) => {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [y, m, d] = value.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  }
+  return new Date(value);
+};
+
 const formatDateShort = (iso: string) =>
-  new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  parseEventDate(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
 const clamp = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 
@@ -32,6 +39,15 @@ const countStrokesEntered = (event: Event): number => {
   return event.scorecards.reduce((total, sc) => {
     return total + (sc.scores?.filter((s: any) => s?.strokes != null).length || 0);
   }, 0);
+};
+
+const isPastDueEvent = (event: Event): boolean => {
+  if (event.isCompleted) return false;
+  const eventDate = parseEventDate(event.date);
+  const today = new Date();
+  const eventDay = new Date(eventDate.getFullYear(), eventDate.getMonth(), eventDate.getDate()).getTime();
+  const todayDay = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
+  return eventDay < todayDay;
 };
 
 // Check if an event is "live" (has scores being entered but not completed)
@@ -94,6 +110,8 @@ const Dashboard: React.FC = () => {
     currentProfile,
     loadEventsFromCloud,
     profiles,
+    lastEventsCloudSyncAt,
+    lastEventsCloudSyncCount,
   } = useEventsAdapter();
   const { wallet } = useWalletAdapter();
   const { isGuest } = useAuthMode();
@@ -103,12 +121,11 @@ const Dashboard: React.FC = () => {
 
   const [showCreateWizard, setShowCreateWizard] = useState(false);
   const [showCreateGroupWizard, setShowCreateGroupWizard] = useState(false);
-  const [showDiscoverGroups, setShowDiscoverGroups] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showFabMenu, setShowFabMenu] = useState(false);
-  
-  // Search state
-  const [searchQuery, setSearchQuery] = useState('');
+  const [isRefreshingInvites, setIsRefreshingInvites] = useState(false);
+  const [showInviteInfo, setShowInviteInfo] = useState(false);
+  const [lastManualRefreshAt, setLastManualRefreshAt] = useState<string | null>(null);
   
   // Section order - persisted to localStorage
   const [sectionOrder, setSectionOrder] = useState<SectionId[]>(getSavedSectionOrder);
@@ -183,7 +200,6 @@ const Dashboard: React.FC = () => {
       return;
     }
     setShowCreateGroupWizard(false);
-    setShowDiscoverGroups(false);
     setShowCreateWizard(true);
   };
   
@@ -193,7 +209,6 @@ const Dashboard: React.FC = () => {
       return;
     }
     setShowCreateWizard(false);
-    setShowDiscoverGroups(false);
     setShowCreateGroupWizard(true);
   };
   
@@ -224,8 +239,31 @@ const Dashboard: React.FC = () => {
     loadEventsFromCloud().catch(() => {});
   }, [currentProfile?.id, isGuest]);
 
+  const refreshInvites = useCallback(async () => {
+    if (isGuest) {
+      addToast?.('Sign in to sync invites', 'error', 2500);
+      return;
+    }
+
+    setIsRefreshingInvites(true);
+    try {
+      const result = await loadEventsFromCloud();
+      setLastManualRefreshAt(result.syncedAt);
+      addToast?.(`Synced ${result.totalCount} events & groups`, 'success', 2500);
+    } catch {
+      addToast?.('Could not refresh invites', 'error', 3000);
+    } finally {
+      setIsRefreshingInvites(false);
+    }
+  }, [addToast, isGuest, loadEventsFromCloud]);
+
+  const syncDisplayAt = lastManualRefreshAt || lastEventsCloudSyncAt;
+  const syncSummary = syncDisplayAt
+    ? `Synced ${lastEventsCloudSyncCount} ${lastEventsCloudSyncCount === 1 ? 'item' : 'items'}`
+    : 'Not synced yet';
+
   // Separate events into categories: live, upcoming, completed, groups
-  const { liveEvents, upcomingEvents, completedEvents, groups, activeEvents, filteredLive, filteredUpcoming, filteredGroups, filteredHistory } = useMemo(() => {
+  const { liveEvents, upcomingEvents, completedEvents, groups, activeEvents } = useMemo(() => {
     const live: Event[] = [];
     const upcoming: Event[] = [];
     const completed: Event[] = [];
@@ -245,16 +283,12 @@ const Dashboard: React.FC = () => {
     
     // Sort by date/activity
     live.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
-    upcoming.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()); // Soonest first
+    upcoming.sort((a, b) => parseEventDate(a.date).getTime() - parseEventDate(b.date).getTime()); // Soonest first
     completed.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
     groupList.sort((a, b) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
     
     // activeEvents = all non-completed for backward compat
     const active = [...live, ...upcoming];
-    
-    // Apply search filter
-    const q = searchQuery.toLowerCase().trim();
-    const matchesSearch = (e: Event) => !q || (e.name || '').toLowerCase().includes(q);
     
     return { 
       liveEvents: live, 
@@ -262,12 +296,8 @@ const Dashboard: React.FC = () => {
       completedEvents: completed, 
       groups: groupList, 
       activeEvents: active,
-      filteredLive: live.filter(matchesSearch),
-      filteredUpcoming: upcoming.filter(matchesSearch),
-      filteredGroups: groupList.filter(matchesSearch),
-      filteredHistory: completed.filter(matchesSearch),
     };
-  }, [userEvents, searchQuery]);
+  }, [userEvents]);
 
 
   // Which sections are visible (for up/down arrow boundary checks)
@@ -464,7 +494,6 @@ const Dashboard: React.FC = () => {
           onAction={() => {
             setShowCreateWizard(false);
             setShowCreateGroupWizard(false);
-            setShowDiscoverGroups(false);
             setShowSettings(false);
             logout();
           }}
@@ -521,92 +550,83 @@ const Dashboard: React.FC = () => {
         </div>
       </header>
 
-      {/* Getting Started - Onboarding Modal */}
+      {/* Getting Started - Onboarding Modal (compact for small screens) */}
       {showOnboarding && createPortal(
         <div 
-          className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          className="fixed inset-0 z-[9999] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-3"
           onClick={() => dismissOnboarding(false)}
         >
           <div 
-            className="bg-white rounded-3xl shadow-2xl max-w-md w-full max-h-[85vh] overflow-y-auto animate-slide-up"
+            className="bg-white rounded-2xl shadow-2xl max-w-sm w-full max-h-[75vh] flex flex-col animate-slide-up"
             onClick={e => e.stopPropagation()}
           >
-            {/* Header */}
-            <div className="relative bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 px-6 pt-8 pb-6 rounded-t-3xl text-center">
+            {/* Header — compact */}
+            <div className="relative bg-gradient-to-br from-primary-600 via-primary-700 to-primary-800 px-4 pt-5 pb-4 rounded-t-2xl text-center flex-shrink-0">
               <button
                 onClick={() => dismissOnboarding(false)}
-                className="absolute top-4 right-4 p-2 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                className="absolute top-2.5 right-2.5 p-1.5 text-white/70 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
                 aria-label="Close"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                 </svg>
               </button>
-              <div className="text-5xl mb-3">⛳</div>
-              <h2 className="text-2xl font-bold text-white mb-1">Welcome to Gimmies!</h2>
-              <p className="text-primary-100 text-sm">Your golf crew's command center</p>
+              <div className="text-3xl mb-1">⛳</div>
+              <h2 className="text-lg font-bold text-white">Welcome to Gimmies!</h2>
+              <p className="text-primary-100 text-xs">Your golf crew's command center</p>
             </div>
             
-            {/* Feature highlights */}
-            <div className="px-5 py-5 space-y-3">
-              {/* Groups */}
+            {/* Feature highlights — scrollable */}
+            <div className="px-4 py-3 space-y-2 overflow-y-auto flex-1 min-h-0">
               <button 
-                className="w-full flex items-start gap-3 p-4 bg-purple-50 rounded-xl border border-purple-100 hover:bg-purple-100 transition-colors text-left"
+                className="w-full flex items-center gap-3 p-3 bg-purple-50 rounded-xl border border-purple-100 hover:bg-purple-100 transition-colors text-left"
                 onClick={() => { setShowGroups(true); dismissOnboarding(false); }}
               >
-                <div className="w-12 h-12 rounded-full bg-purple-200 flex items-center justify-center flex-shrink-0">
-                  <span className="text-2xl">👥</span>
+                <div className="w-9 h-9 rounded-full bg-purple-200 flex items-center justify-center flex-shrink-0">
+                  <span className="text-lg">👥</span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-gray-900">Create a Group</div>
-                  <p className="text-sm text-gray-600 mt-0.5">
-                    Your golf crew's home base. Chat, share photos, and schedule tee times together.
-                  </p>
+                  <div className="font-bold text-sm text-gray-900">Create a Group</div>
+                  <p className="text-xs text-gray-500">Chat, schedule tee times, manage your crew.</p>
                 </div>
-                <span className="text-purple-400 self-center text-lg">→</span>
+                <span className="text-purple-400 text-sm">→</span>
               </button>
 
-              {/* Events */}
               <button 
-                className="w-full flex items-start gap-3 p-4 bg-primary-50 rounded-xl border border-primary-100 hover:bg-primary-100 transition-colors text-left"
+                className="w-full flex items-center gap-3 p-3 bg-primary-50 rounded-xl border border-primary-100 hover:bg-primary-100 transition-colors text-left"
                 onClick={(e) => { e.stopPropagation(); openEventWizard(); dismissOnboarding(false); }}
               >
-                <div className="w-12 h-12 rounded-full bg-primary-200 flex items-center justify-center flex-shrink-0">
-                  <span className="text-2xl">⛳</span>
+                <div className="w-9 h-9 rounded-full bg-primary-200 flex items-center justify-center flex-shrink-0">
+                  <span className="text-lg">⛳</span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-gray-900">Create an Event</div>
-                  <p className="text-sm text-gray-600 mt-0.5">
-                    Score a round, run Nassau/skins, track bets, and see the live leaderboard.
-                  </p>
+                  <div className="font-bold text-sm text-gray-900">Create an Event</div>
+                  <p className="text-xs text-gray-500">Score rounds, run side games, live leaderboard.</p>
                 </div>
-                <span className="text-primary-400 self-center text-lg">→</span>
+                <span className="text-primary-400 text-sm">→</span>
               </button>
 
-              {/* Handicap */}
               <button 
-                className="w-full flex items-start gap-3 p-4 bg-amber-50 rounded-xl border border-amber-100 hover:bg-amber-100 transition-colors text-left"
+                className="w-full flex items-center gap-3 p-3 bg-amber-50 rounded-xl border border-amber-100 hover:bg-amber-100 transition-colors text-left"
                 onClick={() => { navigate('/handicap'); dismissOnboarding(false); }}
               >
-                <div className="w-12 h-12 rounded-full bg-amber-200 flex items-center justify-center flex-shrink-0">
-                  <span className="text-2xl">📊</span>
+                <div className="w-9 h-9 rounded-full bg-amber-200 flex items-center justify-center flex-shrink-0">
+                  <span className="text-lg">📊</span>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="font-bold text-gray-900">Track Your Handicap</div>
-                  <p className="text-sm text-gray-600 mt-0.5">
-                    Add rounds manually or score through events. We calculate your index automatically.
-                  </p>
+                  <div className="font-bold text-sm text-gray-900">Track Your Handicap</div>
+                  <p className="text-xs text-gray-500">Add rounds, auto-calculated index.</p>
                 </div>
-                <span className="text-amber-500 self-center text-lg">→</span>
+                <span className="text-amber-500 text-sm">→</span>
               </button>
             </div>
 
-            {/* Quick start CTA */}
-            <div className="px-5 pb-6 pt-2 border-t border-gray-100">
-              <div className="flex gap-3">
+            {/* Footer — always visible (sticky) */}
+            <div className="px-4 pb-4 pt-2 border-t border-gray-100 flex-shrink-0">
+              <div className="flex gap-2">
                 <button
                   onClick={(e) => { e.stopPropagation(); openGroupWizard(); dismissOnboarding(false); }}
-                  className="flex-1 py-3.5 bg-purple-600 text-white rounded-xl font-bold text-sm hover:bg-purple-700 transition-colors flex items-center justify-center gap-2 shadow-md"
+                  className="flex-1 py-2.5 bg-purple-600 text-white rounded-xl font-bold text-sm hover:bg-purple-700 transition-colors flex items-center justify-center gap-1.5 shadow-md"
                 >
                   <span>👥</span> Start a Group
                 </button>
@@ -620,16 +640,15 @@ const Dashboard: React.FC = () => {
                     navigate('/join');
                     dismissOnboarding(false);
                   }}
-                  className="flex-1 py-3.5 bg-gray-100 text-gray-700 rounded-xl font-bold text-sm hover:bg-gray-200 transition-colors flex items-center justify-center gap-2"
+                  className="flex-1 py-2.5 bg-gray-100 text-gray-700 rounded-xl font-bold text-sm hover:bg-gray-200 transition-colors flex items-center justify-center gap-1.5"
                 >
                   <span>🎫</span> Join with Code
                 </button>
               </div>
               
-              {/* Don't show again */}
               <button
                 onClick={() => dismissOnboarding(true)}
-                className="w-full mt-4 text-sm text-gray-400 hover:text-gray-600 transition-colors py-2"
+                className="w-full mt-2.5 text-xs text-gray-400 hover:text-gray-600 transition-colors py-1.5"
               >
                 Don't show this again
               </button>
@@ -639,32 +658,59 @@ const Dashboard: React.FC = () => {
         document.body
       )}
 
-      {/* Search Bar */}
-      <div className="relative">
-        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search events & groups..."
-          className="w-full pl-9 pr-9 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:bg-white focus:outline-none focus:ring-2 focus:ring-primary-200 focus:border-primary-300 shadow-sm"
-        />
-        {searchQuery && (
+      <div className="rounded-2xl border border-sky-200 bg-gradient-to-r from-sky-50 via-white to-cyan-50 px-3.5 py-2.5 shadow-sm dark:border-sky-800 dark:from-slate-900 dark:via-slate-900 dark:to-sky-950">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-700 dark:bg-sky-900/70 dark:text-sky-200">
+            {isRefreshingInvites ? (
+              <svg className="h-4.5 w-4.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+              </svg>
+            ) : (
+              <svg className="h-4.5 w-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m14.836 2A8.001 8.001 0 005.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-14.837-2m14.837 2H15" />
+              </svg>
+            )}
+          </div>
+          <div className="relative min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <div className="truncate text-sm font-bold text-slate-900 dark:text-slate-100">
+                {isRefreshingInvites ? 'Syncing New Invites...' : 'Sync New Invites'}
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowInviteInfo((value) => !value)}
+                className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border border-sky-200 bg-white/80 text-[11px] font-bold text-sky-700 transition-colors hover:bg-sky-100 dark:border-sky-700 dark:bg-slate-800 dark:text-sky-200 dark:hover:bg-slate-700"
+                aria-label="What this does"
+              >
+                i
+              </button>
+            </div>
+            {showInviteInfo && (
+              <div className="absolute left-0 top-7 z-10 max-w-[220px] rounded-xl border border-sky-200 bg-white px-3 py-2 text-xs leading-5 text-slate-600 shadow-lg dark:border-sky-800 dark:bg-slate-900 dark:text-slate-300">
+                Refresh events and groups you joined from a text, email, or browser link.
+              </div>
+            )}
+            <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
+              {syncSummary}
+            </div>
+          </div>
           <button
-            onClick={() => setSearchQuery('')}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5"
+            type="button"
+            onClick={refreshInvites}
+            disabled={isRefreshingInvites}
+            className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-xl bg-sky-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-wait disabled:opacity-70 dark:bg-sky-500 dark:hover:bg-sky-400"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            <span>{isRefreshingInvites ? 'Syncing' : 'Sync'}</span>
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
             </svg>
           </button>
-        )}
+        </div>
       </div>
 
       {/* Unified Content - Draggable Accordions */}
-      <section className="space-y-3">
+      <section key={lastEventsCloudSyncAt || 'home'} className="space-y-3">
         {/* Empty state - show if no events AND no groups */}
         {liveEvents.length === 0 && upcomingEvents.length === 0 && completedEvents.length === 0 && groups.length === 0 && (
           <div className="bg-white rounded-2xl border border-gray-200 shadow-sm py-12 text-center">
@@ -673,13 +719,6 @@ const Dashboard: React.FC = () => {
             <p className="text-gray-500 mb-2 px-4">
               Tap the <span className="inline-flex items-center justify-center w-8 h-8 bg-accent rounded-full text-white font-bold text-lg align-middle mx-1">+</span> to create an event or group
             </p>
-          </div>
-        )}
-
-        {/* No search results */}
-        {searchQuery && filteredLive.length === 0 && filteredUpcoming.length === 0 && filteredGroups.length === 0 && filteredHistory.length === 0 && (liveEvents.length > 0 || upcomingEvents.length > 0 || groups.length > 0 || completedEvents.length > 0) && (
-          <div className="bg-white rounded-2xl border border-gray-200 shadow-sm py-8 text-center">
-            <div className="text-gray-500">No results for "{searchQuery}"</div>
           </div>
         )}
 
@@ -709,13 +748,13 @@ const Dashboard: React.FC = () => {
               setShowAll: setShowAllLive,
               icon: <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>,
               label: 'Live',
-              count: filteredLive.length,
+              count: liveEvents.length,
               gradient: 'from-red-50 to-white hover:from-red-100',
               badgeBg: 'bg-red-100',
               labelColor: 'text-gray-800',
-              items: filteredLive,
+              items: liveEvents,
               renderItem: (event) => (
-                <EventCard key={event.id} event={event} profiles={profiles} status="live" />
+                <EventCard key={event.id} event={event} profiles={profiles} currentProfileId={currentProfile?.id} status="live" />
               ),
             },
             upcoming: {
@@ -726,13 +765,13 @@ const Dashboard: React.FC = () => {
               setShowAll: setShowAllUpcoming,
               icon: <span className="text-base">📅</span>,
               label: 'Upcoming',
-              count: filteredUpcoming.length,
+              count: upcomingEvents.length,
               gradient: 'from-primary-50 to-white hover:from-primary-100',
               badgeBg: 'bg-primary-100',
               labelColor: 'text-gray-800',
-              items: filteredUpcoming,
+              items: upcomingEvents,
               renderItem: (event) => (
-                <EventCard key={event.id} event={event} profiles={profiles} status="upcoming" />
+                <EventCard key={event.id} event={event} profiles={profiles} currentProfileId={currentProfile?.id} status="upcoming" />
               ),
             },
             groups: {
@@ -743,11 +782,11 @@ const Dashboard: React.FC = () => {
               setShowAll: setShowAllGroups,
               icon: <span className="text-base">👥</span>,
               label: 'Groups',
-              count: filteredGroups.length,
+              count: groups.length,
               gradient: 'from-purple-50 to-white hover:from-purple-100',
               badgeBg: 'bg-purple-100',
               labelColor: 'text-gray-800',
-              items: filteredGroups,
+              items: groups,
               renderItem: (group) => (
                 <GroupCard key={group.id} group={group} />
               ),
@@ -760,13 +799,13 @@ const Dashboard: React.FC = () => {
               setShowAll: setShowAllHistory,
               icon: <span className="text-base">📜</span>,
               label: 'History',
-              count: filteredHistory.length,
+              count: completedEvents.length,
               gradient: 'from-gray-50 to-white hover:from-gray-100',
               badgeBg: 'bg-gray-100',
               labelColor: 'text-gray-600',
-              items: filteredHistory,
+              items: completedEvents,
               renderItem: (event) => (
-                <EventCard key={event.id} event={event} profiles={profiles} status="completed" />
+                <EventCard key={event.id} event={event} profiles={profiles} currentProfileId={currentProfile?.id} status="completed" />
               ),
             },
           };
@@ -888,9 +927,6 @@ const Dashboard: React.FC = () => {
                   )}
                 </div>
               )}
-              {config.isExpanded && config.items.length === 0 && searchQuery && (
-                <div className="px-4 pb-4 text-sm text-gray-500">No {config.label.toLowerCase()} match "{searchQuery}"</div>
-              )}
             </div>
           );
         })}
@@ -981,7 +1017,7 @@ const Dashboard: React.FC = () => {
             
             {/* Action buttons */}
             <div className="px-4 pb-4 space-y-2">
-              {/* Join Event - Most prominent (grandma's #1) */}
+              {/* Join Event or Group - Most prominent (grandma's #1) */}
               <button
                 onClick={() => {
                   if (isGuest) {
@@ -998,7 +1034,7 @@ const Dashboard: React.FC = () => {
                   🎫
                 </div>
                 <div className="text-left flex-1">
-                  <div className="font-bold text-lg">Join Event</div>
+                  <div className="font-bold text-lg">Join Event or Group</div>
                   <div className="text-orange-100 text-sm">Someone invited you? Enter their code</div>
                 </div>
                 <svg className="w-6 h-6 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1091,11 +1127,6 @@ const Dashboard: React.FC = () => {
         }}
       />
 
-      <DiscoverGroupsModal
-        isOpen={showDiscoverGroups}
-        onClose={() => setShowDiscoverGroups(false)}
-      />
-      
       <SettingsPanel
         isOpen={showSettings}
         onClose={() => setShowSettings(false)}
@@ -1105,12 +1136,13 @@ const Dashboard: React.FC = () => {
 };
 
 // Event Card Component - clean text-based design
-const EventCard: React.FC<{ event: Event; profiles: any[]; status?: 'live' | 'upcoming' | 'completed' }> = ({ event, profiles, status }) => {
+const EventCard: React.FC<{ event: Event; profiles: any[]; currentProfileId?: string; status?: 'live' | 'upcoming' | 'completed' }> = ({ event, profiles, currentProfileId, status }) => {
   const navigate = useNavigate();
   
   const golferCount = event.golfers.length;
   const courseId = event.course?.courseId;
   const teeName = event.course?.teeName;
+  const showPastDue = status === 'upcoming' && currentProfileId === event.ownerProfileId && isPastDueEvent(event);
   
   // Calculate leaderboard with positions, scores, and thru
   const leaderboard = useMemo(() => {
@@ -1200,6 +1232,11 @@ const EventCard: React.FC<{ event: Event; profiles: any[]; status?: 'live' | 'up
                 Live
               </span>
             )}
+            {showPastDue && (
+              <span className="flex-shrink-0 px-1.5 py-0.5 text-[9px] font-bold bg-amber-100 text-amber-800 rounded-full uppercase">
+                Past Due
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1.5 text-xs text-gray-500 mt-0.5">
             <span>{formatDateShort(event.date)}</span>
@@ -1229,13 +1266,29 @@ const GroupCard: React.FC<{ group: Event }> = ({ group }) => {
   const navigate = useNavigate();
   
   const lastMessage = group.chat?.length ? group.chat[group.chat.length - 1] : null;
+  const avatar = group.groupSettings?.avatar;
   
   return (
     <button
-      onClick={() => navigate(`/event/${group.id}/chat`)}
+      onClick={() => navigate(`/event/${group.id}`)}
       className="w-full text-left bg-purple-50 hover:bg-purple-100 rounded-lg p-2.5 border border-purple-200 hover:border-purple-300 transition-all group"
     >
-      <div className="flex items-center justify-between">
+      <div className="flex items-center gap-2.5">
+        {/* Group Avatar */}
+        <div className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center overflow-hidden">
+          {avatar && (avatar.startsWith('data:') || avatar.startsWith('http')) ? (
+            <img src={avatar} alt="" className="w-full h-full object-cover" />
+          ) : avatar ? (
+            <div className="w-full h-full bg-gradient-to-br from-purple-500 to-indigo-600 flex items-center justify-center text-lg">
+              {avatar}
+            </div>
+          ) : (
+            <div className="w-full h-full bg-gradient-to-br from-purple-400 to-purple-600 text-white text-sm font-bold flex items-center justify-center">
+              {(group.name || '?').charAt(0).toUpperCase()}
+            </div>
+          )}
+        </div>
+
         <div className="min-w-0 flex-1">
           <div className="font-semibold text-gray-900 group-hover:text-purple-700 truncate transition-colors text-sm">
             {group.name || 'Untitled Group'}
@@ -1244,9 +1297,9 @@ const GroupCard: React.FC<{ group: Event }> = ({ group }) => {
             {lastMessage ? `${lastMessage.senderName}: ${lastMessage.text}` : `${group.golfers.length} members`}
           </div>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-1.5 flex-shrink-0">
           <span className="px-1.5 py-0.5 text-[9px] font-bold bg-purple-200 text-purple-700 rounded-full">
-            CHAT
+            {group.golfers.length}
           </span>
           <svg className="w-4 h-4 text-gray-400 group-hover:text-purple-600 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

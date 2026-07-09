@@ -173,7 +173,7 @@ const NassauTeamsPage: React.FC<Props> = ({ eventId }) => {
   const selectedColor = getTeamColor(selectedTeamIdx >= 0 ? selectedTeamIdx : 0);
 
   return (
-    <div className="space-y-4 max-w-3xl bg-white dark:bg-gray-900 min-h-screen -mx-4 -mt-4 px-4 pt-4 pb-32">
+    <div className="h-full overflow-y-auto space-y-4 max-w-3xl bg-white dark:bg-gray-900 -mx-4 -mt-4 px-4 pt-4 content-with-footer">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">

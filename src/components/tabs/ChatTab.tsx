@@ -1,14 +1,65 @@
 import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useEventChatAdapter } from '../../adapters';
-import type { ChatMessage } from '../../state/types';
+import useStore from '../../state/store';
+import type { ChatMessage, GolferProfile } from '../../state/types';
 import { CHAT_REACTIONS } from '../../state/types';
 import { nanoid } from 'nanoid/non-secure';
+
+// ============================================================================
+// Mention helpers
+// ============================================================================
+
+interface MentionMember {
+  profileId: string;
+  name: string;
+  avatar?: string;
+}
+
+/** Render message text with @mentions highlighted */
+const renderTextWithMentions = (
+  text: string,
+  mentions: string[] | undefined,
+  profilesById: Map<string, GolferProfile>,
+  isMine: boolean,
+): React.ReactNode => {
+  if (!mentions?.length) return text;
+
+  const mentionNames = mentions
+    .map((pid) => profilesById.get(pid)?.name)
+    .filter(Boolean) as string[];
+  if (!mentionNames.length) return text;
+
+  const escaped = mentionNames.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const pattern = new RegExp(`(@(?:${escaped.join('|')}))`, 'g');
+  const parts = text.split(pattern);
+
+  return parts.map((part, i) => {
+    const isMention = mentionNames.some((name) => part === `@${name}`);
+    if (isMention) {
+      return (
+        <span
+          key={i}
+          className={
+            isMine
+              ? 'font-bold text-white/90 underline underline-offset-2 decoration-white/40'
+              : 'font-bold text-primary-600 dark:text-primary-400'
+          }
+        >
+          {part}
+        </span>
+      );
+    }
+    return part;
+  });
+};
 
 interface ChatTabProps {
   eventId: string;
   onCreateEvent?: () => void;
   isActive?: boolean;
+  /** When true, the pinned event banners at the top of chat are hidden (GroupPage renders its own). */
+  hidePinnedBanners?: boolean;
 }
 
 // ============================================================================
@@ -53,64 +104,6 @@ const shouldShowName = (messages: ChatMessage[], index: number): boolean => {
 // ============================================================================
 
 const DOUBLE_TAP_DELAY = 300; // ms window for second tap
-
-// ============================================================================
-// Keyboard handling - visualViewport API for PWA/iOS
-// ============================================================================
-
-const isTouchDevice = () =>
-  'ontouchstart' in window || navigator.maxTouchPoints > 0;
-
-const useKeyboardHandler = () => {
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [isFocused, setIsFocused] = useState(false);
-
-  useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-
-    const onResize = () => {
-      const heightDiff = window.innerHeight - vv.height;
-      setKeyboardHeight(Math.max(0, heightDiff));
-    };
-
-    vv.addEventListener('resize', onResize);
-    vv.addEventListener('scroll', onResize);
-    return () => {
-      vv.removeEventListener('resize', onResize);
-      vv.removeEventListener('scroll', onResize);
-    };
-  }, []);
-
-  // Hide footer when virtual keyboard is visible OR input is focused.
-  // This handles both overlay keyboards (keyboardHeight > 0) and 
-  // resizing viewports (keyboardHeight ~ 0 but focused).
-  useEffect(() => {
-    if (keyboardHeight > 0 || isFocused) {
-      document.body.classList.add('chat-input-focused');
-    } else {
-      document.body.classList.remove('chat-input-focused');
-    }
-    return () => {
-      document.body.classList.remove('chat-input-focused');
-    };
-  }, [keyboardHeight, isFocused]);
-
-  const handleFocus = useCallback(() => {
-    setIsFocused(true);
-  }, []);
-
-  const handleBlur = useCallback(() => {
-    // Short delay to prevent flickering when switching focus
-    setTimeout(() => {
-      if (!document.activeElement || document.activeElement.tagName !== 'TEXTAREA') {
-        setIsFocused(false);
-      }
-    }, 150);
-  }, []);
-
-  return { keyboardHeight, handleFocus, handleBlur };
-};
 
 // ============================================================================
 // Sub-Components
@@ -454,9 +447,13 @@ const PollCreator: React.FC<{
 
 // ============================================================================
 // Main ChatTab Component
+// Architecture: In-flow composer (Google Gemini pattern).
+// The composer is a sticky element at the bottom of the scroll container,
+// NOT a fixed overlay. No JS keyboard handling — the browser + CSS :has()
+// handle everything. Much simpler, more reliable on iOS PWAs.
 // ============================================================================
 
-const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = true }) => {
+const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = true, hidePinnedBanners = false }) => {
   const {
     event, currentProfile, messages, profilesById,
     send, toggleReaction, deleteMessage, votePoll,
@@ -464,9 +461,22 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = tr
     isTyping, reportTyping,
     replyTo, setReplyTo,
     muted, toggleMute,
+    isGroupChat, parentGroupName,
   } = useEventChatAdapter(eventId);
 
   const navigate = useNavigate();
+
+  // Pinned event banners for group hubs (Phase 3C)
+  const isGroupHub = event?.hubType === 'group';
+  const activeChildEvents = useStore((s) => {
+    if (!isGroupHub || !event) return [];
+    return [...(s.events || [])]
+      .filter((e: any) => e.hubType !== 'group' && e.parentGroupId === event.id && !e.isCompleted)
+      .sort((a: any, b: any) => new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime());
+  });
+  const [dismissedBannerIds, setDismissedBannerIds] = useState<Set<string>>(new Set());
+  const visibleBanners = activeChildEvents.filter((e: any) => !dismissedBannerIds.has(e.id));
+
   const [text, setText] = useState('');
   const [showPollCreator, setShowPollCreator] = useState(false);
   const [activeReactionId, setActiveReactionId] = useState<string | null>(null);
@@ -476,9 +486,30 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = tr
   const [showStickers, setShowStickers] = useState(false);
   const [doubleTapPopId, setDoubleTapPopId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
-  const messagesContainerRef = useRef<HTMLDivElement | null>(null);
+  const messagesRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
-  const { keyboardHeight, handleFocus, handleBlur } = useKeyboardHandler();
+  const composerRef = useRef<HTMLDivElement | null>(null);
+
+  // @mention state
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionStartIdx, setMentionStartIdx] = useState(-1);
+  const profiles = useStore((s) => s.profiles) as GolferProfile[];
+
+  const mentionMembers: MentionMember[] = useMemo(() => {
+    if (!event) return [];
+    return event.golfers
+      .filter((g: any) => g.profileId && g.profileId !== currentProfile?.id)
+      .map((g: any) => {
+        const p = profiles.find((pr) => pr.id === g.profileId);
+        return { profileId: g.profileId, name: p?.name || g.displayName || g.customName || '?', avatar: p?.avatar };
+      });
+  }, [event, profiles, currentProfile?.id]);
+
+  const filteredMentions = useMemo(() => {
+    if (mentionQuery === null) return [];
+    const q = mentionQuery.toLowerCase();
+    return mentionMembers.filter((m) => m.name.toLowerCase().includes(q)).slice(0, 6);
+  }, [mentionQuery, mentionMembers]);
 
   // Double-tap tracking: map of messageId -> last tap timestamp
   const lastTapRef = useRef<Map<string, number>>(new Map());
@@ -524,13 +555,18 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = tr
     [messages]
   );
 
-  // Auto-scroll to bottom on new messages (scoped to chat container only)
+  // Auto-scroll to bottom on new messages — use scrollTop on the container
+  // rather than scrollIntoView which can conflict with nested scroll contexts.
+  const scrollToBottom = useCallback((smooth = true) => {
+    const el = messagesRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+  }, []);
+
   useEffect(() => {
-    const container = messagesContainerRef.current;
-    if (container) {
-      container.scrollTop = container.scrollHeight;
-    }
-  }, [visibleMessages.length]);
+    // Instant scroll on mount, smooth on subsequent messages
+    scrollToBottom(visibleMessages.length > 0);
+  }, [visibleMessages.length, scrollToBottom]);
 
   // Close reaction picker on outside tap
   useEffect(() => {
@@ -539,6 +575,37 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = tr
     const t = setTimeout(() => document.addEventListener('click', close, { once: true }), 0);
     return () => { clearTimeout(t); document.removeEventListener('click', close); };
   }, [activeReactionId]);
+
+  // Focus handler: scroll composer into view after iOS keyboard finishes animating.
+  // Uses visualViewport resize event to detect when the keyboard is settled,
+  // with fallback timeouts for browsers without visualViewport support.
+  const handleComposerFocus = useCallback(() => {
+    const scrollIt = () => {
+      inputRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    };
+
+    const vv = window.visualViewport;
+    if (vv) {
+      // Wait for the viewport to finish resizing (keyboard animation complete)
+      let settled: ReturnType<typeof setTimeout>;
+      const onResize = () => {
+        clearTimeout(settled);
+        settled = setTimeout(() => {
+          vv.removeEventListener('resize', onResize);
+          scrollIt();
+        }, 120);
+      };
+      vv.addEventListener('resize', onResize);
+      // Safety: clean up after 2s if no resize event fires
+      setTimeout(() => {
+        vv.removeEventListener('resize', onResize);
+      }, 2000);
+    }
+
+    // Fallback: staggered scroll attempts for devices without visualViewport
+    setTimeout(scrollIt, 300);
+    setTimeout(scrollIt, 600);
+  }, []);
 
   // "Group chat only" mode
   if (!event) {
@@ -559,12 +626,30 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = tr
   const handleSend = async () => {
     const trimmed = text.trim();
     if (!trimmed) return;
-    await send(trimmed, replyTo ? { replyTo: replyTo.id } : undefined);
+
+    const mentionedIds = mentionMembers
+      .filter((m) => trimmed.includes(`@${m.name}`))
+      .map((m) => m.profileId);
+
+    inputRef.current?.blur();
+    await send(trimmed, {
+      ...(replyTo ? { replyTo: replyTo.id } : {}),
+      ...(mentionedIds.length ? { mentions: mentionedIds } : {}),
+    });
     setText('');
     setReplyTo(null);
+    setMentionQuery(null);
+    setMentionStartIdx(-1);
+    setTimeout(() => scrollToBottom(), 300);
   };
 
   const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Escape' && mentionQuery !== null) {
+      e.preventDefault();
+      setMentionQuery(null);
+      setMentionStartIdx(-1);
+      return;
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSend();
@@ -572,8 +657,35 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = tr
   };
 
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setText(e.target.value);
+    const val = e.target.value;
+    setText(val);
     reportTyping();
+
+    const cursor = e.target.selectionStart ?? val.length;
+    const before = val.slice(0, cursor);
+    const atMatch = before.match(/@([^\s@]*)$/);
+    if (atMatch) {
+      setMentionQuery(atMatch[1]);
+      setMentionStartIdx(before.length - atMatch[0].length);
+    } else {
+      setMentionQuery(null);
+      setMentionStartIdx(-1);
+    }
+  };
+
+  const handleMentionSelect = (member: MentionMember) => {
+    const before = text.slice(0, mentionStartIdx);
+    const afterCursor = inputRef.current?.selectionStart ?? text.length;
+    const after = text.slice(afterCursor);
+    const inserted = `@${member.name} `;
+    setText(before + inserted + after);
+    setMentionQuery(null);
+    setMentionStartIdx(-1);
+    inputRef.current?.focus();
+    requestAnimationFrame(() => {
+      const newPos = before.length + inserted.length;
+      inputRef.current?.setSelectionRange(newPos, newPos);
+    });
   };
 
   const handlePollSubmit = (question: string, options: string[]) => {
@@ -593,18 +705,80 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = tr
   };
 
   return (
-    <div
-      className="flex flex-col h-full min-h-0 bg-slate-50 dark:bg-slate-900 rounded-t-xl overflow-hidden -mx-4 event-page-container"
-      style={keyboardHeight > 0 ? { paddingBottom: keyboardHeight } : undefined}
-    >
-      {/* Messages Area */}
-      <div
-        ref={messagesContainerRef}
-        className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-1 scroll-smooth"
-      >
+    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900 pb-[var(--footer-total-height)]">
+      {/* Messages - scrollable area, fills available space above composer */}
+      {/* Pinned active event banners — group hubs only (Phase 3C) */}
+      {isGroupHub && !hidePinnedBanners && visibleBanners.length > 0 && (
+        <div className="flex-shrink-0 px-3 pt-2 space-y-1.5">
+          {visibleBanners.map((evt: any) => {
+            const playerCount = evt.golfers?.length || 0;
+            const hasScores = (evt.scorecards || []).some((sc: any) =>
+              (sc.scores || []).some((s: any) => s?.strokes != null)
+            );
+            return (
+              <div
+                key={evt.id}
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition-colors ${
+                  hasScores
+                    ? 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                    : 'bg-primary-50 dark:bg-primary-900/20 border-primary-200 dark:border-primary-800'
+                }`}
+              >
+                {hasScores && (
+                  <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse flex-shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-bold text-gray-900 dark:text-white truncate">
+                    {evt.name || 'Event'}
+                  </div>
+                  <div className="text-[10px] text-gray-500 dark:text-gray-400">
+                    {playerCount} player{playerCount !== 1 ? 's' : ''}
+                    {hasScores ? ' · In Progress' : ''}
+                  </div>
+                </div>
+                <button
+                  onClick={() => navigate(`/event/${evt.id}`)}
+                  className={`px-2.5 py-1 text-[10px] font-bold rounded-lg flex-shrink-0 transition-colors ${
+                    hasScores
+                      ? 'bg-red-500 hover:bg-red-600 text-white'
+                      : 'bg-primary-600 hover:bg-primary-700 text-white'
+                  }`}
+                >
+                  Open
+                </button>
+                <button
+                  onClick={() => setDismissedBannerIds((prev) => new Set(prev).add(evt.id))}
+                  className="p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 flex-shrink-0"
+                  aria-label="Dismiss"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div ref={messagesRef} className="flex-1 min-h-0 overflow-y-auto">
+        <div className="flex flex-col justify-end min-h-full px-3 py-3 space-y-1">
+        {/* Group chat banner — shown when viewing from a child event */}
+        {isGroupChat && parentGroupName && (
+          <div className="flex items-center justify-center gap-2 py-2 px-3 mb-2">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-50 dark:bg-primary-900/20 rounded-full border border-primary-200/60 dark:border-primary-800">
+              <svg className="w-3.5 h-3.5 text-primary-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+              <span className="text-xs font-semibold text-primary-700 dark:text-primary-400">
+                Group Chat — {parentGroupName}
+              </span>
+            </div>
+          </div>
+        )}
         {/* Empty state */}
         {visibleMessages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-center px-4">
+          <div className="flex flex-col items-center justify-center flex-1 text-center px-4">
             <div className="text-5xl mb-3">⛳</div>
             <div className="font-bold text-gray-700 dark:text-gray-300 text-base mb-1">The fairway is clear</div>
             <p className="text-sm text-gray-500 dark:text-gray-400 max-w-[250px]">
@@ -727,9 +901,11 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = tr
                       </div>
                     )}
 
-                    {/* Regular text */}
+                    {/* Regular text (with @mention highlighting) */}
                     {!isPoll && !isInvite && (
-                      <div className="whitespace-pre-wrap break-words">{m.text}</div>
+                      <div className="whitespace-pre-wrap break-words">
+                        {renderTextWithMentions(m.text, m.mentions, profilesById, mine)}
+                      </div>
                     )}
 
                     <div className={`text-[10px] mt-1 ${mine ? 'text-primary-200' : 'text-gray-400 dark:text-gray-500'}`}>
@@ -785,84 +961,64 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = tr
         )}
 
         <div ref={bottomRef} />
+        </div>
       </div>
 
-      {/* Poll Creator */}
-      {showPollCreator && (
-        <PollCreator
-          onSubmit={handlePollSubmit}
-          onCancel={() => setShowPollCreator(false)}
-        />
-      )}
-
-      {/* Reply Preview Bar */}
-      {replyTo && (
-        <div className="flex items-center gap-2 px-4 py-2 bg-primary-50 dark:bg-primary-900/30 border-t border-primary-200 dark:border-primary-800">
-          <div className="w-1 h-8 bg-primary-500 rounded-full flex-shrink-0" />
-          <div className="flex-1 min-w-0">
-            <div className="text-[11px] font-semibold text-primary-700 dark:text-primary-400">
-              Replying to {profilesById.get(replyTo.profileId)?.name || replyTo.senderName || 'Unknown'}
+      {/* ================================================================
+          Composer — Gemini-inspired chat box card.
+          Input card is the hero, action icons below in a compact row.
+          CSS :has(.chat-composer-input:focus) hides the footer.
+          ================================================================ */}
+      <div ref={composerRef} className="flex-shrink-0 px-3 pb-0 pt-1">
+        {/* Reply Preview — slim bar above the card */}
+        {replyTo && (
+          <div className="flex items-center gap-2 px-3 py-1.5 mb-1.5 bg-primary-50 dark:bg-primary-900/30 rounded-xl border border-primary-200/60 dark:border-primary-800">
+            <div className="w-0.5 h-6 bg-primary-500 rounded-full flex-shrink-0" />
+            <div className="flex-1 min-w-0">
+              <span className="text-[11px] font-semibold text-primary-700 dark:text-primary-400">
+                {profilesById.get(replyTo.profileId)?.name || replyTo.senderName || 'Unknown'}
+              </span>
+              <span className="text-[11px] text-gray-500 dark:text-gray-400 ml-1.5 truncate">{replyTo.text.slice(0, 60)}</span>
             </div>
-            <div className="text-[12px] text-gray-600 dark:text-gray-400 truncate">{replyTo.text}</div>
-          </div>
-          <button
-            onClick={() => setReplyTo(null)}
-            className="text-gray-400 hover:text-gray-600 p-1 flex-shrink-0"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        </div>
-      )}
-
-      {/* Input Area */}
-      <div className="border-t border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 flex-shrink-0">
-        {/* Quick Actions Row */}
-        <div className="flex items-center justify-between px-2 pt-1.5">
-          <div className="flex gap-1">
-            {/* Toggle quick actions */}
-            <button
-              onClick={() => setShowQuickActions(!showQuickActions)}
-              className={`p-1.5 rounded-full transition-colors ${showQuickActions ? 'bg-primary-100 text-primary-600' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            <button onClick={() => setReplyTo(null)} className="text-gray-400 hover:text-gray-600 p-0.5">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           </div>
-          <div className="flex items-center gap-2">
-            {/* Mute notifications toggle - bell icon */}
-            <button
-              onClick={() => {
-                if (muted) toggleMute('unmute');
-                else setShowMuteMenu(!showMuteMenu);
-              }}
-              className={`p-1.5 rounded-full transition-colors ${muted ? 'text-red-400' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
-              title={muted ? 'Unmute notifications' : 'Mute notifications'}
-            >
-              {muted ? (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4l16 16" />
-                </svg>
-              ) : (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
-              )}
-            </button>
-            {text.length > 1500 && (
-              <span className={`text-[10px] font-medium ${text.length > 1900 ? 'text-red-500' : 'text-gray-400'}`}>
-                {text.length}/2000
-              </span>
-            )}
-          </div>
-        </div>
+        )}
 
-        {/* Mute dropdown */}
+        {/* Poll Creator — above the input card */}
+        {showPollCreator && (
+          <div className="mb-2">
+            <PollCreator
+              onSubmit={handlePollSubmit}
+              onCancel={() => setShowPollCreator(false)}
+            />
+          </div>
+        )}
+
+        {/* Expandable panels — slide up above input card */}
+        {showEmojiPicker && (
+          <div className="mb-2 rounded-2xl overflow-hidden border border-gray-200 dark:border-slate-700">
+            <EmojiPicker
+              onSelect={(emoji) => { setText(prev => prev + emoji); inputRef.current?.focus(); }}
+              onClose={() => setShowEmojiPicker(false)}
+            />
+          </div>
+        )}
+        {showStickers && (
+          <div className="mb-2 rounded-2xl overflow-hidden border border-gray-200 dark:border-slate-700">
+            <GolfStickers
+              onSend={(stickerText) => { send(stickerText); }}
+              onClose={() => setShowStickers(false)}
+            />
+          </div>
+        )}
+
+        {/* Mute dropdown — above input card */}
         {showMuteMenu && (
-          <div className="mx-3 mb-1 bg-gray-50 dark:bg-slate-700 rounded-lg border border-gray-200 dark:border-slate-600 overflow-hidden">
+          <div className="mb-2 bg-white dark:bg-slate-700 rounded-xl border border-gray-200 dark:border-slate-600 overflow-hidden">
             {(['1h', '8h', '24h', 'forever'] as const).map(dur => (
               <button
                 key={dur}
@@ -875,62 +1031,143 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = tr
           </div>
         )}
 
-        {/* Expandable quick actions */}
-        {showQuickActions && (
-          <QuickActions
-            onShareCode={() => { shareJoinCode(); setShowQuickActions(false); }}
-            onCreatePoll={() => { setShowPollCreator(true); setShowQuickActions(false); }}
-            onShowEmoji={() => { setShowEmojiPicker(true); setShowQuickActions(false); setShowStickers(false); }}
-            onShowStickers={() => { setShowStickers(true); setShowQuickActions(false); setShowEmojiPicker(false); }}
-            hasShareCode={hasShareCode}
-          />
+        {/* ---- @Mention Suggestions ---- */}
+        {mentionQuery !== null && filteredMentions.length > 0 && (
+          <div className="mb-1.5 bg-white dark:bg-slate-800 rounded-xl border border-gray-200 dark:border-slate-700 shadow-lg overflow-hidden">
+            {filteredMentions.map((m) => (
+              <button
+                key={m.profileId}
+                onClick={() => handleMentionSelect(m)}
+                className="w-full flex items-center gap-2.5 px-3 py-2 hover:bg-primary-50 dark:hover:bg-primary-900/20 active:bg-primary-100 transition-colors text-left"
+              >
+                <div className="w-7 h-7 rounded-full flex-shrink-0 overflow-hidden">
+                  {m.avatar ? (
+                    <img src={m.avatar} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-br from-purple-400 to-purple-600 text-white text-[10px] font-bold flex items-center justify-center">
+                      {m.name.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+                <span className="text-sm font-medium text-gray-900 dark:text-white truncate">{m.name}</span>
+              </button>
+            ))}
+          </div>
         )}
 
-        {/* Emoji Picker */}
-        {showEmojiPicker && (
-          <EmojiPicker
-            onSelect={(emoji) => {
-              setText(prev => prev + emoji);
-              inputRef.current?.focus();
-            }}
-            onClose={() => setShowEmojiPicker(false)}
-          />
-        )}
+        {/* ---- The Chat Box Card (Gemini-style) ---- */}
+        <div className="bg-white dark:bg-slate-800 rounded-t-2xl rounded-b-lg border border-gray-200/80 dark:border-slate-700 shadow-sm overflow-hidden">
+          {/* Input row — hero element */}
+          <div className="flex items-end gap-2 px-3 py-2">
+            <textarea
+              ref={inputRef}
+              value={text}
+              onChange={handleTextChange}
+              onKeyDown={handleKey}
+              onFocus={handleComposerFocus}
+              placeholder={currentProfile ? 'Message...' : 'Create a profile to chat'}
+              disabled={!currentProfile}
+              rows={1}
+              className="chat-composer-input flex-1 resize-none bg-transparent text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 disabled:opacity-50 outline-none py-1"
+              style={{ minHeight: '28px', maxHeight: '100px' }}
+            />
+            {text.trim() && (
+              <button
+                onMouseDown={(e) => { e.preventDefault(); handleSend(); }}
+                onTouchEnd={(e) => { e.preventDefault(); handleSend(); }}
+                disabled={!currentProfile}
+                className="bg-primary-600 hover:bg-primary-700 text-white p-1.5 rounded-xl flex-shrink-0 flex items-center justify-center transition-colors"
+                aria-label="Send message"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                </svg>
+              </button>
+            )}
+          </div>
 
-        {/* Golf Stickers */}
-        {showStickers && (
-          <GolfStickers
-            onSend={(stickerText) => { send(stickerText); }}
-            onClose={() => setShowStickers(false)}
-          />
-        )}
+          {/* Action bar — compact icons below input */}
+          <div className="flex items-center justify-between px-2 py-1.5 border-t border-gray-100 dark:border-slate-700/60">
+            <div className="flex items-center gap-0.5">
+              {/* + More actions */}
+              <button
+                onClick={() => { setShowQuickActions(!showQuickActions); setShowEmojiPicker(false); setShowStickers(false); }}
+                className={`p-1.5 rounded-lg transition-colors ${showQuickActions ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-600' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'}`}
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={showQuickActions ? "M6 18L18 6M6 6l12 12" : "M12 6v6m0 0v6m0-6h6m-6 0H6"} />
+                </svg>
+              </button>
+              {/* Emoji */}
+              <button
+                onClick={() => { setShowEmojiPicker(!showEmojiPicker); setShowStickers(false); setShowQuickActions(false); }}
+                className={`p-1.5 rounded-lg transition-colors text-lg leading-none ${showEmojiPicker ? 'bg-amber-50 dark:bg-amber-900/20' : 'hover:bg-gray-100 dark:hover:bg-slate-700'}`}
+              >
+                😀
+              </button>
+              {/* Stickers */}
+              <button
+                onClick={() => { setShowStickers(!showStickers); setShowEmojiPicker(false); setShowQuickActions(false); }}
+                className={`p-1.5 rounded-lg transition-colors text-lg leading-none ${showStickers ? 'bg-green-50 dark:bg-green-900/20' : 'hover:bg-gray-100 dark:hover:bg-slate-700'}`}
+              >
+                🏌️
+              </button>
+            </div>
 
-        {/* Text input + send */}
-        <div className="flex items-end gap-2 px-3 pb-2 pt-1">
-          <textarea
-            ref={inputRef}
-            value={text}
-            onChange={handleTextChange}
-            onKeyDown={handleKey}
-            onFocus={handleFocus}
-            onBlur={handleBlur}
-            placeholder={currentProfile ? 'Message...' : 'Create a profile to chat'}
-            disabled={!currentProfile}
-            rows={1}
-            className="flex-1 resize-none rounded-xl border border-gray-300 dark:border-slate-600 focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 px-3 py-2.5 text-sm bg-white dark:bg-slate-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 disabled:opacity-50"
-            style={{ minHeight: '40px', maxHeight: '100px' }}
-          />
-          <button
-            onClick={handleSend}
-            disabled={!text.trim() || !currentProfile}
-            className="bg-primary-600 hover:bg-primary-700 disabled:opacity-40 disabled:hover:bg-primary-600 text-white p-2.5 rounded-xl shadow-sm flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center transition-colors"
-            aria-label="Send message"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
-            </svg>
-          </button>
+            <div className="flex items-center gap-1">
+              {text.length > 1500 && (
+                <span className={`text-[10px] font-medium ${text.length > 1900 ? 'text-red-500' : 'text-gray-400'}`}>
+                  {text.length}/2000
+                </span>
+              )}
+              {/* Mute */}
+              <button
+                onClick={() => { if (muted) toggleMute('unmute'); else setShowMuteMenu(!showMuteMenu); }}
+                className={`p-1.5 rounded-lg transition-colors ${muted ? 'text-red-400' : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-slate-700'}`}
+                title={muted ? 'Unmute' : 'Mute'}
+              >
+                {muted ? (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M4 4l16 16" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                  </svg>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
+
+        {/* Quick actions — expand below card when + is tapped */}
+        {showQuickActions && (
+          <div className="flex flex-wrap gap-2 px-1 pt-2">
+            {isGroupHub && onCreateEvent && (
+              <button
+                onClick={() => { onCreateEvent(); setShowQuickActions(false); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-full text-xs font-semibold text-green-700 dark:text-green-400 transition-colors"
+              >
+                ⛳ Schedule Event
+              </button>
+            )}
+            <button
+              onClick={() => { setShowPollCreator(true); setShowQuickActions(false); }}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-700 rounded-full text-xs font-semibold text-primary-700 dark:text-primary-400 transition-colors"
+            >
+              📊 Poll
+            </button>
+            {hasShareCode && (
+              <button
+                onClick={() => { shareJoinCode(); setShowQuickActions(false); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700 rounded-full text-xs font-semibold text-orange-700 dark:text-orange-400 transition-colors"
+              >
+                🎫 Share Code
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

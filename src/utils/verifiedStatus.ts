@@ -7,6 +7,26 @@
 
 import { STATUS_TIERS, StatusTier, VerifiedStatus, Event, GolferProfile } from '../state/types';
 
+const EARNABLE_STATUS_TIERS = STATUS_TIERS.filter(t => !t.isManualOnly);
+const FOUNDER_TIER_LEVEL = 5;
+
+/**
+ * Manual founder assignments by Cognito user ID.
+ * These accounts always resolve to Founder tier in UI.
+ */
+const FOUNDER_USER_IDS = new Set<string>([
+  '24385478-1001-7004-3901-76637abafc12',
+  'e42844b8-70b1-70b7-c400-dec832f98821'
+]);
+
+/**
+ * Optional fallback by email to handle legacy profile records.
+ */
+const FOUNDER_EMAILS = new Set<string>([
+  'victory7500@hotmail.com',
+  'jwhallstrom@gmail.com'
+]);
+
 // ============================================================================
 // Status Calculation
 // ============================================================================
@@ -16,12 +36,12 @@ import { STATUS_TIERS, StatusTier, VerifiedStatus, Event, GolferProfile } from '
  */
 export function getStatusTier(verifiedRounds: number): StatusTier {
   // Find the highest tier the user qualifies for
-  for (let i = STATUS_TIERS.length - 1; i >= 0; i--) {
-    if (verifiedRounds >= STATUS_TIERS[i].minRounds) {
-      return STATUS_TIERS[i];
+  for (let i = EARNABLE_STATUS_TIERS.length - 1; i >= 0; i--) {
+    if (verifiedRounds >= EARNABLE_STATUS_TIERS[i].minRounds) {
+      return EARNABLE_STATUS_TIERS[i];
     }
   }
-  return STATUS_TIERS[0]; // Default to Bogey Beginner
+  return EARNABLE_STATUS_TIERS[0];
 }
 
 /**
@@ -29,6 +49,45 @@ export function getStatusTier(verifiedRounds: number): StatusTier {
  */
 export function getStatusTierByLevel(level: number): StatusTier {
   return STATUS_TIERS[level] || STATUS_TIERS[0];
+}
+
+/**
+ * True when a profile belongs to a manually designated founder account.
+ */
+export function isFounderProfile(profile: GolferProfile | undefined): boolean {
+  if (!profile) return false;
+
+  if (profile.userId && FOUNDER_USER_IDS.has(profile.userId)) {
+    return true;
+  }
+
+  const email = profile.email?.trim().toLowerCase();
+  return !!email && FOUNDER_EMAILS.has(email);
+}
+
+/**
+ * Returns verified status with manual founder overrides applied.
+ */
+export function getEffectiveVerifiedStatus(profile: GolferProfile | undefined): VerifiedStatus {
+  const base = profile?.verifiedStatus || {
+    verifiedRounds: 0,
+    statusLevel: 0,
+    badges: []
+  };
+
+  if (!isFounderProfile(profile)) {
+    return base;
+  }
+
+  const badges = base.badges.includes('founder')
+    ? base.badges
+    : [...base.badges, 'founder'];
+
+  return {
+    ...base,
+    statusLevel: FOUNDER_TIER_LEVEL,
+    badges
+  };
 }
 
 /**
@@ -41,9 +100,10 @@ export function getProgressToNextTier(verifiedRounds: number): {
   progressPercent: number;
 } {
   const currentTier = getStatusTier(verifiedRounds);
-  const nextTierIndex = currentTier.level + 1;
+  const currentEarnableTierIndex = EARNABLE_STATUS_TIERS.findIndex((t) => t.level === currentTier.level);
+  const nextTierIndex = currentEarnableTierIndex + 1;
   
-  if (nextTierIndex >= STATUS_TIERS.length) {
+  if (nextTierIndex >= EARNABLE_STATUS_TIERS.length) {
     // Already at max level
     return {
       currentTier,
@@ -53,7 +113,7 @@ export function getProgressToNextTier(verifiedRounds: number): {
     };
   }
   
-  const nextTier = STATUS_TIERS[nextTierIndex];
+  const nextTier = EARNABLE_STATUS_TIERS[nextTierIndex];
   const roundsToNext = nextTier.minRounds - verifiedRounds;
   const tierRange = nextTier.minRounds - currentTier.minRounds;
   const progressInTier = verifiedRounds - currentTier.minRounds;
@@ -215,7 +275,7 @@ export function getStatusDisplay(profile: GolferProfile | undefined): {
   isHandicapVerified: boolean;
   label: string;
 } {
-  const status = profile?.verifiedStatus || { verifiedRounds: 0, statusLevel: 0, badges: [] };
+  const status = getEffectiveVerifiedStatus(profile);
   const tier = getStatusTierByLevel(status.statusLevel);
   
   return {
@@ -254,6 +314,7 @@ export function getBadgeInfo(badgeId: string): { name: string; emoji: string; de
     platinum_contender: { name: 'Platinum Contender', emoji: '💎', description: 'Reached Established Level' },
     elite_member: { name: 'Elite Member', emoji: '🦅', description: 'Reached Elite Level' },
     gold_jacket: { name: 'Gold Jacket', emoji: '🧥', description: 'Achieved Hall of Fame status' },
+    founder: { name: 'Founder', emoji: '\u{1F451}', description: 'Reserved platform architect status' },
     milestone_10: { name: '10 Rounds', emoji: '🔟', description: '10 verified rounds played' },
     milestone_25: { name: '25 Rounds', emoji: '🎯', description: '25 verified rounds played' },
     milestone_50: { name: '50 Rounds', emoji: '🌟', description: '50 verified rounds played' },
@@ -263,3 +324,4 @@ export function getBadgeInfo(badgeId: string): { name: string; emoji: string; de
   
   return badges[badgeId] || { name: badgeId, emoji: '🏷️', description: 'Achievement unlocked' };
 }
+

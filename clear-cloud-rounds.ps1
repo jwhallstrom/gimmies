@@ -1,65 +1,104 @@
-# PowerShell script to clear all IndividualRound and CompletedRound data from cloud
-# Run this to start fresh after implementing duplicate prevention
+# Clear IndividualRound and CompletedRound data from the active Amplify backend.
+# Profiles, events, and chat are preserved.
+
+param(
+    [switch]$Force
+)
+
+$ErrorActionPreference = 'Stop'
+
+function Get-ActiveApiId {
+    $outputsPath = Join-Path $PSScriptRoot 'amplify_outputs.json'
+    if (-not (Test-Path $outputsPath)) {
+        throw "amplify_outputs.json not found at $outputsPath"
+    }
+
+    $outputs = Get-Content $outputsPath -Raw | ConvertFrom-Json
+    $graphqlUrl = [string]$outputs.data.url
+    if (-not $graphqlUrl) {
+        throw 'Could not read data.url from amplify_outputs.json'
+    }
+
+    $apisJson = (aws appsync list-graphql-apis --region us-east-1 --output json) | Out-String
+    $apis = (ConvertFrom-Json $apisJson).graphqlApis
+    $matchingApi = $apis | Where-Object { $_.uris.GRAPHQL -eq $graphqlUrl } | Select-Object -First 1
+
+    if ($matchingApi) {
+        return [string]$matchingApi.apiId
+    }
+
+    throw "Could not resolve AppSync API id from URL: $graphqlUrl"
+}
+
+function Get-TableName([string]$modelName, [string]$apiId) {
+    return "$modelName-$apiId-NONE"
+}
+
+function Get-Items([string]$tableName) {
+    $response = (aws dynamodb scan --table-name $tableName --projection-expression "id" --output json) | Out-String
+    return (ConvertFrom-Json $response).Items
+}
+
+function Remove-Items([string]$tableName, [object[]]$items, [string]$label) {
+    $count = @($items).Count
+    Write-Host "Deleting $label from $tableName..." -ForegroundColor Yellow
+
+    foreach ($item in @($items)) {
+        $id = $item.id.S
+        Write-Host "  Deleting ${label}: $id" -ForegroundColor DarkGray
+        $keyJson = @{ id = @{ S = $id } } | ConvertTo-Json -Compress
+        $tmpKeyPath = Join-Path ([System.IO.Path]::GetTempPath()) ("gimmies-ddb-key-" + [System.Guid]::NewGuid().ToString() + ".json")
+        try {
+            Set-Content -Path $tmpKeyPath -Value $keyJson -Encoding ascii
+            aws dynamodb delete-item --table-name $tableName --key ("file://" + $tmpKeyPath) | Out-Null
+        } finally {
+            if (Test-Path $tmpKeyPath) {
+                Remove-Item $tmpKeyPath -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+
+    Write-Host "Deleted $count $label record(s)." -ForegroundColor Green
+    return $count
+}
+
+$apiId = Get-ActiveApiId
 
 Write-Host ""
 Write-Host "=== Gimmies Golf - Clear Cloud Rounds ===" -ForegroundColor Cyan
+Write-Host "Active backend API id: $apiId" -ForegroundColor Gray
 Write-Host "This will DELETE all IndividualRounds and CompletedRounds from cloud." -ForegroundColor Yellow
-Write-Host "Events, Profiles, and other data will NOT be affected." -ForegroundColor Yellow
+Write-Host "Events, Profiles, and ChatMessages will NOT be affected." -ForegroundColor Yellow
 Write-Host ""
 
-$confirm = Read-Host "Are you sure you want to continue? (yes/no)"
-if ($confirm -ne "yes") {
-    Write-Host ""
-    Write-Host "Operation cancelled." -ForegroundColor Red
-    exit
-}
-
-Write-Host ""
-Write-Host "--- Step 1: Scanning IndividualRound table ---" -ForegroundColor Green
-$individualRounds = aws dynamodb scan --table-name IndividualRound-o26pgbkew5c4fpgcps5tnf27ey-NONE --projection-expression "id,profileId,grossScore" --output json | ConvertFrom-Json
-
-$individualCount = $individualRounds.Items.Count
-Write-Host "Found $individualCount IndividualRounds" -ForegroundColor Yellow
-
-if ($individualCount -gt 0) {
-    Write-Host ""
-    Write-Host "Deleting IndividualRounds..." -ForegroundColor Yellow
-    foreach ($item in $individualRounds.Items) {
-        $id = $item.id.S
-        Write-Host "  Deleting IndividualRound: $id" -ForegroundColor Gray
-        $keyJson = '{"id": {"S": "' + $id + '"}}'
-        aws dynamodb delete-item --table-name IndividualRound-o26pgbkew5c4fpgcps5tnf27ey-NONE --key $keyJson | Out-Null
+if (-not $Force) {
+    $confirm = Read-Host "Type 'yes' to continue"
+    if ($confirm -ne 'yes') {
+        Write-Host "Operation cancelled." -ForegroundColor Red
+        exit
     }
-    Write-Host "Done! Deleted $individualCount IndividualRounds" -ForegroundColor Green
 }
 
-Write-Host ""
-Write-Host "--- Step 2: Scanning CompletedRound table ---" -ForegroundColor Green
-$completedRounds = aws dynamodb scan --table-name CompletedRound-o26pgbkew5c4fpgcps5tnf27ey-NONE --projection-expression "id,golferId" --output json | ConvertFrom-Json
+$targets = @(
+    @{ Model = 'IndividualRound'; Label = 'individual round' },
+    @{ Model = 'CompletedRound'; Label = 'completed round' }
+)
 
-$completedCount = $completedRounds.Items.Count
-Write-Host "Found $completedCount CompletedRounds" -ForegroundColor Yellow
+$summary = @()
 
-if ($completedCount -gt 0) {
-    Write-Host ""
-    Write-Host "Deleting CompletedRounds..." -ForegroundColor Yellow
-    foreach ($item in $completedRounds.Items) {
-        $id = $item.id.S
-        Write-Host "  Deleting CompletedRound: $id" -ForegroundColor Gray
-        $keyJson = '{"id": {"S": "' + $id + '"}}'
-        aws dynamodb delete-item --table-name CompletedRound-o26pgbkew5c4fpgcps5tnf27ey-NONE --key $keyJson | Out-Null
+foreach ($target in $targets) {
+    $tableName = Get-TableName $target.Model $apiId
+    $items = Get-Items $tableName
+    $deleted = Remove-Items $tableName $items $target.Label
+    $summary += [PSCustomObject]@{
+        Table = $tableName
+        Deleted = $deleted
     }
-    Write-Host "Done! Deleted $completedCount CompletedRounds" -ForegroundColor Green
+    Write-Host ""
 }
 
-Write-Host ""
 Write-Host "=== Summary ===" -ForegroundColor Cyan
-Write-Host "Deleted $individualCount IndividualRounds" -ForegroundColor Green
-Write-Host "Deleted $completedCount CompletedRounds" -ForegroundColor Green
-Write-Host ""
-Write-Host "Next steps:" -ForegroundColor Yellow
-Write-Host "  1. Clear browser cache or hard refresh (Ctrl+F5)" -ForegroundColor White
-Write-Host "  2. Complete an event to test" -ForegroundColor White
-Write-Host "  3. Check browser console for duplicate prevention logs" -ForegroundColor White
-Write-Host "  4. Verify Analytics page shows correct data" -ForegroundColor White
+$summary | ForEach-Object {
+    Write-Host "$($_.Table): deleted $($_.Deleted)" -ForegroundColor Green
+}
 Write-Host ""

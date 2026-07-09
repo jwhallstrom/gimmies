@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import useStore from '../../state/store';
 import { useAuthMode } from '../../hooks/useAuthMode';
 import { calculateEventPayouts } from '../../games/payouts';
+import { getParticipantsForConfig } from '../../games/participants';
 import { netScore } from '../../games/handicap';
 import { courseMap } from '../../data/courses';
 import { useCourses } from '../../hooks/useCourses';
@@ -87,42 +88,21 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
     const golferId = eventGolfer.profileId || eventGolfer.customName;
     if (golferId) buyinByGolfer[golferId] = 0; 
   });
-  // Nassau: each paying participant contributes its fee once — use all eligible golfers
   payouts.nassau.forEach(n => {
     const cfg = event.games.nassau.find((c: any) => c.id === n.configId);
     if (!cfg) return;
-    const group = event.groups.find((gr: any) => gr.id === cfg.groupId);
-    if (!group) return;
-    let players: string[] = group.golferIds.slice();
-    // Respect per-golfer game preference (Nassau = "all games" or "nassau only")
-    players = players.filter((gid) => {
-      const eg = event.golfers.find((g: any) => (g.profileId || g.customName || g.displayName) === gid);
-      const pref: 'all' | 'nassau' | 'skins' | 'none' = (eg?.gamePreference as any) || 'all';
-      return pref === 'all' || pref === 'nassau';
+    const players = getParticipantsForConfig(event, cfg, 'nassau', {
+      restrictToGroup: true,
+      assignedTeamsOnly: Array.isArray(cfg?.teams) && cfg.teams.length >= 2,
     });
-    const isTeam = cfg.teams && cfg.teams.length >= 2;
-    if (isTeam) {
-      const assigned = new Set<string>();
-      (cfg.teams || []).forEach((t: any) => t.golferIds.forEach((gid: string) => { if (players.includes(gid)) assigned.add(gid); }));
-      players = players.filter(p => assigned.has(p));
-    }
     if (players.length < 2) return;
     const fees = cfg.fees ?? { out: cfg.fee, in: cfg.fee, total: cfg.fee };
     const perPlayer = (fees.out || 0) + (fees.in || 0) + (fees.total || 0);
     players.forEach(pid => { buyinByGolfer[pid] += perPlayer; });
   });
-  // Skins: every eligible golfer pays each skins config fee
   const skinsConfigs: any[] = Array.isArray(event.games.skins) ? event.games.skins : (event.games.skins ? [event.games.skins] : []);
   skinsConfigs.forEach(sk => {
-    const eligible = (gid: string) => {
-      const eg = event.golfers.find((g: any) => (g.profileId || g.customName || g.displayName) === gid);
-      const pref: 'all' | 'nassau' | 'skins' | 'none' = (eg?.gamePreference as any) || 'all';
-      return pref === 'all' || pref === 'skins';
-    };
-    const skinParticipants = event.golfers
-      .map((g: any) => g.profileId || g.customName || g.displayName)
-      .filter((id: any) => !!id)
-      .filter((id: string) => eligible(id));
+    const skinParticipants = getParticipantsForConfig(event, sk, 'skins');
     skinParticipants.forEach((gid: string) => { buyinByGolfer[gid] += sk.fee; });
   });
   // Pinky: NO buy-in - players only pay if they get pinkys (penalty game)
@@ -298,7 +278,7 @@ const OverviewTab: React.FC<Props> = ({ eventId }) => {
       {/* Round Recap - Show when event has scores */}
       {event.golfers.some((g: any) => g.scores?.length > 0) && (
         <RoundRecapCard
-          recap={generateRoundRecap(event)}
+          recap={generateRoundRecap(event, profiles)}
           compact={!event.isCompleted}
         />
       )}

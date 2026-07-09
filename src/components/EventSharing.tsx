@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import useStore from '../state/store';
 import { useAuthMode } from '../hooks/useAuthMode';
+import { buildJoinInviteUrl, buildDirectEventUrl } from '../utils/inviteLinks';
 
 type Props = { eventId: string };
 
@@ -66,7 +67,10 @@ const EventSharing: React.FC<Props> = ({ eventId }) => {
     }
   };
 
-  const shareUrl = event.shareCode ? `${window.location.origin}/join/${event.shareCode}` : '';
+  const isPublic = !!event.isPublic;
+  const shareUrl = isPublic && event.id
+    ? buildDirectEventUrl(event.id)
+    : buildJoinInviteUrl(event.shareCode);
 
   return (
     <div className="space-y-6">
@@ -101,20 +105,23 @@ const EventSharing: React.FC<Props> = ({ eventId }) => {
             
             {event.shareCode && (
               <div className="bg-gray-50 p-4 rounded">
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="font-medium text-gray-800">Share Code:</span>
-                  <code className="bg-white border border-gray-400 px-3 py-1 rounded font-mono text-lg">{event.shareCode}</code>
-                  <button
-                    onClick={() => {
-                      navigator.clipboard.writeText(event.shareCode!);
-                      setMessage('Code copied to clipboard!');
-                      setTimeout(() => setMessage(''), 2000);
-                    }}
-                    className="text-primary-600 hover:text-primary-700 text-sm font-medium"
-                  >
-                    Copy
-                  </button>
-                </div>
+                {/* Hide share code for public events — they use direct links */}
+                {!event.isPublic && (
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="font-medium text-gray-800">Share Code:</span>
+                    <code className="bg-white border border-gray-400 px-3 py-1 rounded font-mono text-lg">{event.shareCode}</code>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(event.shareCode!);
+                        setMessage('Code copied to clipboard!');
+                        setTimeout(() => setMessage(''), 2000);
+                      }}
+                      className="text-primary-600 hover:text-primary-700 text-sm font-medium"
+                    >
+                      Copy
+                    </button>
+                  </div>
+                )}
                 {shareUrl && (
                   <div className="flex items-center gap-2 mb-3">
                     <span className="font-medium text-gray-800">Share Link:</span>

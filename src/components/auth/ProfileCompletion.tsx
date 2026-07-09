@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../../state/store';
 
 interface ProfileCompletionProps {
   userId: string;
   email?: string;
-  suggestedName?: string; // Full name from OAuth
+  suggestedName?: string; // Full name from OAuth or invite flow
   firstName?: string; // First name from OAuth (Google, Facebook)
   lastName?: string; // Last name from OAuth
   photoUrl?: string; // Profile photo from OAuth
+  autoSubmit?: boolean; // Auto-create profile when name is available (invite flow)
   onComplete: () => void;
 }
 
@@ -19,6 +20,7 @@ export function ProfileCompletion({
   firstName: oauthFirstName,
   lastName: oauthLastName,
   photoUrl,
+  autoSubmit,
   onComplete 
 }: ProfileCompletionProps) {
   const { createProfile } = useStore();
@@ -35,6 +37,18 @@ export function ProfileCompletion({
 
   // Check if form is pre-filled from OAuth
   const isPreFilled = Boolean(suggestedName || (oauthFirstName && oauthLastName));
+
+  // Auto-submit: when coming from the invite flow, skip the form entirely
+  const autoSubmitted = useRef(false);
+  useEffect(() => {
+    if (autoSubmit && suggestedName && !autoSubmitted.current) {
+      autoSubmitted.current = true;
+      // Trigger the form submit programmatically
+      const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
+      handleSubmit(fakeEvent);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSubmit, suggestedName]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,6 +126,18 @@ export function ProfileCompletion({
       setLoading(false);
     }
   };
+
+  // When auto-submitting from invite flow, show a simple loading screen
+  if (autoSubmit && !error) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-900 via-primary-800 to-primary-950">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white mx-auto mb-4"></div>
+          <p className="text-white/80 font-medium">Setting up your profile...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div 
