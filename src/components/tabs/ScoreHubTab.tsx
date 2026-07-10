@@ -17,22 +17,64 @@ import useStore from '../../state/store';
 import { useCourse } from '../../hooks/useCourse';
 import LeaderboardTab from './LeaderboardTab';
 import ScorecardTab from './ScorecardTab';
+import EventChatSheet from '../event/EventChatSheet';
+import EventPayoutSheet from '../event/EventPayoutSheet';
+import EventCourseStatsSheet from '../event/EventCourseStatsSheet';
+import EventHighlightsSheet from '../event/EventHighlightsSheet';
+import { useMyEventPayout } from '../../hooks/useMyEventPayout';
+import { useEventCourseStats } from '../../hooks/useEventCourseStats';
+import { generateRoundRecap } from '../../utils/roundRecap';
 
-type Props = { eventId: string; isTabActive?: boolean };
+type Props = {
+  eventId: string;
+  isTabActive?: boolean;
+  chatUnread?: number;
+  onOpenFullChat?: () => void;
+  onOpenGamesTab?: () => void;
+  onChatRead?: () => void;
+};
 
-const ScoreHubTab: React.FC<Props> = ({ eventId, isTabActive = true }) => {
+const ScoreHubTab: React.FC<Props> = ({
+  eventId,
+  isTabActive = true,
+  chatUnread = 0,
+  onOpenFullChat,
+  onOpenGamesTab,
+  onChatRead,
+}) => {
   const event = useStore((s: any) => 
     s.events.find((e: any) => e.id === eventId) || 
     s.completedEvents.find((e: any) => e.id === eventId)
   );
   const currentProfile = useStore((s: any) => s.currentProfile);
+  const profiles = useStore((s: any) => s.profiles);
   const setScorecardView = useStore((s: any) => s.setScorecardView);
   const updateScore = useStore((s: any) => s.updateScore);
   const addToast = useStore((s: any) => s.addToast);
 
   const [focusGolferId, setFocusGolferId] = useState<string | null>(null);
   const [showFabMenu, setShowFabMenu] = useState(false);
+  const [showChatSheet, setShowChatSheet] = useState(false);
+  const [showPayoutSheet, setShowPayoutSheet] = useState(false);
+  const [showStatsSheet, setShowStatsSheet] = useState(false);
+  const [showHighlightsSheet, setShowHighlightsSheet] = useState(false);
   const [entryMode, setEntryMode] = useState<'cards' | 'team'>('cards');
+  
+  const payout = useMyEventPayout(eventId);
+  const courseStats = useEventCourseStats(eventId);
+
+  const recap = useMemo(() => {
+    if (!event) return null;
+    return generateRoundRecap(event, profiles);
+  }, [event, profiles]);
+
+  const showHighlightsChip = Boolean(recap && recap.highlights.length > 0);
+
+  const highlightTeaser = useMemo(() => {
+    if (!recap?.highlights.length) return null;
+    const top = recap.highlights[0];
+    return { emoji: top.emoji, text: top.title };
+  }, [recap]);
   
   // Quick entry state
   const [quickScore, setQuickScore] = useState<number | null>(null);
@@ -171,7 +213,20 @@ const ScoreHubTab: React.FC<Props> = ({ eventId, isTabActive = true }) => {
         />
       ) : (
         <div className="relative">
-          <LeaderboardTab eventId={eventId} onEnterScores={handleEnterScores} />
+          <LeaderboardTab
+            eventId={eventId}
+            onEnterScores={handleEnterScores}
+            chatUnread={chatUnread}
+            onOpenChat={() => setShowChatSheet(true)}
+            showMoneyChip={payout.showMoneyChip}
+            myNet={payout.myNet}
+            onOpenPayouts={() => setShowPayoutSheet(true)}
+            showStatsChip={courseStats.showStatsChip}
+            onOpenStats={() => setShowStatsSheet(true)}
+            showHighlightsChip={showHighlightsChip}
+            onOpenHighlights={() => setShowHighlightsSheet(true)}
+            highlightTeaser={highlightTeaser}
+          />
 
           {/* Orange FAB - matches home page design. Only show when this tab is active to avoid covering chat. */}
           {!event.isCompleted && currentProfile && isTabActive && (
@@ -429,6 +484,51 @@ const ScoreHubTab: React.FC<Props> = ({ eventId, isTabActive = true }) => {
           )}
 
         </div>
+      )}
+
+      <EventChatSheet
+        eventId={eventId}
+        isOpen={showChatSheet}
+        onClose={() => {
+          setShowChatSheet(false);
+          onChatRead?.();
+        }}
+        onOpenFullChat={onOpenFullChat}
+        unreadCount={chatUnread}
+      />
+
+      {payout.myNet != null && (
+        <EventPayoutSheet
+          isOpen={showPayoutSheet}
+          onClose={() => setShowPayoutSheet(false)}
+          onOpenFullPayouts={onOpenGamesTab}
+          myNet={payout.myNet}
+          myBuyin={payout.myBuyin}
+          myWinnings={payout.myWinnings}
+          buyinBreakdown={payout.buyinBreakdown}
+          winningsBreakdown={payout.winningsBreakdown}
+        />
+      )}
+
+      {courseStats.event && (
+        <EventCourseStatsSheet
+          isOpen={showStatsSheet}
+          onClose={() => setShowStatsSheet(false)}
+          event={courseStats.event}
+          holes={courseStats.holes}
+          holeParByNumber={courseStats.holeParByNumber}
+          playersWithScores={courseStats.playersWithScores}
+          totalPar={courseStats.totalPar}
+        />
+      )}
+
+      {recap && recap.highlights.length > 0 && (
+        <EventHighlightsSheet
+          isOpen={showHighlightsSheet}
+          onClose={() => setShowHighlightsSheet(false)}
+          recap={recap}
+          isLive={!event.isCompleted}
+        />
       )}
     </div>
   );

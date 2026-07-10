@@ -26,18 +26,7 @@ import { CreateEventWizard } from '../components/CreateEventWizard';
 import { getCourseById } from '../data/cloudCourses';
 import { LeaderboardIcon } from '../components/icons/LeaderboardIcon';
 import { formatLocalDate } from '../utils/dateUtils';
-
-// Mark group chat as read (stores in localStorage)
-const LAST_READ_KEY = 'gimmies.chatLastRead.v1';
-function markChatAsRead(groupId: string) {
-  try {
-    const current = JSON.parse(localStorage.getItem(LAST_READ_KEY) || '{}');
-    current[groupId] = new Date().toISOString();
-    localStorage.setItem(LAST_READ_KEY, JSON.stringify(current));
-  } catch {
-    // ignore
-  }
-}
+import { getChatTargetId, getChatUnreadCount, markChatAsRead } from '../utils/chatUnread';
 
 const formatDateShort = (iso: string) =>
   formatLocalDate(iso, { month: 'short', day: 'numeric' });
@@ -53,6 +42,7 @@ const EventPage: React.FC = () => {
   const [activePageIndex, setActivePageIndex] = useState(0);
   const [joiningEventId, setJoiningEventId] = useState<string | null>(null);
   const [showCreateEvent, setShowCreateEvent] = useState(false);
+  const [chatReadVersion, setChatReadVersion] = useState(0);
 
   // First-time help modals
   const [showEventHelp, setShowEventHelp] = useState(() => {
@@ -117,6 +107,15 @@ const EventPage: React.FC = () => {
   const isGroupHub = event.hubType === 'group';
   const isOwner = Boolean(currentProfile && event.ownerProfileId === currentProfile.id);
   const courseName = event.course.courseId ? getCourseById(event.course.courseId)?.name : null;
+
+  const chatUnread = useMemo(() => {
+    if (!currentProfile || isGroupHub) return 0;
+    const chatTargetId = getChatTargetId(event);
+    const messages = event.parentGroupId
+      ? (parentGroup?.chat || [])
+      : (event.chat || []);
+    return getChatUnreadCount(messages, chatTargetId, currentProfile.id);
+  }, [currentProfile?.id, isGroupHub, event.chat, event.parentGroupId, event.id, parentGroup?.chat, chatReadVersion]);
   
   // Parent group context (Phase 4) — for child events within groups
   // Get child events for this group (both active and completed)
@@ -185,7 +184,7 @@ const EventPage: React.FC = () => {
         { id: 'scorecard', label: 'Leaderboard', icon: <LeaderboardIcon className="w-5 h-5" /> },
         { id: 'games', label: 'Games', icon: '💰' },
         { id: 'golfers', label: 'Golfers', icon: '👥', badge: stats.golferCount },
-        { id: 'chat', label: 'Chat', icon: '💬' },
+        { id: 'chat', label: 'Chat', icon: '💬', badge: chatUnread > 0 ? chatUnread : undefined },
         ...(isOwner ? [
           { id: 'alerts', label: 'Alerts', icon: '🔔', isModal: true },
           { id: 'settings', label: 'Settings', icon: '⚙️' },
@@ -227,6 +226,7 @@ const EventPage: React.FC = () => {
   // Determine if on chat page (for showing composer)
   // Chat is index 0 for groups, index 3 for events (after Leaderboard, Games, Golfers)
   const chatSwipeIndex = isGroupHub ? 0 : swipeableTabs.findIndex(t => t.id === 'chat');
+  const gamesSwipeIndex = swipeableTabs.findIndex(t => t.id === 'games');
   const isChatPage = activePageIndex === chatSwipeIndex;
   
   // Mark group chat as read when viewing chat tab.
@@ -235,11 +235,9 @@ const EventPage: React.FC = () => {
   // child events display the parent group's conversation).
   useEffect(() => {
     if (isChatPage) {
-      if (isGroupHub && event?.id) {
-        markChatAsRead(event.id);
-      } else if (event?.parentGroupId) {
-        markChatAsRead(event.parentGroupId);
-      }
+      const targetId = event.parentGroupId || event.id;
+      markChatAsRead(targetId);
+      setChatReadVersion((v) => v + 1);
     }
   }, [isGroupHub, isChatPage, event?.id, event?.parentGroupId]);
 
@@ -771,7 +769,20 @@ const EventPage: React.FC = () => {
             <div className={tab.id === 'chat' ? 'h-full' : 'px-4 py-2 pb-32'}>
               {tab.id === 'chat' && <ChatTab eventId={event.id} isActive={isChatPage} />}
               {tab.id === 'events' && <GroupEventsTab eventId={event.id} />}
-              {tab.id === 'scorecard' && <ScoreHubTab eventId={event.id} isTabActive={swipeableTabs[activePageIndex]?.id === 'scorecard'} />}
+              {tab.id === 'scorecard' && (
+                <ScoreHubTab
+                  eventId={event.id}
+                  isTabActive={swipeableTabs[activePageIndex]?.id === 'scorecard'}
+                  chatUnread={chatUnread}
+                  onOpenFullChat={() => {
+                    if (chatSwipeIndex >= 0) scrollToPage(chatSwipeIndex);
+                  }}
+                  onOpenGamesTab={() => {
+                    if (gamesSwipeIndex >= 0) scrollToPage(gamesSwipeIndex);
+                  }}
+                  onChatRead={() => setChatReadVersion((v) => v + 1)}
+                />
+              )}
               {tab.id === 'games' && <GamesTab eventId={event.id} isTabActive={swipeableTabs[activePageIndex]?.id === 'games'} autoOpenAddGame={triggerAddGame} />}
               {tab.id === 'golfers' && <GolfersTab eventId={event.id} isTabActive={swipeableTabs[activePageIndex]?.id === 'golfers'} />}
               {tab.id === 'settings' && (isOwner ? <SetupTab eventId={event.id} /> : <AccessDenied />)}

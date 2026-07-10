@@ -60,6 +60,8 @@ interface ChatTabProps {
   isActive?: boolean;
   /** When true, the pinned event banners at the top of chat are hidden (GroupPage renders its own). */
   hidePinnedBanners?: boolean;
+  /** Compact layout for bottom-sheet embedding (no footer padding). */
+  embedded?: boolean;
 }
 
 // ============================================================================
@@ -453,7 +455,7 @@ const PollCreator: React.FC<{
 // handle everything. Much simpler, more reliable on iOS PWAs.
 // ============================================================================
 
-const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = true, hidePinnedBanners = false }) => {
+const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = true, hidePinnedBanners = false, embedded = false }) => {
   const {
     event, currentProfile, messages, profilesById,
     send, toggleReaction, deleteMessage, votePoll,
@@ -705,7 +707,7 @@ const ChatTab: React.FC<ChatTabProps> = ({ eventId, onCreateEvent, isActive = tr
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900 pb-[var(--footer-total-height)]">
+    <div className={`flex flex-col h-full bg-slate-50 dark:bg-slate-900 ${embedded ? 'min-h-0' : 'pb-[var(--footer-total-height)]'}`}>
       {/* Messages - scrollable area, fills available space above composer */}
       {/* Pinned active event banners — group hubs only (Phase 3C) */}
       {isGroupHub && !hidePinnedBanners && visibleBanners.length > 0 && (
