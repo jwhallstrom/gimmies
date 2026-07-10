@@ -162,9 +162,14 @@ const App: React.FC = () => {
       currentProfile: incoming as any,
     });
 
-    setTimeout(() => {
+    setTimeout(async () => {
       try {
-        useStore.getState().recalculateAllDifferentials();
+        const { loadCoursesIntoCache } = await import('../hooks/useCourses');
+        await loadCoursesIntoCache();
+        const state = useStore.getState();
+        state.recalculateAllDifferentials();
+        const profileId = state.currentProfile?.id;
+        if (profileId) state.calculateAndUpdateHandicap(profileId);
       } catch (e) {
         console.error('Failed to recalculate handicap from cloud profile:', e);
       }

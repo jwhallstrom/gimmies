@@ -71,7 +71,11 @@ export function getTee(courseId: string | undefined, teeName: string | undefined
   if (!course) return undefined;
   if (!course.tees?.length) return undefined;
   if (teeName) {
-    const match = course.tees.find(t => t.name === teeName);
+    const normalized = teeName.trim().toLowerCase();
+    const match =
+      course.tees.find((t) => t.name === teeName) ||
+      course.tees.find((t) => t.name?.trim().toLowerCase() === normalized) ||
+      course.tees.find((t) => t.name?.toLowerCase().includes(normalized) || normalized.includes(t.name?.toLowerCase() || ''));
     if (match) return match;
   }
   return course.tees[0];

@@ -6,7 +6,7 @@
 import { useState, useEffect } from 'react';
 import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '../../amplify/data/resource';
-import { setCoursesCache } from '../data/cloudCourses';
+import { setCoursesCache, getCoursesCacheSize } from '../data/cloudCourses';
 import { courses as localCourses, courseTeesMap } from '../data/courses';
 
 function getLocalCourses(): CourseData[] {
@@ -165,6 +165,54 @@ export function useCourses() {
     loading,
     error,
     searchCourses,
-    reload: loadCourses
+    reload: loadCourses,
   };
+}
+
+/** Ensure the global course cache is populated (for handicap recalc outside React). */
+export async function loadCoursesIntoCache(): Promise<void> {
+  if (getCoursesCacheSize() > 0) return;
+
+  if (import.meta.env.VITE_ENABLE_CLOUD_SYNC !== 'true') {
+    const local = getLocalCourses();
+    setCoursesCache(local as any);
+    return;
+  }
+
+  try {
+    const client = generateClient<Schema>();
+    const all: any[] = [];
+    let nextToken: string | undefined = undefined;
+    do {
+      const result: any = await client.models.Course.list({ limit: 1000, nextToken });
+      if (Array.isArray(result?.errors) && result.errors.length > 0) {
+        throw new Error(result.errors.map((e: { message?: string }) => e?.message).filter(Boolean).join('; '));
+      }
+      all.push(...((result?.data ?? []) as any[]));
+      nextToken = result?.nextToken;
+    } while (nextToken);
+
+    const parsedCourses: CourseData[] = (all || []).map((course: any) => ({
+      id: course.id,
+      courseId: course.courseId,
+      name: course.name || '',
+      location: course.location || '',
+      tees: course.teesJson
+        ? JSON.parse(course.teesJson as string).map((tee: any) => ({
+            ...tee,
+            courseRating: tee.rating ?? tee.courseRating ?? null,
+            slopeRating: tee.slope ?? tee.slopeRating ?? null,
+          }))
+        : [],
+    }));
+
+    if (parsedCourses.length > 0) {
+      setCoursesCache(parsedCourses as any);
+      return;
+    }
+    throw new Error('No cloud courses');
+  } catch {
+    const local = getLocalCourses();
+    setCoursesCache(local as any);
+  }
 }

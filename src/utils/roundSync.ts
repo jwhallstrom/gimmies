@@ -111,9 +111,18 @@ export async function loadIndividualRoundsFromCloud(profileId: string): Promise<
       scores: cloudRound.scoresJson ? JSON.parse(cloudRound.scoresJson as string) : [],
       grossScore: cloudRound.grossScore,
       netScore: cloudRound.netScore || 0,
-      scoreDifferential: typeof cloudRound.scoreDifferential === 'number' ? cloudRound.scoreDifferential : 0,
-      courseRating: typeof cloudRound.courseRating === 'number' ? cloudRound.courseRating : 0,
-      slopeRating: typeof cloudRound.slopeRating === 'number' ? cloudRound.slopeRating : 0,
+      scoreDifferential:
+        typeof cloudRound.scoreDifferential === 'number' && !Number.isNaN(cloudRound.scoreDifferential)
+          ? cloudRound.scoreDifferential
+          : Number.NaN,
+      courseRating:
+        typeof cloudRound.courseRating === 'number' && cloudRound.courseRating > 0
+          ? cloudRound.courseRating
+          : 0,
+      slopeRating:
+        typeof cloudRound.slopeRating === 'number' && cloudRound.slopeRating > 0
+          ? cloudRound.slopeRating
+          : 0,
       courseHandicap: cloudRound.courseHandicap || 0,
       eventId: cloudRound.eventId || undefined,
       completedRoundId: cloudRound.completedRoundId || undefined, // Link to CompletedRound

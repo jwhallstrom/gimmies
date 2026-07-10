@@ -588,7 +588,7 @@ export const useStore = create<State>()(
                 r.grossScore === totalScore)
             );
             
-            if (!existingIndividualRound && event.course.courseId && holesPlayed >= 14) {
+            if (!existingIndividualRound && event.course.courseId && holesPlayed >= 9) {
               const course = getCourseById(event.course.courseId);
               let tee = course?.tees.find((t: any) => t.name === eventGolfer.teeName) 
                      || course?.tees.find((t: any) => t.name === event.course.teeName)
@@ -714,6 +714,8 @@ export const useStore = create<State>()(
           }
           setTimeout(() => {
             get().recalculateAllDifferentials();
+            const profileId = get().currentProfile?.id;
+            if (profileId) get().calculateAndUpdateHandicap(profileId);
           }, 0);
           
           // Load CompletedRounds from cloud
@@ -852,8 +854,7 @@ export const useStore = create<State>()(
               course?.tees[Math.floor((course?.tees.length || 1) / 2)] ||
               course?.tees[0];
             
-            // Require at least 14 holes for handicap tracking (WHS rule)
-            if (tee && completedRound.holesPlayed >= 14) {
+            if (tee && completedRound.holesPlayed >= 9) {
               const currentHandicap = completedRound.handicapIndex || 0;
               const { courseRating: cr, slopeRating: sl } = getTeeRatings(tee);
               const courseHandicap = Math.round(currentHandicap * (sl / 113) + (cr - tee.par));
@@ -938,6 +939,8 @@ export const useStore = create<State>()(
           setTimeout(() => {
             try {
               get().recalculateAllDifferentials();
+              const affectedIds = new Set(newIndividualRounds.map((r) => r.profileId));
+              affectedIds.forEach((id) => get().calculateAndUpdateHandicap(id));
             } catch (e) {
               console.error('Failed to recalculate handicap after completeEvent:', e);
             }

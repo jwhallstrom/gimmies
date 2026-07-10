@@ -73,7 +73,7 @@ function mapCloudProfileToSyncable(cloudProfile: any): SyncableProfile {
     lastName: cloudProfile.lastName || undefined,
     email: cloudProfile.email || undefined,
     avatar: cloudProfile.avatar || undefined,
-    handicapIndex: cloudProfile.handicapIndex || undefined,
+    handicapIndex: cloudProfile.handicapIndex ?? undefined,
     preferredTee: cloudProfile.preferredTee || undefined,
     stats: cloudProfile.statsJson ? JSON.parse(cloudProfile.statsJson as string) : {
       roundsPlayed: 0,
@@ -197,7 +197,7 @@ export async function saveCloudProfile(profile: SyncableProfile): Promise<boolea
       lastName: profile.lastName || null,
       email: profile.email || null,
       avatar: profile.avatar || null,
-      handicapIndex: profile.handicapIndex || null,
+      handicapIndex: profile.handicapIndex ?? null,
       preferredTee: profile.preferredTee || null,
       statsJson: JSON.stringify(statsJson), // Stringify for storage
       preferencesJson: JSON.stringify(preferencesJson), // Stringify for storage

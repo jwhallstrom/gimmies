@@ -26,18 +26,40 @@ export function resolveRoundRatings(round: IndividualRound): { courseRating: num
 
 /** Recompute WHS differential from hole scores when missing or stale. */
 export function recomputeRoundDifferential(round: IndividualRound): IndividualRound {
-  if (!round.scores?.length || !round.scores.some((s) => typeof s.strokes === 'number')) {
+  const hasHoleScores = Array.isArray(round.scores) && round.scores.some((s) => typeof s.strokes === 'number');
+  const hasGrossOnly = !hasHoleScores && (round.grossScore ?? 0) > 0;
+
+  if (!hasHoleScores && !hasGrossOnly) {
     return round;
   }
 
   try {
     const { courseRating, slopeRating } = resolveRoundRatings(round);
+    if (courseRating <= 0 || slopeRating <= 0) {
+      return round;
+    }
+
+    if (hasGrossOnly) {
+      const adjustedGross = round.adjustedGrossScore ?? round.grossScore;
+      const scoreDifferential = calculateScoreDifferential(adjustedGross, courseRating, slopeRating);
+      return {
+        ...round,
+        adjustedGrossScore: adjustedGross,
+        scoreDifferential,
+        courseRating,
+        slopeRating,
+      };
+    }
+
     const courseHandicap = round.courseHandicap ?? 0;
     const strokeDist = distributeHandicapStrokes(courseHandicap, round.courseId, round.teeName);
 
     let adjustedGross = 0;
+    let holesWithScores = 0;
     const updatedScores = round.scores.map((s) => {
-      const raw = s.strokes ?? 0;
+      if (typeof s.strokes !== 'number') return s;
+      holesWithScores += 1;
+      const raw = s.strokes;
       const par = s.par || 4;
       const handicapStrokes = s.handicapStrokes ?? strokeDist[s.hole] ?? 0;
       const adjustedStrokes = applyESCAdjustment(raw, par, handicapStrokes);
@@ -45,7 +67,14 @@ export function recomputeRoundDifferential(round: IndividualRound): IndividualRo
       return { ...s, handicapStrokes, adjustedStrokes, netStrokes: calculateNetScore(raw, handicapStrokes) };
     });
 
-    const scoreDifferential = calculateScoreDifferential(adjustedGross, courseRating, slopeRating);
+    // Partial rounds (9–17 holes): scale differential toward 18-hole equivalent.
+    let effectiveRating = courseRating;
+    if (holesWithScores > 0 && holesWithScores < 18) {
+      const ratingPerHole = courseRating / 18;
+      effectiveRating = ratingPerHole * holesWithScores;
+    }
+
+    const scoreDifferential = calculateScoreDifferential(adjustedGross, effectiveRating, slopeRating);
     return {
       ...round,
       scores: updatedScores,
@@ -64,12 +93,15 @@ export function isValidScoreDifferential(value: unknown): value is number {
 }
 
 export function isRoundEligibleForHandicapIndex(round: IndividualRound): boolean {
+  const hasHoleScores =
+    Array.isArray(round.scores) && round.scores.some((s) => typeof s.strokes === 'number');
+  const hasGrossOnly = !hasHoleScores && (round.grossScore ?? 0) > 0;
+  if (!hasHoleScores && !hasGrossOnly) return false;
+
   return (
     isValidScoreDifferential(round.scoreDifferential) &&
     (round.courseRating ?? 0) > 0 &&
-    (round.slopeRating ?? 0) > 0 &&
-    Array.isArray(round.scores) &&
-    round.scores.some((s) => typeof s.strokes === 'number')
+    (round.slopeRating ?? 0) > 0
   );
 }
 

@@ -12,7 +12,6 @@ import {
   calculateScoreDifferential,
   getTeeRatings,
   recomputeRoundDifferential,
-  isValidScoreDifferential,
   isRoundEligibleForHandicapIndex,
 } from '../../utils/handicap';
 import type { 
@@ -171,12 +170,9 @@ export const createHandicapSlice = (
 
     // Self-heal: dedupe + backfill missing score differentials from hole data.
     const recomputedRounds = normalizedRounds.map((round: IndividualRound) => {
-      const needsRecompute =
-        !isValidScoreDifferential(round.scoreDifferential) ||
-        round.adjustedGrossScore == null ||
-        !round.courseRating ||
-        !round.slopeRating;
-      return needsRecompute ? recomputeRoundDifferential(round) : round;
+      if (isRoundEligibleForHandicapIndex(round)) return round;
+      const fixed = recomputeRoundDifferential(round);
+      return isRoundEligibleForHandicapIndex(fixed) ? fixed : recomputeRoundDifferential(round);
     });
 
     const roundEntries = recomputedRounds
@@ -274,7 +270,7 @@ export const createHandicapSlice = (
         const course = getCourseById(completedRound.courseId!);
         const tee = course?.tees.find((t: any) => t.name === completedRound.teeName);
         
-        if (tee && completedRound.holesPlayed >= 14) {
+        if (tee && completedRound.holesPlayed >= 9) {
           const currentHandicap = completedRound.handicapIndex || 0;
           const cr1 = getTeeRatings(tee).courseRating;
           const sl1 = getTeeRatings(tee).slopeRating;
@@ -349,36 +345,13 @@ export const createHandicapSlice = (
       });
     });
     
-    // For each profile, recompute round differentials if possible
+    // For each profile, recompute round differentials (uses stored ratings + course cache fallbacks).
     const updatedProfiles = state.profiles.map((profile: GolferProfile) => {
       if (!profile.individualRounds || profile.individualRounds.length === 0) return profile;
 
       const recomputed = profile.individualRounds.map((r: IndividualRound) => {
-        try {
-          const course = getCourseById(r.courseId);
-          if (!course) return r;
-          const tee = course.tees.find(t => t.name === r.teeName);
-          if (!tee) return r;
-
-          // Distribute strokes and apply ESC
-          const strokeDist = distributeHandicapStrokes(r.courseHandicap || 0, r.courseId, r.teeName);
-          let adjustedGross = 0;
-          const updatedScores = r.scores.map(s => {
-            const raw = s.strokes || 0;
-            const par = s.par || 4;
-            const handicapStrokes = s.handicapStrokes ?? (strokeDist[s.hole] || 0);
-            const adj = applyESCAdjustment(raw, par, handicapStrokes);
-            adjustedGross += adj;
-            return { ...s, handicapStrokes, adjustedStrokes: adj };
-          });
-
-          const cr2 = getTeeRatings(tee).courseRating;
-          const sl2 = getTeeRatings(tee).slopeRating;
-          const diff = calculateScoreDifferential(adjustedGross, cr2, sl2);
-          return { ...r, scores: updatedScores, adjustedGrossScore: adjustedGross, scoreDifferential: diff };
-        } catch {
-          return r;
-        }
+        if (isRoundEligibleForHandicapIndex(r)) return r;
+        return recomputeRoundDifferential(r);
       });
 
       return { ...profile, individualRounds: recomputed };

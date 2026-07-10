@@ -2,13 +2,21 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import useStore from '../state/store';
 import { applyESCAdjustment, isRoundEligibleForHandicapIndex } from '../utils/handicap';
-import { useCourses } from '../hooks/useCourses';
+import { loadCoursesIntoCache } from '../hooks/useCourses';
 
 const HandicapPage: React.FC = () => {
-  const { currentProfile, getProfileRounds, loadEventsFromCloud, recalculateAllDifferentials } = useStore();
+  const { currentProfile, getProfileRounds, loadEventsFromCloud, recalculateAllDifferentials, calculateAndUpdateHandicap } = useStore();
   const navigate = useNavigate();
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const { loading: coursesLoading } = useCourses();
+  const [coursesReady, setCoursesReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    loadCoursesIntoCache()
+      .then(() => { if (!cancelled) setCoursesReady(true); })
+      .catch(() => { if (!cancelled) setCoursesReady(true); });
+    return () => { cancelled = true; };
+  }, []);
 
   const individualRounds = currentProfile?.individualRounds || [];
   const eligibleRounds = useMemo(
@@ -17,18 +25,20 @@ const HandicapPage: React.FC = () => {
   );
 
   useEffect(() => {
-    if (!currentProfile?.id || coursesLoading) return;
+    if (!currentProfile?.id || !coursesReady) return;
 
     let cancelled = false;
     setIsRefreshing(true);
 
     const refreshHandicap = async () => {
       try {
+        await loadCoursesIntoCache();
         if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
           await loadEventsFromCloud();
         }
         if (cancelled) return;
         recalculateAllDifferentials();
+        calculateAndUpdateHandicap(currentProfile.id);
       } finally {
         if (!cancelled) setIsRefreshing(false);
       }
@@ -36,7 +46,7 @@ const HandicapPage: React.FC = () => {
 
     void refreshHandicap();
     return () => { cancelled = true; };
-  }, [currentProfile?.id, coursesLoading, loadEventsFromCloud, recalculateAllDifferentials]);
+  }, [currentProfile?.id, coursesReady, loadEventsFromCloud, recalculateAllDifferentials, calculateAndUpdateHandicap]);
 
   if (!currentProfile) {
     return (
@@ -48,7 +58,8 @@ const HandicapPage: React.FC = () => {
 
   const rounds = getProfileRounds(currentProfile.id);
   const roundsUntilIndex = Math.max(0, 3 - eligibleRounds.length);
-  const hasCalculatedIndex = eligibleRounds.length >= 3 && currentProfile.handicapIndex != null;
+  const hasCalculatedIndex =
+    eligibleRounds.length >= 3 && typeof currentProfile.handicapIndex === 'number';
 
   const latestHistory = currentProfile.handicapHistory && currentProfile.handicapHistory.length > 0
     ? currentProfile.handicapHistory[currentProfile.handicapHistory.length - 1]
