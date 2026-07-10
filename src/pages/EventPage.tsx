@@ -36,6 +36,7 @@ const EventPage: React.FC = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [eventOverlay, setEventOverlay] = useState<null | 'games' | 'golfers' | 'settings' | 'chat'>(null);
+  const [gamesSubTab, setGamesSubTab] = useState<'games' | 'payouts'>('games');
   const [showEventsDropdown, setShowEventsDropdown] = useState(false);
   const [showCommandCenter, setShowCommandCenter] = useState(false);
   const [showPlayerGuide, setShowPlayerGuide] = useState(false);
@@ -219,7 +220,14 @@ const EventPage: React.FC = () => {
 
   const openEventPanel = useCallback((panel: 'games' | 'golfers' | 'settings' | 'chat') => {
     setShowMenu(false);
+    if (panel === 'games') setGamesSubTab('games');
     setEventOverlay(panel);
+  }, []);
+
+  const openGamesPanel = useCallback((subTab: 'games' | 'payouts' = 'games') => {
+    setGamesSubTab(subTab);
+    setShowMenu(false);
+    setEventOverlay('games');
   }, []);
 
   const goToEventSection = useCallback(
@@ -879,7 +887,7 @@ const EventPage: React.FC = () => {
               isTabActive
               chatUnread={chatUnread}
               onOpenFullChat={() => openEventPanel('chat')}
-              onOpenGamesTab={() => openEventPanel('games')}
+              onOpenGamesTab={(subTab = 'games') => openGamesPanel(subTab)}
               onChatRead={() => setChatReadVersion((v) => v + 1)}
             />
           </div>
@@ -911,13 +919,21 @@ const EventPage: React.FC = () => {
                   onOpenFullChat={() => {
                     if (chatSwipeIndex >= 0) scrollToPage(chatSwipeIndex);
                   }}
-                  onOpenGamesTab={() => {
+                  onOpenGamesTab={(subTab = 'games') => {
+                    setGamesSubTab(subTab);
                     if (gamesSwipeIndex >= 0) scrollToPage(gamesSwipeIndex);
                   }}
                   onChatRead={() => setChatReadVersion((v) => v + 1)}
                 />
               )}
-              {tab.id === 'games' && <GamesTab eventId={event.id} isTabActive={swipeableTabs[activePageIndex]?.id === 'games'} autoOpenAddGame={triggerAddGame} />}
+              {tab.id === 'games' && (
+                <GamesTab
+                  eventId={event.id}
+                  isTabActive={swipeableTabs[activePageIndex]?.id === 'games'}
+                  autoOpenAddGame={triggerAddGame}
+                  initialSubTab={gamesSubTab}
+                />
+              )}
               {tab.id === 'golfers' && <GolfersTab eventId={event.id} isTabActive={swipeableTabs[activePageIndex]?.id === 'golfers'} />}
               {tab.id === 'settings' && (isOwner ? <SetupTab eventId={event.id} /> : <AccessDenied />)}
             </div>
@@ -964,7 +980,12 @@ const EventPage: React.FC = () => {
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto">
               {eventOverlay === 'games' && (
-                <GamesTab eventId={event.id} isTabActive autoOpenAddGame={triggerAddGame} />
+                <GamesTab
+                  eventId={event.id}
+                  isTabActive
+                  autoOpenAddGame={triggerAddGame}
+                  initialSubTab={gamesSubTab}
+                />
               )}
               {eventOverlay === 'golfers' && <GolfersTab eventId={event.id} isTabActive />}
               {eventOverlay === 'chat' && (

@@ -15,7 +15,12 @@ import type { DotCategory, BingoBangoBongoHoleResult, WolfHoleResult, DotsPlayer
 import type { NassauPayoutSummary, NassauSegmentResult } from '../../games/nassau';
 import type { SkinsSummary } from '../../games/skins';
 
-type Props = { eventId: string; isTabActive?: boolean; autoOpenAddGame?: number };
+type Props = {
+  eventId: string;
+  isTabActive?: boolean;
+  autoOpenAddGame?: number;
+  initialSubTab?: 'games' | 'payouts';
+};
 
 const GAME_TYPES = [
   {
@@ -94,7 +99,7 @@ const GAME_TYPES = [
   }
 ];
 
-const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGame }) => {
+const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGame, initialSubTab = 'games' }) => {
   const navigate = useNavigate();
   const rawEvent = useStore((s: any) => 
     s.events.find((e: any) => e.id === eventId) || 
@@ -104,9 +109,13 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   const currentProfile = useStore((s: any) => s.currentProfile);
   const updateEvent = useStore((s: any) => s.updateEvent);
   
-  // Sub-tab state: 'games' for configuration, 'payouts' for standings
-  const [subTab, setSubTab] = useState<'games' | 'payouts'>('games');
-  
+  // Sub-tab state: 'games' = side-game tracking, 'payouts' = money breakdown
+  const [subTab, setSubTab] = useState<'games' | 'payouts'>(initialSubTab);
+
+  useEffect(() => {
+    setSubTab(initialSubTab);
+  }, [initialSubTab]);
+
   const [showAddGame, setShowAddGame] = useState(false);
   const [showFabMenu, setShowFabMenu] = useState(false);
 
@@ -919,29 +928,29 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   
   return (
     <div className="space-y-4">
-      {/* Sub-tabs: Games / Payouts */}
-      <div className="flex bg-slate-100 rounded-xl p-1">
+      {/* Sub-tabs: Tracking / Payouts */}
+      <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-1 border border-slate-200 dark:border-slate-700">
         <button
           onClick={() => setSubTab('games')}
-          className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-bold transition-all ${
+          className={`flex-1 py-2.5 px-4 rounded-md text-sm font-semibold transition-all ${
             subTab === 'games'
-              ? 'bg-white text-gray-900 shadow-sm'
-              : 'text-gray-600 hover:text-gray-900'
+              ? 'bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 shadow-sm'
+              : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200'
           }`}
         >
-          🎯 Games
+          🎯 Tracking
         </button>
         <button
           onClick={() => setSubTab('payouts')}
-          className={`flex-1 py-2.5 px-4 rounded-lg text-sm font-bold transition-all ${
+          className={`flex-1 py-2.5 px-4 rounded-md text-sm font-semibold transition-all ${
             subTab === 'payouts'
-              ? 'bg-white text-gray-900 shadow-sm'
-              : 'text-gray-600 hover:text-gray-900'
+              ? 'bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 shadow-sm'
+              : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-200'
           }`}
         >
           💰 Payouts
           {canPreviewPayouts && myNet !== null && (
-            <span className={`ml-2 text-xs ${myNetValue >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            <span className={`ml-2 text-xs ${myNetValue >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
               {signedCurrency(myNetValue)}
             </span>
           )}

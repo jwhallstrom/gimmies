@@ -18,7 +18,6 @@ import { useCourse } from '../../hooks/useCourse';
 import LeaderboardTab from './LeaderboardTab';
 import ScorecardTab from './ScorecardTab';
 import EventChatSheet from '../event/EventChatSheet';
-import EventPayoutSheet from '../event/EventPayoutSheet';
 import EventCourseStatsSheet from '../event/EventCourseStatsSheet';
 import EventHighlightsSheet from '../event/EventHighlightsSheet';
 import { useMyEventPayout } from '../../hooks/useMyEventPayout';
@@ -34,7 +33,7 @@ type Props = {
   isTabActive?: boolean;
   chatUnread?: number;
   onOpenFullChat?: () => void;
-  onOpenGamesTab?: () => void;
+  onOpenGamesTab?: (subTab?: 'games' | 'payouts') => void;
   onChatRead?: () => void;
 };
 
@@ -59,7 +58,6 @@ const ScoreHubTab: React.FC<Props> = ({
   const [focusGolferId, setFocusGolferId] = useState<string | null>(null);
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [showChatSheet, setShowChatSheet] = useState(false);
-  const [showPayoutSheet, setShowPayoutSheet] = useState(false);
   const [showStatsSheet, setShowStatsSheet] = useState(false);
   const [showHighlightsSheet, setShowHighlightsSheet] = useState(false);
   const [insightsExpanded, setInsightsExpanded] = useState(() => getLeaderboardInsightsExpanded());
@@ -233,7 +231,7 @@ const ScoreHubTab: React.FC<Props> = ({
             onOpenChat={() => setShowChatSheet(true)}
             showMoneyChip={payout.showMoneyChip}
             myNet={payout.myNet}
-            onOpenPayouts={() => setShowPayoutSheet(true)}
+            onOpenPayouts={() => onOpenGamesTab?.('games')}
             showStatsChip={courseStats.showStatsChip}
             onOpenStats={() => setShowStatsSheet(true)}
             showHighlightsChip={showHighlightsChip}
@@ -511,19 +509,6 @@ const ScoreHubTab: React.FC<Props> = ({
         onOpenFullChat={onOpenFullChat}
         unreadCount={chatUnread}
       />
-
-      {payout.myNet != null && (
-        <EventPayoutSheet
-          isOpen={showPayoutSheet}
-          onClose={() => setShowPayoutSheet(false)}
-          onOpenFullPayouts={onOpenGamesTab}
-          myNet={payout.myNet}
-          myBuyin={payout.myBuyin}
-          myWinnings={payout.myWinnings}
-          buyinBreakdown={payout.buyinBreakdown}
-          winningsBreakdown={payout.winningsBreakdown}
-        />
-      )}
 
       {courseStats.event && (
         <EventCourseStatsSheet

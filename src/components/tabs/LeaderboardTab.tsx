@@ -338,18 +338,18 @@ const LeaderboardTab: React.FC<Props> = ({
   };
 
   const getPositionColor = (position: number) => {
-    if (position === 1) return 'text-yellow-600 font-bold';
-    if (position === 2) return 'text-gray-500 font-semibold';
-    if (position === 3) return 'text-amber-600 font-semibold';
-    return 'text-gray-700';
+    if (position === 1) return 'text-slate-900 dark:text-slate-100 font-bold';
+    if (position === 2) return 'text-slate-700 dark:text-slate-300 font-semibold';
+    if (position === 3) return 'text-slate-600 dark:text-slate-400 font-semibold';
+    return 'text-slate-500 dark:text-slate-500';
   };
 
   // PGA/Masters convention: Red = under par, Black = even/over
   const getToParColor = (toPar: number | null) => {
-    if (toPar === null) return 'text-gray-400';
-    if (toPar < 0) return 'text-red-600'; // Under par = RED (golf standard)
-    if (toPar === 0) return 'text-gray-800'; // Even = dark/black
-    return 'text-gray-800'; // Over par = dark/black (+ sign shows it's over)
+    if (toPar === null) return 'text-gray-400 dark:text-slate-500';
+    if (toPar < 0) return 'text-red-600 dark:text-red-400';
+    if (toPar === 0) return 'text-slate-800 dark:text-slate-100';
+    return 'text-slate-800 dark:text-slate-100';
   };
 
   // Check if any golfer has handicap data (to show Gross/Net toggle)
@@ -362,21 +362,21 @@ const LeaderboardTab: React.FC<Props> = ({
 
   return (
     <div className="-mx-4 sm:mx-0">
-      <div className="bg-white sm:rounded-lg shadow-sm border-y sm:border border-slate-200 overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 sm:rounded-lg border-y sm:border border-slate-200 dark:border-slate-700 overflow-hidden">
         {/* Header bar with toggles */}
-        <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-b border-slate-200">
-          <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Leaderboard</span>
+        <div className="flex items-center justify-between px-3 py-2.5 bg-slate-800 dark:bg-slate-950 border-b border-slate-700">
+          <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Leaderboard</span>
           {hasHandicapData && (
-            <div className="flex gap-0.5 text-[11px] font-bold rounded-lg overflow-hidden border border-slate-300 bg-white">
+            <div className="flex gap-0.5 text-[11px] font-semibold rounded-md overflow-hidden border border-slate-600 bg-slate-900">
               <button
                 onClick={() => setScoreMode('gross')}
-                className={`px-3 py-1.5 transition-colors ${scoreMode === 'gross' ? 'bg-primary-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                className={`px-3 py-1.5 transition-colors ${scoreMode === 'gross' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-slate-200'}`}
               >
                 Gross
               </button>
               <button
                 onClick={() => setScoreMode('net')}
-                className={`px-3 py-1.5 transition-colors ${scoreMode === 'net' ? 'bg-primary-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
+                className={`px-3 py-1.5 transition-colors ${scoreMode === 'net' ? 'bg-white text-slate-900' : 'text-slate-400 hover:text-slate-200'}`}
               >
                 Net
               </button>
@@ -385,10 +385,10 @@ const LeaderboardTab: React.FC<Props> = ({
         </div>
 
         {hasInsightsRail && (
-          <div className="border-b border-slate-100 bg-white">
+          <div className="border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
             {insightsExpanded ? (
               <>
-                <div className="flex items-center gap-2 px-3 py-1.5 border-b border-slate-50">
+                <div className="flex items-center gap-2 px-3 py-1.5 border-b border-slate-100 dark:border-slate-800">
                   {onToggleInsights && (
                     <button
                       type="button"
@@ -408,7 +408,7 @@ const LeaderboardTab: React.FC<Props> = ({
                     <button
                       type="button"
                       onClick={onOpenChat}
-                      className="relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 hover:border-slate-300 transition-colors flex-shrink-0"
+                      className="relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex-shrink-0"
                     >
                       <span aria-hidden>💬</span>
                       <span>Chat</span>
@@ -423,7 +423,7 @@ const LeaderboardTab: React.FC<Props> = ({
                     <button
                       type="button"
                       onClick={onOpenHighlights}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100 transition-colors flex-shrink-0"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex-shrink-0"
                     >
                       <span aria-hidden>⭐</span>
                       <span>Highlights</span>
@@ -433,7 +433,7 @@ const LeaderboardTab: React.FC<Props> = ({
                     <button
                       type="button"
                       onClick={onOpenStats}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 transition-colors flex-shrink-0"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors flex-shrink-0"
                     >
                       <span aria-hidden>📊</span>
                       <span>Holes</span>
@@ -443,12 +443,12 @@ const LeaderboardTab: React.FC<Props> = ({
                     <button
                       type="button"
                       onClick={onOpenPayouts}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition-colors flex-shrink-0 ${
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold border transition-colors flex-shrink-0 ${
                         myNet > 0
-                          ? 'border-green-200 bg-green-50 text-green-800 hover:bg-green-100'
+                          ? 'border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-green-700 dark:text-green-400 hover:bg-slate-50 dark:hover:bg-slate-700'
                           : myNet < 0
-                            ? 'border-red-200 bg-red-50 text-red-800 hover:bg-red-100'
-                            : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                            ? 'border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-red-700 dark:text-red-400 hover:bg-slate-50 dark:hover:bg-slate-700'
+                            : 'border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700'
                       }`}
                     >
                       <span aria-hidden>💰</span>
@@ -462,12 +462,12 @@ const LeaderboardTab: React.FC<Props> = ({
                     onClick={onOpenHighlights}
                     className="w-full px-3 pb-2 text-left"
                   >
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50/80 border border-amber-100 text-xs text-amber-900 hover:bg-amber-100/80 transition-colors">
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
                       <span className="text-base flex-shrink-0" aria-hidden>
                         {highlightTeaser.emoji}
                       </span>
                       <span className="truncate font-medium">{highlightTeaser.text}</span>
-                      <span className="text-amber-600 flex-shrink-0 ml-auto">→</span>
+                      <span className="text-slate-400 flex-shrink-0 ml-auto">→</span>
                     </div>
                   </button>
                 )}
@@ -476,7 +476,7 @@ const LeaderboardTab: React.FC<Props> = ({
               <button
                 type="button"
                 onClick={onToggleInsights}
-                className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-slate-50 transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
                 aria-label="Expand insights"
               >
                 <svg className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -505,25 +505,25 @@ const LeaderboardTab: React.FC<Props> = ({
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 border-b border-slate-200">
+            <thead className="bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
               <tr>
-                <th className="px-3 py-3 text-left font-semibold text-slate-700 text-xs">Pos</th>
-                <th className="px-3 py-3 text-left font-semibold text-slate-700 text-xs">Player</th>
-                {hasTeams && <th className="px-3 py-3 text-left font-semibold text-slate-700 text-xs">Team</th>}
-                <th className="px-3 py-3 text-center font-semibold text-slate-700 text-xs">
+                <th className="px-3 py-2.5 text-left font-semibold text-slate-600 dark:text-slate-300 text-xs uppercase tracking-wide">Pos</th>
+                <th className="px-3 py-2.5 text-left font-semibold text-slate-600 dark:text-slate-300 text-xs uppercase tracking-wide">Player</th>
+                {hasTeams && <th className="px-3 py-2.5 text-left font-semibold text-slate-600 dark:text-slate-300 text-xs uppercase tracking-wide">Team</th>}
+                <th className="px-3 py-2.5 text-center font-semibold text-slate-600 dark:text-slate-300 text-xs uppercase tracking-wide">
                   {scoreMode === 'net' ? 'Net' : 'Score'}
                 </th>
-                <th className="px-3 py-3 text-center font-semibold text-slate-700 text-xs">Thru</th>
-                <th className="px-3 py-3 text-center font-semibold text-slate-700 text-xs">Tot</th>
+                <th className="px-3 py-2.5 text-center font-semibold text-slate-600 dark:text-slate-300 text-xs uppercase tracking-wide">Thru</th>
+                <th className="px-3 py-2.5 text-center font-semibold text-slate-600 dark:text-slate-300 text-xs uppercase tracking-wide">Tot</th>
               </tr>
             </thead>
             <tbody>
               {allPlayers.map((player, index) => (
                 <React.Fragment key={player.id}>
                   <tr 
-                    className={`border-b border-slate-100 hover:bg-slate-50 cursor-pointer transition-colors ${
-                      player.position && player.position <= 3 ? 'bg-gradient-to-r from-yellow-50 to-transparent' : ''
-                    } ${expandedPlayer === player.id ? 'bg-blue-50' : ''}`}
+                    className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors ${
+                      player.position === 1 ? 'bg-slate-50/80 dark:bg-slate-800/30' : ''
+                    } ${expandedPlayer === player.id ? 'bg-slate-100 dark:bg-slate-800/60' : ''}`}
                     onClick={() => {
                       // If we can edit and onEnterScores is available, go directly to edit mode
                       if (typeof onEnterScores === 'function' && !event.isCompleted && canEditScore?.(eventId, player.id)) {
@@ -536,19 +536,19 @@ const LeaderboardTab: React.FC<Props> = ({
                   >
                     <td className={`px-3 py-3 font-mono text-center ${getPositionColor(player.position || 0)}`}>
                       {player.position ? (
-                        <span className={`inline-flex items-center justify-center w-8 h-8 rounded-full text-sm ${
-                          player.position === 1 ? 'bg-yellow-400 text-yellow-900' :
-                          player.position === 2 ? 'bg-gray-300 text-gray-800' :
-                          player.position === 3 ? 'bg-amber-600 text-white' :
-                          'bg-slate-100 text-slate-600'
-                        } font-bold`}>
+                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-md text-sm font-bold ${
+                          player.position === 1 ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900' :
+                          player.position === 2 ? 'bg-slate-200 text-slate-800 dark:bg-slate-600 dark:text-slate-100' :
+                          player.position === 3 ? 'bg-slate-300 text-slate-800 dark:bg-slate-700 dark:text-slate-200' :
+                          'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'
+                        }`}>
                           {player.position}
                         </span>
                       ) : (
                         <span className="text-slate-400">-</span>
                       )}
                     </td>
-                    <td className="px-3 py-3 font-medium text-slate-900">
+                    <td className="px-3 py-3 font-medium text-slate-900 dark:text-slate-100">
                       <div className="flex items-center gap-2">
                         {typeof onEnterScores === 'function' ? (
                           <button
@@ -561,7 +561,7 @@ const LeaderboardTab: React.FC<Props> = ({
                               }
                             }}
                             disabled={event.isCompleted || !canEditScore?.(eventId, player.id)}
-                            className="truncate max-w-[140px] sm:max-w-none text-left font-bold text-slate-900 hover:text-primary-700 disabled:text-slate-400 disabled:cursor-not-allowed"
+                            className="truncate max-w-[140px] sm:max-w-none text-left font-semibold text-slate-900 dark:text-slate-100 hover:text-primary-600 dark:hover:text-primary-400 disabled:text-slate-400 disabled:cursor-not-allowed"
                             title={event.isCompleted ? 'Read-only' : (canEditScore?.(eventId, player.id) ? 'Enter scores' : 'You cannot edit this golfer')}
                           >
                             {player.name}
@@ -600,14 +600,14 @@ const LeaderboardTab: React.FC<Props> = ({
                         {player.holesPlayed > 0 ? formatToPar(scoreMode === 'net' ? player.netToPar : player.toPar) : '-'}
                       </span>
                     </td>
-                    <td className="px-3 py-3 text-center text-slate-600 font-medium">
+                    <td className="px-3 py-3 text-center text-slate-600 dark:text-slate-400 font-medium">
                       {player.holesPlayed >= 18 ? (
-                        <span className="text-green-600 font-bold">F</span>
+                        <span className="text-green-600 dark:text-green-400 font-semibold">F</span>
                       ) : (
                         player.holesPlayed || '-'
                       )}
                     </td>
-                    <td className="px-3 py-3 text-center text-slate-500 font-mono text-sm">
+                    <td className="px-3 py-3 text-center text-slate-500 dark:text-slate-400 font-mono text-sm">
                       {player.holesPlayed > 0 ? (scoreMode === 'net' ? player.netStrokes : player.totalStrokes) : '-'}
                     </td>
                   </tr>
@@ -661,13 +661,13 @@ const LeaderboardTab: React.FC<Props> = ({
                                   
                                   return (
                                     <div key={`score-${hole.number}`} className={`text-xs py-1 text-center font-mono rounded w-8 shrink-0 ${
-                                      strokes == null ? 'text-slate-400' :
-                                      toPar === null ? 'text-slate-700' :
-                                      toPar <= -2 ? 'text-amber-700 bg-amber-100 font-bold' :
-                                      toPar === -1 ? 'text-red-700 bg-red-100 font-semibold' :
-                                      toPar === 0 ? 'text-slate-700 bg-white' :
-                                      toPar === 1 ? 'text-blue-700 bg-blue-100 font-semibold' :
-                                      'text-blue-900 bg-blue-200 font-semibold'
+                                      strokes == null ? 'text-slate-400 dark:text-slate-500' :
+                                      toPar === null ? 'text-slate-700 dark:text-slate-200' :
+                                      toPar <= -2 ? 'text-amber-800 bg-amber-100 dark:text-amber-200 dark:bg-amber-950 font-bold' :
+                                      toPar === -1 ? 'text-red-700 bg-red-100 dark:text-red-300 dark:bg-red-950 font-semibold' :
+                                      toPar === 0 ? 'text-slate-700 bg-white dark:text-slate-200 dark:bg-slate-800' :
+                                      toPar === 1 ? 'text-blue-700 bg-blue-100 dark:text-blue-300 dark:bg-blue-950 font-semibold' :
+                                      'text-blue-900 bg-blue-200 dark:text-blue-200 dark:bg-blue-900 font-semibold'
                                     }`}>
                                       {strokes ?? '-'}
                                     </div>
@@ -722,13 +722,13 @@ const LeaderboardTab: React.FC<Props> = ({
                                   
                                   return (
                                     <div key={`score-${hole.number}`} className={`text-xs py-1 text-center font-mono rounded w-8 shrink-0 ${
-                                      strokes == null ? 'text-slate-400' :
-                                      toPar === null ? 'text-slate-700' :
-                                      toPar <= -2 ? 'text-amber-700 bg-amber-100 font-bold' :
-                                      toPar === -1 ? 'text-red-700 bg-red-100 font-semibold' :
-                                      toPar === 0 ? 'text-slate-700 bg-white' :
-                                      toPar === 1 ? 'text-blue-700 bg-blue-100 font-semibold' :
-                                      'text-blue-900 bg-blue-200 font-semibold'
+                                      strokes == null ? 'text-slate-400 dark:text-slate-500' :
+                                      toPar === null ? 'text-slate-700 dark:text-slate-200' :
+                                      toPar <= -2 ? 'text-amber-800 bg-amber-100 dark:text-amber-200 dark:bg-amber-950 font-bold' :
+                                      toPar === -1 ? 'text-red-700 bg-red-100 dark:text-red-300 dark:bg-red-950 font-semibold' :
+                                      toPar === 0 ? 'text-slate-700 bg-white dark:text-slate-200 dark:bg-slate-800' :
+                                      toPar === 1 ? 'text-blue-700 bg-blue-100 dark:text-blue-300 dark:bg-blue-950 font-semibold' :
+                                      'text-blue-900 bg-blue-200 dark:text-blue-200 dark:bg-blue-900 font-semibold'
                                     }`}>
                                       {strokes ?? '-'}
                                     </div>

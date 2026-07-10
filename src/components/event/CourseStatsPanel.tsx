@@ -112,10 +112,10 @@ const CourseStatsPanel: React.FC<Props> = ({
   const easiestHole = sorted[sorted.length - 1];
 
   const getDiffBg = (avgVsPar: number) => {
-    if (avgVsPar <= -0.3) return 'bg-emerald-100 text-emerald-800';
-    if (avgVsPar <= 0.1) return 'bg-slate-100 text-slate-700';
-    if (avgVsPar <= 0.5) return 'bg-amber-100 text-amber-800';
-    return 'bg-red-100 text-red-800';
+    if (avgVsPar <= -0.3) return 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300';
+    if (avgVsPar <= 0.1) return 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200';
+    if (avgVsPar <= 0.5) return 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300';
+    return 'bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300';
   };
 
   const getBarWidth = (count: number, total: number) => (total > 0 ? Math.max(2, (count / total) * 100) : 0);
@@ -128,20 +128,20 @@ const CourseStatsPanel: React.FC<Props> = ({
       <div className="mb-3">
         <div className="flex items-center justify-between mb-1.5">
           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{label}</div>
-          <div className="text-[10px] text-slate-500">
+          <div className="text-[10px] text-slate-500 dark:text-slate-400">
             Par {rangePar} · Avg {rangeAvg.toFixed(1)}
           </div>
         </div>
         <div className="overflow-x-auto -mx-1">
           <table className="w-full text-[11px] border-collapse">
             <thead>
-              <tr className="bg-slate-100/80">
-                <th className="px-1.5 py-1 text-left font-bold text-slate-500 w-[38px]">Hole</th>
-                <th className="px-1 py-1 text-center font-bold text-slate-500 w-[30px]">Par</th>
-                <th className="px-1 py-1 text-center font-bold text-slate-500 w-[36px]">Avg</th>
-                <th className="px-1 py-1 text-center font-bold text-slate-500 w-[32px]">+/-</th>
-                <th className="px-1 py-1 text-center font-bold text-slate-500 w-[24px]">#</th>
-                <th className="px-1.5 py-1 font-bold text-slate-500 text-left">Distribution</th>
+              <tr className="bg-slate-100/80 dark:bg-slate-800">
+                <th className="px-1.5 py-1 text-left font-bold text-slate-500 dark:text-slate-400 w-[38px]">Hole</th>
+                <th className="px-1 py-1 text-center font-bold text-slate-500 dark:text-slate-400 w-[30px]">Par</th>
+                <th className="px-1 py-1 text-center font-bold text-slate-500 dark:text-slate-400 w-[36px]">Avg</th>
+                <th className="px-1 py-1 text-center font-bold text-slate-500 dark:text-slate-400 w-[32px]">+/-</th>
+                <th className="px-1 py-1 text-center font-bold text-slate-500 dark:text-slate-400 w-[24px]">#</th>
+                <th className="px-1.5 py-1 font-bold text-slate-500 dark:text-slate-400 text-left">Distribution</th>
               </tr>
             </thead>
             <tbody>
@@ -152,17 +152,19 @@ const CourseStatsPanel: React.FC<Props> = ({
                 return (
                   <tr
                     key={h.hole}
-                    className={`border-t border-slate-100 ${isHardest ? 'bg-red-50/50' : isEasiest ? 'bg-emerald-50/50' : ''}`}
+                    className={`border-t border-slate-100 dark:border-slate-700 ${
+                      isHardest ? 'bg-red-50/50 dark:bg-red-950/20' : isEasiest ? 'bg-emerald-50/50 dark:bg-emerald-950/20' : ''
+                    }`}
                   >
-                    <td className="px-1.5 py-1.5 font-bold text-slate-700">
+                    <td className="px-1.5 py-1.5 font-bold text-slate-700 dark:text-slate-200">
                       <div className="flex items-center gap-1">
                         {h.hole}
-                        {isHardest && <span className="text-[8px] text-red-500 font-black">H</span>}
-                        {isEasiest && <span className="text-[8px] text-emerald-500 font-black">E</span>}
+                        {isHardest && <span className="text-[8px] text-red-500 dark:text-red-400 font-black">H</span>}
+                        {isEasiest && <span className="text-[8px] text-emerald-500 dark:text-emerald-400 font-black">E</span>}
                       </div>
                     </td>
-                    <td className="px-1 py-1.5 text-center text-slate-600">{h.par}</td>
-                    <td className="px-1 py-1.5 text-center font-mono font-bold text-slate-800">
+                    <td className="px-1 py-1.5 text-center text-slate-600 dark:text-slate-300">{h.par}</td>
+                    <td className="px-1 py-1.5 text-center font-mono font-bold text-slate-800 dark:text-slate-100">
                       {h.avg.toFixed(1)}
                     </td>
                     <td className="px-1 py-1.5 text-center">
@@ -173,10 +175,10 @@ const CourseStatsPanel: React.FC<Props> = ({
                         {h.avgVsPar.toFixed(1)}
                       </span>
                     </td>
-                    <td className="px-1 py-1.5 text-center text-slate-500 text-[10px]">{h.rank}</td>
+                    <td className="px-1 py-1.5 text-center text-slate-500 dark:text-slate-400 text-[10px]">{h.rank}</td>
                     <td className="px-1.5 py-1.5">
                       {totalScored > 0 ? (
-                        <div className="flex h-3 rounded-full overflow-hidden bg-slate-200/60">
+                        <div className="flex h-3 rounded-full overflow-hidden bg-slate-200/60 dark:bg-slate-700">
                           {h.eagles > 0 && (
                             <div
                               className="bg-amber-400"
@@ -221,7 +223,7 @@ const CourseStatsPanel: React.FC<Props> = ({
                           )}
                         </div>
                       ) : (
-                        <span className="text-slate-300 text-[10px]">-</span>
+                        <span className="text-slate-300 dark:text-slate-600 text-[10px]">-</span>
                       )}
                     </td>
                   </tr>
@@ -239,10 +241,10 @@ const CourseStatsPanel: React.FC<Props> = ({
       <div className="px-3 py-3 border-b border-slate-100 dark:border-slate-700">
         <div className="grid grid-cols-3 gap-2 mb-3">
           <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-2 text-center">
-            <div className="text-[10px] text-slate-500 font-semibold uppercase">Field Avg</div>
+            <div className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold uppercase">Field Avg</div>
             <div className="text-lg font-black text-slate-800 dark:text-white">{fieldAvg.toFixed(1)}</div>
             {totalPar != null && (
-              <div className="text-[10px] text-slate-500">
+              <div className="text-[10px] text-slate-500 dark:text-slate-400">
                 {fieldAvg - totalPar >= 0 ? '+' : ''}
                 {(fieldAvg - totalPar).toFixed(1)} vs par
               </div>
@@ -270,26 +272,26 @@ const CourseStatsPanel: React.FC<Props> = ({
 
         <div className="flex flex-wrap gap-1.5">
           {totals.eagles > 0 && (
-            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-100 text-amber-800 text-[10px] font-bold">
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 text-[10px] font-bold">
               <span className="w-2 h-2 rounded-full bg-amber-400" /> Eagles {totals.eagles}
             </span>
           )}
-          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold">
+          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 text-[10px] font-bold">
             <span className="w-2 h-2 rounded-full bg-emerald-500" /> Birdies {totals.birdies}
           </span>
-          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-slate-200 text-slate-700 text-[10px] font-bold">
+          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200 text-[10px] font-bold">
             <span className="w-2 h-2 rounded-full bg-slate-400" /> Pars {totals.pars}
           </span>
-          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-orange-100 text-orange-800 text-[10px] font-bold">
+          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-300 text-[10px] font-bold">
             <span className="w-2 h-2 rounded-full bg-orange-400" /> Bogeys {totals.bogeys}
           </span>
           {totals.doubles > 0 && (
-            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-100 text-red-800 text-[10px] font-bold">
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300 text-[10px] font-bold">
               <span className="w-2 h-2 rounded-full bg-red-500" /> Doubles {totals.doubles}
             </span>
           )}
           {totals.triples > 0 && (
-            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-200 text-red-900 text-[10px] font-bold">
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-red-200 text-red-900 dark:bg-red-900 dark:text-red-200 text-[10px] font-bold">
               <span className="w-2 h-2 rounded-full bg-red-800" /> Triple+ {totals.triples}
             </span>
           )}
@@ -304,9 +306,9 @@ const CourseStatsPanel: React.FC<Props> = ({
           <span className="text-[9px] text-slate-400 font-semibold uppercase">Key:</span>
           <span className="text-[9px] text-slate-400 font-semibold uppercase"># = Difficulty Rank</span>
           <span className="text-[8px] text-red-500 font-black">H</span>
-          <span className="text-[9px] text-slate-500">Hardest</span>
-          <span className="text-[8px] text-emerald-500 font-black">E</span>
-          <span className="text-[9px] text-slate-500">Easiest</span>
+          <span className="text-[9px] text-slate-500 dark:text-slate-400">Hardest</span>
+          <span className="text-[8px] text-emerald-500 dark:text-emerald-400 font-black">E</span>
+          <span className="text-[9px] text-slate-500 dark:text-slate-400">Easiest</span>
         </div>
         <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
           <div className="flex items-center gap-1">
