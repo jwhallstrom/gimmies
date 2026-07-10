@@ -8,7 +8,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { idbStorage } from '../utils/idbStorage';
 import { nanoid } from 'nanoid/non-secure';
 import { getCourseById, getHole } from '../data/cloudCourses';
-import { distributeHandicapStrokes, applyESCAdjustment, calculateScoreDifferential } from '../utils/handicap';
+import { distributeHandicapStrokes, applyESCAdjustment, calculateScoreDifferential, getTeeRatings } from '../utils/handicap';
 import { calculateEventPayouts } from '../games/payouts';
 import { generateRoundRecap, generateRecapPushMessage } from '../utils/roundRecap';
 import { ScoreEntry as HandicapScoreEntry } from '../types/handicap';
@@ -597,8 +597,7 @@ export const useStore = create<State>()(
               
               if (course && tee) {
                 const currentHandicap = eventGolfer.handicapOverride ?? currentProfile.handicapIndex ?? 0;
-                const cr = (tee.courseRating ?? 72) as number;
-                const sl = (tee.slopeRating ?? 113) as number;
+                const { courseRating: cr, slopeRating: sl } = getTeeRatings(tee);
                 const courseHandicap = Math.round(currentHandicap * (sl / 113) + (cr - tee.par));
                 const strokeDist = distributeHandicapStrokes(courseHandicap, event.course.courseId, tee.name);
                 
@@ -673,7 +672,25 @@ export const useStore = create<State>()(
                 return { ...p, individualRounds: [...existingRounds, ...roundsToAdd] };
               }
               return p;
-            })
+            }),
+            currentProfile: (() => {
+              const profile = get().profiles.find((p) => p.id === currentProfile.id);
+              if (!profile) return get().currentProfile;
+              const existingRounds = profile.individualRounds || [];
+              const roundsToAdd = newIndividualRoundsFromCloud.filter((newRound) =>
+                !existingRounds.some((existing) =>
+                  existing.id === newRound.id ||
+                  (newRound.eventId && existing.eventId === newRound.eventId) ||
+                  (newRound.completedRoundId && existing.completedRoundId === newRound.completedRoundId) ||
+                  (existing.date === newRound.date &&
+                    existing.courseId === newRound.courseId &&
+                    existing.teeName === newRound.teeName &&
+                    existing.grossScore === newRound.grossScore)
+                )
+              );
+              if (roundsToAdd.length === 0) return profile;
+              return { ...profile, individualRounds: [...existingRounds, ...roundsToAdd] };
+            })(),
           });
 
           if (newIndividualRoundsFromCloud.length > 0) {
@@ -695,7 +712,9 @@ export const useStore = create<State>()(
               });
             }
           }
-          setTimeout(() => get().calculateAndUpdateHandicap(currentProfile.id), 0);
+          setTimeout(() => {
+            get().recalculateAllDifferentials();
+          }, 0);
           
           // Load CompletedRounds from cloud
           try {
@@ -826,13 +845,17 @@ export const useStore = create<State>()(
             if (!eventGolfer?.profileId) return;
             
             const course = getCourseById(event.course.courseId!);
-            const tee = course?.tees.find(t => t.name === completedRound.teeName);
+            const tee =
+              course?.tees.find((t) => t.name === completedRound.teeName) ||
+              course?.tees.find((t) => t.name === event.course.teeName) ||
+              course?.tees.find((t) => t.name === eventGolfer?.teeName) ||
+              course?.tees[Math.floor((course?.tees.length || 1) / 2)] ||
+              course?.tees[0];
             
             // Require at least 14 holes for handicap tracking (WHS rule)
             if (tee && completedRound.holesPlayed >= 14) {
               const currentHandicap = completedRound.handicapIndex || 0;
-              const cr = (tee.courseRating ?? 72) as number;
-              const sl = (tee.slopeRating ?? 113) as number;
+              const { courseRating: cr, slopeRating: sl } = getTeeRatings(tee);
               const courseHandicap = Math.round(currentHandicap * (sl / 113) + (cr - tee.par));
               const strokeDist = distributeHandicapStrokes(courseHandicap, event.course.courseId!, tee.name);
               
@@ -913,13 +936,11 @@ export const useStore = create<State>()(
 
           // Recompute handicap for affected profiles.
           setTimeout(() => {
-            roundsByProfileId.forEach((_rounds, profileId) => {
-              try {
-                get().calculateAndUpdateHandicap(profileId);
-              } catch (e) {
-                console.error('Failed to recalculate handicap after completeEvent:', e);
-              }
-            });
+            try {
+              get().recalculateAllDifferentials();
+            } catch (e) {
+              console.error('Failed to recalculate handicap after completeEvent:', e);
+            }
           }, 0);
         }
         

@@ -1,7 +1,77 @@
 // World Handicap System (WHS) Utilities backed by cloud course data
-import { getCourseById, getTee } from '../data/cloudCourses';
+import { getCourseById, getTee, CloudTee } from '../data/cloudCourses';
 import { courseMap } from '../data/courses';
 import { IndividualRound, WHSCalculation, ScoreEntry } from '../types/handicap';
+
+/** Resolve course/slope rating from tee metadata (supports legacy rating/slope fields). */
+export function getTeeRatings(tee: CloudTee | undefined, fallbackPar = 72): { courseRating: number; slopeRating: number } {
+  const courseRating = (tee?.courseRating ?? tee?.rating ?? fallbackPar) as number;
+  const slopeRating = (tee?.slopeRating ?? tee?.slope ?? 113) as number;
+  return { courseRating, slopeRating };
+}
+
+export function resolveRoundRatings(round: IndividualRound): { courseRating: number; slopeRating: number; tee?: CloudTee } {
+  const course = getCourseById(round.courseId);
+  const tee =
+    getTee(round.courseId, round.teeName) ||
+    course?.tees.find((t) => t.name?.toLowerCase() === round.teeName?.toLowerCase()) ||
+    course?.tees[0];
+  const fromTee = getTeeRatings(tee, tee?.par ?? 72);
+  return {
+    courseRating: round.courseRating > 0 ? round.courseRating : fromTee.courseRating,
+    slopeRating: round.slopeRating > 0 ? round.slopeRating : fromTee.slopeRating,
+    tee,
+  };
+}
+
+/** Recompute WHS differential from hole scores when missing or stale. */
+export function recomputeRoundDifferential(round: IndividualRound): IndividualRound {
+  if (!round.scores?.length || !round.scores.some((s) => typeof s.strokes === 'number')) {
+    return round;
+  }
+
+  try {
+    const { courseRating, slopeRating } = resolveRoundRatings(round);
+    const courseHandicap = round.courseHandicap ?? 0;
+    const strokeDist = distributeHandicapStrokes(courseHandicap, round.courseId, round.teeName);
+
+    let adjustedGross = 0;
+    const updatedScores = round.scores.map((s) => {
+      const raw = s.strokes ?? 0;
+      const par = s.par || 4;
+      const handicapStrokes = s.handicapStrokes ?? strokeDist[s.hole] ?? 0;
+      const adjustedStrokes = applyESCAdjustment(raw, par, handicapStrokes);
+      adjustedGross += adjustedStrokes;
+      return { ...s, handicapStrokes, adjustedStrokes, netStrokes: calculateNetScore(raw, handicapStrokes) };
+    });
+
+    const scoreDifferential = calculateScoreDifferential(adjustedGross, courseRating, slopeRating);
+    return {
+      ...round,
+      scores: updatedScores,
+      adjustedGrossScore: adjustedGross,
+      scoreDifferential,
+      courseRating,
+      slopeRating,
+    };
+  } catch {
+    return round;
+  }
+}
+
+export function isValidScoreDifferential(value: unknown): value is number {
+  return typeof value === 'number' && !Number.isNaN(value);
+}
+
+export function isRoundEligibleForHandicapIndex(round: IndividualRound): boolean {
+  return (
+    isValidScoreDifferential(round.scoreDifferential) &&
+    (round.courseRating ?? 0) > 0 &&
+    (round.slopeRating ?? 0) > 0 &&
+    Array.isArray(round.scores) &&
+    round.scores.some((s) => typeof s.strokes === 'number')
+  );
+}
 
 /**
  * Calculate course handicap from handicap index

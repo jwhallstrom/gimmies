@@ -1,22 +1,42 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import useStore from '../state/store';
-import { applyESCAdjustment } from '../utils/handicap';
+import { applyESCAdjustment, isRoundEligibleForHandicapIndex } from '../utils/handicap';
+import { useCourses } from '../hooks/useCourses';
 
 const HandicapPage: React.FC = () => {
-  const { currentProfile, getProfileRounds, loadEventsFromCloud } = useStore();
+  const { currentProfile, getProfileRounds, loadEventsFromCloud, recalculateAllDifferentials } = useStore();
   const navigate = useNavigate();
-  const [isLoadingEvents, setIsLoadingEvents] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const { loading: coursesLoading } = useCourses();
 
-  // Load events from cloud when component mounts (to get IndividualRounds from completed events)
+  const individualRounds = currentProfile?.individualRounds || [];
+  const eligibleRounds = useMemo(
+    () => individualRounds.filter((r) => isRoundEligibleForHandicapIndex(r)),
+    [individualRounds]
+  );
+
   useEffect(() => {
-    if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true' && currentProfile) {
-      setIsLoadingEvents(true);
-      loadEventsFromCloud().finally(() => {
-        setIsLoadingEvents(false);
-      });
-    }
-  }, [currentProfile?.id, loadEventsFromCloud]);
+    if (!currentProfile?.id || coursesLoading) return;
+
+    let cancelled = false;
+    setIsRefreshing(true);
+
+    const refreshHandicap = async () => {
+      try {
+        if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+          await loadEventsFromCloud();
+        }
+        if (cancelled) return;
+        recalculateAllDifferentials();
+      } finally {
+        if (!cancelled) setIsRefreshing(false);
+      }
+    };
+
+    void refreshHandicap();
+    return () => { cancelled = true; };
+  }, [currentProfile?.id, coursesLoading, loadEventsFromCloud, recalculateAllDifferentials]);
 
   if (!currentProfile) {
     return (
@@ -27,7 +47,9 @@ const HandicapPage: React.FC = () => {
   }
 
   const rounds = getProfileRounds(currentProfile.id);
-  const individualRounds = currentProfile.individualRounds || [];
+  const roundsUntilIndex = Math.max(0, 3 - eligibleRounds.length);
+  const hasCalculatedIndex = eligibleRounds.length >= 3 && currentProfile.handicapIndex != null;
+
   const latestHistory = currentProfile.handicapHistory && currentProfile.handicapHistory.length > 0
     ? currentProfile.handicapHistory[currentProfile.handicapHistory.length - 1]
     : null;
@@ -42,12 +64,12 @@ const HandicapPage: React.FC = () => {
 
   const getScoreBadgeColor = (gross: number, par: number = 72) => {
     const diff = gross - par;
-    if (diff <= -2) return 'bg-purple-100 text-purple-800'; // Eagle or better
-    if (diff === -1) return 'bg-blue-100 text-blue-800'; // Birdie
-    if (diff === 0) return 'bg-green-100 text-green-800'; // Par
-    if (diff === 1) return 'bg-yellow-100 text-yellow-800'; // Bogey
-    if (diff === 2) return 'bg-orange-100 text-orange-800'; // Double bogey
-    return 'bg-red-100 text-red-800'; // Triple or worse
+    if (diff <= -2) return 'bg-purple-100 text-purple-800';
+    if (diff === -1) return 'bg-blue-100 text-blue-800';
+    if (diff === 0) return 'bg-green-100 text-green-800';
+    if (diff === 1) return 'bg-yellow-100 text-yellow-800';
+    if (diff === 2) return 'bg-orange-100 text-orange-800';
+    return 'bg-red-100 text-red-800';
   };
 
   return (
@@ -58,15 +80,25 @@ const HandicapPage: React.FC = () => {
           <div>
             <h1 className="text-2xl font-bold text-primary-800 dark:text-primary-200">Handicap Tracker</h1>
             <p className="text-gray-600 dark:text-slate-300 mt-1">Track your individual rounds and handicap progression</p>
+            {isRefreshing && (
+              <p className="text-xs text-primary-600 dark:text-primary-300 mt-2">Recalculating from your rounds…</p>
+            )}
           </div>
           <div className="text-center">
             <div className="text-3xl font-bold text-primary-600">
-              {currentProfile.handicapIndex !== undefined 
-                ? currentProfile.handicapIndex.toFixed(1)
+              {hasCalculatedIndex
+                ? currentProfile.handicapIndex!.toFixed(1)
                 : '--'
               }
             </div>
             <div className="text-sm text-gray-500 dark:text-slate-400">Current Index</div>
+            {!hasCalculatedIndex && rounds.length > 0 && (
+              <div className="text-[11px] text-gray-500 dark:text-slate-400 mt-1 max-w-[140px]">
+                {eligibleRounds.length === 0
+                  ? 'Scores saved — waiting on course rating data'
+                  : `${eligibleRounds.length} of 3 scored rounds${roundsUntilIndex > 0 ? ` (${roundsUntilIndex} more needed)` : ''}`}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -78,8 +110,8 @@ const HandicapPage: React.FC = () => {
           <div className="text-sm text-gray-600 dark:text-slate-300">Total Rounds</div>
         </div>
         <div className="bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 backdrop-blur rounded-lg shadow-md p-4 border border-primary-900/5 dark:border-slate-800">
-          <div className="text-xl font-bold text-primary-600">{individualRounds.length}</div>
-          <div className="text-sm text-gray-600 dark:text-slate-300">Individual Rounds</div>
+          <div className="text-xl font-bold text-primary-600">{eligibleRounds.length}</div>
+          <div className="text-sm text-gray-600 dark:text-slate-300">Scored for Index</div>
         </div>
         <div className="bg-white/90 dark:bg-slate-900/90 text-slate-900 dark:text-slate-100 backdrop-blur rounded-lg shadow-md p-4 border border-primary-900/5 dark:border-slate-800">
           <div className="text-xl font-bold text-primary-600">

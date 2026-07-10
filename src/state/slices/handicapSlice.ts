@@ -9,7 +9,11 @@ import {
   calculateWHSHandicapIndex, 
   distributeHandicapStrokes, 
   applyESCAdjustment, 
-  calculateScoreDifferential 
+  calculateScoreDifferential,
+  getTeeRatings,
+  recomputeRoundDifferential,
+  isValidScoreDifferential,
+  isRoundEligibleForHandicapIndex,
 } from '../../utils/handicap';
 import type { 
   GolferProfile, 
@@ -165,24 +169,47 @@ export const createHandicapSlice = (
     const normalizedRounds = normalizeIndividualRounds(profile.individualRounds);
     if (normalizedRounds.length === 0) return;
 
-    // Self-heal profile data if duplicates exist.
-    const didNormalize = normalizedRounds.length !== profile.individualRounds.length;
+    // Self-heal: dedupe + backfill missing score differentials from hole data.
+    const recomputedRounds = normalizedRounds.map((round: IndividualRound) => {
+      const needsRecompute =
+        !isValidScoreDifferential(round.scoreDifferential) ||
+        round.adjustedGrossScore == null ||
+        !round.courseRating ||
+        !round.slopeRating;
+      return needsRecompute ? recomputeRoundDifferential(round) : round;
+    });
 
-    // Get all score differentials
-    const differentials = normalizedRounds
-      .map((round: IndividualRound) => round.scoreDifferential)
-      .filter((diff: number | undefined) => diff !== undefined && !isNaN(diff));
+    const roundEntries = recomputedRounds
+      .filter((r: IndividualRound) => isRoundEligibleForHandicapIndex(r))
+      .map((r: IndividualRound) => ({ id: r.id, differential: r.scoreDifferential as number }));
 
-    if (differentials.length === 0) return;
+    const roundsChanged =
+      recomputedRounds.length !== profile.individualRounds.length ||
+      recomputedRounds.some((r, i) => r.scoreDifferential !== profile.individualRounds?.[i]?.scoreDifferential);
 
-    // Calculate WHS handicap index - pass ids so we can know which rounds were used
-    const roundEntries = normalizedRounds.map((r: IndividualRound) => ({ 
-      id: r.id, 
-      differential: r.scoreDifferential 
-    }));
-    const whsResult = calculateWHSHandicapIndex(roundEntries as any);
+    // Nothing to calculate yet — still persist repaired differentials.
+    if (roundEntries.length === 0) {
+      if (!roundsChanged) return;
+      const repairedOnly = { ...profile, individualRounds: recomputedRounds };
+      set((state: any) => ({
+        profiles: state.profiles.map((p: GolferProfile) => (p.id === profileId ? repairedOnly : p)),
+        currentProfile: state.currentProfile?.id === profileId ? repairedOnly : state.currentProfile,
+      }));
+      return;
+    }
 
-    // Create the updated profile object
+    // WHS requires 3+ rounds — don't overwrite a manual index with 0 while building history.
+    if (roundEntries.length < 3) {
+      const pendingProfile = { ...profile, individualRounds: recomputedRounds };
+      set((state: any) => ({
+        profiles: state.profiles.map((p: GolferProfile) => (p.id === profileId ? pendingProfile : p)),
+        currentProfile: state.currentProfile?.id === profileId ? pendingProfile : state.currentProfile,
+      }));
+      return;
+    }
+
+    const whsResult = calculateWHSHandicapIndex(roundEntries);
+
     const updatedProfile = {
       ...profile,
       handicapIndex: whsResult.handicapIndex,
@@ -191,22 +218,38 @@ export const createHandicapSlice = (
         {
           date: whsResult.calculationDate,
           handicapIndex: whsResult.handicapIndex,
-          rounds: normalizedRounds,
+          rounds: recomputedRounds,
           usedRoundIds: whsResult.usedRoundIds,
           source: 'calculation' as const
         }
       ],
-      individualRounds: didNormalize ? normalizedRounds : profile.individualRounds
+      individualRounds: recomputedRounds,
     };
 
-    // Update profile with new handicap and record which rounds were used
     set((state: any) => ({
       profiles: state.profiles.map((p: GolferProfile) =>
         p.id === profileId ? updatedProfile : p
       ),
-      // Also update currentProfile if it's the same profile
       currentProfile: state.currentProfile?.id === profileId ? updatedProfile : state.currentProfile
     }));
+
+    if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
+      import('../../utils/profileSync').then(({ saveCloudProfile }) => {
+        saveCloudProfile(updatedProfile as any).catch((err: unknown) => {
+          console.error('Failed to save calculated handicap to cloud:', err);
+        });
+      });
+      import('../../utils/roundSync').then(({ batchSaveIndividualRoundsToCloud }) => {
+        const changedRounds = recomputedRounds.filter((r) =>
+          !profile.individualRounds?.some(
+            (existing: IndividualRound) => existing.id === r.id && existing.scoreDifferential === r.scoreDifferential
+          )
+        );
+        if (changedRounds.length > 0) {
+          batchSaveIndividualRoundsToCloud(changedRounds).catch(console.error);
+        }
+      });
+    }
   },
 
   recalculateAllDifferentials: (): void => {
@@ -233,8 +276,8 @@ export const createHandicapSlice = (
         
         if (tee && completedRound.holesPlayed >= 14) {
           const currentHandicap = completedRound.handicapIndex || 0;
-          const cr1 = (tee.courseRating ?? (tee as any).rating ?? 72) as number;
-          const sl1 = (tee.slopeRating ?? (tee as any).slope ?? 113) as number;
+          const cr1 = getTeeRatings(tee).courseRating;
+          const sl1 = getTeeRatings(tee).slopeRating;
           const courseHandicap = Math.round(currentHandicap * (sl1 / 113) + (cr1 - tee.par));
           
           // Build scores array
@@ -329,8 +372,8 @@ export const createHandicapSlice = (
             return { ...s, handicapStrokes, adjustedStrokes: adj };
           });
 
-          const cr2 = (tee.courseRating ?? (tee as any).rating ?? 72) as number;
-          const sl2 = (tee.slopeRating ?? (tee as any).slope ?? 113) as number;
+          const cr2 = getTeeRatings(tee).courseRating;
+          const sl2 = getTeeRatings(tee).slopeRating;
           const diff = calculateScoreDifferential(adjustedGross, cr2, sl2);
           return { ...r, scores: updatedScores, adjustedGrossScore: adjustedGross, scoreDifferential: diff };
         } catch {

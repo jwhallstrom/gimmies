@@ -6,7 +6,8 @@ import {
   applyESCAdjustment,
   distributeHandicapStrokes,
   processScores,
-  calculateWHSHandicapIndex
+  calculateWHSHandicapIndex,
+  recomputeRoundDifferential,
 } from '../src/utils/handicap';
 
 const courseId = 'test-course';
@@ -76,8 +77,34 @@ describe('handicap utils', () => {
     const diffs = [10.1, 12.4, 11.0, 13.5, 9.9, 8.2, 10.0, 12.0];
     const calc = calculateWHSHandicapIndex(diffs);
     expect(calc.roundsUsed).toBe(2);
-    // Should average the two lowest (8.2 and 9.9) => 9.05 => 9.1
     expect(calc.handicapIndex).toBeCloseTo(9.1, 1);
+  });
+
+  it('recomputes missing score differentials from hole scores', () => {
+    const scores = Array.from({ length: 18 }).map((_, i) => ({
+      hole: i + 1,
+      par: 4,
+      strokes: 5,
+      handicapStrokes: 0,
+    }));
+    const round = recomputeRoundDifferential({
+      id: 'r1',
+      profileId: 'p1',
+      courseId,
+      teeName: 'White',
+      date: '2026-01-01',
+      scores,
+      grossScore: 90,
+      netScore: 90,
+      scoreDifferential: 0,
+      courseRating: 0,
+      slopeRating: 0,
+      courseHandicap: 0,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    });
+    expect(round.scoreDifferential).toBeGreaterThan(0);
+    expect(round.courseRating).toBe(72);
+    expect(round.slopeRating).toBe(113);
   });
 });
 

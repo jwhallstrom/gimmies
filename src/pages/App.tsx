@@ -164,7 +164,7 @@ const App: React.FC = () => {
 
     setTimeout(() => {
       try {
-        useStore.getState().calculateAndUpdateHandicap(incoming.id);
+        useStore.getState().recalculateAllDifferentials();
       } catch (e) {
         console.error('Failed to recalculate handicap from cloud profile:', e);
       }
