@@ -103,7 +103,7 @@ const EventHighlightsSheet: React.FC<EventHighlightsSheetProps> = ({
         </div>
 
         <div className="p-3 max-h-[min(72vh,640px)] overflow-y-auto">
-          <RoundRecapCard recap={recap} hideHeader showShare />
+          <RoundRecapCard recap={recap} hideHeader showShare={false} variant="feed" />
         </div>
       </div>
     </div>,

@@ -73,12 +73,6 @@ const ScoreHubTab: React.FC<Props> = ({
 
   const showHighlightsChip = Boolean(recap && recap.highlights.length > 0);
 
-  const highlightTeaser = useMemo(() => {
-    if (!recap?.highlights.length) return null;
-    const top = recap.highlights[0];
-    return { emoji: top.emoji, text: top.title };
-  }, [recap]);
-
   const toggleInsights = () => {
     setInsightsExpanded((prev) => {
       const next = !prev;
@@ -236,7 +230,6 @@ const ScoreHubTab: React.FC<Props> = ({
             onOpenStats={() => setShowStatsSheet(true)}
             showHighlightsChip={showHighlightsChip}
             onOpenHighlights={() => setShowHighlightsSheet(true)}
-            highlightTeaser={insightsExpanded ? highlightTeaser : null}
             insightsExpanded={insightsExpanded}
             onToggleInsights={toggleInsights}
           />

@@ -17,6 +17,7 @@ import { shareRecapImage } from '../utils/shareRecap';
 interface Props {
   recap: RoundRecap;
   compact?: boolean;
+  variant?: 'cards' | 'feed';
   onShare?: () => void;
   headerTitle?: string;
   headerIcon?: string;
@@ -146,6 +147,7 @@ const HighlightRow: React.FC<{
 const RoundRecapCard: React.FC<Props> = ({
   recap,
   compact = false,
+  variant = 'cards',
   onShare,
   headerTitle = 'Round Recap',
   headerIcon = '🏁',
@@ -170,6 +172,22 @@ const RoundRecapCard: React.FC<Props> = ({
   }, [onShare, recap]);
 
   if (!recap.highlights.length) return null;
+
+  if (variant === 'feed') {
+    return (
+      <div className="space-y-3 text-sm leading-relaxed">
+        {recap.highlights.map((h, i) => (
+          <p key={`${h.type}-${i}`} className="text-gray-800 dark:text-gray-200">
+            <span className="mr-1.5" aria-hidden>
+              {h.emoji}
+            </span>
+            <span className="font-semibold">{h.title}:</span>{' '}
+            <span className="text-gray-600 dark:text-gray-400">{h.description}</span>
+          </p>
+        ))}
+      </div>
+    );
+  }
 
   // ─── Compact mode: flat list of top highlights ───
   if (compact) {

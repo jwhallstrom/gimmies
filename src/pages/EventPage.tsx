@@ -424,8 +424,109 @@ const EventPage: React.FC = () => {
   const tabBarClass = 'flex gap-1.5 px-3 pb-1 -mx-3 justify-center';
 
   return (
-    <div className="h-full min-h-0 -mx-4 -mt-4 flex flex-col">
-      {/* Header - Compact & Sticky */}
+    <div className={`h-full min-h-0 -mx-4 -mt-4 flex flex-col ${useLeaderboardHub ? 'bg-slate-100 dark:bg-slate-950' : ''}`}>
+      {useLeaderboardHub ? (
+        <div className="sticky top-0 z-30 flex-shrink-0 px-3 py-2 bg-slate-100/95 dark:bg-slate-950/95 backdrop-blur-sm border-b border-slate-200/80 dark:border-slate-800">
+          <div className="flex items-center gap-2 min-w-0">
+            {parentGroup && (
+              <button
+                onClick={() => navigate(`/event/${parentGroup.id}`)}
+                className="flex-shrink-0 p-1.5 -ml-0.5 rounded-lg text-slate-500 hover:bg-slate-200/80 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors"
+                aria-label="Back to group"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+            )}
+            <div className="flex-1 min-w-0">
+              <h1 className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate leading-tight">
+                {event.name || 'Untitled Event'}
+              </h1>
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 min-w-0">
+                {parentGroup && (
+                  <>
+                    <span className="truncate max-w-[100px]">{parentGroup.name}</span>
+                    <span className="text-slate-300 dark:text-slate-600">·</span>
+                  </>
+                )}
+                {courseName && (
+                  <>
+                    <span className="truncate max-w-[120px]">{courseName}</span>
+                    <span className="text-slate-300 dark:text-slate-600">·</span>
+                  </>
+                )}
+                <span className="flex-shrink-0 whitespace-nowrap">
+                  {formatLocalDate(event.date, { weekday: 'short', month: 'short', day: 'numeric' })}
+                </span>
+                {event.isCompleted && (
+                  <span className="px-1 py-0.5 bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400 rounded text-[9px] font-bold flex-shrink-0">
+                    DONE
+                  </span>
+                )}
+                {event.shareCode && (
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(event.shareCode || '');
+                      addToast('Join code copied!', 'success');
+                    }}
+                    className="px-1 py-0.5 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white font-mono text-[10px] font-bold tracking-wider flex-shrink-0"
+                    title="Copy join code"
+                  >
+                    {event.shareCode}
+                  </button>
+                )}
+              </div>
+            </div>
+            {ccData ? (
+              <button
+                onClick={() => setShowCommandCenter(true)}
+                className={`relative flex-shrink-0 w-9 h-9 rounded-lg border flex items-center justify-center text-base transition-colors active:scale-95 ${
+                  ccData.isCompleted
+                    ? 'border-green-300 bg-green-50 text-green-700 dark:bg-green-950/80 dark:border-green-800 dark:text-green-400'
+                    : ccData.isStarted
+                      ? 'border-orange-300 bg-orange-50 text-orange-700 dark:bg-orange-950/80 dark:border-orange-800 dark:text-orange-400'
+                      : 'border-slate-300 bg-white text-slate-700 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-200'
+                }`}
+                title="Game control"
+                aria-label="Game control"
+              >
+                🎛️
+                {ccData.isStarted && !ccData.isCompleted && (
+                  <span className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-red-500 border border-white dark:border-slate-900" />
+                )}
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowPlayerGuide(true)}
+                className="flex-shrink-0 w-9 h-9 rounded-lg border border-slate-300 bg-white text-slate-700 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-200 flex items-center justify-center text-base active:scale-95"
+                title="Game control"
+                aria-label="Game control"
+              >
+                🎛️
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowMenu((v) => !v)}
+              className="relative flex-shrink-0 w-9 h-9 rounded-lg border border-slate-300 bg-white text-slate-600 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700 flex items-center justify-center transition-colors"
+              aria-label="Event menu"
+              title="More"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+              {(chatUnread > 0 || stats.golferCount > 0) && (
+                <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-0.5 rounded-full text-[8px] font-extrabold leading-none flex items-center justify-center bg-orange-500 text-white">
+                  {chatUnread > 0 ? (chatUnread > 9 ? '9+' : chatUnread) : '·'}
+                </span>
+              )}
+            </button>
+          </div>
+        </div>
+      ) : (
+      <>
+      {/* Header - Compact & Sticky (group hubs) */}
       <div className="bg-gradient-to-br from-primary-700 via-primary-800 to-primary-900 px-3 py-2 shadow-lg sticky top-0 z-30 flex-shrink-0">
         {/* Event Info Row */}
         <div className="flex items-center gap-2">
@@ -621,12 +722,14 @@ const EventPage: React.FC = () => {
         </div>
         )}
       </div>
+      </>
+      )}
 
       {/* Event hub menu (live rounds) */}
       {useLeaderboardHub && showMenu && (
         <>
           <div className="fixed inset-0 z-40 bg-black/30" onClick={() => setShowMenu(false)} />
-          <div className="fixed right-3 top-[4.5rem] z-50 w-56">
+          <div className="fixed right-3 top-12 z-50 w-56">
             <div className="bg-white rounded-xl shadow-xl border border-gray-200 py-1 overflow-hidden">
               <button
                 type="button"
@@ -881,7 +984,7 @@ const EventPage: React.FC = () => {
 
       {useLeaderboardHub ? (
         <div className="flex-1 min-h-0 overflow-y-auto">
-          <div className="px-4 py-2 pb-32">
+          <div className="pb-28">
             <ScoreHubTab
               eventId={event.id}
               isTabActive

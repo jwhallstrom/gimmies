@@ -20,7 +20,6 @@ type Props = {
   onOpenStats?: () => void;
   showHighlightsChip?: boolean;
   onOpenHighlights?: () => void;
-  highlightTeaser?: { emoji: string; text: string } | null;
   insightsExpanded?: boolean;
   onToggleInsights?: () => void;
 };
@@ -37,7 +36,6 @@ const LeaderboardTab: React.FC<Props> = ({
   onOpenStats,
   showHighlightsChip = false,
   onOpenHighlights,
-  highlightTeaser = null,
   insightsExpanded = true,
   onToggleInsights,
 }) => {
@@ -352,6 +350,19 @@ const LeaderboardTab: React.FC<Props> = ({
     return 'text-slate-800 dark:text-slate-100';
   };
 
+  const getHoleScoreCellClass = (strokes: number | null | undefined, toPar: number | null) => {
+    if (strokes == null) return 'text-slate-400 dark:text-slate-500';
+    if (toPar === null) return 'text-slate-800 dark:text-slate-100';
+    if (toPar <= -2) return 'text-green-700 dark:text-green-400 font-bold bg-green-100 dark:bg-green-950/60';
+    if (toPar === -1) return 'text-red-700 dark:text-red-400 font-semibold bg-red-100 dark:bg-red-950/60';
+    if (toPar === 0) return 'text-slate-800 dark:text-slate-100';
+    if (toPar === 1) return 'text-blue-700 dark:text-blue-300 font-semibold bg-blue-100 dark:bg-blue-950/60';
+    return 'text-blue-900 dark:text-blue-200 font-semibold bg-blue-200 dark:bg-blue-900/70';
+  };
+
+  const nineTotalClass =
+    'text-xs py-1 text-center font-mono font-bold w-10 shrink-0 ml-1 rounded bg-slate-200 text-slate-900 dark:bg-slate-600 dark:text-white';
+
   // Check if any golfer has handicap data (to show Gross/Net toggle)
   const hasHandicapData = useMemo(() => {
     return event.golfers.some((g: any) => {
@@ -361,8 +372,8 @@ const LeaderboardTab: React.FC<Props> = ({
   }, [event, profiles]);
 
   return (
-    <div className="-mx-4 sm:mx-0">
-      <div className="bg-white dark:bg-slate-900 sm:rounded-lg border-y sm:border border-slate-200 dark:border-slate-700 overflow-hidden">
+    <div className="w-full">
+      <div className="bg-slate-50 dark:bg-slate-800/95 sm:rounded-lg border-y sm:border border-slate-200 dark:border-slate-600 overflow-hidden shadow-sm">
         {/* Header bar with toggles */}
         <div className="flex items-center justify-between px-3 py-2.5 bg-slate-800 dark:bg-slate-950 border-b border-slate-700">
           <span className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Leaderboard</span>
@@ -385,7 +396,7 @@ const LeaderboardTab: React.FC<Props> = ({
         </div>
 
         {hasInsightsRail && (
-          <div className="border-b border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
+          <div className="border-b border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/95">
             {insightsExpanded ? (
               <>
                 <div className="flex items-center gap-2 px-3 py-1.5 border-b border-slate-100 dark:border-slate-800">
@@ -456,21 +467,6 @@ const LeaderboardTab: React.FC<Props> = ({
                     </button>
                   )}
                 </div>
-                {highlightTeaser && onOpenHighlights && (
-                  <button
-                    type="button"
-                    onClick={onOpenHighlights}
-                    className="w-full px-3 pb-2 text-left"
-                  >
-                    <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
-                      <span className="text-base flex-shrink-0" aria-hidden>
-                        {highlightTeaser.emoji}
-                      </span>
-                      <span className="truncate font-medium">{highlightTeaser.text}</span>
-                      <span className="text-slate-400 flex-shrink-0 ml-auto">→</span>
-                    </div>
-                  </button>
-                )}
               </>
             ) : (
               <button
@@ -505,7 +501,7 @@ const LeaderboardTab: React.FC<Props> = ({
 
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
-            <thead className="bg-slate-100 dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700">
+            <thead className="bg-slate-100/90 dark:bg-slate-900/80 border-b border-slate-200 dark:border-slate-600">
               <tr>
                 <th className="px-3 py-2.5 text-left font-semibold text-slate-600 dark:text-slate-300 text-xs uppercase tracking-wide">Pos</th>
                 <th className="px-3 py-2.5 text-left font-semibold text-slate-600 dark:text-slate-300 text-xs uppercase tracking-wide">Player</th>
@@ -521,18 +517,10 @@ const LeaderboardTab: React.FC<Props> = ({
               {allPlayers.map((player, index) => (
                 <React.Fragment key={player.id}>
                   <tr 
-                    className={`border-b border-slate-100 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer transition-colors ${
-                      player.position === 1 ? 'bg-slate-50/80 dark:bg-slate-800/30' : ''
-                    } ${expandedPlayer === player.id ? 'bg-slate-100 dark:bg-slate-800/60' : ''}`}
-                    onClick={() => {
-                      // If we can edit and onEnterScores is available, go directly to edit mode
-                      if (typeof onEnterScores === 'function' && !event.isCompleted && canEditScore?.(eventId, player.id)) {
-                        onEnterScores(player.id);
-                      } else {
-                        // Otherwise, toggle expand to view scorecard (read-only)
-                        togglePlayerExpanded(player.id);
-                      }
-                    }}
+                    className={`border-b border-slate-100 dark:border-slate-700 hover:bg-white/70 dark:hover:bg-slate-700/40 cursor-pointer transition-colors ${
+                      player.position === 1 ? 'bg-white/60 dark:bg-slate-700/25' : ''
+                    } ${expandedPlayer === player.id ? 'bg-white dark:bg-slate-900/80' : ''}`}
+                    onClick={() => togglePlayerExpanded(player.id)}
                   >
                     <td className={`px-3 py-3 font-mono text-center ${getPositionColor(player.position || 0)}`}>
                       {player.position ? (
@@ -613,36 +601,62 @@ const LeaderboardTab: React.FC<Props> = ({
                   </tr>
                   {expandedPlayer === player.id && (
                     <tr>
-                      <td colSpan={hasTeams ? 6 : 5} className="px-4 py-3 bg-slate-50 border-b border-slate-200">
+                      <td colSpan={hasTeams ? 6 : 5} className="px-4 py-3 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-700">
                         <div className="space-y-3">
-                          {/* Read-only notice */}
-                          <div className="text-[11px] text-slate-500 italic">
-                            {event.isCompleted ? 'Event completed' : 'Viewing scorecard (read-only)'}
+                          <div className="flex items-center justify-between gap-2">
+                            <div>
+                              <div className="text-sm font-semibold text-slate-900 dark:text-slate-100">{player.name}</div>
+                              <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                                {event.isCompleted ? 'Final scorecard' : 'Scorecard preview'}
+                                {typeof onEnterScores === 'function' && !event.isCompleted && canEditScore?.(eventId, player.id) && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onEnterScores(player.id);
+                                    }}
+                                    className="ml-2 text-primary-600 dark:text-primary-400 font-semibold hover:underline"
+                                  >
+                                    Edit scores
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setExpandedPlayer(null)}
+                              className="p-2 rounded-lg border border-slate-200 dark:border-slate-600 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                              aria-label="Close scorecard"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                              </svg>
+                            </button>
                           </div>
                           {/* Front 9 */}
                           <div>
-                            <div className="text-xs font-semibold text-slate-500 mb-1">Front Nine</div>
+                            <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Front Nine</div>
                             <div className="flex flex-col gap-1">
                               {/* Hole numbers 1-9 */}
                               <div className="flex gap-1">
-                                <div className="text-xs font-semibold text-slate-600 py-1 text-center w-12 shrink-0">Hole</div>
+                                <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 py-1 text-center w-12 shrink-0">Hole</div>
                                 {holes.slice(0, 9).map((hole) => (
-                                  <div key={`hole-${hole.number}`} className="text-xs font-semibold text-slate-600 py-1 text-center w-8 shrink-0">
+                                  <div key={`hole-${hole.number}`} className="text-xs font-semibold text-slate-600 dark:text-slate-300 py-1 text-center w-8 shrink-0">
                                     {hole.number}
                                   </div>
                                 ))}
-                                <div className="text-xs font-semibold text-slate-600 py-1 text-center w-10 shrink-0 ml-1">Out</div>
+                                <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 py-1 text-center w-10 shrink-0 ml-1">Out</div>
                               </div>
                               
                               {/* Par 1-9 */}
                               <div className="flex gap-1">
-                                <div className="text-xs font-semibold text-slate-600 py-1 text-center w-12 shrink-0">Par</div>
+                                <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 py-1 text-center w-12 shrink-0">Par</div>
                                 {holes.slice(0, 9).map((hole) => (
-                                  <div key={`par-${hole.number}`} className="text-xs text-slate-600 py-1 text-center bg-slate-100 rounded w-8 shrink-0">
+                                  <div key={`par-${hole.number}`} className="text-xs text-slate-600 dark:text-slate-300 py-1 text-center w-8 shrink-0">
                                     {typeof hole.par === 'number' ? hole.par : '-'}
                                   </div>
                                 ))}
-                                <div className="text-xs text-slate-600 py-1 text-center bg-slate-200 rounded w-10 shrink-0 ml-1 font-semibold">
+                                <div className={`${nineTotalClass} font-semibold`}>
                                   {parsKnown
                                     ? holes.slice(0, 9).reduce((sum: number, h: any) => sum + (h.par as number), 0)
                                     : '-'}
@@ -651,7 +665,7 @@ const LeaderboardTab: React.FC<Props> = ({
                               
                               {/* Player scores 1-9 */}
                               <div className="flex gap-1">
-                                <div className="text-xs font-semibold text-slate-700 py-1 text-center w-12 shrink-0">Score</div>
+                                <div className="text-xs font-semibold text-slate-700 dark:text-slate-200 py-1 text-center w-12 shrink-0">Score</div>
                                 {holes.slice(0, 9).map((hole) => {
                                   const playerScores = getPlayerScorecard(player.id);
                                   const scoreForHole = playerScores.find((s: any) => s.hole === hole.number);
@@ -660,20 +674,12 @@ const LeaderboardTab: React.FC<Props> = ({
                                   const toPar = strokes != null && typeof par === 'number' ? strokes - par : null;
                                   
                                   return (
-                                    <div key={`score-${hole.number}`} className={`text-xs py-1 text-center font-mono rounded w-8 shrink-0 ${
-                                      strokes == null ? 'text-slate-400 dark:text-slate-500' :
-                                      toPar === null ? 'text-slate-700 dark:text-slate-200' :
-                                      toPar <= -2 ? 'text-amber-800 bg-amber-100 dark:text-amber-200 dark:bg-amber-950 font-bold' :
-                                      toPar === -1 ? 'text-red-700 bg-red-100 dark:text-red-300 dark:bg-red-950 font-semibold' :
-                                      toPar === 0 ? 'text-slate-700 bg-white dark:text-slate-200 dark:bg-slate-800' :
-                                      toPar === 1 ? 'text-blue-700 bg-blue-100 dark:text-blue-300 dark:bg-blue-950 font-semibold' :
-                                      'text-blue-900 bg-blue-200 dark:text-blue-200 dark:bg-blue-900 font-semibold'
-                                    }`}>
+                                    <div key={`score-${hole.number}`} className={`text-xs py-1 text-center font-mono rounded w-8 shrink-0 ${getHoleScoreCellClass(strokes, toPar)}`}>
                                       {strokes ?? '-'}
                                     </div>
                                   );
                                 })}
-                                <div className="text-xs py-1 text-center font-mono rounded w-10 shrink-0 ml-1 bg-slate-100 font-semibold">
+                                <div className={nineTotalClass}>
                                   {player.outStrokes || '-'}
                                 </div>
                               </div>
@@ -682,28 +688,28 @@ const LeaderboardTab: React.FC<Props> = ({
 
                           {/* Back 9 */}
                           <div>
-                            <div className="text-xs font-semibold text-slate-500 mb-1">Back Nine</div>
+                            <div className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">Back Nine</div>
                             <div className="flex flex-col gap-1">
                               {/* Hole numbers 10-18 */}
                               <div className="flex gap-1">
-                                <div className="text-xs font-semibold text-slate-600 py-1 text-center w-12 shrink-0">Hole</div>
+                                <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 py-1 text-center w-12 shrink-0">Hole</div>
                                 {holes.slice(9, 18).map((hole) => (
-                                  <div key={`hole-${hole.number}`} className="text-xs font-semibold text-slate-600 py-1 text-center w-8 shrink-0">
+                                  <div key={`hole-${hole.number}`} className="text-xs font-semibold text-slate-600 dark:text-slate-300 py-1 text-center w-8 shrink-0">
                                     {hole.number}
                                   </div>
                                 ))}
-                                <div className="text-xs font-semibold text-slate-600 py-1 text-center w-10 shrink-0 ml-1">In</div>
+                                <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 py-1 text-center w-10 shrink-0 ml-1">In</div>
                               </div>
                               
                               {/* Par 10-18 */}
                               <div className="flex gap-1">
-                                <div className="text-xs font-semibold text-slate-600 py-1 text-center w-12 shrink-0">Par</div>
+                                <div className="text-xs font-semibold text-slate-600 dark:text-slate-300 py-1 text-center w-12 shrink-0">Par</div>
                                 {holes.slice(9, 18).map((hole) => (
-                                  <div key={`par-${hole.number}`} className="text-xs text-slate-600 py-1 text-center bg-slate-100 rounded w-8 shrink-0">
+                                  <div key={`par-${hole.number}`} className="text-xs text-slate-600 dark:text-slate-300 py-1 text-center w-8 shrink-0">
                                     {typeof hole.par === 'number' ? hole.par : '-'}
                                   </div>
                                 ))}
-                                <div className="text-xs text-slate-600 py-1 text-center bg-slate-200 rounded w-10 shrink-0 ml-1 font-semibold">
+                                <div className={`${nineTotalClass} font-semibold`}>
                                   {parsKnown
                                     ? holes.slice(9, 18).reduce((sum: number, h: any) => sum + (h.par as number), 0)
                                     : '-'}
@@ -712,7 +718,7 @@ const LeaderboardTab: React.FC<Props> = ({
                               
                               {/* Player scores 10-18 */}
                               <div className="flex gap-1">
-                                <div className="text-xs font-semibold text-slate-700 py-1 text-center w-12 shrink-0">Score</div>
+                                <div className="text-xs font-semibold text-slate-700 dark:text-slate-200 py-1 text-center w-12 shrink-0">Score</div>
                                 {holes.slice(9, 18).map((hole) => {
                                   const playerScores = getPlayerScorecard(player.id);
                                   const scoreForHole = playerScores.find((s: any) => s.hole === hole.number);
@@ -721,20 +727,12 @@ const LeaderboardTab: React.FC<Props> = ({
                                   const toPar = strokes != null && typeof par === 'number' ? strokes - par : null;
                                   
                                   return (
-                                    <div key={`score-${hole.number}`} className={`text-xs py-1 text-center font-mono rounded w-8 shrink-0 ${
-                                      strokes == null ? 'text-slate-400 dark:text-slate-500' :
-                                      toPar === null ? 'text-slate-700 dark:text-slate-200' :
-                                      toPar <= -2 ? 'text-amber-800 bg-amber-100 dark:text-amber-200 dark:bg-amber-950 font-bold' :
-                                      toPar === -1 ? 'text-red-700 bg-red-100 dark:text-red-300 dark:bg-red-950 font-semibold' :
-                                      toPar === 0 ? 'text-slate-700 bg-white dark:text-slate-200 dark:bg-slate-800' :
-                                      toPar === 1 ? 'text-blue-700 bg-blue-100 dark:text-blue-300 dark:bg-blue-950 font-semibold' :
-                                      'text-blue-900 bg-blue-200 dark:text-blue-200 dark:bg-blue-900 font-semibold'
-                                    }`}>
+                                    <div key={`score-${hole.number}`} className={`text-xs py-1 text-center font-mono rounded w-8 shrink-0 ${getHoleScoreCellClass(strokes, toPar)}`}>
                                       {strokes ?? '-'}
                                     </div>
                                   );
                                 })}
-                                <div className="text-xs py-1 text-center font-mono rounded w-10 shrink-0 ml-1 bg-slate-100 font-semibold">
+                                <div className={nineTotalClass}>
                                   {player.inStrokes || '-'}
                                 </div>
                               </div>
