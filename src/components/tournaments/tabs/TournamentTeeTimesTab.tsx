@@ -5,6 +5,7 @@
 import React, { useState } from 'react';
 import useStore from '../../../state/store';
 import type { TournamentTeeTime, TournamentRegistration } from '../../../state/types';
+import { formatHandicapIndex } from '../../../utils/handicap';
 
 interface Props {
   tournamentId: string;
@@ -101,7 +102,7 @@ const TournamentTeeTimesTab: React.FC<Props> = ({ tournamentId }) => {
                 </div>
                 {registration?.handicapSnapshot != null && (
                   <div className="text-xs text-gray-500">
-                    HCP: {registration.handicapSnapshot.toFixed(1)}
+                    HCP: {formatHandicapIndex(registration.handicapSnapshot)}
                   </div>
                 )}
               </div>

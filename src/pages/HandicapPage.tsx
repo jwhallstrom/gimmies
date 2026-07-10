@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import useStore from '../state/store';
-import { applyESCAdjustment, isRoundEligibleForHandicapIndex } from '../utils/handicap';
+import { applyESCAdjustment, formatHandicapIndex, isRoundEligibleForHandicapIndex } from '../utils/handicap';
 import { loadCoursesIntoCache } from '../hooks/useCourses';
 
 const HandicapPage: React.FC = () => {
@@ -98,7 +98,7 @@ const HandicapPage: React.FC = () => {
           <div className="text-center">
             <div className="text-3xl font-bold text-primary-600">
               {hasCalculatedIndex
-                ? currentProfile.handicapIndex!.toFixed(1)
+                ? formatHandicapIndex(currentProfile.handicapIndex)
                 : '--'
               }
             </div>
@@ -247,7 +247,7 @@ const HandicapPage: React.FC = () => {
                     {formatDate(history.date)}
                   </span>
                   <span className="font-medium text-primary-600 dark:text-primary-300">
-                    {history.handicapIndex.toFixed(1)}
+                    {formatHandicapIndex(history.handicapIndex, { fallback: '—' })}
                   </span>
                 </div>
               ))}

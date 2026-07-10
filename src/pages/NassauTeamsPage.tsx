@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import useStore from '../state/store';
+import { formatHandicapIndex } from '../utils/handicap';
 
 type Props = { eventId: string };
 
@@ -379,7 +380,7 @@ const NassauTeamsPage: React.FC<Props> = ({ eventId }) => {
                       {g.name}
                       {g.handicapIndex != null && (
                         <span className={`ml-1 ${onTeam ? 'opacity-80' : 'text-slate-400'}`}>
-                          ({g.handicapIndex})
+                          ({formatHandicapIndex(g.handicapIndex)})
                         </span>
                       )}
                     </button>

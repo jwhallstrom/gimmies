@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import useStore from '../state/store';
 import { fileToAvatarDataUrl } from '../utils/avatarImage';
+import { formatHandicapIndex, parseHandicapIndexInput } from '../utils/handicap';
 import { CourseSearch } from './CourseSearch';
 
 const ProfileManager: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
@@ -23,7 +24,9 @@ const ProfileManager: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
       setEditFirstName(currentProfile.firstName || '');
       setEditLastName(currentProfile.lastName || '');
       setEditEmail(currentProfile.email || '');
-      setEditHandicapIndex(currentProfile.handicapIndex?.toString() || '');
+      setEditHandicapIndex(
+        currentProfile.handicapIndex != null ? formatHandicapIndex(currentProfile.handicapIndex) : ''
+      );
       setEditHomeCourseId((currentProfile.preferences as any)?.homeCourseId || '');
       setEditHomeCourseName((currentProfile.preferences as any)?.homeCourseName || '');
     }
@@ -44,7 +47,7 @@ const ProfileManager: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
         firstName: editFirstName.trim() || undefined,
         lastName: editLastName.trim() || undefined,
         email: editEmail.trim() || undefined,
-        handicapIndex: editHandicapIndex ? parseFloat(editHandicapIndex) : undefined,
+        handicapIndex: parseHandicapIndexInput(editHandicapIndex),
         preferences: {
           ...currentProfile.preferences,
           homeCourseId: editHomeCourseId || undefined,
@@ -311,7 +314,9 @@ const ProfileManager: React.FC<{ onClose?: () => void }> = ({ onClose }) => {
             setEditFirstName(currentProfile.firstName || '');
             setEditLastName(currentProfile.lastName || '');
             setEditEmail(currentProfile.email || '');
-            setEditHandicapIndex(currentProfile.handicapIndex?.toString() || '');
+            setEditHandicapIndex(
+        currentProfile.handicapIndex != null ? formatHandicapIndex(currentProfile.handicapIndex) : ''
+      );
           }
         }}
         className="hidden"

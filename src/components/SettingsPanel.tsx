@@ -17,6 +17,7 @@ import useStore from '../state/store';
 import { useAuthMode } from '../hooks/useAuthMode';
 import { fileToAvatarDataUrl } from '../utils/avatarImage';
 import { getStatusDisplay } from '../utils/verifiedStatus';
+import { formatHandicapIndex } from '../utils/handicap';
 import { CourseSearch } from './CourseSearch';
 import { StatusBadge, StatusProgress } from './verified';
 import StatusLevelsInfo from './verified/StatusLevelsInfo';
@@ -306,7 +307,7 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
                   <p className="text-sm text-gray-500 dark:text-slate-400 truncate">{username}</p>
                   <div className="flex items-center gap-3 mt-1">
                     <span className="text-sm font-semibold text-primary-600">
-                      {handicapIndex != null ? `${handicapIndex.toFixed(1)} HCP` : 'No handicap'}
+                      {handicapIndex != null ? `${formatHandicapIndex(handicapIndex)} HCP` : 'No handicap'}
                     </span>
                     {isGuest && (
                       <span className="text-[10px] bg-amber-100 text-amber-700 px-2 py-0.5 rounded font-bold">

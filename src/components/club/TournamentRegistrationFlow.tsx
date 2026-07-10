@@ -14,6 +14,7 @@ import { createPortal } from 'react-dom';
 import type { Tournament, TournamentDivision, TournamentRegistration } from '../../state/types';
 import { formatCurrency, calculatePlatformFee } from '../../utils/stripe';
 import useStore from '../../state/store';
+import { formatHandicapIndex } from '../../utils/handicap';
 
 interface Props {
   isOpen: boolean;
@@ -327,7 +328,7 @@ const TournamentRegistrationFlow: React.FC<Props> = ({ isOpen, onClose, tourname
             <div>
               <p className="font-bold text-gray-900">{currentProfile.name}</p>
               <p className="text-sm text-gray-500">
-                Handicap: {currentProfile.handicapIndex != null ? currentProfile.handicapIndex.toFixed(1) : 'Not set'}
+                Handicap: {currentProfile.handicapIndex != null ? formatHandicapIndex(currentProfile.handicapIndex) : 'Not set'}
               </p>
             </div>
           </div>

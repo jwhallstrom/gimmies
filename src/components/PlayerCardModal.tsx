@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import StatusLevelsInfo from './verified/StatusLevelsInfo';
 import type { StatusTier } from '../state/types';
 import { getProgressToNextTier } from '../utils/verifiedStatus';
+import { formatHandicapIndex } from '../utils/handicap';
 
 export interface PlayerCardData {
   id: string;
@@ -77,7 +78,7 @@ const PlayerCardModal: React.FC<PlayerCardModalProps> = ({ player, onClose }) =>
                 <div className="grid grid-cols-3 gap-3 mb-4">
                   <div className="text-center bg-slate-50 dark:bg-slate-800 rounded-xl py-3">
                     <div className="text-xl font-black text-gray-900 dark:text-white">
-                      {player.handicap != null ? player.handicap.toFixed(1) : '-'}
+                      {formatHandicapIndex(player.handicap, { fallback: '-' })}
                     </div>
                     <div className="text-[10px] text-gray-500 font-medium uppercase">Handicap</div>
                   </div>

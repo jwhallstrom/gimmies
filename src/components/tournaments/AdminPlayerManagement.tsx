@@ -13,6 +13,7 @@
 
 import React, { useState, useMemo } from 'react';
 import type { Tournament, TournamentRegistration } from '../../state/types';
+import { formatHandicapIndex } from '../../utils/handicap';
 
 interface Props {
   tournament: Tournament;
@@ -250,7 +251,7 @@ const AdminPlayerManagement: React.FC<Props> = ({
                       </div>
                       <div className="flex items-center gap-3 text-sm text-gray-500">
                         {player.handicapSnapshot != null && (
-                          <span>HCP: {player.handicapSnapshot.toFixed(1)}</span>
+                          <span>HCP: {formatHandicapIndex(player.handicapSnapshot)}</span>
                         )}
                         {tournament.divisions.length > 0 && player.divisionId && (
                           <span>

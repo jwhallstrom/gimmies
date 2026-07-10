@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import useStore from '../state/store';
+import { formatHandicapIndex, parseHandicapIndexInput } from '../utils/handicap';
 
 const EditProfilePage: React.FC = () => {
   const navigate = useNavigate();
@@ -53,7 +54,9 @@ const EditProfilePage: React.FC = () => {
       setEditFirstName(currentProfile.firstName || '');
       setEditLastName(currentProfile.lastName || '');
       setEditEmail(currentProfile.email || '');
-      setEditHandicapIndex(currentProfile.handicapIndex?.toString() || '');
+      setEditHandicapIndex(
+        currentProfile.handicapIndex != null ? formatHandicapIndex(currentProfile.handicapIndex) : ''
+      );
       setEditingProfile(true);
     }
   };
@@ -70,7 +73,7 @@ const EditProfilePage: React.FC = () => {
         firstName: editFirstName.trim() || undefined,
         lastName: editLastName.trim() || undefined,
         email: editEmail.trim() || undefined,
-        handicapIndex: editHandicapIndex ? parseFloat(editHandicapIndex) : undefined
+        handicapIndex: parseHandicapIndexInput(editHandicapIndex),
       });
       setEditingProfile(false);
     }
@@ -316,7 +319,9 @@ const EditProfilePage: React.FC = () => {
                     </div>
                     <div>
                       <span className="text-sm font-medium text-gray-900">Handicap Index:</span>
-                      <span className="ml-2 text-gray-700">{currentProfile.handicapIndex || 'N/A'}</span>
+                      <span className="ml-2 text-gray-700">
+                        {formatHandicapIndex(currentProfile.handicapIndex, { fallback: 'N/A' })}
+                      </span>
                     </div>
                   </div>
                 </div>

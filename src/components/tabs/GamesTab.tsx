@@ -8,7 +8,7 @@ import { calculateEventPayouts } from '../../games/payouts';
 import { getParticipantsForConfig } from '../../games/participants';
 import { EventSettlement } from '../wallet';
 import { DOT_DEFINITIONS, DEFAULT_DOTS } from '../../games/dots';
-import { distributeHandicapStrokes, calculateCourseHandicap } from '../../utils/handicap';
+import { distributeHandicapStrokes, calculateCourseHandicap, formatHandicapIndex } from '../../utils/handicap';
 import { getTee } from '../../data/cloudCourses';
 import { courseMap } from '../../data/courses';
 import type { DotCategory, BingoBangoBongoHoleResult, WolfHoleResult, DotsPlayerResult } from '../../state/types';
@@ -3825,7 +3825,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                     <label key={gg.id} className={`flex items-center gap-1 px-2 py-1 rounded border cursor-pointer ${sel ? 'bg-primary-600 text-white border-primary-600' : 'bg-white border-primary-300 text-primary-700'} disabled:opacity-50 disabled:cursor-not-allowed ${!canEdit ? 'pointer-events-none' : ''}`}>
                       <input type="checkbox" className="hidden" checked={sel} onChange={()=> toggleSelect(gg.id)} disabled={!canEdit} />
                       <span className="truncate">{gg.name}</span>
-                      {gg.handicapIndex != null && <span className="text-[9px] opacity-70">({gg.handicapIndex})</span>}
+                      {gg.handicapIndex != null && <span className="text-[9px] opacity-70">({formatHandicapIndex(gg.handicapIndex)})</span>}
                     </label>
                   );
                 })}

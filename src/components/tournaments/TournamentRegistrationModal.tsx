@@ -7,6 +7,7 @@
 
 import React, { useState, useEffect } from 'react';
 import useStore from '../../state/store';
+import { formatHandicapIndex } from '../../utils/handicap';
 import type { Tournament, TournamentDivision } from '../../state/types';
 import TestCardInput, { CardData, processTestPayment } from './TestCardInput';
 import { isStripeConfigured } from '../../adapters/payments';
@@ -287,7 +288,7 @@ const TournamentRegistrationModal: React.FC<Props> = ({ tournament, onClose, onC
                 />
                 {currentProfile?.handicapIndex && (
                   <p className="text-xs text-gray-500 mt-1">
-                    Your Gimmies handicap: {currentProfile.handicapIndex.toFixed(1)}
+                    Your Gimmies handicap: {formatHandicapIndex(currentProfile.handicapIndex)}
                   </p>
                 )}
               </div>
@@ -583,7 +584,7 @@ const TournamentRegistrationModal: React.FC<Props> = ({ tournament, onClose, onC
                 {data.handicapIndex != null && (
                   <div className="flex justify-between">
                     <span className="text-gray-500">Handicap</span>
-                    <span className="font-medium text-gray-700">{data.handicapIndex.toFixed(1)}</span>
+                    <span className="font-medium text-gray-700">{formatHandicapIndex(data.handicapIndex)}</span>
                   </div>
                 )}
                 {data.divisionId && (

@@ -233,12 +233,12 @@ export function calculateWHSHandicapIndex(input: number[] | { id: string; differ
     roundsToUse = 0;
   } else if (roundCount <= 5) {
     // Use lowest differential minus 2
-    handicapIndex = Math.max(0, sortedDifferentials[0] - 2);
+    handicapIndex = sortedDifferentials[0] - 2;
     roundsToUse = 1;
   } else if (roundCount === 6) {
     // Average of 2 lowest minus 1
     const avg = (sortedDifferentials[0] + sortedDifferentials[1]) / 2;
-    handicapIndex = Math.max(0, avg - 1);
+    handicapIndex = avg - 1;
     roundsToUse = 2;
   } else if (roundCount <= 8) {
     // Average of 2 lowest
@@ -291,6 +291,34 @@ export function calculateWHSHandicapIndex(input: number[] | { id: string; differ
     usedRoundIds: usedIds,
     calculationDate: new Date().toISOString()
   };
+}
+
+/**
+ * Format handicap index for display.
+ * Golf convention: negative stored values are plus handicaps (better than scratch).
+ * e.g. stored -2.5 → "+2.5", stored 14.2 → "14.2"
+ */
+export function formatHandicapIndex(
+  value: number | null | undefined,
+  options?: { decimals?: number; fallback?: string }
+): string {
+  const { decimals = 1, fallback = '—' } = options ?? {};
+  if (value == null || Number.isNaN(value)) return fallback;
+  const abs = Math.abs(value).toFixed(decimals);
+  if (value < 0) return `+${abs}`;
+  return abs;
+}
+
+/** Parse handicap index from user input (+2.5 → stored -2.5). */
+export function parseHandicapIndexInput(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  if (trimmed.startsWith('+')) {
+    const n = parseFloat(trimmed.slice(1));
+    return Number.isNaN(n) ? undefined : -Math.abs(n);
+  }
+  const n = parseFloat(trimmed);
+  return Number.isNaN(n) ? undefined : n;
 }
 
 /**

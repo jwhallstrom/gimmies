@@ -7,6 +7,7 @@ import React, { useState, useMemo } from 'react';
 import useStore from '../../../state/store';
 import { getCourseById, getHole } from '../../../data/cloudCourses';
 import type { TournamentRegistration, TournamentStanding, ScoreEntry } from '../../../state/types';
+import { formatHandicapIndex } from '../../../utils/handicap';
 
 interface Props {
   tournamentId: string;
@@ -126,7 +127,7 @@ const TournamentScoreHubTab: React.FC<Props> = ({ tournamentId }) => {
                       <div className="font-semibold text-gray-900 text-sm">{entry.name}</div>
                       {entry.registration?.handicapSnapshot != null && (
                         <div className="text-xs text-gray-500">
-                          HCP: {entry.registration.handicapSnapshot.toFixed(1)}
+                          HCP: {formatHandicapIndex(entry.registration.handicapSnapshot)}
                         </div>
                       )}
                     </div>

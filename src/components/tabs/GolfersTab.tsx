@@ -17,6 +17,7 @@ import useStore from '../../state/store';
 import { useCourse } from '../../hooks/useCourse';
 import { buildJoinInviteUrl, buildDirectEventUrl } from '../../utils/inviteLinks';
 import { getStatusDisplay } from '../../utils/verifiedStatus';
+import { formatHandicapIndex } from '../../utils/handicap';
 import PlayerCardModal from '../PlayerCardModal';
 import type { PlayerCardData } from '../PlayerCardModal';
 
@@ -446,7 +447,7 @@ Code: ${event.shareCode}`,
                   {!isGroupHub && (
                     <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400 mt-0.5">
                       {golfer.handicap != null && (
-                        <span>HCP: {typeof golfer.handicap === 'number' ? golfer.handicap.toFixed(1) : golfer.handicap}</span>
+                        <span>HCP: {typeof golfer.handicap === 'number' ? formatHandicapIndex(golfer.handicap) : golfer.handicap}</span>
                       )}
                       {golfer.teeName && (
                         <span className="text-xs px-2 py-0.5 bg-gray-100 rounded">{golfer.teeName}</span>

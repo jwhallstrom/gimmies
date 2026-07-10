@@ -2,6 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import useStore from '../state/store';
 import CircularChart from '../components/CircularChart';
+import { formatHandicapIndex } from '../utils/handicap';
 
 const AnalyticsPage: React.FC = () => {
   const { currentProfile, completedRounds, getProfileRounds } = useStore();
@@ -104,7 +105,7 @@ const AnalyticsPage: React.FC = () => {
 
           <div className="text-center">
             <div className="text-2xl font-bold text-primary-600">
-              {currentProfile.handicapIndex !== undefined ? currentProfile.handicapIndex.toFixed(1) : 'N/A'}
+              {formatHandicapIndex(currentProfile.handicapIndex, { fallback: 'N/A' })}
             </div>
             <div className="text-sm text-gray-600 dark:text-slate-300">Handicap</div>
           </div>

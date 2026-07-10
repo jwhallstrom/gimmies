@@ -20,6 +20,7 @@ import { useEventsAdapter, useWalletAdapter } from '../adapters';
 import type { Event } from '../state/types';
 import useStore from '../state/store';
 import { getHole } from '../data/cloudCourses';
+import { formatHandicapIndex } from '../utils/handicap';
 import { hasPendingInviteTarget } from '../utils/inviteSession';
 
 const parseEventDate = (value: string) => {
@@ -542,7 +543,7 @@ const Dashboard: React.FC = () => {
               className="bg-white/10 hover:bg-white/15 rounded-lg px-3 py-2 text-center transition-colors min-w-[60px]"
             >
               <div className="text-lg font-bold text-white leading-tight">
-                {stats.handicap != null ? stats.handicap.toFixed(1) : '—'}
+                {formatHandicapIndex(stats.handicap)}
               </div>
               <div className="text-[9px] text-primary-200 font-medium uppercase tracking-wide">HCP</div>
             </Link>

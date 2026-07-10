@@ -6,6 +6,7 @@
  */
 
 import { STATUS_TIERS, StatusTier, VerifiedStatus, Event, GolferProfile } from '../state/types';
+import { formatHandicapIndex } from './handicap';
 
 const EARNABLE_STATUS_TIERS = STATUS_TIERS.filter(t => !t.isManualOnly);
 const FOUNDER_TIER_LEVEL = 5;
@@ -294,7 +295,7 @@ export function formatVerifiedHandicap(
   profile: GolferProfile | undefined
 ): { value: string; isVerified: boolean; badge: string } {
   const display = getStatusDisplay(profile);
-  const value = handicap !== undefined ? handicap.toFixed(1) : '-';
+  const value = formatHandicapIndex(handicap, { fallback: '-' });
   
   return {
     value,
