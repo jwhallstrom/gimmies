@@ -35,6 +35,7 @@ const EventPage: React.FC = () => {
   const { id } = useParams();
   const [showNotifications, setShowNotifications] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [eventOverlay, setEventOverlay] = useState<null | 'games' | 'golfers' | 'settings' | 'chat'>(null);
   const [showEventsDropdown, setShowEventsDropdown] = useState(false);
   const [showCommandCenter, setShowCommandCenter] = useState(false);
   const [showPlayerGuide, setShowPlayerGuide] = useState(false);
@@ -105,6 +106,7 @@ const EventPage: React.FC = () => {
   };
 
   const isGroupHub = event.hubType === 'group';
+  const useLeaderboardHub = !isGroupHub;
   const isOwner = Boolean(currentProfile && event.ownerProfileId === currentProfile.id);
   const courseName = event.course.courseId ? getCourseById(event.course.courseId)?.name : null;
 
@@ -215,6 +217,25 @@ const EventPage: React.FC = () => {
     setActivePageIndex(index);
   }, []);
 
+  const openEventPanel = useCallback((panel: 'games' | 'golfers' | 'settings' | 'chat') => {
+    setShowMenu(false);
+    setEventOverlay(panel);
+  }, []);
+
+  const goToEventSection = useCallback(
+    (section: 'scorecard' | 'games' | 'golfers' | 'chat', closeModal?: () => void) => {
+      closeModal?.();
+      if (useLeaderboardHub) {
+        if (section === 'scorecard') setEventOverlay(null);
+        else openEventPanel(section);
+      } else {
+        const idx = swipeableTabs.findIndex((t) => t.id === section);
+        if (idx >= 0) scrollToPage(idx);
+      }
+    },
+    [useLeaderboardHub, openEventPanel, scrollToPage, swipeableTabs]
+  );
+
   const handleDelete = () => {
     if (window.confirm(`Delete "${event.name}"? This cannot be undone.`)) {
       // Navigate first to avoid blank screen, then delete
@@ -240,6 +261,14 @@ const EventPage: React.FC = () => {
       setChatReadVersion((v) => v + 1);
     }
   }, [isGroupHub, isChatPage, event?.id, event?.parentGroupId]);
+
+  useEffect(() => {
+    if (eventOverlay === 'chat') {
+      const targetId = getChatTargetId(event);
+      markChatAsRead(targetId);
+      setChatReadVersion((v) => v + 1);
+    }
+  }, [eventOverlay, event?.id, event?.parentGroupId]);
 
   
   
@@ -442,9 +471,8 @@ const EventPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Tab Navigation Row — Game Control left, icons centered */}
+        {/* Navigation — events: hub menu; groups: swipe tabs */}
         <div className="flex items-center pb-1 relative">
-          {/* Game Control — left-aligned with label */}
           {ccData && !isGroupHub ? (
             <button
               onClick={() => setShowCommandCenter(true)}
@@ -472,8 +500,27 @@ const EventPage: React.FC = () => {
             <div className="w-0" />
           )}
 
-          {/* Tab icons — centered in remaining space */}
-          <div className="flex-1 flex gap-1.5 justify-center">
+          {useLeaderboardHub ? (
+            <div className="flex-1 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowMenu((v) => !v)}
+                className="relative flex items-center justify-center w-10 h-10 rounded-xl bg-white/10 text-white hover:bg-white/20 transition-colors"
+                aria-label="Event menu"
+                title="More"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+                {(chatUnread > 0 || stats.golferCount > 0) && (
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[14px] h-[14px] px-0.5 rounded-full text-[8px] font-extrabold leading-none flex items-center justify-center bg-orange-500 text-white">
+                    {chatUnread > 0 ? (chatUnread > 9 ? '9+' : chatUnread) : '·'}
+                  </span>
+                )}
+              </button>
+            </div>
+          ) : (
+            <div className="flex-1 flex gap-1.5 justify-center">
           {tabs.map((tab, index) => {
             // Find the swipeable index for this tab (or -1 if modal-only)
             const swipeIndex = swipeableTabs.findIndex(t => t.id === tab.id);
@@ -545,10 +592,11 @@ const EventPage: React.FC = () => {
               </button>
             );
           })}
-          </div>
+            </div>
+          )}
         </div>
-        
-        {/* Dot Indicators - Instagram style */}
+
+        {!useLeaderboardHub && (
         <div className="flex justify-center gap-1.5 pb-2">
           {swipeableTabs.map((tab, index) => (
             <button
@@ -563,7 +611,80 @@ const EventPage: React.FC = () => {
             />
           ))}
         </div>
+        )}
       </div>
+
+      {/* Event hub menu (live rounds) */}
+      {useLeaderboardHub && showMenu && (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/30" onClick={() => setShowMenu(false)} />
+          <div className="fixed right-3 top-[4.5rem] z-50 w-56">
+            <div className="bg-white rounded-xl shadow-xl border border-gray-200 py-1 overflow-hidden">
+              <button
+                type="button"
+                onClick={() => openEventPanel('games')}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors"
+              >
+                <span className="text-lg">💰</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-bold text-gray-900">Games & Payouts</div>
+                  <div className="text-[10px] text-gray-500">Side games, matchups, totals</div>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => openEventPanel('golfers')}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors border-t border-gray-100"
+              >
+                <span className="text-lg">👥</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-bold text-gray-900">Golfers</div>
+                  <div className="text-[10px] text-gray-500">{stats.golferCount} in this event</div>
+                </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => openEventPanel('chat')}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors border-t border-gray-100"
+              >
+                <span className="text-lg">💬</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-bold text-gray-900">Full Chat</div>
+                  <div className="text-[10px] text-gray-500">Group thread & photos</div>
+                </div>
+                {chatUnread > 0 && (
+                  <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-primary-600 text-white text-[10px] font-bold flex items-center justify-center">
+                    {chatUnread > 9 ? '9+' : chatUnread}
+                  </span>
+                )}
+              </button>
+              {isOwner && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowMenu(false);
+                      setShowNotifications(true);
+                    }}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors border-t border-gray-100"
+                  >
+                    <span className="text-lg">🔔</span>
+                    <div className="text-sm font-bold text-gray-900">Alerts</div>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openEventPanel('settings')}
+                    className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors border-t border-gray-100"
+                  >
+                    <span className="text-lg">⚙️</span>
+                    <div className="text-sm font-bold text-gray-900">Settings</div>
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Guest banner */}
       {getGuestSession() && (
@@ -750,7 +871,20 @@ const EventPage: React.FC = () => {
         <div></div>
       )}
 
-      {/* Swipeable Content Area - Horizontal scroll-snap */}
+      {useLeaderboardHub ? (
+        <div className="flex-1 min-h-0 overflow-y-auto">
+          <div className="px-4 py-2 pb-32">
+            <ScoreHubTab
+              eventId={event.id}
+              isTabActive
+              chatUnread={chatUnread}
+              onOpenFullChat={() => openEventPanel('chat')}
+              onOpenGamesTab={() => openEventPanel('games')}
+              onChatRead={() => setChatReadVersion((v) => v + 1)}
+            />
+          </div>
+        </div>
+      ) : (
       <div 
         ref={scrollContainerRef}
         onScroll={handleScroll}
@@ -790,6 +924,7 @@ const EventPage: React.FC = () => {
           </div>
         ))}
       </div>
+      )}
       
       {/* Modals */}
       
@@ -798,6 +933,50 @@ const EventPage: React.FC = () => {
           event={event}
           onClose={() => setShowNotifications(false)}
         />
+      )}
+
+      {useLeaderboardHub && eventOverlay && createPortal(
+        <div
+          className="fixed inset-0 z-[55] bg-black/50 backdrop-blur-[2px] flex flex-col justify-end sm:justify-center sm:p-4"
+          onClick={() => setEventOverlay(null)}
+        >
+          <div
+            className="bg-white sm:rounded-2xl rounded-t-2xl shadow-2xl w-full sm:max-w-lg mx-auto max-h-[min(92vh,800px)] flex flex-col overflow-hidden animate-slide-up"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-slate-200 bg-slate-50 flex-shrink-0">
+              <div className="font-bold text-sm text-gray-900">
+                {eventOverlay === 'games' && 'Games & Payouts'}
+                {eventOverlay === 'golfers' && 'Golfers'}
+                {eventOverlay === 'chat' && 'Event Chat'}
+                {eventOverlay === 'settings' && 'Event Settings'}
+              </div>
+              <button
+                type="button"
+                onClick={() => setEventOverlay(null)}
+                className="p-2 rounded-full hover:bg-slate-200 text-gray-500"
+                aria-label="Close"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto">
+              {eventOverlay === 'games' && (
+                <GamesTab eventId={event.id} isTabActive autoOpenAddGame={triggerAddGame} />
+              )}
+              {eventOverlay === 'golfers' && <GolfersTab eventId={event.id} isTabActive />}
+              {eventOverlay === 'chat' && (
+                <div className="h-[min(72vh,640px)] flex flex-col">
+                  <ChatTab eventId={event.id} isActive embedded />
+                </div>
+              )}
+              {eventOverlay === 'settings' && (isOwner ? <SetupTab eventId={event.id} /> : <AccessDenied />)}
+            </div>
+          </div>
+        </div>,
+        document.body
       )}
 
       {/* ========== PLAYER GAME GUIDE MODAL ========== */}
@@ -873,11 +1052,7 @@ const EventPage: React.FC = () => {
               {/* Enter Scores — only when live */}
               {event.status === 'started' && !event.isCompleted && (
                 <button
-                  onClick={() => {
-                    setShowPlayerGuide(false);
-                    const idx = swipeableTabs.findIndex(t => t.id === 'scorecard');
-                    if (idx >= 0) scrollToPage(idx);
-                  }}
+                  onClick={() => goToEventSection('scorecard', () => setShowPlayerGuide(false))}
                   className="w-full p-4 flex items-center gap-4 hover:bg-green-50 active:bg-green-100 transition text-left"
                 >
                   <div className="w-11 h-11 rounded-xl bg-green-500 flex items-center justify-center text-lg shadow-sm">
@@ -895,11 +1070,7 @@ const EventPage: React.FC = () => {
 
               {/* Leaderboard */}
               <button
-                onClick={() => {
-                  setShowPlayerGuide(false);
-                  const idx = swipeableTabs.findIndex(t => t.id === 'scorecard');
-                  if (idx >= 0) scrollToPage(idx);
-                }}
+                onClick={() => goToEventSection('scorecard', () => setShowPlayerGuide(false))}
                 className="w-full p-4 flex items-center gap-4 hover:bg-slate-50 active:bg-slate-100 transition text-left"
               >
                 <div className="w-11 h-11 rounded-xl bg-slate-700 flex items-center justify-center text-lg shadow-sm">
@@ -918,11 +1089,7 @@ const EventPage: React.FC = () => {
 
               {/* Games & Payouts */}
               <button
-                onClick={() => {
-                  setShowPlayerGuide(false);
-                  const idx = swipeableTabs.findIndex(t => t.id === 'games');
-                  if (idx >= 0) scrollToPage(idx);
-                }}
+                onClick={() => goToEventSection('games', () => setShowPlayerGuide(false))}
                 className="w-full p-4 flex items-center gap-4 hover:bg-slate-50 active:bg-slate-100 transition text-left"
               >
                 <div className="w-11 h-11 rounded-xl bg-amber-500 flex items-center justify-center text-lg shadow-sm">
@@ -941,11 +1108,7 @@ const EventPage: React.FC = () => {
 
               {/* Chat */}
               <button
-                onClick={() => {
-                  setShowPlayerGuide(false);
-                  const idx = swipeableTabs.findIndex(t => t.id === 'chat');
-                  if (idx >= 0) scrollToPage(idx);
-                }}
+                onClick={() => goToEventSection('chat', () => setShowPlayerGuide(false))}
                 className="w-full p-4 flex items-center gap-4 hover:bg-slate-50 active:bg-slate-100 transition text-left"
               >
                 <div className="w-11 h-11 rounded-xl bg-blue-500 flex items-center justify-center text-lg shadow-sm">
@@ -1231,10 +1394,8 @@ const EventPage: React.FC = () => {
               <button
                 onClick={() => {
                   setShowCommandCenter(false);
-                  const gamesIdx = swipeableTabs.findIndex(t => t.id === 'games');
-                  if (gamesIdx >= 0) scrollToPage(gamesIdx);
-                  // Auto-open the Add Game selector
-                  setTriggerAddGame(prev => prev + 1);
+                  goToEventSection('games');
+                  setTriggerAddGame((prev) => prev + 1);
                 }}
                 className="w-full p-4 flex items-center gap-4 hover:bg-slate-50 active:bg-slate-100 transition text-left"
               >

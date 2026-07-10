@@ -42,7 +42,7 @@ const EventCourseStatsSheet: React.FC<EventCourseStatsSheetProps> = ({
             <span className="text-lg" aria-hidden>
               📊
             </span>
-            <div className="font-bold text-sm text-gray-900 dark:text-white">Course Stats</div>
+            <div className="font-bold text-sm text-gray-900 dark:text-white">Hole-by-Hole Stats</div>
           </div>
           <button
             type="button"

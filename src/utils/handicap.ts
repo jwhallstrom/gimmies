@@ -299,13 +299,15 @@ export function calculateWHSHandicapIndex(input: number[] | { id: string; differ
  * e.g. stored -2.5 → "+2.5", stored 14.2 → "14.2"
  */
 export function formatHandicapIndex(
-  value: number | null | undefined,
+  value: number | string | null | undefined,
   options?: { decimals?: number; fallback?: string }
 ): string {
   const { decimals = 1, fallback = '—' } = options ?? {};
-  if (value == null || Number.isNaN(value)) return fallback;
-  const abs = Math.abs(value).toFixed(decimals);
-  if (value < 0) return `+${abs}`;
+  if (value == null || value === '') return fallback;
+  const n = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  const abs = Math.abs(n).toFixed(decimals);
+  if (n < 0) return `+${abs}`;
   return abs;
 }
 

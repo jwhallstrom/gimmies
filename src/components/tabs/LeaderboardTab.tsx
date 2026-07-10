@@ -21,6 +21,8 @@ type Props = {
   showHighlightsChip?: boolean;
   onOpenHighlights?: () => void;
   highlightTeaser?: { emoji: string; text: string } | null;
+  insightsExpanded?: boolean;
+  onToggleInsights?: () => void;
 };
 
 const LeaderboardTab: React.FC<Props> = ({
@@ -36,6 +38,8 @@ const LeaderboardTab: React.FC<Props> = ({
   showHighlightsChip = false,
   onOpenHighlights,
   highlightTeaser = null,
+  insightsExpanded = true,
+  onToggleInsights,
 }) => {
   const { profiles, currentProfile, canEditScore } = useStore() as any;
   const [scoreMode, setScoreMode] = useState<'gross' | 'net'>('gross');
@@ -53,6 +57,18 @@ const LeaderboardTab: React.FC<Props> = ({
   }>(null);
   
   if (!event) return null;
+
+  const hasInsightsRail =
+    onOpenChat ||
+    (showMoneyChip && onOpenPayouts) ||
+    (showStatsChip && onOpenStats) ||
+    (showHighlightsChip && onOpenHighlights);
+
+  const collapsedBadgeCount =
+    (chatUnread > 0 ? 1 : 0) +
+    (showHighlightsChip ? 1 : 0) +
+    (showStatsChip ? 1 : 0) +
+    (showMoneyChip && myNet != null ? 1 : 0);
 
   const togglePlayerExpanded = (playerId: string) => {
     setExpandedPlayer(expandedPlayer === playerId ? null : playerId);
@@ -368,77 +384,120 @@ const LeaderboardTab: React.FC<Props> = ({
           )}
         </div>
 
-        {(onOpenChat ||
-          (showMoneyChip && onOpenPayouts) ||
-          (showStatsChip && onOpenStats) ||
-          (showHighlightsChip && onOpenHighlights)) && (
+        {hasInsightsRail && (
           <div className="border-b border-slate-100 bg-white">
-            <div className="flex items-center gap-2 px-3 py-2 overflow-x-auto scrollbar-hide">
-              {onOpenChat && (
-                <button
-                  type="button"
-                  onClick={onOpenChat}
-                  className="relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 hover:border-slate-300 transition-colors flex-shrink-0"
-                >
-                  <span aria-hidden>💬</span>
-                  <span>Chat</span>
-                  {chatUnread > 0 && (
-                    <span className="min-w-[16px] h-4 px-1 rounded-full bg-primary-600 text-white text-[9px] font-bold flex items-center justify-center">
-                      {chatUnread > 9 ? '9+' : chatUnread}
-                    </span>
+            {insightsExpanded ? (
+              <>
+                <div className="flex items-center gap-2 px-3 py-1.5 border-b border-slate-50">
+                  {onToggleInsights && (
+                    <button
+                      type="button"
+                      onClick={onToggleInsights}
+                      className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider hover:text-slate-700 flex-shrink-0"
+                      aria-label="Collapse insights"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 15l7-7 7 7" />
+                      </svg>
+                      Insights
+                    </button>
                   )}
-                </button>
-              )}
-              {showHighlightsChip && onOpenHighlights && (
-                <button
-                  type="button"
-                  onClick={onOpenHighlights}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100 transition-colors flex-shrink-0"
-                >
-                  <span aria-hidden>⭐</span>
-                  <span>Highlights</span>
-                </button>
-              )}
-              {showStatsChip && onOpenStats && (
-                <button
-                  type="button"
-                  onClick={onOpenStats}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 transition-colors flex-shrink-0"
-                >
-                  <span aria-hidden>📊</span>
-                  <span>Stats</span>
-                </button>
-              )}
-              {showMoneyChip && onOpenPayouts && myNet != null && (
-                <button
-                  type="button"
-                  onClick={onOpenPayouts}
-                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition-colors flex-shrink-0 ${
-                    myNet > 0
-                      ? 'border-green-200 bg-green-50 text-green-800 hover:bg-green-100'
-                      : myNet < 0
-                        ? 'border-red-200 bg-red-50 text-red-800 hover:bg-red-100'
-                        : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
-                  }`}
-                >
-                  <span aria-hidden>💰</span>
-                  <span className="tabular-nums">{formatSignedMoney(myNet)}</span>
-                </button>
-              )}
-            </div>
-            {highlightTeaser && onOpenHighlights && (
+                </div>
+                <div className="flex items-center gap-2 px-3 py-2 overflow-x-auto scrollbar-hide">
+                  {onOpenChat && (
+                    <button
+                      type="button"
+                      onClick={onOpenChat}
+                      className="relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 hover:border-slate-300 transition-colors flex-shrink-0"
+                    >
+                      <span aria-hidden>💬</span>
+                      <span>Chat</span>
+                      {chatUnread > 0 && (
+                        <span className="min-w-[16px] h-4 px-1 rounded-full bg-primary-600 text-white text-[9px] font-bold flex items-center justify-center">
+                          {chatUnread > 9 ? '9+' : chatUnread}
+                        </span>
+                      )}
+                    </button>
+                  )}
+                  {showHighlightsChip && onOpenHighlights && (
+                    <button
+                      type="button"
+                      onClick={onOpenHighlights}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100 transition-colors flex-shrink-0"
+                    >
+                      <span aria-hidden>⭐</span>
+                      <span>Highlights</span>
+                    </button>
+                  )}
+                  {showStatsChip && onOpenStats && (
+                    <button
+                      type="button"
+                      onClick={onOpenStats}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100 transition-colors flex-shrink-0"
+                    >
+                      <span aria-hidden>📊</span>
+                      <span>Holes</span>
+                    </button>
+                  )}
+                  {showMoneyChip && onOpenPayouts && myNet != null && (
+                    <button
+                      type="button"
+                      onClick={onOpenPayouts}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition-colors flex-shrink-0 ${
+                        myNet > 0
+                          ? 'border-green-200 bg-green-50 text-green-800 hover:bg-green-100'
+                          : myNet < 0
+                            ? 'border-red-200 bg-red-50 text-red-800 hover:bg-red-100'
+                            : 'border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span aria-hidden>💰</span>
+                      <span className="tabular-nums">{formatSignedMoney(myNet)}</span>
+                    </button>
+                  )}
+                </div>
+                {highlightTeaser && onOpenHighlights && (
+                  <button
+                    type="button"
+                    onClick={onOpenHighlights}
+                    className="w-full px-3 pb-2 text-left"
+                  >
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50/80 border border-amber-100 text-xs text-amber-900 hover:bg-amber-100/80 transition-colors">
+                      <span className="text-base flex-shrink-0" aria-hidden>
+                        {highlightTeaser.emoji}
+                      </span>
+                      <span className="truncate font-medium">{highlightTeaser.text}</span>
+                      <span className="text-amber-600 flex-shrink-0 ml-auto">→</span>
+                    </div>
+                  </button>
+                )}
+              </>
+            ) : (
               <button
                 type="button"
-                onClick={onOpenHighlights}
-                className="w-full px-3 pb-2 text-left"
+                onClick={onToggleInsights}
+                className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-slate-50 transition-colors"
+                aria-label="Expand insights"
               >
-                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-50/80 border border-amber-100 text-xs text-amber-900 hover:bg-amber-100/80 transition-colors">
-                  <span className="text-base flex-shrink-0" aria-hidden>
-                    {highlightTeaser.emoji}
-                  </span>
-                  <span className="truncate font-medium">{highlightTeaser.text}</span>
-                  <span className="text-amber-600 flex-shrink-0 ml-auto">→</span>
+                <svg className="w-3.5 h-3.5 text-slate-400 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+                </svg>
+                <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Insights</span>
+                <div className="flex items-center gap-1.5 ml-1">
+                  {chatUnread > 0 && (
+                    <span className="text-[10px] font-bold text-primary-700 bg-primary-50 px-1.5 py-0.5 rounded-full">
+                      💬 {chatUnread > 9 ? '9+' : chatUnread}
+                    </span>
+                  )}
+                  {showHighlightsChip && <span className="text-xs" aria-hidden>⭐</span>}
+                  {showStatsChip && <span className="text-xs" aria-hidden>📊</span>}
+                  {showMoneyChip && myNet != null && (
+                    <span className="text-[10px] font-bold text-slate-600 tabular-nums">{formatSignedMoney(myNet)}</span>
+                  )}
                 </div>
+                {collapsedBadgeCount === 0 && (
+                  <span className="text-[10px] text-slate-400 ml-auto">Standings only</span>
+                )}
               </button>
             )}
           </div>

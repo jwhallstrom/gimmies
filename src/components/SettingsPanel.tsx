@@ -17,7 +17,7 @@ import useStore from '../state/store';
 import { useAuthMode } from '../hooks/useAuthMode';
 import { fileToAvatarDataUrl } from '../utils/avatarImage';
 import { getStatusDisplay } from '../utils/verifiedStatus';
-import { formatHandicapIndex } from '../utils/handicap';
+import { formatHandicapIndex, parseHandicapIndexInput } from '../utils/handicap';
 import { CourseSearch } from './CourseSearch';
 import { StatusBadge, StatusProgress } from './verified';
 import StatusLevelsInfo from './verified/StatusLevelsInfo';
@@ -53,7 +53,9 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
   useEffect(() => {
     if (currentProfile && isOpen) {
       setEditName(currentProfile.name || '');
-      setEditHandicap(currentProfile.handicapIndex?.toString() || '');
+      setEditHandicap(
+        currentProfile.handicapIndex != null ? formatHandicapIndex(currentProfile.handicapIndex) : ''
+      );
       recomputeVerifiedStatuses();
     }
   }, [currentProfile?.id, isOpen, recomputeVerifiedStatuses]);
@@ -112,7 +114,7 @@ const SettingsPanel: React.FC<Props> = ({ isOpen, onClose }) => {
     try {
       updateProfile(currentProfile.id, {
         name: editName.trim() || currentProfile.name,
-        handicapIndex: editHandicap ? parseFloat(editHandicap) : undefined,
+        handicapIndex: parseHandicapIndexInput(editHandicap),
       });
       
       // Save to cloud (signed-in only)

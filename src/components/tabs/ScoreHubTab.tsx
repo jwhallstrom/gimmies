@@ -24,6 +24,10 @@ import EventHighlightsSheet from '../event/EventHighlightsSheet';
 import { useMyEventPayout } from '../../hooks/useMyEventPayout';
 import { useEventCourseStats } from '../../hooks/useEventCourseStats';
 import { generateRoundRecap } from '../../utils/roundRecap';
+import {
+  getLeaderboardInsightsExpanded,
+  setLeaderboardInsightsExpanded,
+} from '../../utils/leaderboardInsights';
 
 type Props = {
   eventId: string;
@@ -58,6 +62,7 @@ const ScoreHubTab: React.FC<Props> = ({
   const [showPayoutSheet, setShowPayoutSheet] = useState(false);
   const [showStatsSheet, setShowStatsSheet] = useState(false);
   const [showHighlightsSheet, setShowHighlightsSheet] = useState(false);
+  const [insightsExpanded, setInsightsExpanded] = useState(() => getLeaderboardInsightsExpanded());
   const [entryMode, setEntryMode] = useState<'cards' | 'team'>('cards');
   
   const payout = useMyEventPayout(eventId);
@@ -75,6 +80,14 @@ const ScoreHubTab: React.FC<Props> = ({
     const top = recap.highlights[0];
     return { emoji: top.emoji, text: top.title };
   }, [recap]);
+
+  const toggleInsights = () => {
+    setInsightsExpanded((prev) => {
+      const next = !prev;
+      setLeaderboardInsightsExpanded(next);
+      return next;
+    });
+  };
   
   // Quick entry state
   const [quickScore, setQuickScore] = useState<number | null>(null);
@@ -225,7 +238,9 @@ const ScoreHubTab: React.FC<Props> = ({
             onOpenStats={() => setShowStatsSheet(true)}
             showHighlightsChip={showHighlightsChip}
             onOpenHighlights={() => setShowHighlightsSheet(true)}
-            highlightTeaser={highlightTeaser}
+            highlightTeaser={insightsExpanded ? highlightTeaser : null}
+            insightsExpanded={insightsExpanded}
+            onToggleInsights={toggleInsights}
           />
 
           {/* Orange FAB - matches home page design. Only show when this tab is active to avoid covering chat. */}
