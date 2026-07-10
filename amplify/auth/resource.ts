@@ -1,4 +1,4 @@
-import { defineAuth, secret } from '@aws-amplify/backend';
+import { defineAuth } from '@aws-amplify/backend';
 import { preSignUp } from './pre-sign-up/resource';
 
 /**
@@ -13,27 +13,27 @@ export const auth = defineAuth({
     // Email/Password authentication
     email: true,
     
-    // Google OAuth — set secrets before deploy:
+    // Google OAuth — uncomment AFTER setting Amplify secrets (deploy fails without them):
     //   npx ampx sandbox secret set GOOGLE_CLIENT_ID
     //   npx ampx sandbox secret set GOOGLE_CLIENT_SECRET
     // Amplify Console → Hosting → Backend → Secrets (production pipeline).
-    externalProviders: {
-      google: {
-        clientId: secret('GOOGLE_CLIENT_ID'),
-        clientSecret: secret('GOOGLE_CLIENT_SECRET'),
-        scopes: ['email', 'profile', 'openid'],
-      },
-      callbackUrls: [
-        'http://localhost:5173/',
-        'https://app.golfwithgimmies.com/',
-        'https://play.golfwithgimmies.com/',
-      ],
-      logoutUrls: [
-        'http://localhost:5173/',
-        'https://app.golfwithgimmies.com/',
-        'https://play.golfwithgimmies.com/',
-      ],
-    },
+    // externalProviders: {
+    //   google: {
+    //     clientId: secret('GOOGLE_CLIENT_ID'),
+    //     clientSecret: secret('GOOGLE_CLIENT_SECRET'),
+    //     scopes: ['email', 'profile', 'openid'],
+    //   },
+    //   callbackUrls: [
+    //     'http://localhost:5173/',
+    //     'https://app.golfwithgimmies.com/',
+    //     'https://play.golfwithgimmies.com/',
+    //   ],
+    //   logoutUrls: [
+    //     'http://localhost:5173/',
+    //     'https://app.golfwithgimmies.com/',
+    //     'https://play.golfwithgimmies.com/',
+    //   ],
+    // },
   },
 
   triggers: {

@@ -278,19 +278,10 @@ const GuestJoinPage: React.FC<GuestJoinPageProps> = ({
         : 'Create an account or sign in to join the game.'
       : 'Your friends are waiting — join them in just a minute.';
 
-  const userFacingPreviewNote =
-    preview?.error &&
-    !preview.error.toLowerCase().includes('not authorized') &&
-    !preview.error.toLowerCase().includes('unauthorized')
-      ? preview.error
-      : null;
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary-900 via-primary-800 to-primary-950 flex flex-col">
-      <div className="flex-shrink-0 pt-safe-top" />
-
-      <div className="flex-1 flex flex-col items-center justify-center px-6 py-8">
-        <div className="w-full max-w-sm">
+    <div className="h-full min-h-0 overflow-y-auto overscroll-y-contain bg-gradient-to-br from-primary-900 via-primary-800 to-primary-950">
+      <div className="min-h-min flex flex-col items-center px-6 pt-safe-top pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+        <div className="w-full max-w-sm py-6">
           <div className="text-center mb-5">
             <img src="/gimmies-logo.png" alt="Gimmies" className="h-9 mx-auto opacity-90" />
           </div>
@@ -329,9 +320,6 @@ const GuestJoinPage: React.FC<GuestJoinPageProps> = ({
                 </p>
                 <h1 className="text-xl font-black text-white mb-1">Join your friends on Gimmies</h1>
                 <p className="text-white/70 text-sm leading-relaxed">{inviteHint}</p>
-                {userFacingPreviewNote && (
-                  <p className="text-white/50 text-xs mt-2 leading-relaxed">{userFacingPreviewNote}</p>
-                )}
               </>
             )}
             <p className="text-white/40 text-xs mt-3 leading-relaxed">

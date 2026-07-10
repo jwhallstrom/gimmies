@@ -973,16 +973,21 @@ export const handler = async (event: AppSyncResolverEvent<Record<string, any>>) 
     (event as any)?.requestContext?.fieldName ||
     null;
 
-  if (!callerUserId) {
-    throw new Error('Authentication required.');
-  }
-
   if (!fieldName) {
     console.error('event-access: unsupported event shape', JSON.stringify({
       keys: Object.keys((event as any) || {}),
       sample: event,
     }));
     throw new Error('Unsupported event shape.');
+  }
+
+  // Invite preview is called with API key before the user has an account.
+  if (fieldName === 'getHubInvitePreview') {
+    return handleGetHubInvitePreview(client, event.arguments as any);
+  }
+
+  if (!callerUserId) {
+    throw new Error('Authentication required.');
   }
 
   switch (fieldName) {
@@ -994,8 +999,6 @@ export const handler = async (event: AppSyncResolverEvent<Record<string, any>>) 
       return handleListAccessibleHubs(client, callerMembershipKeys);
     case 'getAccessibleHubById':
       return handleGetAccessibleHubById(client, callerMembershipKeys, event.arguments as any);
-    case 'getHubInvitePreview':
-      return handleGetHubInvitePreview(client, event.arguments as any);
     case 'joinHubByShareCode':
       return handleJoinHubByShareCode(client, callerMembershipKeys, callerUserId, event.arguments as any);
     case 'joinHubByEventId':

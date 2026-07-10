@@ -606,21 +606,23 @@ const App: React.FC = () => {
     }
 
     return (
-      <Suspense fallback={
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-900 via-primary-800 to-primary-950">
-          <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white"></div>
-        </div>
-      }>
-        <GuestJoinPage
-          eventId={eventMatch?.[1]}
-          shareCode={joinMatch?.[1]}
-          onSignIn={() => {
-            stashPendingInviteTargets(joinMatch?.[1], eventMatch?.[1]);
-            navigate('/', { replace: true });
-          }}
-          onSuccess={handleLoginSuccess}
-        />
-      </Suspense>
+      <div className="h-full min-h-0 flex flex-col">
+        <Suspense fallback={
+          <div className="h-full flex items-center justify-center bg-gradient-to-br from-primary-900 via-primary-800 to-primary-950">
+            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white"></div>
+          </div>
+        }>
+          <GuestJoinPage
+            eventId={eventMatch?.[1]}
+            shareCode={joinMatch?.[1]}
+            onSignIn={() => {
+              stashPendingInviteTargets(joinMatch?.[1], eventMatch?.[1]);
+              navigate('/', { replace: true });
+            }}
+            onSuccess={handleLoginSuccess}
+          />
+        </Suspense>
+      </div>
     );
   }
 
@@ -628,7 +630,8 @@ const App: React.FC = () => {
     console.log('App: No user (Amplify or local), showing login');
 
     return (
-      <LoginPage 
+      <div className="h-full min-h-0 flex flex-col">
+      <LoginPage
         onSuccess={handleLoginSuccess}
         hideGuestMode={hasPendingInviteTarget()}
         onGuestMode={() => {
@@ -636,6 +639,7 @@ const App: React.FC = () => {
           createUser('guest@local', 'Guest User', false);
         }}
       />
+      </div>
     );
   }
 

@@ -216,11 +216,11 @@ export function LoginPage({ onSuccess, onGuestMode, hideGuestMode }: LoginPagePr
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-primary-900 via-primary-800 to-primary-900 bg-[url('/File_000.jpeg')] bg-cover bg-center bg-no-repeat relative p-4 pt-safe pb-safe pb-safe-base-0 pl-safe pr-safe">
+    <div className="h-full min-h-0 overflow-y-auto overscroll-y-contain bg-gradient-to-b from-primary-900 via-primary-800 to-primary-900 bg-[url('/File_000.jpeg')] bg-cover bg-center bg-no-repeat relative">
       {/* Very light overlay for better text readability */}
-      <div className="absolute inset-0 bg-black/10"></div>
-      
-      <div className="w-full max-w-md relative z-10">
+      <div className="absolute inset-0 bg-black/10 pointer-events-none"></div>
+
+      <div className="relative z-10 w-full max-w-md mx-auto p-4 pt-safe pb-[max(1.5rem,env(safe-area-inset-bottom))] pl-safe pr-safe py-6">
         {/* Logo/Header */}
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
