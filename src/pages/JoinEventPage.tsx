@@ -9,21 +9,23 @@ import { formatLocalDate, isSameOrAfterToday, parseLocalDate } from '../utils/da
 const PENDING_JOIN_KEY = 'gimmies.pendingJoinCode.v1';
 const DEFAULT_ITEMS_LIMIT = 5;
 const SECTION_ORDER_KEY = 'gimmies.joinSectionOrder.v1';
-const DEFAULT_SECTION_ORDER = ['courses', 'events', 'groups'];
+const DEFAULT_SECTION_ORDER = ['events', 'groups'] as const;
 
-type SectionId = 'courses' | 'events' | 'groups';
+type SectionId = 'events' | 'groups';
 
 function getSavedSectionOrder(): SectionId[] {
   try {
     const saved = localStorage.getItem(SECTION_ORDER_KEY);
     if (saved) {
       const parsed = JSON.parse(saved);
-      if (Array.isArray(parsed) && parsed.every(id => DEFAULT_SECTION_ORDER.includes(id))) {
-        return parsed as SectionId[];
+      if (Array.isArray(parsed)) {
+        const filtered = parsed.filter((id: string) => id === 'events' || id === 'groups') as SectionId[];
+        if (filtered.length === 2) return filtered;
+        if (filtered.length === 1) return [...filtered, filtered[0] === 'events' ? 'groups' : 'events'];
       }
     }
   } catch {}
-  return DEFAULT_SECTION_ORDER as SectionId[];
+  return [...DEFAULT_SECTION_ORDER];
 }
 
 function saveSectionOrder(order: SectionId[]): void {
@@ -93,12 +95,11 @@ const JoinEventPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   
   // Section states (collapsible)
-  const [showCourses, setShowCourses] = useState(true);
   const [showEvents, setShowEvents] = useState(true);
   const [showGroups, setShowGroups] = useState(true);
-  const [showAllCourses, setShowAllCourses] = useState(false);
   const [showAllEvents, setShowAllEvents] = useState(false);
   const [showAllGroups, setShowAllGroups] = useState(false);
+  const [courseFilterId, setCourseFilterId] = useState<string>('');
   
   // Section order (draggable)
   const [sectionOrder, setSectionOrder] = useState<SectionId[]>(getSavedSectionOrder);
@@ -328,12 +329,35 @@ const JoinEventPage: React.FC = () => {
   }, [coursesWithDistance, normalizedQuery]);
 
   const filteredEvents = useMemo(() => {
-    if (!normalizedQuery) return sortedEvents;
-    return sortedEvents.filter((e: any) => 
+    let list = sortedEvents;
+    if (courseFilterId) {
+      list = list.filter((e: any) => {
+        const cid = e.course?.courseId || e.courseId;
+        return cid === courseFilterId;
+      });
+    }
+    if (!normalizedQuery) return list;
+    return list.filter((e: any) =>
       (e.name || '').toLowerCase().includes(normalizedQuery) ||
       e.courseName.toLowerCase().includes(normalizedQuery)
     );
-  }, [sortedEvents, normalizedQuery]);
+  }, [sortedEvents, normalizedQuery, courseFilterId]);
+
+  const myActiveEvents = useMemo(() => {
+    return (myEvents || [])
+      .filter((e: any) => !e.isCompleted)
+      .map((e: any) => {
+        const courseId = e.courseId || e.course?.courseId;
+        const course = getCourseById(courseId);
+        return {
+          ...e,
+          courseName: course?.name || courseId || 'Course TBD',
+          playerCount: e.golfers?.length || 0,
+          isGroup: e.hubType === 'group',
+        };
+      })
+      .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [myEvents]);
 
   const sortedGroups = useMemo(() => {
     return (publicGroups || []).map((g: any) => {
@@ -553,20 +577,6 @@ const JoinEventPage: React.FC = () => {
     labelColor: string;
     items: any[];
   }> = {
-    courses: {
-      show: true,
-      isExpanded: showCourses,
-      setExpanded: setShowCourses,
-      showAll: showAllCourses,
-      setShowAll: setShowAllCourses,
-      icon: <span className="text-base">📍</span>,
-      label: 'Courses',
-      count: filteredCourses.length,
-      gradient: 'from-blue-50 to-white dark:from-blue-900/20 dark:to-slate-800 hover:from-blue-100',
-      badgeBg: 'bg-blue-100 dark:bg-blue-900/50',
-      labelColor: 'text-gray-800 dark:text-white',
-      items: filteredCourses,
-    },
     events: {
       show: true,
       isExpanded: showEvents,
@@ -574,7 +584,7 @@ const JoinEventPage: React.FC = () => {
       showAll: showAllEvents,
       setShowAll: setShowAllEvents,
       icon: <span className="text-base">⛳</span>,
-      label: 'Events',
+      label: 'Public Events',
       count: filteredEvents.length,
       gradient: 'from-primary-50 to-white dark:from-primary-900/20 dark:to-slate-800 hover:from-primary-100',
       badgeBg: 'bg-primary-100 dark:bg-primary-900/50',
@@ -588,7 +598,7 @@ const JoinEventPage: React.FC = () => {
       showAll: showAllGroups,
       setShowAll: setShowAllGroups,
       icon: <span className="text-base">👥</span>,
-      label: 'Groups',
+      label: 'Public Groups',
       count: filteredGroups.length,
       gradient: 'from-purple-50 to-white dark:from-purple-900/20 dark:to-slate-800 hover:from-purple-100',
       badgeBg: 'bg-purple-100 dark:bg-purple-900/50',
@@ -781,7 +791,7 @@ const JoinEventPage: React.FC = () => {
         </div>
         <div>
           <h1 className="text-lg font-black text-gray-900 dark:text-white">Join a Game or Group</h1>
-          <p className="text-xs text-gray-500 dark:text-gray-400">Browse public events and groups, or enter an invite code</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">Browse open games or enter an invite code</p>
         </div>
       </div>
 
@@ -809,73 +819,88 @@ const JoinEventPage: React.FC = () => {
         </div>
       )}
 
-      {/* Search Bar - matches Dashboard */}
-      <div className="relative">
-        <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
-        <input
-          ref={searchInputRef}
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search courses & events..."
-          className="w-full pl-9 pr-9 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-700 focus:border-primary-300 shadow-sm"
-        />
-        {searchQuery && (
-          <button
-            onClick={() => setSearchQuery('')}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-0.5"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        )}
+      {/* Search + course filter */}
+      <div className="flex gap-2">
+        <div className="relative flex-1 min-w-0">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search events..."
+            className="w-full pl-9 pr-9 py-2.5 text-sm rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-200 dark:focus:ring-primary-700 focus:border-primary-300 shadow-sm"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-0.5"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+        <select
+          value={courseFilterId}
+          onChange={(e) => setCourseFilterId(e.target.value)}
+          className="max-w-[42%] py-2.5 px-2 text-xs font-semibold rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary-200 shadow-sm truncate"
+          aria-label="Filter by course"
+        >
+          <option value="">All courses</option>
+          {coursesWithDistance.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}{c.eventCount > 0 ? ` (${c.eventCount})` : ''}
+            </option>
+          ))}
+        </select>
       </div>
 
-      {/* Inline Code Entry - Always visible, grandma-simple */}
-      <div className="bg-gradient-to-r from-accent/10 to-orange-100 dark:from-accent/20 dark:to-orange-900/20 border-2 border-accent/30 dark:border-accent/40 rounded-2xl p-3">
-        <div className="flex items-center gap-2 mb-2">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-accent to-orange-500 flex items-center justify-center flex-shrink-0">
-            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
-            </svg>
+      {/* Compact invite code — opens sheet */}
+      <button
+        type="button"
+        onClick={() => setShowCodeModal(true)}
+        className="w-full flex items-center justify-between gap-3 px-4 py-3 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm hover:bg-gray-50 dark:hover:bg-slate-750 transition-colors"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-lg">🎫</span>
+          <span className="text-sm font-semibold text-gray-800 dark:text-gray-100 truncate">Have an invite code?</span>
+        </div>
+        <span className="text-xs font-bold text-primary-600 dark:text-primary-400 flex-shrink-0">Enter code →</span>
+      </button>
+
+      {/* Your active games */}
+      {myActiveEvents.length > 0 && (
+        <div className="bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm overflow-hidden">
+          <div className="px-4 py-3 border-b border-gray-100 dark:border-slate-700 bg-gradient-to-r from-primary-50 to-white dark:from-primary-900/20 dark:to-slate-800">
+            <h2 className="text-sm font-bold text-gray-900 dark:text-white">Your active games</h2>
+            <p className="text-[11px] text-gray-500 dark:text-gray-400">Tap to open</p>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-bold text-gray-900 dark:text-white">Have an invite code?</p>
+          <div className="divide-y divide-gray-100 dark:divide-slate-700">
+            {myActiveEvents.slice(0, 5).map((event: any) => (
+              <button
+                key={event.id}
+                type="button"
+                onClick={() => navigate(event.isGroup ? `/event/${event.id}` : `/event/${event.id}`)}
+                className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-slate-700/50 transition-colors"
+              >
+                <span className="text-lg">{event.isGroup ? '👥' : '⛳'}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm text-gray-900 dark:text-white truncate">{event.name}</div>
+                  <div className="text-xs text-gray-500 truncate">
+                    {formatDate(event.date)} · {event.courseName}
+                    {event.playerCount > 0 && ` · ${event.playerCount} players`}
+                  </div>
+                </div>
+                <span className="text-xs font-bold text-primary-600">Open</span>
+              </button>
+            ))}
           </div>
         </div>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={rawInput}
-            onChange={(e) => setRawInput(e.target.value.toUpperCase())}
-            onKeyDown={(e) => e.key === 'Enter' && code.length === 6 && attemptJoinByCode()}
-            placeholder="Enter 6-digit code"
-            inputMode="text"
-            autoCapitalize="characters"
-            autoCorrect="off"
-            spellCheck={false}
-            maxLength={8}
-            className="flex-1 px-3 py-2.5 text-base font-mono font-bold tracking-wider text-center rounded-xl border-2 border-gray-200 dark:border-slate-600 bg-white dark:bg-slate-800 dark:text-white focus:outline-none focus:ring-2 focus:ring-accent focus:border-accent placeholder:text-gray-300 dark:placeholder:text-gray-600 placeholder:tracking-normal placeholder:font-normal uppercase"
-          />
-          <button
-            onClick={attemptJoinByCode}
-            disabled={codeStatus === 'joining' || code.length !== 6}
-            className="px-5 py-2.5 bg-gradient-to-r from-accent to-orange-500 text-white font-bold text-sm rounded-xl shadow-md shadow-orange-500/30 disabled:opacity-40 disabled:shadow-none transition-all hover:shadow-lg active:scale-95 flex-shrink-0"
-          >
-            {codeStatus === 'joining' ? '...' : 'Join'}
-          </button>
-        </div>
-        {codeMessage && (
-          <p className={`mt-2 text-xs font-semibold text-center ${
-            codeStatus === 'success' ? 'text-green-600' : codeStatus === 'error' ? 'text-red-500' : 'text-gray-500'
-          }`}>
-            {codeMessage}
-          </p>
-        )}
-      </div>
+      )}
 
       {/* Location prompt */}
       {geoStatus === 'idle' && (
@@ -971,18 +996,14 @@ const JoinEventPage: React.FC = () => {
                       <div className="text-sm text-center text-gray-500 dark:text-gray-400 py-4">
                         {sectionId === 'events'
                           ? 'No public events available'
-                          : sectionId === 'groups'
-                            ? 'No public groups available'
-                            : 'No courses found'}
+                          : 'No public groups available'}
                       </div>
                     ) : (
                       <>
                           {itemsToShow.map((item: any) => (
-                            sectionId === 'courses'
-                              ? <CourseCard key={item.id} course={item} />
-                              : sectionId === 'groups'
-                                ? <GroupCard key={item.id} group={item} />
-                                : <EventCard key={item.id} event={item} />
+                            sectionId === 'groups'
+                              ? <GroupCard key={item.id} group={item} />
+                              : <EventCard key={item.id} event={item} />
                           ))}
                         
                         {hasMoreItems && !config.showAll && (
@@ -1042,43 +1063,27 @@ const JoinEventPage: React.FC = () => {
             
             {/* Action buttons */}
             <div className="px-4 pb-4 space-y-2">
-              {/* Search for Course */}
               <button
-                onClick={() => { 
-                  setShowFabMenu(false); 
-                  setShowCourses(true);
-                  setShowEvents(false);
-                  setSearchQuery('');
-                  setTimeout(() => {
-                    searchInputRef.current?.focus();
-                    searchInputRef.current?.setAttribute('placeholder', 'Search for a course...');
-                  }, 100);
+                onClick={() => {
+                  setShowFabMenu(false);
+                  setShowCodeModal(true);
                 }}
-                className="w-full flex items-center gap-4 p-4 bg-blue-50 rounded-2xl hover:bg-blue-100 transition-colors border border-blue-200"
+                className="w-full flex items-center gap-4 p-4 bg-orange-50 rounded-2xl hover:bg-orange-100 transition-colors border border-orange-200"
               >
-                <div className="w-12 h-12 rounded-xl bg-blue-200 flex items-center justify-center text-xl flex-shrink-0">
-                  📍
+                <div className="w-12 h-12 rounded-xl bg-orange-200 flex items-center justify-center text-xl flex-shrink-0">
+                  🎫
                 </div>
                 <div className="text-left flex-1">
-                  <div className="font-bold text-gray-900">Search Courses</div>
-                  <div className="text-gray-500 text-sm">Find your course by name</div>
+                  <div className="font-bold text-gray-900">Enter Invite Code</div>
+                  <div className="text-gray-500 text-sm">Paste a link or 6-digit code</div>
                 </div>
-                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
               </button>
 
-              {/* Search for Event */}
               <button
-                onClick={() => { 
-                  setShowFabMenu(false); 
+                onClick={() => {
+                  setShowFabMenu(false);
                   setShowEvents(true);
-                  setShowCourses(false);
-                  setSearchQuery('');
-                  setTimeout(() => {
-                    searchInputRef.current?.focus();
-                    searchInputRef.current?.setAttribute('placeholder', 'Search for an event...');
-                  }, 100);
+                  searchInputRef.current?.focus();
                 }}
                 className="w-full flex items-center gap-4 p-4 bg-primary-50 rounded-2xl hover:bg-primary-100 transition-colors border border-primary-200"
               >
@@ -1086,12 +1091,9 @@ const JoinEventPage: React.FC = () => {
                   ⛳
                 </div>
                 <div className="text-left flex-1">
-                  <div className="font-bold text-gray-900">Search Events</div>
-                  <div className="text-gray-500 text-sm">Find an event by name</div>
+                  <div className="font-bold text-gray-900">Browse Public Events</div>
+                  <div className="text-gray-500 text-sm">Find an open game near you</div>
                 </div>
-                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                </svg>
               </button>
             </div>
 

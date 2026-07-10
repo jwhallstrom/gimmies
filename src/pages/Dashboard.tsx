@@ -20,6 +20,7 @@ import { useEventsAdapter, useWalletAdapter } from '../adapters';
 import type { Event } from '../state/types';
 import useStore from '../state/store';
 import { getHole } from '../data/cloudCourses';
+import { hasPendingInviteTarget } from '../utils/inviteSession';
 
 const parseEventDate = (value: string) => {
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
@@ -124,7 +125,6 @@ const Dashboard: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [showFabMenu, setShowFabMenu] = useState(false);
   const [isRefreshingInvites, setIsRefreshingInvites] = useState(false);
-  const [showInviteInfo, setShowInviteInfo] = useState(false);
   const [lastManualRefreshAt, setLastManualRefreshAt] = useState<string | null>(null);
   
   // Section order - persisted to localStorage
@@ -232,12 +232,22 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  // Load events on mount
+  // Load + silently refresh events (invite links, other devices)
   useEffect(() => {
-    if (!currentProfile) return;
-    if (isGuest) return;
-    loadEventsFromCloud().catch(() => {});
-  }, [currentProfile?.id, isGuest]);
+    if (!currentProfile || isGuest) return;
+
+    const silentSync = () => {
+      loadEventsFromCloud().catch(() => {});
+    };
+
+    silentSync();
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') silentSync();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, [currentProfile?.id, isGuest, loadEventsFromCloud]);
 
   const refreshInvites = useCallback(async () => {
     if (isGuest) {
@@ -257,10 +267,9 @@ const Dashboard: React.FC = () => {
     }
   }, [addToast, isGuest, loadEventsFromCloud]);
 
-  const syncDisplayAt = lastManualRefreshAt || lastEventsCloudSyncAt;
-  const syncSummary = syncDisplayAt
-    ? `Synced ${lastEventsCloudSyncCount} ${lastEventsCloudSyncCount === 1 ? 'item' : 'items'}`
-    : 'Not synced yet';
+  const showInviteSyncHint =
+    !isGuest &&
+    (hasPendingInviteTarget() || !lastEventsCloudSyncAt);
 
   // Separate events into categories: live, upcoming, completed, groups
   const { liveEvents, upcomingEvents, completedEvents, groups, activeEvents } = useMemo(() => {
@@ -658,56 +667,23 @@ const Dashboard: React.FC = () => {
         document.body
       )}
 
-      <div className="rounded-2xl border border-sky-200 bg-gradient-to-r from-sky-50 via-white to-cyan-50 px-3.5 py-2.5 shadow-sm dark:border-sky-800 dark:from-slate-900 dark:via-slate-900 dark:to-sky-950">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-sky-100 text-sky-700 dark:bg-sky-900/70 dark:text-sky-200">
-            {isRefreshingInvites ? (
-              <svg className="h-4.5 w-4.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
-              </svg>
-            ) : (
-              <svg className="h-4.5 w-4.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m14.836 2A8.001 8.001 0 005.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-14.837-2m14.837 2H15" />
-              </svg>
-            )}
-          </div>
-          <div className="relative min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <div className="truncate text-sm font-bold text-slate-900 dark:text-slate-100">
-                {isRefreshingInvites ? 'Syncing New Invites...' : 'Sync New Invites'}
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowInviteInfo((value) => !value)}
-                className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border border-sky-200 bg-white/80 text-[11px] font-bold text-sky-700 transition-colors hover:bg-sky-100 dark:border-sky-700 dark:bg-slate-800 dark:text-sky-200 dark:hover:bg-slate-700"
-                aria-label="What this does"
-              >
-                i
-              </button>
-            </div>
-            {showInviteInfo && (
-              <div className="absolute left-0 top-7 z-10 max-w-[220px] rounded-xl border border-sky-200 bg-white px-3 py-2 text-xs leading-5 text-slate-600 shadow-lg dark:border-sky-800 dark:bg-slate-900 dark:text-slate-300">
-                Refresh events and groups you joined from a text, email, or browser link.
-              </div>
-            )}
-            <div className="mt-0.5 text-[11px] text-slate-500 dark:text-slate-400">
-              {syncSummary}
-            </div>
-          </div>
+      {showInviteSyncHint && (
+        <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs dark:border-slate-700 dark:bg-slate-900/60">
+          <span className="text-slate-600 dark:text-slate-300">
+            {hasPendingInviteTarget()
+              ? 'Finishing an invite? Refresh to pull in your game.'
+              : 'Missing something from a text link?'}
+          </span>
           <button
             type="button"
             onClick={refreshInvites}
             disabled={isRefreshingInvites}
-            className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-xl bg-sky-600 px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-sky-700 disabled:cursor-wait disabled:opacity-70 dark:bg-sky-500 dark:hover:bg-sky-400"
+            className="flex-shrink-0 font-semibold text-sky-700 hover:text-sky-800 disabled:opacity-60 dark:text-sky-300"
           >
-            <span>{isRefreshingInvites ? 'Syncing' : 'Sync'}</span>
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-            </svg>
+            {isRefreshingInvites ? 'Syncing…' : 'Refresh'}
           </button>
         </div>
-      </div>
+      )}
 
       {/* Unified Content - Draggable Accordions */}
       <section key={lastEventsCloudSyncAt || 'home'} className="space-y-3">

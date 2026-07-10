@@ -121,6 +121,7 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
   const [greenieSetupId, setGreenieSetupId] = useState<string | null>(null);
   const [stablefordSetupId, setStablefordSetupId] = useState<string | null>(null);
   const [ninePointSetupId, setNinePointSetupId] = useState<string | null>(null);
+  const [ninePointDetailId, setNinePointDetailId] = useState<string | null>(null);
   const [bbbSetupId, setBbbSetupId] = useState<string | null>(null);
   const [wolfSetupId, setWolfSetupId] = useState<string | null>(null);
   const [dotsSetupId, setDotsSetupId] = useState<string | null>(null);
@@ -1412,34 +1413,62 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
       {/* ========== 9-POINT CARD ========== */}
       {ninePointArray.length > 0 && ninePointArray.map((cfg: any) => {
         const summary = payouts.ninePoint?.find((s: any) => s.configId === cfg.id);
+        const playerIds: string[] = summary
+          ? Object.keys(summary.pointsByGolfer).sort(
+              (a, b) => (summary.pointsByGolfer[b] || 0) - (summary.pointsByGolfer[a] || 0)
+            )
+          : (cfg.participantGolferIds || []).slice(0, 3);
         return (
           <div key={cfg.id} className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <div
-              onClick={isOwner ? () => setNinePointSetupId(cfg.id) : undefined}
-              className={`w-full p-4 text-left transition-colors ${isOwner ? 'cursor-pointer hover:bg-slate-50' : ''}`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="text-xl">9️⃣</span>
-                  <div>
+            <div className="p-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="text-xl flex-shrink-0">9️⃣</span>
+                  <div className="min-w-0">
                     <div className="font-bold text-gray-900">9-Point</div>
-                    <div className="text-xs text-gray-500">
-                      {cfg.net ? 'Net' : 'Gross'} · ${cfg.fee}/point · 3 players
+                    <div className="text-xs text-gray-500 truncate">
+                      {cfg.net ? 'Net' : 'Gross'} · ${cfg.fee}/pt · 3 players
                     </div>
                   </div>
                 </div>
-                {isOwner && <span className="text-xs text-primary-600 font-bold">{canEdit ? 'Edit →' : 'View →'}</span>}
+                {isOwner && (
+                  <button
+                    type="button"
+                    onClick={() => setNinePointSetupId(cfg.id)}
+                    className="text-xs text-primary-600 font-bold flex-shrink-0"
+                  >
+                    {canEdit ? 'Edit' : 'View'}
+                  </button>
+                )}
               </div>
             </div>
-            {summary && (
-              <div className="px-4 pb-3 border-t border-slate-100 pt-2 space-y-1">
-                {Object.entries(summary.pointsByGolfer).sort((a: any, b: any) => b[1] - a[1]).map(([gid, pts]) => (
-                  <div key={gid} className="flex items-center justify-between text-xs">
-                    <span className={`${gid === myGolferId ? 'font-bold text-gray-900 bg-primary-100 px-1.5 py-0.5 rounded' : 'text-gray-600'}`}>{getGolferName(gid)}</span>
-                    <span className="font-mono font-bold text-primary-700 bg-primary-50 px-2 py-0.5 rounded">{pts as number} pts</span>
-                  </div>
-                ))}
-              </div>
+            {summary && playerIds.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setNinePointDetailId(cfg.id)}
+                className="w-full px-4 pb-3 border-t border-slate-100 pt-2 text-left hover:bg-slate-50 transition-colors"
+              >
+                <div className="grid grid-cols-3 gap-2">
+                  {playerIds.map((gid) => (
+                    <div
+                      key={gid}
+                      className={`rounded-lg px-2 py-1.5 text-center ${
+                        gid === myGolferId ? 'bg-primary-50 ring-1 ring-primary-200' : 'bg-slate-50'
+                      }`}
+                    >
+                      <div className={`text-[10px] truncate ${gid === myGolferId ? 'font-bold text-gray-900' : 'text-gray-600'}`}>
+                        {gid === myGolferId ? 'You' : getGolferName(gid)}
+                      </div>
+                      <div className="text-sm font-black text-primary-700 tabular-nums">
+                        {summary.pointsByGolfer[gid] ?? 0}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-2 text-[10px] font-semibold text-primary-600 text-center">
+                  Tap for hole-by-hole scorecard →
+                </div>
+              </button>
             )}
           </div>
         );
@@ -3158,6 +3187,101 @@ const GamesTab: React.FC<Props> = ({ eventId, isTabActive = false, autoOpenAddGa
                   className="px-3 py-2 rounded-lg text-xs font-extrabold border border-red-200 bg-red-50 text-red-700 disabled:opacity-50" disabled={!canModify}>Remove</button>
                 <button onClick={() => setNinePointSetupId(null)}
                   className="px-4 py-2 rounded-lg text-xs font-extrabold border border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200">Done</button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        );
+      })()}
+
+      {/* ========== 9-POINT SCORECARD MODAL ========== */}
+      {ninePointDetailId && (() => {
+        const cfg = ninePointArray.find((x: any) => x.id === ninePointDetailId);
+        const summary = payouts.ninePoint?.find((s: any) => s.configId === ninePointDetailId);
+        if (!cfg || !summary) return null;
+        const playerIds = Object.keys(summary.pointsByGolfer).sort(
+          (a, b) => (summary.pointsByGolfer[b] || 0) - (summary.pointsByGolfer[a] || 0)
+        );
+        const shortName = (gid: string) => {
+          if (gid === myGolferId) return 'You';
+          const name = getGolferName(gid);
+          return name.length > 8 ? `${name.slice(0, 7)}…` : name;
+        };
+        return createPortal(
+          <div className="fixed inset-0 z-[9999] flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4" onClick={() => setNinePointDetailId(null)}>
+            <div className="w-full max-w-lg max-h-[85vh] bg-white rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-slide-up" onClick={e => e.stopPropagation()}>
+              <div className="flex-shrink-0 px-4 py-3 border-b border-slate-200 flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-bold tracking-[0.15em] text-slate-400 uppercase">9-Point Scorecard</div>
+                  <div className="font-extrabold text-gray-900">{cfg.net ? 'Net' : 'Gross'} · ${cfg.fee}/point</div>
+                </div>
+                <button type="button" onClick={() => setNinePointDetailId(null)} className="p-2 rounded-full hover:bg-slate-100">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+              <div className="px-4 py-3 border-b border-slate-100 bg-slate-50 grid grid-cols-3 gap-2">
+                {playerIds.map((gid) => (
+                  <div key={gid} className={`rounded-lg px-2 py-2 text-center ${gid === myGolferId ? 'bg-primary-100 ring-1 ring-primary-200' : 'bg-white'}`}>
+                    <div className="text-[10px] font-semibold text-gray-600 truncate">{shortName(gid)}</div>
+                    <div className="text-lg font-black text-primary-700 tabular-nums">{summary.pointsByGolfer[gid] ?? 0}</div>
+                    <div className="text-[9px] text-gray-400 uppercase">Total pts</div>
+                  </div>
+                ))}
+              </div>
+              <div className="overflow-y-auto flex-1 min-h-0 p-4">
+                <div className="rounded-lg border border-slate-200 overflow-hidden">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="bg-slate-100 text-[10px] text-gray-500 uppercase">
+                        <th className="text-left py-2 px-2 font-semibold w-10">Hole</th>
+                        {playerIds.map((gid) => (
+                          <th key={gid} className={`text-center py-2 px-1 font-semibold ${gid === myGolferId ? 'text-primary-700' : ''}`}>
+                            {shortName(gid)}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {summary.holeResults.map((hr: any) => (
+                        <tr key={hr.hole} className={hr.hole % 2 === 0 ? 'bg-white' : 'bg-slate-50/80'}>
+                          <td className="py-1.5 px-2 font-bold text-gray-700">{hr.hole}</td>
+                          {playerIds.map((gid) => {
+                            const pts = hr.distribution?.[gid];
+                            const score = hr.scores?.[gid];
+                            const hasScore = score != null;
+                            return (
+                              <td key={gid} className={`py-1.5 px-1 text-center ${gid === myGolferId ? 'bg-primary-50/50' : ''}`}>
+                                <div className={`font-black tabular-nums ${hasScore ? 'text-gray-900' : 'text-gray-300'}`}>
+                                  {pts ?? '—'}
+                                </div>
+                                {hasScore && (
+                                  <div className="text-[9px] text-gray-400 tabular-nums">{score}</div>
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-primary-50 font-bold border-t-2 border-primary-200">
+                        <td className="py-2 px-2 text-gray-700">Tot</td>
+                        {playerIds.map((gid) => (
+                          <td key={gid} className="py-2 px-1 text-center text-primary-800 tabular-nums">
+                            {summary.pointsByGolfer[gid] ?? 0}
+                          </td>
+                        ))}
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+                <div className="mt-2 text-[10px] text-gray-400 text-center">Bold = points · small = {cfg.net ? 'net' : 'gross'} score</div>
+              </div>
+              <div className="flex-shrink-0 px-4 py-3 border-t border-slate-200 bg-slate-50">
+                <button type="button" onClick={() => setNinePointDetailId(null)}
+                  className="w-full px-4 py-2.5 rounded-lg text-sm font-extrabold border border-slate-300 bg-white text-slate-700 hover:bg-slate-50">
+                  Close
+                </button>
               </div>
             </div>
           </div>,
