@@ -579,16 +579,6 @@ export const createEventSlice = (
     if (event.isCompleted) return false;
     if (event.ownerProfileId === currentProfile.id) return true;
     if (golferId === currentProfile.id) return true;
-
-    // Any event participant can enter scores for guest golfers (no app profile).
-    const isParticipant = event.golfers.some((g: EventGolfer) => g.profileId === currentProfile.id);
-    if (isParticipant) {
-      const targetGolfer = event.golfers.find(
-        (g: EventGolfer) => g.profileId === golferId || g.customName === golferId
-      );
-      if (targetGolfer && !targetGolfer.profileId) return true;
-    }
-
     const nassauGames = Array.isArray(event.games?.nassau) ? event.games.nassau : [];
     const userTeams = nassauGames.flatMap(
       (nassau: any) => nassau.teams?.filter((team: any) => (team.golferIds || []).includes(currentProfile.id)) || []

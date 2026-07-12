@@ -39,14 +39,6 @@ const ScoreHubTab: React.FC<Props> = ({ eventId, isTabActive = true }) => {
   const [quickSaving, setQuickSaving] = useState(false);
 
   const isOwner = Boolean(currentProfile && event && event.ownerProfileId === currentProfile.id);
-  const isParticipant = Boolean(
-    currentProfile && event?.golfers?.some((g: any) => g.profileId === currentProfile.id)
-  );
-  const guestGolfers = useMemo(() => {
-    if (!event) return [];
-    return (event.golfers || []).filter((g: any) => !g.profileId);
-  }, [event?.id, event?.lastModified, event?.golfers]);
-  const hasGuestGolfers = guestGolfers.length > 0;
 
   // Find current user's team members for team scoring
   const myTeamGolferIds = useMemo(() => {
@@ -417,31 +409,6 @@ const ScoreHubTab: React.FC<Props> = ({ eventId, isTabActive = true }) => {
                     <div className="text-left flex-1">
                       <div className="font-bold text-gray-900">All Scorecards</div>
                       <div className="text-xs text-gray-500">Admin: Edit any player</div>
-                    </div>
-                    <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                )}
-
-                {/* Guest scores - available to any participant */}
-                {!isOwner && isParticipant && hasGuestGolfers && (
-                  <button
-                    onClick={() => {
-                      setShowFabMenu(false);
-                      const firstGuestId = guestGolfers[0]?.customName || guestGolfers[0]?.displayName;
-                      if (firstGuestId) handleEnterScores(firstGuestId, 'admin');
-                    }}
-                    className="w-full p-4 flex items-center gap-4 hover:bg-slate-50 active:bg-slate-100 transition border-b border-slate-100"
-                  >
-                    <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center shadow-md">
-                      <span className="text-xl">👤</span>
-                    </div>
-                    <div className="text-left flex-1">
-                      <div className="font-bold text-gray-900">Guest Scores</div>
-                      <div className="text-xs text-gray-500">
-                        Enter scores for guests • {guestGolfers.length} guest{guestGolfers.length !== 1 ? 's' : ''}
-                      </div>
                     </div>
                     <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />

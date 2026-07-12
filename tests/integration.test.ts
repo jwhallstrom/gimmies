@@ -178,34 +178,6 @@ describe('Integration: Score Entry Permissions', () => {
     
     expect(useStore.getState().canEditScore(eventId, playerId)).toBe(true);
   });
-
-  it('participant can edit guest scores but not other registered players', async () => {
-    useStore.getState().createUser('host', 'Host');
-    const hostId = useStore.getState().currentProfile!.id;
-    const eventId = useStore.getState().createEvent()!;
-    await useStore.getState().addGolferToEvent(eventId, { customName: 'Walk-on' });
-
-    useStore.getState().createUser('joiner', 'Joiner');
-    const joinerId = useStore.getState().currentProfile!.id;
-    useStore.setState((state: any) => ({
-      events: state.events.map((e: any) => {
-        if (e.id !== eventId) return e;
-        return {
-          ...e,
-          ownerProfileId: hostId,
-          golfers: [
-            { profileId: hostId, displayName: 'Host', handicapSnapshot: null, gamePreference: 'all' },
-            { profileId: joinerId, displayName: 'Joiner', handicapSnapshot: null, gamePreference: 'all' },
-            { customName: 'Walk-on', displayName: 'Walk-on', handicapSnapshot: null, gamePreference: 'all' },
-          ],
-        };
-      }),
-    }));
-
-    expect(useStore.getState().canEditScore(eventId, 'Walk-on')).toBe(true);
-    expect(useStore.getState().canEditScore(eventId, joinerId)).toBe(true);
-    expect(useStore.getState().canEditScore(eventId, hostId)).toBe(false);
-  });
 });
 
 describe('Integration: Toast Notifications', () => {

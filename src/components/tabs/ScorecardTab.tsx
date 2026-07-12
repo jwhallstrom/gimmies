@@ -128,14 +128,6 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
       // Can always see their own scorecard
       if (isCurrentUser) return true;
 
-      // Participants can see guest scorecards (so they can enter guest scores)
-      const isParticipant = !!currentProfile && event.golfers.some((g: any) => g.profileId === currentProfile.id);
-      const isGuestGolfer = !eventGolfer.profileId;
-      if (isParticipant && isGuestGolfer) {
-        if (event.scorecardView === 'admin') return true;
-        if (focusGolferId && golferId === focusGolferId) return true;
-      }
-
       // Can see team members if they're on a team together in Nassau games
       if (currentProfile) {
         const userTeams = safeNassauGames.flatMap(nassau =>
@@ -152,9 +144,6 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
   const isEventOwner = currentProfile?.id === event.ownerProfileId;
   const hasNassauGames = safeNassauGames.length > 0;
   const isTeamScorecard = event.scorecardView === 'team' && hasNassauGames;
-  const isParticipant = !!currentProfile && event.golfers.some((g: any) => g.profileId === currentProfile.id);
-  const hasGuestGolfers = event.golfers.some((g: any) => !g.profileId);
-  const canUseGuestScorecards = Boolean(isEventOwner || (isParticipant && hasGuestGolfers));
 
   // Auto-switch from team view to individual if no Nassau games exist
   React.useEffect(() => {
@@ -252,17 +241,17 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
               className={`px-2 py-1 capitalize tracking-wide ${event.scorecardView==='team'? 'bg-red-600 text-white':'text-primary-700 hover:bg-primary-100'}`}>
               team
             </button>
-            {canUseGuestScorecards && (
+            {isEventOwner && (
               <button key="admin" onClick={()=>setScorecardView(eventId, 'admin')}
                 className={`px-2 py-1 capitalize tracking-wide ${event.scorecardView==='admin'? 'bg-red-600 text-white':'text-primary-700 hover:bg-primary-100'}`}>
-                {isEventOwner ? 'admin' : 'guests'}
+                admin
               </button>
             )}
           </div>
         )}
 
-        {/* Individual / guest view for non-Nassau events */}
-        {!hasNassauGames && canUseGuestScorecards && (
+        {/* Individual View Only for non-Nassau events or when no Nassau games */}
+        {!hasNassauGames && isEventOwner && (
           <div className="flex gap-1 text-[11px] font-medium rounded-md overflow-hidden border border-primary-200 bg-primary-50">
             <button key="individual" onClick={()=>setScorecardView(eventId, 'individual')}
               className={`px-2 py-1 capitalize tracking-wide ${event.scorecardView==='individual'? 'bg-red-600 text-white':'text-primary-700 hover:bg-primary-100'}`}>
@@ -270,7 +259,7 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
             </button>
             <button key="admin" onClick={()=>setScorecardView(eventId, 'admin')}
               className={`px-2 py-1 capitalize tracking-wide ${event.scorecardView==='admin'? 'bg-red-600 text-white':'text-primary-700 hover:bg-primary-100'}`}>
-              {isEventOwner ? 'admin' : 'guests'}
+              admin
             </button>
           </div>
         )}

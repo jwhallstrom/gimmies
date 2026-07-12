@@ -48,9 +48,6 @@ const GolfersTab: React.FC<Props> = ({ eventId, isTabActive = true }) => {
 
   const isGroupHub = event.hubType === 'group';
   const isOwner = currentProfile && event.ownerProfileId === currentProfile.id;
-  const isParticipant = Boolean(currentProfile && event.golfers.some((g: any) => g.profileId === currentProfile.id));
-  // Any participant (or owner) can add guests / members — not just the creator.
-  const canManageGuests = Boolean(isOwner || isParticipant || !event.golfers?.length);
   const courseSelected = !!event.course?.courseId;
   const teeSelected = !!event.course?.teeName;
   const teesForCourse = selectedCourse?.tees || [];
@@ -367,7 +364,7 @@ Code: ${event.shareCode}`,
         </div>
         
         {/* Groups keep an inline add button (no FAB for groups) */}
-        {isGroupHub && !event.isCompleted && canManageGuests && (
+        {isGroupHub && !event.isCompleted && (
           <button
             onClick={() => { setAddModalTab('invite'); setShowAddModal(true); }}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl font-semibold text-sm transition-all bg-purple-600 text-white hover:bg-purple-700 shadow-md shadow-purple-200"
@@ -827,8 +824,7 @@ Code: ${event.shareCode}`,
       )}
 
       {/* ========== FAB + Action Sheet (Events only, Members tab only) ========== */}
-      {/* Any participant can add guests — not just the event creator */}
-      {!event.isCompleted && !isGroupHub && isTabActive && canManageGuests && (
+      {!event.isCompleted && !isGroupHub && isTabActive && (
         <>
           {/* FAB Button - matches app-wide standard (w-16 h-16 + fab-position) */}
           <button
