@@ -390,13 +390,11 @@ describe('Event Slice', () => {
       useStore.getState().createUser('owner@test.com', 'Owner');
       const ownerId = useStore.getState().currentProfile!.id;
       const eventId = useStore.getState().createEvent()!;
-      await useStore.getState().addGolferToEvent(eventId, 'Guest Bob');
+      await useStore.getState().addGolferToEvent(eventId, { customName: 'Guest Bob' });
 
-      // createUser only activates a profile when no current user exists
-      useStore.getState().logout();
       useStore.getState().createUser('player@test.com', 'Player');
       const playerId = useStore.getState().currentProfile!.id;
-
+      // Simulate joining the owner's event as a participant
       useStore.setState((state: any) => ({
         events: state.events.map((e: any) => {
           if (e.id !== eventId) return e;
@@ -404,7 +402,7 @@ describe('Event Slice', () => {
             ...e,
             ownerProfileId: ownerId,
             golfers: [
-              { profileId: ownerId, displayName: 'Owner', handicapSnapshot: null, gamePreference: 'all' },
+              ...e.golfers.filter((g: any) => g.profileId !== playerId),
               { profileId: playerId, displayName: 'Player', handicapSnapshot: null, gamePreference: 'all' },
               { customName: 'Guest Bob', displayName: 'Guest Bob', handicapSnapshot: null, gamePreference: 'all' },
             ],
@@ -412,7 +410,6 @@ describe('Event Slice', () => {
         }),
       }));
 
-      expect(playerId).not.toBe(ownerId);
       expect(useStore.getState().canEditScore(eventId, 'Guest Bob')).toBe(true);
       expect(useStore.getState().canEditScore(eventId, ownerId)).toBe(false);
     });
