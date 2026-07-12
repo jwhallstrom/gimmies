@@ -366,8 +366,10 @@ export const createEventSlice = (
     const state = get();
     const event = state.events.find((e: Event) => e.id === eventId);
     if (!event) return;
+    if (!get().canEditScore(eventId, golferId)) return;
 
-    const eventGolfer = event.golfers.find((g: EventGolfer) => g.profileId === golferId || g.customName === golferId);
+    const eventGolfers = Array.isArray(event.golfers) ? event.golfers : [];
+    const eventGolfer = eventGolfers.find((g: EventGolfer) => g.profileId === golferId || g.customName === golferId);
     const profile = eventGolfer?.profileId ? state.profiles.find((p: GolferProfile) => p.id === eventGolfer.profileId) : null;
     const playerName = profile ? profile.name : eventGolfer?.customName || 'Unknown Player';
 
