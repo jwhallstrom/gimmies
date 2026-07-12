@@ -183,8 +183,9 @@ describe('Integration: Score Entry Permissions', () => {
     useStore.getState().createUser('host', 'Host');
     const hostId = useStore.getState().currentProfile!.id;
     const eventId = useStore.getState().createEvent()!;
-    await useStore.getState().addGolferToEvent(eventId, { customName: 'Walk-on' });
+    await useStore.getState().addGolferToEvent(eventId, 'Walk-on');
 
+    useStore.getState().logout();
     useStore.getState().createUser('joiner', 'Joiner');
     const joinerId = useStore.getState().currentProfile!.id;
     useStore.setState((state: any) => ({
@@ -202,6 +203,7 @@ describe('Integration: Score Entry Permissions', () => {
       }),
     }));
 
+    expect(joinerId).not.toBe(hostId);
     expect(useStore.getState().canEditScore(eventId, 'Walk-on')).toBe(true);
     expect(useStore.getState().canEditScore(eventId, joinerId)).toBe(true);
     expect(useStore.getState().canEditScore(eventId, hostId)).toBe(false);
