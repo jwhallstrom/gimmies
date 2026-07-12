@@ -39,10 +39,15 @@ const syncEventToCloud = async (
   guard.markSaving();
   try {
     const { saveEventToCloud, saveEventPatchToCloud } = await import('../../utils/eventSync');
+    let saved = false;
     if (patch && Object.keys(patch).length > 0) {
-      await saveEventPatchToCloud(event, patch, profile.id);
+      saved = await saveEventPatchToCloud(event, patch, profile.id);
     } else {
-      await saveEventToCloud(event, profile.id, options);
+      saved = !!(await saveEventToCloud(event, profile.id, options));
+    }
+    if (!saved) {
+      guard.markFailed();
+      return;
     }
     guard.markSaved();
   } catch (error) {
@@ -542,7 +547,15 @@ export const createEventSlice = (
       events: s.events.map((e: Event) => {
         if (e.id !== eventId) return e;
         const scorecards = Array.isArray(e.scorecards) ? e.scorecards : [];
-        return { ...e, scorecards: scorecards.map(sc => sc.golferId === golferId ? { ...sc, scores: sc.scores.map(s => s.hole === hole ? { ...s, strokes } : s) } : sc), lastModified: new Date().toISOString() };
+        return {
+          ...e,
+          scorecards: scorecards.map(sc => {
+            if (sc.golferId !== golferId) return sc;
+            const scores = Array.isArray(sc.scores) ? sc.scores : defaultScoreArray(e.course?.courseId);
+            return { ...sc, scores: scores.map(s => s.hole === hole ? { ...s, strokes } : s) };
+          }),
+          lastModified: new Date().toISOString()
+        };
       })
     }));
 
