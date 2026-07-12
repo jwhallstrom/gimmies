@@ -390,7 +390,16 @@ export const createEventSlice = (
     set((s: any) => ({
       events: s.events.map((e: Event) => {
         if (e.id !== eventId) return e;
-        return { ...e, scorecards: e.scorecards.map(sc => sc.golferId === golferId ? { ...sc, scores: sc.scores.map(s => s.hole === hole ? { ...s, strokes } : s) } : sc), lastModified: new Date().toISOString() };
+        const scorecards = Array.isArray(e.scorecards) ? e.scorecards : [];
+        return {
+          ...e,
+          scorecards: scorecards.map(sc => {
+            if (sc.golferId !== golferId) return sc;
+            const scores = Array.isArray(sc.scores) ? sc.scores : defaultScoreArray(e.course?.courseId);
+            return { ...sc, scores: scores.map(s => s.hole === hole ? { ...s, strokes } : s) };
+          }),
+          lastModified: new Date().toISOString()
+        };
       })
     }));
 
@@ -415,11 +424,18 @@ export const createEventSlice = (
     if (event.isCompleted) return false;
     if (event.ownerProfileId === currentProfile.id) return true;
     if (golferId === currentProfile.id) return true;
-    if (event.scorecardView === 'team') {
-      const userTeams = event.games.nassau.flatMap((nassau: any) => nassau.teams?.filter((team: any) => team.golferIds.includes(currentProfile.id)) || []);
-      const teamGolferIds = userTeams.flatMap((team: any) => team.golferIds);
-      return teamGolferIds.includes(golferId);
-    }
+    const eventGolfers = Array.isArray(event.golfers) ? event.golfers : [];
+    const isParticipant = eventGolfers.some((g: EventGolfer) => g.profileId === currentProfile.id);
+    const targetGolfer = eventGolfers.find(
+      (g: EventGolfer) => g.profileId === golferId || g.customName === golferId
+    );
+    if (isParticipant && targetGolfer && !targetGolfer.profileId) return true;
+    const nassauGames = Array.isArray(event.games?.nassau) ? event.games.nassau : [];
+    const userTeams = nassauGames.flatMap(
+      (nassau: any) => nassau.teams?.filter((team: any) => (team.golferIds || []).includes(currentProfile.id)) || []
+    );
+    const teamGolferIds = new Set(userTeams.flatMap((team: any) => team.golferIds || []));
+    if (teamGolferIds.has(golferId)) return true;
     return false;
   },
   
