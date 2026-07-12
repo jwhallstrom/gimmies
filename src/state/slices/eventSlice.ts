@@ -579,6 +579,11 @@ export const createEventSlice = (
     if (event.isCompleted) return false;
     if (event.ownerProfileId === currentProfile.id) return true;
     if (golferId === currentProfile.id) return true;
+    const isParticipant = event.golfers.some((g: EventGolfer) => g.profileId === currentProfile.id);
+    const targetGolfer = event.golfers.find(
+      (g: EventGolfer) => g.profileId === golferId || g.customName === golferId
+    );
+    if (isParticipant && targetGolfer && !targetGolfer.profileId) return true;
     const nassauGames = Array.isArray(event.games?.nassau) ? event.games.nassau : [];
     const userTeams = nassauGames.flatMap(
       (nassau: any) => nassau.teams?.filter((team: any) => (team.golferIds || []).includes(currentProfile.id)) || []
