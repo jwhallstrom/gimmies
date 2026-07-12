@@ -1064,7 +1064,17 @@ const EventPage: React.FC = () => {
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="font-bold text-sm text-gray-900">Enter Scores</div>
-                      <p className="text-xs text-gray-500">Tap the orange + on the Leaderboard tab.</p>
+                      <p className="text-xs text-gray-500">Tap the orange + on the Leaderboard — including guest scores.</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-xl border border-amber-100 text-left">
+                    <div className="w-9 h-9 rounded-full bg-amber-200 flex items-center justify-center flex-shrink-0">
+                      <span className="text-lg">👤</span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-sm text-gray-900">Add Guests</div>
+                      <p className="text-xs text-gray-500">On Golfers, tap + to add someone who isn't on the app.</p>
                     </div>
                   </div>
 
