@@ -27,13 +27,15 @@ const syncEventToCloud = async (eventId: string, get: () => any) => {
   if (import.meta.env.VITE_ENABLE_CLOUD_SYNC !== 'true') return;
   const event = get().events.find((e: Event) => e.id === eventId);
   const profile = get().currentProfile;
-  if (event && profile) {
-    try {
-      const { saveEventToCloud } = await import('../../utils/eventSync');
-      await saveEventToCloud(event, profile.id);
-    } catch (error) {
-      console.error('Failed to sync event to cloud:', error);
+  if (!event || !profile) return;
+  try {
+    const { saveEventToCloud } = await import('../../utils/eventSync');
+    const saved = await saveEventToCloud(event, profile.id);
+    if (!saved) {
+      console.error('Failed to sync event to cloud: save returned no share code');
     }
+  } catch (error) {
+    console.error('Failed to sync event to cloud:', error);
   }
 };
 
