@@ -80,7 +80,12 @@ describe('Event Slice', () => {
         nassau: [],
         skins: [],
         pinky: [],
-        greenie: []
+        greenie: [],
+        stableford: [],
+        ninePoint: [],
+        bingoBangoBongo: [],
+        wolf: [],
+        dots: [],
       });
     });
 
@@ -399,6 +404,7 @@ describe('Event Slice', () => {
         events: state.events.map((e: any) => e.id === eventId ? {
           ...e,
           ownerProfileId: ownerId,
+          settings: { ...(e.settings || {}), allowSharedScoreEntry: false },
           golfers: [
             { profileId: ownerId, displayName: 'Owner' },
             { profileId: playerId, displayName: 'Player' },
@@ -409,6 +415,39 @@ describe('Event Slice', () => {
 
       expect(useStore.getState().canEditScore(eventId, 'Guest Bob')).toBe(true);
       expect(useStore.getState().canEditScore(eventId, ownerId)).toBe(false);
+    });
+
+    it('allows shared score entry for other players by default', () => {
+      useStore.getState().createUser('owner@test.com', 'Owner');
+      const ownerId = useStore.getState().currentProfile!.id;
+      const eventId = useStore.getState().createEvent()!;
+
+      useStore.getState().logout();
+      useStore.getState().createUser('player@test.com', 'Player');
+      const playerId = useStore.getState().currentProfile!.id;
+
+      useStore.setState((state: any) => ({
+        events: state.events.map((e: any) => e.id === eventId ? {
+          ...e,
+          ownerProfileId: ownerId,
+          golfers: [
+            { profileId: ownerId, displayName: 'Owner' },
+            { profileId: playerId, displayName: 'Player' },
+          ],
+        } : e),
+      }));
+
+      expect(useStore.getState().canEditScore(eventId, ownerId)).toBe(true);
+
+      useStore.setState((state: any) => ({
+        events: state.events.map((e: any) => e.id === eventId ? {
+          ...e,
+          settings: { ...(e.settings || {}), allowSharedScoreEntry: false },
+        } : e),
+      }));
+
+      expect(useStore.getState().canEditScore(eventId, ownerId)).toBe(false);
+      expect(useStore.getState().canEditScore(eventId, playerId)).toBe(true);
     });
   });
 

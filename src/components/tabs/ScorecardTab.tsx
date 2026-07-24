@@ -128,9 +128,17 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
       // Can always see their own scorecard
       if (isCurrentUser) return true;
 
-      // Participants can see guest scorecards (so they can enter guest scores)
       const isParticipant = !!currentProfile && Array.isArray(event.golfers)
         && event.golfers.some((g: any) => g.profileId === currentProfile.id);
+      const allowShared = event.settings?.allowSharedScoreEntry !== false;
+
+      // Shared score entry: participants can open any scorecard (admin/focus views)
+      if (isParticipant && allowShared) {
+        if (event.scorecardView === 'admin') return true;
+        if (focusGolferId && golferId === focusGolferId) return true;
+      }
+
+      // Participants can see guest scorecards (so they can enter guest scores)
       const isGuestGolfer = !eventGolfer.profileId;
       if (isParticipant && isGuestGolfer) {
         if (event.scorecardView === 'admin') return true;
@@ -155,8 +163,11 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
   const isTeamScorecard = event.scorecardView === 'team' && hasNassauGames;
   const isParticipant = !!currentProfile && Array.isArray(event.golfers)
     && event.golfers.some((g: any) => g.profileId === currentProfile.id);
+  const allowSharedScoreEntry = event.settings?.allowSharedScoreEntry !== false;
   const hasGuestGolfers = Array.isArray(event.golfers) && event.golfers.some((g: any) => !g.profileId);
-  const canUseGuestScorecards = Boolean(isEventOwner || (isParticipant && hasGuestGolfers));
+  const canUseGuestScorecards = Boolean(
+    isEventOwner || (isParticipant && (allowSharedScoreEntry || hasGuestGolfers))
+  );
 
   // Auto-switch from team view to individual if no Nassau games exist
   React.useEffect(() => {
@@ -257,7 +268,7 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
             {canUseGuestScorecards && (
               <button key="admin" onClick={()=>setScorecardView(eventId, 'admin')}
                 className={`px-2 py-1 capitalize tracking-wide ${event.scorecardView==='admin'? 'bg-red-600 text-white':'text-primary-700 hover:bg-primary-100'}`}>
-                {isEventOwner ? 'admin' : 'guests'}
+                {isEventOwner ? 'admin' : allowSharedScoreEntry ? 'all' : 'guests'}
               </button>
             )}
           </div>
@@ -272,7 +283,7 @@ const ScorecardTab: React.FC<Props> = ({ eventId, focusGolferId, initialEntryMod
             </button>
             <button key="admin" onClick={()=>setScorecardView(eventId, 'admin')}
               className={`px-2 py-1 capitalize tracking-wide ${event.scorecardView==='admin'? 'bg-red-600 text-white':'text-primary-700 hover:bg-primary-100'}`}>
-              {isEventOwner ? 'admin' : 'guests'}
+              {isEventOwner ? 'admin' : allowSharedScoreEntry ? 'all' : 'guests'}
             </button>
           </div>
         )}

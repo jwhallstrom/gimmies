@@ -595,6 +595,11 @@ export interface Event {
   settings?: {
     /** If true, don't auto-post recap to chat when event completes */
     disableAutoRecap?: boolean;
+    /**
+     * If true (default when unset), any event participant can enter scores
+     * for other players. Set false to restrict to own/team/guest scorecards.
+     */
+    allowSharedScoreEntry?: boolean;
   };
   
   // Verified Status System

@@ -15,6 +15,7 @@ import React, { useMemo, useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import useStore from '../../state/store';
 import { useCourse } from '../../hooks/useCourse';
+import { getTee, getHole } from '../../data/cloudCourses';
 import LeaderboardTab from './LeaderboardTab';
 import ScorecardTab from './ScorecardTab';
 import EventChatSheet from '../event/EventChatSheet';
@@ -27,6 +28,7 @@ import {
   getLeaderboardInsightsExpanded,
   setLeaderboardInsightsExpanded,
 } from '../../utils/leaderboardInsights';
+import { flushPendingScorecardSync } from '../../state/slices/eventSlice';
 
 type Props = {
   eventId: string;
@@ -89,6 +91,7 @@ const ScoreHubTab: React.FC<Props> = ({
   const isParticipant = Boolean(
     currentProfile && Array.isArray(event?.golfers) && event.golfers.some((g: any) => g.profileId === currentProfile.id)
   );
+  const allowSharedScoreEntry = event?.settings?.allowSharedScoreEntry !== false;
   const guestGolfers = useMemo(() => {
     if (!event || !Array.isArray(event.golfers)) return [];
     return event.golfers.filter((g: any) => !g.profileId);
@@ -127,22 +130,36 @@ const ScoreHubTab: React.FC<Props> = ({
   const hasTeam = myTeamGolferIds.size > 1;
 
   // Load course data for par info
-  const { course: selectedCourse } = useCourse(event?.course?.courseId);
+  const { course: selectedCourse, loading: courseLoading } = useCourse(event?.course?.courseId);
   
-  // Get holes with par info
+  // Resolve holes/pars the same way scorecard + getHole do (fuzzy tee match).
+  // Never invent par=4 while a real course is still loading — that caused the
+  // orange-+ quick entry to show wrong pars vs scorecard mode.
   const holes = useMemo(() => {
     if (!event) return [];
-    const selectedTeeName = event.course?.teeName;
-    const selectedTee = selectedCourse?.tees?.find((t: any) => t.name === selectedTeeName);
-    const teeWithHoles = selectedTee || selectedCourse?.tees?.[0];
-    return teeWithHoles?.holes?.length
-      ? teeWithHoles.holes
-      : Array.from({ length: 18 }).map((_, i) => ({
-          number: i + 1,
-          par: 4, // Default par if not loaded
-          strokeIndex: i + 1,
-        }));
-  }, [event?.course?.teeName, selectedCourse]);
+    const cachedTee = getTee(event.course?.courseId, event.course?.teeName);
+    const liveTee =
+      selectedCourse?.tees?.find((t: any) => t.name === event.course?.teeName) ||
+      selectedCourse?.tees?.find(
+        (t: any) => t.name?.trim().toLowerCase() === event.course?.teeName?.trim().toLowerCase()
+      ) ||
+      selectedCourse?.tees?.[0];
+    const teeWithHoles = (cachedTee?.holes?.length ? cachedTee : null) || liveTee;
+
+    if (teeWithHoles?.holes?.length) {
+      return teeWithHoles.holes.map((h: any, i: number) => ({
+        number: typeof h.number === 'number' ? h.number : i + 1,
+        par: typeof h.par === 'number' ? h.par : undefined,
+        strokeIndex: h.strokeIndex ?? i + 1,
+      }));
+    }
+
+    return Array.from({ length: 18 }).map((_, i) => ({
+      number: i + 1,
+      par: event.course?.courseId ? undefined : 4,
+      strokeIndex: i + 1,
+    }));
+  }, [event?.course?.courseId, event?.course?.teeName, selectedCourse]);
 
   // Track which hole the quick entry widget is showing (null = auto / next empty)
   const [quickEntryHole, setQuickEntryHole] = useState<number | null>(null);
@@ -168,14 +185,36 @@ const ScoreHubTab: React.FC<Props> = ({
   const nextHoleInfo = useMemo(() => {
     const holeNum = quickEntryHole ?? nextEmptyHole ?? 18;
     const holeMeta = holes.find((h: any) => h.number === holeNum);
-    const par = holeMeta?.par ?? 4;
+    const fromCourse = event?.course?.courseId
+      ? getHole(event.course.courseId, holeNum, event.course.teeName)?.par
+      : undefined;
+    const par =
+      typeof holeMeta?.par === 'number'
+        ? holeMeta.par
+        : typeof fromCourse === 'number'
+          ? fromCourse
+          : null;
 
     if (!currentProfile || !event) return { hole: holeNum, par, existingScore: null };
     const myScorecard = event.scorecards.find((sc: any) => sc.golferId === currentProfile.id);
     const existingScore = myScorecard?.scores.find((s: any) => s.hole === holeNum)?.strokes ?? null;
 
     return { hole: holeNum, par, existingScore };
-  }, [event?.scorecards, currentProfile?.id, holes, quickEntryHole, nextEmptyHole]);
+  }, [event?.scorecards, event?.course?.courseId, event?.course?.teeName, currentProfile?.id, holes, quickEntryHole, nextEmptyHole]);
+
+  // Flush pending score syncs if the tab is backgrounded / closed mid-entry
+  useEffect(() => {
+    const flush = () => flushPendingScorecardSync(() => useStore.getState(), eventId);
+    const onVis = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, [eventId]);
 
   // Reset quick entry hole when FAB opens
   useEffect(() => {
@@ -187,7 +226,8 @@ const ScoreHubTab: React.FC<Props> = ({
   // Update quick score whenever the displayed hole changes
   useEffect(() => {
     if (showFabMenu) {
-      setQuickScore(nextHoleInfo.existingScore ?? nextHoleInfo.par);
+      const fallbackPar = nextHoleInfo.par ?? 4;
+      setQuickScore(nextHoleInfo.existingScore ?? fallbackPar);
     }
   }, [showFabMenu, nextHoleInfo.hole, nextHoleInfo.par, nextHoleInfo.existingScore]);
 
@@ -288,10 +328,13 @@ const ScoreHubTab: React.FC<Props> = ({
                         <span className="opacity-70">{holesCompleted} / {totalHoles}</span>
                       </div>
                       <div className="text-2xl font-black">
-                        Hole {nextHoleInfo.hole} <span className="text-lg font-medium opacity-80">• Par {nextHoleInfo.par}</span>
+                        Hole {nextHoleInfo.hole}{' '}
+                        <span className="text-lg font-medium opacity-80">
+                          • {nextHoleInfo.par != null ? `Par ${nextHoleInfo.par}` : courseLoading ? 'Loading par…' : 'Par —'}
+                        </span>
                       </div>
                     </div>
-                    {quickScore !== null && (
+                    {quickScore !== null && nextHoleInfo.par != null && (
                       <div className={`px-3 py-1.5 rounded-xl text-sm font-bold ${
                         quickScore <= nextHoleInfo.par - 2 ? 'bg-amber-400 text-amber-950' :
                         quickScore < nextHoleInfo.par ? 'bg-red-500 text-white' :
@@ -348,7 +391,7 @@ const ScoreHubTab: React.FC<Props> = ({
                     {/* Score -/+ and number */}
                     <div className="flex-1 flex items-center gap-2">
                       <button
-                        onClick={() => setQuickScore((s) => Math.max(1, (s ?? nextHoleInfo.par) - 1))}
+                        onClick={() => setQuickScore((s) => Math.max(1, (s ?? nextHoleInfo.par ?? 4) - 1))}
                         className="w-14 h-16 rounded-2xl bg-white/20 hover:bg-white/30 active:bg-white/40 flex items-center justify-center text-white text-3xl font-bold transition"
                       >
                         −
@@ -356,16 +399,16 @@ const ScoreHubTab: React.FC<Props> = ({
 
                       <div className="flex-1 flex items-center justify-center">
                         <div className={`text-7xl font-black tabular-nums ${
-                          quickScore !== null && quickScore < nextHoleInfo.par ? 'text-red-300' :
-                          quickScore !== null && quickScore > nextHoleInfo.par ? 'text-blue-200' :
+                          nextHoleInfo.par != null && quickScore !== null && quickScore < nextHoleInfo.par ? 'text-red-300' :
+                          nextHoleInfo.par != null && quickScore !== null && quickScore > nextHoleInfo.par ? 'text-blue-200' :
                           'text-white'
                         }`}>
-                          {quickScore ?? nextHoleInfo.par}
+                          {quickScore ?? nextHoleInfo.par ?? '—'}
                         </div>
                       </div>
 
                       <button
-                        onClick={() => setQuickScore((s) => Math.min(15, (s ?? nextHoleInfo.par) + 1))}
+                        onClick={() => setQuickScore((s) => Math.min(15, (s ?? nextHoleInfo.par ?? 4) + 1))}
                         className="w-14 h-16 rounded-2xl bg-white/20 hover:bg-white/30 active:bg-white/40 flex items-center justify-center text-white text-3xl font-bold transition"
                       >
                         +
@@ -463,8 +506,8 @@ const ScoreHubTab: React.FC<Props> = ({
                   </button>
                 )}
 
-                {/* Admin: All Players - Only for event owner */}
-                {isOwner && (
+                {/* Admin / shared: All Players */}
+                {(isOwner || (isParticipant && allowSharedScoreEntry)) && (
                   <button
                     onClick={() => { 
                       setShowFabMenu(false);
@@ -477,7 +520,9 @@ const ScoreHubTab: React.FC<Props> = ({
                     </div>
                     <div className="text-left flex-1">
                       <div className="font-bold text-gray-900">All Scorecards</div>
-                      <div className="text-xs text-gray-500">Admin: Edit any player</div>
+                      <div className="text-xs text-gray-500">
+                        {isOwner ? 'Admin: Edit any player' : 'Enter scores for anyone in the group'}
+                      </div>
                     </div>
                     <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -485,8 +530,8 @@ const ScoreHubTab: React.FC<Props> = ({
                   </button>
                 )}
 
-                {/* Guest scores - available to any participant (not just the event creator) */}
-                {!isOwner && isParticipant && hasGuestGolfers && (
+                {/* Guest scores - when shared entry is off, still allow guest entry */}
+                {!isOwner && isParticipant && !allowSharedScoreEntry && hasGuestGolfers && (
                   <button
                     onClick={() => {
                       setShowFabMenu(false);

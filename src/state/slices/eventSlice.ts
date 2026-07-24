@@ -47,12 +47,22 @@ const syncEventToCloud = async (
     }
     if (!saved) {
       guard.markFailed();
+      try {
+        get().addToast?.('Score sync failed — check connection. Your scores are still on this device.', 'error', 4000);
+      } catch {
+        // ignore toast errors
+      }
       return;
     }
     guard.markSaved();
   } catch (error) {
     console.error('Failed to sync event to cloud:', error);
     guard.markFailed();
+    try {
+      get().addToast?.('Score sync failed — check connection. Your scores are still on this device.', 'error', 4000);
+    } catch {
+      // ignore toast errors
+    }
   }
 };
 
@@ -70,6 +80,18 @@ const debouncedSyncScorecards = (eventId: string, get: () => any) => {
       void syncEventToCloud(eventId, get, { scorecards: [] } as Partial<Event>);
     }, SCORECARD_DEBOUNCE_MS)
   );
+};
+
+/** Flush any pending debounced scorecard syncs (call on page hide / unload). */
+export const flushPendingScorecardSync = (get: () => any, eventId?: string) => {
+  const ids = eventId ? [eventId] : Array.from(scorecardSaveTimers.keys());
+  for (const id of ids) {
+    const timer = scorecardSaveTimers.get(id);
+    if (!timer) continue;
+    clearTimeout(timer);
+    scorecardSaveTimers.delete(id);
+    void syncEventToCloud(id, get, { scorecards: [] } as Partial<Event>);
+  }
 };
 
 // ============================================================================
@@ -595,14 +617,19 @@ export const createEventSlice = (
     if (event.ownerProfileId === currentProfile.id) return true;
     if (golferId === currentProfile.id) return true;
 
-    // Any event participant can enter scores for guest golfers (no app profile).
     // Guard against partial/syncing event payloads so this never crashes mid-round.
     const eventGolfers = Array.isArray(event.golfers) ? event.golfers : [];
     const isParticipant = eventGolfers.some((g: EventGolfer) => g.profileId === currentProfile.id);
+    if (!isParticipant) return false;
+
+    // Default ON: any participant can enter anyone's scores unless admin turns it off.
+    if (event.settings?.allowSharedScoreEntry !== false) return true;
+
+    // Restricted mode: guests + Nassau teammates only.
     const targetGolfer = eventGolfers.find(
       (g: EventGolfer) => g.profileId === golferId || g.customName === golferId
     );
-    if (isParticipant && targetGolfer && !targetGolfer.profileId) return true;
+    if (targetGolfer && !targetGolfer.profileId) return true;
 
     const nassauGames = Array.isArray(event.games?.nassau) ? event.games.nassau : [];
     const userTeams = nassauGames.flatMap(

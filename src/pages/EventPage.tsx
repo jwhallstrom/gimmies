@@ -39,6 +39,8 @@ const EventPage: React.FC = () => {
   const [gamesSubTab, setGamesSubTab] = useState<'games' | 'payouts'>('games');
   const [showEventsDropdown, setShowEventsDropdown] = useState(false);
   const [showCommandCenter, setShowCommandCenter] = useState(false);
+  const [ccGuestName, setCcGuestName] = useState('');
+  const [ccAddingGuest, setCcAddingGuest] = useState(false);
   const [showPlayerGuide, setShowPlayerGuide] = useState(false);
   const [triggerAddGame, setTriggerAddGame] = useState(0);
   const [activePageIndex, setActivePageIndex] = useState(0);
@@ -301,6 +303,7 @@ const EventPage: React.FC = () => {
   // ========== COMMAND CENTER STATE (Admin only, non-group events) ==========
   const updateEvent = useStore((s: any) => s.updateEvent);
   const completeEvent = useStore((s) => s.completeEvent);
+  const addGolferToEvent = useStore((s: any) => s.addGolferToEvent);
   
   const ccData = useMemo(() => {
     if (isGroupHub || !isOwner || !event) return null;
@@ -354,18 +357,21 @@ const EventPage: React.FC = () => {
     // Suggested team count
     const suggestedTeams = playerCount <= 8 ? 2 : playerCount <= 12 ? 3 : 4;
     
-    // Which step is current
+    // Which step is current: Players(0) → Games(1) → Teams(2) → Start(3) → Play(4) → Done(5)
     let currentStep = 0;
-    if (isCompleted) currentStep = 4;
-    else if (isStarted) currentStep = 3;
-    else if (canStart) currentStep = 2;
-    else if (totalGames > 0 && hasNassau && !nassauTeamsDone) currentStep = 1;
-    else if (totalGames > 0) currentStep = 2;
+    if (isCompleted) currentStep = 5;
+    else if (isStarted) currentStep = 4;
+    else if (canStart) currentStep = 3;
+    else if (totalGames > 0 && hasNassau && !nassauTeamsDone) currentStep = 2;
+    else if (totalGames > 0) currentStep = 3;
+    else if (playerCount > 0) currentStep = 1;
     
     return {
       totalGames, isStarted, isCompleted, playerCount, hasNassau, nassauTeamsDone,
       issues, canStart, allScoresComplete, suggestedTeams, currentStep,
-      nassauArray, firstNassauId: nassauArray[0]?.id
+      nassauArray, firstNassauId: nassauArray[0]?.id,
+      allowSharedScoreEntry: event.settings?.allowSharedScoreEntry !== false,
+      guestCount: (event.golfers || []).filter((g: any) => !g.profileId).length,
     };
   }, [event, isGroupHub, isOwner]);
 
@@ -1498,7 +1504,7 @@ const EventPage: React.FC = () => {
 
               {/* Progress bar */}
               <div className="flex gap-1">
-                {['Games', 'Teams', 'Start', 'Play', 'Done'].map((label, i) => (
+                {['Players', 'Games', 'Teams', 'Start', 'Play', 'Done'].map((label, i) => (
                   <div key={label} className="flex-1">
                     <div className={`h-1.5 rounded-full transition-all ${
                       i <= ccData.currentStep ? 'bg-white' : 'bg-white/15'
@@ -1513,6 +1519,122 @@ const EventPage: React.FC = () => {
 
             {/* Steps */}
             <div className="divide-y divide-slate-100 max-h-[50vh] overflow-y-auto">
+
+              {/* Step 0: Players / Guests */}
+              <div className="p-4 space-y-3">
+                <div className="flex items-center gap-4">
+                  <div className={`w-11 h-11 rounded-xl flex items-center justify-center text-lg font-bold shadow-sm ${
+                    ccData.playerCount > 0 ? 'bg-green-500 text-white' : 'bg-amber-500 text-white'
+                  }`}>
+                    {ccData.playerCount > 0 ? '✓' : '👤'}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-extrabold text-gray-900">Players</div>
+                    <div className="text-xs text-gray-500">
+                      {ccData.playerCount} player{ccData.playerCount !== 1 ? 's' : ''}
+                      {ccData.guestCount > 0 ? ` · ${ccData.guestCount} guest${ccData.guestCount !== 1 ? 's' : ''}` : ''}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCommandCenter(false);
+                      openEventPanel('golfers');
+                    }}
+                    className="text-xs font-bold text-primary-700 bg-primary-50 hover:bg-primary-100 px-3 py-2 rounded-lg"
+                  >
+                    Full roster
+                  </button>
+                </div>
+
+                <form
+                  className="flex gap-2"
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    const name = ccGuestName.trim();
+                    if (!name || ccAddingGuest || event.isCompleted) return;
+                    setCcAddingGuest(true);
+                    try {
+                      await addGolferToEvent(event.id, name, event.course?.teeName || undefined, null);
+                      setCcGuestName('');
+                      addToast(`Added guest ${name}`, 'success', 2000);
+                    } catch {
+                      addToast('Could not add guest', 'error');
+                    } finally {
+                      setCcAddingGuest(false);
+                    }
+                  }}
+                >
+                  <input
+                    type="text"
+                    value={ccGuestName}
+                    onChange={(e) => setCcGuestName(e.target.value)}
+                    placeholder="Add guest name…"
+                    disabled={!!event.isCompleted || ccAddingGuest}
+                    className="flex-1 min-w-0 px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-primary-500/30 focus:border-primary-400"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!ccGuestName.trim() || ccAddingGuest || !!event.isCompleted}
+                    className="px-4 py-2.5 rounded-xl bg-slate-900 text-white text-sm font-bold disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {ccAddingGuest ? '…' : 'Add'}
+                  </button>
+                </form>
+
+                {ccData.hasNassau && ccData.playerCount > 1 && !ccData.nassauTeamsDone && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowCommandCenter(false);
+                      if (ccData.firstNassauId) navigate(`/event/${id}/games/nassau/${ccData.firstNassauId}/teams`);
+                    }}
+                    className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-xl bg-amber-50 border border-amber-100 text-left"
+                  >
+                    <div>
+                      <div className="text-sm font-bold text-amber-900">Assign to teams →</div>
+                      <div className="text-[11px] text-amber-700">Guests & players still need Nassau teams</div>
+                    </div>
+                    <svg className="w-4 h-4 text-amber-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+
+              {/* Shared score entry toggle */}
+              <div className="px-4 py-3 flex items-center justify-between gap-3 bg-slate-50/80">
+                <div className="min-w-0">
+                  <div className="text-sm font-bold text-gray-900">Shared score entry</div>
+                  <div className="text-[11px] text-gray-500">
+                    {ccData.allowSharedScoreEntry
+                      ? 'Anyone in the event can enter anyone’s scores'
+                      : 'Players can only enter their own, team, or guest scores'}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={ccData.allowSharedScoreEntry}
+                  onClick={() => {
+                    updateEvent(event.id, {
+                      settings: {
+                        ...(event.settings || {}),
+                        allowSharedScoreEntry: !ccData.allowSharedScoreEntry,
+                      },
+                    });
+                  }}
+                  className={`relative w-12 h-7 rounded-full transition-colors flex-shrink-0 ${
+                    ccData.allowSharedScoreEntry ? 'bg-green-500' : 'bg-slate-300'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-6 h-6 rounded-full bg-white shadow transition-transform ${
+                      ccData.allowSharedScoreEntry ? 'translate-x-5' : 'translate-x-0'
+                    }`}
+                  />
+                </button>
+              </div>
 
               {/* Step 1: Pick Games */}
               <button
