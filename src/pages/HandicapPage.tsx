@@ -58,12 +58,17 @@ const HandicapPage: React.FC = () => {
 
   const rounds = getProfileRounds(currentProfile.id);
   const roundsUntilIndex = Math.max(0, 3 - eligibleRounds.length);
-  const hasCalculatedIndex =
-    eligibleRounds.length >= 3 && typeof currentProfile.handicapIndex === 'number';
-
+  const hasNumericIndex = typeof currentProfile.handicapIndex === 'number';
+  const hasCalculatedIndex = eligibleRounds.length >= 3 && hasNumericIndex;
   const latestHistory = currentProfile.handicapHistory && currentProfile.handicapHistory.length > 0
     ? currentProfile.handicapHistory[currentProfile.handicapHistory.length - 1]
     : null;
+  const indexSource =
+    latestHistory?.source === 'calculation' && hasCalculatedIndex
+      ? 'Calculated'
+      : hasNumericIndex
+        ? 'Manual / pending calc'
+        : null;
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -97,12 +102,15 @@ const HandicapPage: React.FC = () => {
           </div>
           <div className="text-center">
             <div className="text-3xl font-bold text-primary-600">
-              {hasCalculatedIndex
+              {hasNumericIndex
                 ? formatHandicapIndex(currentProfile.handicapIndex)
                 : '--'
               }
             </div>
             <div className="text-sm text-gray-500 dark:text-slate-400">Current Index</div>
+            {indexSource && (
+              <div className="text-[10px] text-primary-600 dark:text-primary-300 mt-0.5">{indexSource}</div>
+            )}
             {!hasCalculatedIndex && rounds.length > 0 && (
               <div className="text-[11px] text-gray-500 dark:text-slate-400 mt-1 max-w-[140px]">
                 {eligibleRounds.length === 0

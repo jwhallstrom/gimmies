@@ -9,6 +9,7 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import { LevelUpModal } from '../components/verified';
 import { MessagesPanel, getUnreadCount } from '../components/MessagesPanel';
 import useStore from '../state/store';
+import { mergeIndividualRoundLists } from '../state/slices/handicapSlice';
 import {
   readJoinFailure,
   readPendingJoinTargets,
@@ -145,15 +146,29 @@ const App: React.FC = () => {
   };
 
   const upsertCloudProfileToStore = (cloudProfile: any, cloudRounds: any[]) => {
-    const normalizedRounds = normalizeCloudRounds(cloudRounds);
-    const incoming = { ...cloudProfile, individualRounds: normalizedRounds } as any;
+    const normalizedCloudRounds = normalizeCloudRounds(cloudRounds);
     const state = useStore.getState();
     const existing = state.profiles.find((p: any) => p.userId === cloudProfile.userId || p.id === cloudProfile.id);
+    const localRounds = Array.isArray(existing?.individualRounds) ? existing.individualRounds : [];
+
+    // Never wipe local rounds that haven't synced to cloud yet.
+    const mergedRounds = mergeIndividualRoundLists(localRounds, normalizedCloudRounds as any);
+
+    const incoming = {
+      ...(existing || {}),
+      ...cloudProfile,
+      individualRounds: mergedRounds,
+      // Keep local handicap history (not stored in cloud schema)
+      handicapHistory: existing?.handicapHistory || cloudProfile.handicapHistory || [],
+      handicapIndex:
+        typeof cloudProfile.handicapIndex === 'number'
+          ? cloudProfile.handicapIndex
+          : existing?.handicapIndex,
+    } as any;
+
     const nextProfiles = existing
       ? state.profiles.map((p: any) =>
-          (p.userId === cloudProfile.userId || p.id === cloudProfile.id)
-            ? { ...p, ...incoming, individualRounds: normalizedRounds }
-            : p
+          (p.userId === cloudProfile.userId || p.id === cloudProfile.id) ? incoming : p
         )
       : [...state.profiles, incoming];
 
@@ -166,10 +181,10 @@ const App: React.FC = () => {
       try {
         const { loadCoursesIntoCache } = await import('../hooks/useCourses');
         await loadCoursesIntoCache();
-        const state = useStore.getState();
-        state.recalculateAllDifferentials();
-        const profileId = state.currentProfile?.id;
-        if (profileId) state.calculateAndUpdateHandicap(profileId);
+        const latest = useStore.getState();
+        latest.recalculateAllDifferentials();
+        const profileId = latest.currentProfile?.id;
+        if (profileId) latest.calculateAndUpdateHandicap(profileId);
       } catch (e) {
         console.error('Failed to recalculate handicap from cloud profile:', e);
       }

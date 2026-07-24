@@ -106,5 +106,64 @@ describe('handicap utils', () => {
     expect(round.courseRating).toBe(72);
     expect(round.slopeRating).toBe(113);
   });
+
+  it('uses most recent 20 differentials when 20+ rounds are provided oldest-first', () => {
+    // 25 rounds oldest→newest: first 5 are terrible, last 20 are solid ~10
+    const entries = [
+      ...Array.from({ length: 5 }).map((_, i) => ({ id: `old-${i}`, differential: 40 })),
+      ...Array.from({ length: 20 }).map((_, i) => ({ id: `new-${i}`, differential: 10 + (i % 3) * 0.1 })),
+    ];
+    const calc = calculateWHSHandicapIndex(entries);
+    expect(calc.roundsUsed).toBe(8);
+    expect(calc.handicapIndex).toBeLessThan(15);
+    expect(calc.usedRoundIds.every((id) => id.startsWith('new-'))).toBe(true);
+  });
+});
+
+describe('mergeIndividualRoundLists', () => {
+  it('keeps local-only rounds when cloud list is incomplete', async () => {
+    const { mergeIndividualRoundLists } = await import('../src/state/slices/handicapSlice');
+    const local = [
+      {
+        id: 'ir-local-1',
+        profileId: 'p1',
+        eventId: 'evt-1',
+        date: '2026-07-01',
+        courseId,
+        teeName: 'White',
+        grossScore: 88,
+        netScore: 80,
+        courseHandicap: 8,
+        scoreDifferential: 12.1,
+        courseRating: 72,
+        slopeRating: 113,
+        scores: [],
+        createdAt: '2026-07-01T12:00:00.000Z',
+      },
+    ] as any;
+    const cloud = [
+      {
+        id: 'ir-cloud-2',
+        profileId: 'p1',
+        eventId: 'evt-2',
+        date: '2026-06-01',
+        courseId,
+        teeName: 'White',
+        grossScore: 90,
+        netScore: 82,
+        courseHandicap: 8,
+        scoreDifferential: 14.2,
+        courseRating: 72,
+        slopeRating: 113,
+        scores: [],
+        createdAt: '2026-06-01T12:00:00.000Z',
+      },
+    ] as any;
+
+    const merged = mergeIndividualRoundLists(local, cloud);
+    expect(merged).toHaveLength(2);
+    expect(merged.some((r: any) => r.eventId === 'evt-1')).toBe(true);
+    expect(merged.some((r: any) => r.eventId === 'evt-2')).toBe(true);
+  });
 });
 

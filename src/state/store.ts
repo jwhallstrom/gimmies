@@ -7,7 +7,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { idbStorage } from '../utils/idbStorage';
 import { nanoid } from 'nanoid/non-secure';
-import { getCourseById, getHole } from '../data/cloudCourses';
+import { getCourseById, getHole, getTee } from '../data/cloudCourses';
 import { distributeHandicapStrokes, applyESCAdjustment, calculateScoreDifferential, getTeeRatings } from '../utils/handicap';
 import { calculateEventPayouts } from '../games/payouts';
 import { generateRoundRecap, generateRecapPushMessage } from '../utils/roundRecap';
@@ -848,6 +848,9 @@ export const useStore = create<State>()(
             
             const course = getCourseById(event.course.courseId!);
             const tee =
+              getTee(event.course.courseId!, completedRound.teeName) ||
+              getTee(event.course.courseId!, event.course.teeName) ||
+              getTee(event.course.courseId!, eventGolfer?.teeName) ||
               course?.tees.find((t) => t.name === completedRound.teeName) ||
               course?.tees.find((t) => t.name === event.course.teeName) ||
               course?.tees.find((t) => t.name === eventGolfer?.teeName) ||
@@ -857,6 +860,8 @@ export const useStore = create<State>()(
             if (tee && completedRound.holesPlayed >= 9) {
               const currentHandicap = completedRound.handicapIndex || 0;
               const { courseRating: cr, slopeRating: sl } = getTeeRatings(tee);
+              if (!Number.isFinite(cr) || !Number.isFinite(sl) || sl <= 0) return;
+
               const courseHandicap = Math.round(currentHandicap * (sl / 113) + (cr - tee.par));
               const strokeDist = distributeHandicapStrokes(courseHandicap, event.course.courseId!, tee.name);
               
@@ -934,18 +939,27 @@ export const useStore = create<State>()(
 
             return { profiles: updatedProfiles, currentProfile: updatedCurrentProfile };
           });
+        }
 
-          // Recompute handicap for affected profiles.
-          setTimeout(() => {
+        // Always try to recover/recompute after complete — courses may load async.
+        // Load course cache first when IndividualRounds couldn't be created yet.
+        const affectedProfileIds = new Set(
+          newCompletedRounds.map((r) => r.golferId).filter(Boolean) as string[]
+        );
+        setTimeout(() => {
+          void (async () => {
             try {
+              if (newIndividualRounds.length === 0 && event.course.courseId) {
+                const { loadCoursesIntoCache } = await import('../hooks/useCourses');
+                await loadCoursesIntoCache();
+              }
               get().recalculateAllDifferentials();
-              const affectedIds = new Set(newIndividualRounds.map((r) => r.profileId));
-              affectedIds.forEach((id) => get().calculateAndUpdateHandicap(id));
+              affectedProfileIds.forEach((id) => get().calculateAndUpdateHandicap(id));
             } catch (e) {
               console.error('Failed to recalculate handicap after completeEvent:', e);
             }
-          }, 0);
-        }
+          })();
+        }, 0);
         
         // ========================================================================
         // VERIFIED STATUS: Check if this event qualifies as a verified round

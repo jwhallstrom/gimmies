@@ -4,7 +4,7 @@
  */
 
 import { nanoid } from 'nanoid/non-secure';
-import { getCourseById } from '../../data/cloudCourses';
+import { getCourseById, getTee } from '../../data/cloudCourses';
 import { 
   calculateWHSHandicapIndex, 
   distributeHandicapStrokes, 
@@ -27,7 +27,7 @@ const getRoundTimestamp = (round: IndividualRound): number =>
 const sanitizeIdPart = (value: string) => String(value || '').replace(/[^a-zA-Z0-9_-]/g, '_');
 const buildIndividualRoundId = (eventId: string, profileId: string) => `ir-${sanitizeIdPart(eventId)}-${sanitizeIdPart(profileId)}`;
 
-const getRoundDedupKey = (round: IndividualRound): string => {
+export const getRoundDedupKey = (round: IndividualRound): string => {
   if (round.eventId) return `event:${round.eventId}:${round.profileId}`;
   if (round.completedRoundId) return `completed:${round.completedRoundId}`;
   return `manual:${round.date}:${round.courseId}:${round.teeName}:${round.grossScore}`;
@@ -42,6 +42,14 @@ const normalizeIndividualRounds = (rounds: IndividualRound[] = []): IndividualRo
       byKey.set(key, round);
       return;
     }
+    // Prefer the round that already has a usable differential / more complete data.
+    const existingEligible = isRoundEligibleForHandicapIndex(existing);
+    const incomingEligible = isRoundEligibleForHandicapIndex(round);
+    if (incomingEligible && !existingEligible) {
+      byKey.set(key, round);
+      return;
+    }
+    if (existingEligible && !incomingEligible) return;
     if (getRoundTimestamp(round) >= getRoundTimestamp(existing)) {
       byKey.set(key, round);
     }
@@ -49,6 +57,11 @@ const normalizeIndividualRounds = (rounds: IndividualRound[] = []): IndividualRo
 
   return Array.from(byKey.values()).sort((a, b) => getRoundTimestamp(b) - getRoundTimestamp(a));
 };
+
+export const mergeIndividualRoundLists = (
+  localRounds: IndividualRound[] = [],
+  remoteRounds: IndividualRound[] = []
+): IndividualRound[] => normalizeIndividualRounds([...localRounds, ...remoteRounds]);
 
 // ============================================================================
 // Actions Interface
@@ -177,6 +190,8 @@ export const createHandicapSlice = (
 
     const roundEntries = recomputedRounds
       .filter((r: IndividualRound) => isRoundEligibleForHandicapIndex(r))
+      // Oldest → newest so WHS "most recent 20" uses slice(-20) correctly
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
       .map((r: IndividualRound) => ({ id: r.id, differential: r.scoreDifferential as number }));
 
     const roundsChanged =
@@ -206,19 +221,38 @@ export const createHandicapSlice = (
 
     const whsResult = calculateWHSHandicapIndex(roundEntries);
 
+    const previousIndex = profile.handicapIndex;
+    const indexChanged =
+      typeof previousIndex !== 'number' ||
+      Math.abs(previousIndex - whsResult.handicapIndex) > 0.05;
+
+    const previousHistory = profile.handicapHistory || [];
+    const lastHistory = previousHistory[previousHistory.length - 1];
+    const shouldAppendHistory =
+      indexChanged &&
+      (!lastHistory ||
+        lastHistory.handicapIndex !== whsResult.handicapIndex ||
+        lastHistory.source !== 'calculation');
+
     const updatedProfile = {
       ...profile,
       handicapIndex: whsResult.handicapIndex,
-      handicapHistory: [
-        ...(profile.handicapHistory || []),
-        {
-          date: whsResult.calculationDate,
-          handicapIndex: whsResult.handicapIndex,
-          rounds: recomputedRounds,
-          usedRoundIds: whsResult.usedRoundIds,
-          source: 'calculation' as const
-        }
-      ],
+      handicapHistory: shouldAppendHistory
+        ? [
+            ...previousHistory,
+            {
+              date: whsResult.calculationDate,
+              handicapIndex: whsResult.handicapIndex,
+              rounds: recomputedRounds,
+              usedRoundIds: whsResult.usedRoundIds,
+              source: 'calculation' as const
+            }
+          ]
+        : previousHistory.map((entry: any, idx: number) =>
+            idx === previousHistory.length - 1 && entry.source === 'calculation'
+              ? { ...entry, usedRoundIds: whsResult.usedRoundIds, rounds: recomputedRounds }
+              : entry
+          ),
       individualRounds: recomputedRounds,
     };
 
@@ -250,126 +284,129 @@ export const createHandicapSlice = (
 
   recalculateAllDifferentials: (): void => {
     const state = get();
-    
-    // First, check if any completed rounds should be added to individual rounds for handicap
-    state.profiles.forEach((profile: GolferProfile) => {
-      // Create a set of existing individual round dates/courses to avoid duplicates
-      const existingRounds = new Set(
-        profile.individualRounds?.map((r: IndividualRound) => `${r.date}-${r.courseId}-${r.teeName}`) || []
+
+    // Work on an in-memory copy so newly converted rounds are not wiped by a
+    // later set() that still references the pre-conversion snapshot.
+    const workingProfiles: GolferProfile[] = state.profiles.map((p: GolferProfile) => ({
+      ...p,
+      individualRounds: [...(p.individualRounds || [])],
+    }));
+    const newlyCreatedRounds: IndividualRound[] = [];
+
+    workingProfiles.forEach((profile: GolferProfile) => {
+      const existingKeys = new Set(
+        (profile.individualRounds || []).flatMap((r: IndividualRound) => {
+          const keys = [getRoundDedupKey(r), `${r.date}-${r.courseId}-${r.teeName}`];
+          if (r.eventId) keys.push(`event:${r.eventId}:${profile.id}`);
+          if (r.completedRoundId) keys.push(`completed:${r.completedRoundId}`);
+          return keys;
+        })
       );
-      const completedRoundsForProfile = state.completedRounds.filter((cr: CompletedRound) => 
-        cr.golferId === profile.id && 
-        cr.courseId && 
-        !existingRounds.has(`${cr.datePlayed}-${cr.courseId}-${cr.teeName}`)
+
+      const completedRoundsForProfile = state.completedRounds.filter((cr: CompletedRound) =>
+        cr.golferId === profile.id &&
+        cr.courseId &&
+        !existingKeys.has(`${cr.datePlayed}-${cr.courseId}-${cr.teeName}`) &&
+        !existingKeys.has(`completed:${cr.id}`) &&
+        !existingKeys.has(`event:${cr.eventId}:${profile.id}`)
       );
-      
+
       completedRoundsForProfile.forEach((completedRound: CompletedRound) => {
         if (!completedRound.courseId) return;
-        
-        // Convert completed event round to individual round
-        const course = getCourseById(completedRound.courseId!);
-        const tee = course?.tees.find((t: any) => t.name === completedRound.teeName);
-        
-        if (tee && completedRound.holesPlayed >= 9) {
-          const currentHandicap = completedRound.handicapIndex || 0;
-          const cr1 = getTeeRatings(tee).courseRating;
-          const sl1 = getTeeRatings(tee).slopeRating;
-          const courseHandicap = Math.round(currentHandicap * (sl1 / 113) + (cr1 - tee.par));
-          
-          // Build scores array
-          const strokeDist = distributeHandicapStrokes(courseHandicap, completedRound.courseId!, completedRound.teeName);
-          const roundScores: HandicapScoreEntry[] = completedRound.holeScores.map(holeScore => {
-            const handicapStrokes = strokeDist[holeScore.hole] || 0;
-            const strokes = holeScore.strokes;
-            return {
-              hole: holeScore.hole,
-              par: holeScore.par,
-              strokes,
-              handicapStrokes,
-              netStrokes: strokes - handicapStrokes,
-              adjustedStrokes: applyESCAdjustment(strokes ?? 0, holeScore.par, handicapStrokes),
-            };
-          });
-          
-          // Apply ESC and calculate differential
-          let adjustedGross = 0;
-          roundScores.forEach(s => {
-            const adj = typeof s.adjustedStrokes === 'number'
+
+        const course = getCourseById(completedRound.courseId);
+        const tee =
+          getTee(completedRound.courseId, completedRound.teeName) ||
+          course?.tees.find((t: any) => t.name === completedRound.teeName) ||
+          course?.tees?.[0];
+
+        if (!tee || completedRound.holesPlayed < 9) return;
+
+        const currentHandicap = completedRound.handicapIndex || 0;
+        const { courseRating: cr1, slopeRating: sl1 } = getTeeRatings(tee);
+        if (!Number.isFinite(cr1) || !Number.isFinite(sl1) || sl1 <= 0) return;
+
+        const courseHandicap = Math.round(currentHandicap * (sl1 / 113) + (cr1 - tee.par));
+        const strokeDist = distributeHandicapStrokes(
+          courseHandicap,
+          completedRound.courseId!,
+          completedRound.teeName || tee.name
+        );
+
+        const roundScores: HandicapScoreEntry[] = completedRound.holeScores.map((holeScore) => {
+          const handicapStrokes = strokeDist[holeScore.hole] || 0;
+          const strokes = holeScore.strokes;
+          return {
+            hole: holeScore.hole,
+            par: holeScore.par,
+            strokes,
+            handicapStrokes,
+            netStrokes: strokes - handicapStrokes,
+            adjustedStrokes: applyESCAdjustment(strokes ?? 0, holeScore.par, handicapStrokes),
+          };
+        });
+
+        let adjustedGross = 0;
+        roundScores.forEach((s) => {
+          const adj =
+            typeof s.adjustedStrokes === 'number'
               ? s.adjustedStrokes
               : applyESCAdjustment(s.strokes ?? 0, s.par, s.handicapStrokes);
-            adjustedGross += adj;
-          });
-          
-          const scoreDifferential = calculateScoreDifferential(adjustedGross, cr1, sl1);
-          
-          const newIndividualRound: IndividualRound = {
-            id: buildIndividualRoundId(completedRound.eventId, profile.id),
-            profileId: profile.id,
-            date: completedRound.datePlayed,
-            courseId: completedRound.courseId,
-            teeName: completedRound.teeName || tee.name,
-            grossScore: completedRound.finalScore,
-            netScore: completedRound.finalScore - courseHandicap,
-            courseHandicap,
-            scoreDifferential,
-            courseRating: cr1,
-            slopeRating: sl1,
-            scores: roundScores,
-            adjustedGrossScore: adjustedGross,
-            eventId: completedRound.eventId, // Link back to source event
-            completedRoundId: completedRound.id, // Link to CompletedRound to prevent double-counting
-            createdAt: new Date().toISOString()
-          };
-          
-          // Add to profile's individual rounds
-          set((s: any) => ({
-            profiles: s.profiles.map((p: GolferProfile) =>
-              p.id === profile.id ? {
-                ...p,
-                individualRounds: [...(p.individualRounds || []), newIndividualRound]
-              } : p
-            )
-          }));
-          
-          // Sync IndividualRound to cloud
-          if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true') {
-            import('../../utils/roundSync').then(({ saveIndividualRoundToCloud }) => {
-              saveIndividualRoundToCloud(newIndividualRound).then(() => {
-                console.log('✅ recalculateAllDifferentials: IndividualRound saved to cloud:', newIndividualRound.id);
-              }).catch((err: unknown) => {
-                console.error('❌ recalculateAllDifferentials: Failed to save IndividualRound to cloud:', err);
-              });
-            });
-          }
-        }
+          adjustedGross += adj;
+        });
+
+        const scoreDifferential = calculateScoreDifferential(adjustedGross, cr1, sl1);
+        const newIndividualRound: IndividualRound = {
+          id: buildIndividualRoundId(completedRound.eventId, profile.id),
+          profileId: profile.id,
+          date: completedRound.datePlayed,
+          courseId: completedRound.courseId,
+          teeName: completedRound.teeName || tee.name,
+          grossScore: completedRound.finalScore,
+          netScore: completedRound.finalScore - courseHandicap,
+          courseHandicap,
+          scoreDifferential,
+          courseRating: cr1,
+          slopeRating: sl1,
+          scores: roundScores,
+          adjustedGrossScore: adjustedGross,
+          eventId: completedRound.eventId,
+          completedRoundId: completedRound.id,
+          createdAt: new Date().toISOString(),
+        };
+
+        profile.individualRounds = [...(profile.individualRounds || []), newIndividualRound];
+        newlyCreatedRounds.push(newIndividualRound);
       });
     });
-    
-    // For each profile, recompute round differentials (uses stored ratings + course cache fallbacks).
-    const updatedProfiles = state.profiles.map((profile: GolferProfile) => {
-      if (!profile.individualRounds || profile.individualRounds.length === 0) return profile;
 
-      const recomputed = profile.individualRounds.map((r: IndividualRound) => {
+    const updatedProfiles = workingProfiles.map((profile: GolferProfile) => {
+      if (!profile.individualRounds || profile.individualRounds.length === 0) return profile;
+      const recomputed = normalizeIndividualRounds(profile.individualRounds).map((r: IndividualRound) => {
         if (isRoundEligibleForHandicapIndex(r)) return r;
         return recomputeRoundDifferential(r);
       });
-
       return { ...profile, individualRounds: recomputed };
     });
 
-    // Find the updated current profile if it exists
-    const currentProfileId = get().currentProfile?.id;
-    const updatedCurrentProfile = currentProfileId 
-      ? updatedProfiles.find((p: GolferProfile) => p.id === currentProfileId) 
+    const currentProfileId = state.currentProfile?.id;
+    const updatedCurrentProfile = currentProfileId
+      ? updatedProfiles.find((p: GolferProfile) => p.id === currentProfileId)
       : null;
 
-    set(() => ({ 
+    set(() => ({
       profiles: updatedProfiles,
-      // Also update currentProfile if it was updated
-      currentProfile: updatedCurrentProfile || get().currentProfile
+      currentProfile: updatedCurrentProfile || state.currentProfile,
     }));
 
-    // Recalculate handicap for each profile that had rounds
+    if (import.meta.env.VITE_ENABLE_CLOUD_SYNC === 'true' && newlyCreatedRounds.length > 0) {
+      import('../../utils/roundSync').then(({ batchSaveIndividualRoundsToCloud }) => {
+        batchSaveIndividualRoundsToCloud(newlyCreatedRounds).catch((err: unknown) => {
+          console.error('❌ recalculateAllDifferentials: Failed to save IndividualRounds:', err);
+        });
+      });
+    }
+
     updatedProfiles.forEach((p: GolferProfile) => {
       if (p.individualRounds && p.individualRounds.length > 0) get().calculateAndUpdateHandicap(p.id);
     });
