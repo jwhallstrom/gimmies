@@ -385,6 +385,31 @@ describe('Event Slice', () => {
       const canEdit = useStore.getState().canEditScore(eventId, 'Bob');
       expect(canEdit).toBe(true);
     });
+
+    it('allows participants to edit guest scores only', () => {
+      useStore.getState().createUser('owner@test.com', 'Owner');
+      const ownerId = useStore.getState().currentProfile!.id;
+      const eventId = useStore.getState().createEvent()!;
+
+      useStore.getState().logout();
+      useStore.getState().createUser('player@test.com', 'Player');
+      const playerId = useStore.getState().currentProfile!.id;
+
+      useStore.setState((state: any) => ({
+        events: state.events.map((e: any) => e.id === eventId ? {
+          ...e,
+          ownerProfileId: ownerId,
+          golfers: [
+            { profileId: ownerId, displayName: 'Owner' },
+            { profileId: playerId, displayName: 'Player' },
+            { customName: 'Guest Bob', displayName: 'Guest Bob' },
+          ],
+        } : e),
+      }));
+
+      expect(useStore.getState().canEditScore(eventId, 'Guest Bob')).toBe(true);
+      expect(useStore.getState().canEditScore(eventId, ownerId)).toBe(false);
+    });
   });
 
   describe('groups', () => {

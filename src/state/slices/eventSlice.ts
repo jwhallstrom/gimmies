@@ -39,10 +39,15 @@ const syncEventToCloud = async (
   guard.markSaving();
   try {
     const { saveEventToCloud, saveEventPatchToCloud } = await import('../../utils/eventSync');
+    let saved = false;
     if (patch && Object.keys(patch).length > 0) {
-      await saveEventPatchToCloud(event, patch, profile.id);
+      saved = await saveEventPatchToCloud(event, patch, profile.id);
     } else {
-      await saveEventToCloud(event, profile.id, options);
+      saved = !!(await saveEventToCloud(event, profile.id, options));
+    }
+    if (!saved) {
+      guard.markFailed();
+      return;
     }
     guard.markSaved();
   } catch (error) {
@@ -517,7 +522,8 @@ export const createEventSlice = (
     if (!event) return;
     if (!get().canEditScore(eventId, golferId)) return;
 
-    const eventGolfer = event.golfers.find((g: EventGolfer) => g.profileId === golferId || g.customName === golferId);
+    const eventGolfers = Array.isArray(event.golfers) ? event.golfers : [];
+    const eventGolfer = eventGolfers.find((g: EventGolfer) => g.profileId === golferId || g.customName === golferId);
     const profile = eventGolfer?.profileId ? state.profiles.find((p: GolferProfile) => p.id === eventGolfer.profileId) : null;
     const playerName = profile ? profile.name : eventGolfer?.customName || 'Unknown Player';
 
@@ -540,7 +546,16 @@ export const createEventSlice = (
     set((s: any) => ({
       events: s.events.map((e: Event) => {
         if (e.id !== eventId) return e;
-        return { ...e, scorecards: e.scorecards.map(sc => sc.golferId === golferId ? { ...sc, scores: sc.scores.map(s => s.hole === hole ? { ...s, strokes } : s) } : sc), lastModified: new Date().toISOString() };
+        const scorecards = Array.isArray(e.scorecards) ? e.scorecards : [];
+        return {
+          ...e,
+          scorecards: scorecards.map(sc => {
+            if (sc.golferId !== golferId) return sc;
+            const scores = Array.isArray(sc.scores) ? sc.scores : defaultScoreArray(e.course?.courseId);
+            return { ...sc, scores: scores.map(s => s.hole === hole ? { ...s, strokes } : s) };
+          }),
+          lastModified: new Date().toISOString()
+        };
       })
     }));
 
@@ -579,6 +594,16 @@ export const createEventSlice = (
     if (event.isCompleted) return false;
     if (event.ownerProfileId === currentProfile.id) return true;
     if (golferId === currentProfile.id) return true;
+
+    // Any event participant can enter scores for guest golfers (no app profile).
+    // Guard against partial/syncing event payloads so this never crashes mid-round.
+    const eventGolfers = Array.isArray(event.golfers) ? event.golfers : [];
+    const isParticipant = eventGolfers.some((g: EventGolfer) => g.profileId === currentProfile.id);
+    const targetGolfer = eventGolfers.find(
+      (g: EventGolfer) => g.profileId === golferId || g.customName === golferId
+    );
+    if (isParticipant && targetGolfer && !targetGolfer.profileId) return true;
+
     const nassauGames = Array.isArray(event.games?.nassau) ? event.games.nassau : [];
     const userTeams = nassauGames.flatMap(
       (nassau: any) => nassau.teams?.filter((team: any) => (team.golferIds || []).includes(currentProfile.id)) || []
